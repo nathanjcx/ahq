@@ -33,7 +33,6 @@ import {
   Settings as SettingsIcon,
   Slack,
   Sparkles,
-  StepForward,
   Trash2,
   UserCircle,
   Volume2,
@@ -60,6 +59,7 @@ import type {
   CalendarEvent,
   Command,
   Routine,
+  ReplayEntry,
   Snapshot,
   Source,
   SourceItem,
@@ -67,6 +67,7 @@ import type {
 } from "./shared/types";
 
 type Tab = "office" | "tasks" | "inbox" | "calendar" | "routines" | "history" | "settings";
+type Composer = { kind: "simulation" | "calendar" } | { kind: "message"; templateId?: string };
 type Toast = { id: number; message: string; tone: "error" | "success" };
 
 const NAV: { id: Tab; label: string; icon: typeof Building2 }[] = [
@@ -260,6 +261,7 @@ function App() {
   const [editingRoutine, setEditingRoutine] = useState<Routine>();
   const [profileOpen, setProfileOpen] = useState(false);
   const [inboxTargetId, setInboxTargetId] = useState<string>();
+  const [composer, setComposer] = useState<Composer>();
   const toastId = useRef(0);
   const revision = useRef(-1);
   const snapshotRef = useRef<Snapshot | null>(null);
@@ -585,6 +587,7 @@ function App() {
             onOpenWork={openWork}
             onOpenArtifact={openArtifact}
             onOpenCalendar={() => setActiveTab("calendar")}
+            onSimulate={() => setComposer({ kind: "simulation" })}
           />
         )}
         {activeTab === "inbox" && (
@@ -593,6 +596,7 @@ function App() {
             run={run}
             busy={busy}
             targetId={inboxTargetId}
+            onCompose={() => setComposer({ kind: "message" })}
             onOpenWork={openWork}
             onOpenArtifact={openArtifact}
           />
@@ -613,7 +617,7 @@ function App() {
           />
         )}
         {activeTab === "tasks" && <TasksView snapshot={snapshot} onOpenWork={openWork} onOpenSource={openSource} onOpenArtifact={openArtifact} />}
-        {activeTab === "calendar" && <CalendarView snapshot={snapshot} onOpenWork={openWork} run={run} busy={busy} />}
+        {activeTab === "calendar" && <CalendarView snapshot={snapshot} onOpenWork={openWork} onCreate={() => setComposer({ kind: "calendar" })} />}
         {activeTab === "history" && (
           <HistoryView snapshot={snapshot} onOpenWork={openWork} />
         )}
@@ -622,6 +626,9 @@ function App() {
         )}
       </div>
 
+      {composer?.kind === "simulation" && <SimulationModal snapshot={snapshot} busy={busy} run={run} onClose={() => setComposer(undefined)} onMessage={() => setComposer({ kind: "message" })} onCalendar={() => setComposer({ kind: "calendar" })} onTemplate={(id) => setComposer({ kind: "message", templateId: id })} />}
+      {composer?.kind === "message" && <IncomingMessageModal key={composer.templateId || "new-message"} run={run} busy={busy} signedIn={snapshot.auth.status === "signed-in"} template={snapshot.demo.events?.find((entry) => entry.id === composer.templateId)} onClose={() => setComposer(undefined)} onCreated={(id) => { setComposer(undefined); if (activeTab === "inbox") setInboxTargetId(id); }} />}
+      {composer?.kind === "calendar" && <CalendarEventModal snapshot={snapshot} run={run} busy={busy} onClose={() => setComposer(undefined)} />}
       {routineOpen && (
         <RoutineModal
           snapshot={snapshot}
@@ -685,6 +692,7 @@ function OfficeView({
   onOpenWork,
   onOpenArtifact,
   onOpenCalendar,
+  onSimulate,
 }: {
   snapshot: Snapshot;
   run: RunCommand;
@@ -694,10 +702,9 @@ function OfficeView({
   onOpenWork: (id: string) => void;
   onOpenArtifact: (id: string) => void;
   onOpenCalendar: () => void;
+  onSimulate: () => void;
 }) {
-  const [eventId, setEventId] = useState("");
-  const replayEvents = snapshot.demo.events || [];
-  const nextEvent = replayEvents.find((event) => event.id === eventId && !event.delivered) || replayEvents.find((event) => !event.delivered);
+  const arrivalTemplates = snapshot.demo.events || [];
   const signedIn = snapshot.auth.status === "signed-in";
   const visibleAgents = snapshot.agents.filter((agent) => !agent.retiredAt && (agent.temporary || agent.persistent || agent.id === "agent-maya" || agent.activity !== "idle"));
   const [boardText, setBoardText] = useState("");
@@ -741,19 +748,10 @@ function OfficeView({
             <p className="eyebrow">Live office</p>
             <h1>Your team at work</h1>
           </div>
-          <div className="scenario-runner" id="scenario-runner">
-            <label htmlFor="incoming-event">Deliver an incoming event</label>
-            <div>
-              <select id="incoming-event" value={nextEvent?.id || ""} onChange={(event) => setEventId(event.target.value)}>
-                {!nextEvent && <option value="">All events delivered</option>}
-                {replayEvents.filter((event) => !event.delivered).map((event) => <option key={event.id} value={event.id}>{SOURCE_META[event.source].label} · {event.label}</option>)}
-              </select>
-              <button className="button button--primary" disabled={busy !== null || !signedIn || !nextEvent} onClick={() => nextEvent && run({ type: "demo.deliver", id: nextEvent.id })}><Zap size={15} /> Deliver</button>
-            </div>
-          </div>
+          <button className="button button--primary" onClick={onSimulate}><Plus size={16} /> Simulate an arrival</button>
         </section>
 
-        <div className="triage-mode"><Sparkles size={15} /><span>Demo data · Codex triage and execution</span><small>{signedIn ? `${replayEvents.filter((event) => event.delivered).length} / ${replayEvents.length} events delivered` : "Sign in with ChatGPT in Settings to triage incoming events."}</small></div>
+        <div className="triage-mode"><Sparkles size={15} /><span>Demo data · Codex triage and execution</span><small>{signedIn ? `${arrivalTemplates.filter((event) => event.delivered).length} / ${arrivalTemplates.length} suggestions delivered` : "Sign in with ChatGPT in Settings to triage incoming events."}</small></div>
         <section className="roster" aria-label="Agent roster">
           <span className="roster__label">In the office</span>
           <div className="roster__people">
@@ -809,52 +807,7 @@ function OfficeView({
           </div>
         </section>
 
-        <section className="playback">
-          <div className="playback__controls">
-            <span className="eyebrow">Incoming event replay</span>
-            <button
-              className="round-control round-control--play"
-              disabled={busy !== null || (!signedIn && !snapshot.demo.playing)}
-              onClick={() =>
-                run({
-                  type: snapshot.demo.playing ? "demo.pause" : "demo.play",
-                })
-              }
-              aria-label={snapshot.demo.playing ? "Pause replay" : "Play replay"}
-            >
-              {snapshot.demo.playing ? <Pause size={17} /> : <Play size={17} />}
-            </button>
-            <button
-              className="round-control"
-              disabled={busy !== null || !signedIn}
-              onClick={() => run({ type: "demo.next" })}
-              aria-label="Deliver next event"
-            >
-              <StepForward size={16} />
-            </button>
-            <button
-              className="round-control"
-              disabled={busy !== null}
-              onClick={() => run({ type: "demo.reset" })}
-              aria-label="Reset demo data"
-            >
-              <RotateCcw size={15} />
-            </button>
-            <label className="speed-control">
-              Arrival speed{" "}
-              <select
-                value={snapshot.demo.speed}
-                onChange={(event) =>
-                  run({ type: "demo.speed", speed: Number(event.target.value) })
-                }
-              >
-                <option value="0.5">0.5x</option>
-                <option value="1">1x</option>
-                <option value="2">2x</option>
-                <option value="4">4x</option>
-              </select>
-            </label>
-          </div>
+        <section className="office-activity" aria-label="Recent office activity">
           <div className="recent-strip">
             <span className="eyebrow">Recent activity</span>
             <div>
@@ -1007,6 +960,7 @@ function InboxView({
   run,
   busy,
   targetId,
+  onCompose,
   onOpenWork,
   onOpenArtifact,
 }: {
@@ -1014,13 +968,13 @@ function InboxView({
   run: RunCommand;
   busy: string | null;
   targetId?: string;
+  onCompose: () => void;
   onOpenWork: (id: string) => void;
   onOpenArtifact: (id: string) => void;
 }) {
   const [source, setSource] = useState<Source | "all">("all");
   const [selectedId, setSelectedId] = useState<string | undefined>(targetId);
   const [query, setQuery] = useState("");
-  const [composing, setComposing] = useState(false);
   const filtered = snapshot.sources.filter(
     (item) =>
       (source === "all" || item.source === source) &&
@@ -1049,9 +1003,8 @@ function InboxView({
         eyebrow="Connected sources"
         title="Inbox"
         description="Incoming messages, Codex decisions, and the work they started."
-        action={<button className="button button--primary" onClick={() => setComposing(true)}><Plus size={15} /> New incoming message</button>}
+        action={<button className="button button--primary" onClick={onCompose}><Plus size={15} /> New incoming message</button>}
       />
-      {composing && <IncomingMessageModal run={run} busy={busy} signedIn={snapshot.auth.status === "signed-in"} onClose={() => setComposing(false)} onCreated={(id) => { setSelectedId(id); setSource("all"); setQuery(""); setComposing(false); }} />}
       <div className="source-tabs" role="tablist" aria-label="Inbox sources">
         <button
           role="tab"
@@ -1138,7 +1091,7 @@ function InboxView({
               <div className="message-copy">
                 <p>{selected.content}</p>
               </div>
-              {!!selected.attachments?.length && <div className="attachment-list"><h3>Attachments · {selected.attachments.length}</h3>{selected.attachments.map((file) => <details key={file.id}><summary><FileText size={15} /> {file.name}<small>{file.mediaType}</small></summary><pre>{file.content}</pre></details>)}</div>}
+              <SourceAttachments attachments={selected.attachments} />
               <SourceTriage snapshot={snapshot} sourceId={selected.id} onOpenWork={onOpenWork} />
               {snapshot.sources.filter((item) => item.source === selected.source && item.threadId === selected.threadId && item.id !== selected.id).length > 0 && <details className="thread-context"><summary>Other messages in this thread</summary>{snapshot.sources.filter((item) => item.source === selected.source && item.threadId === selected.threadId && item.id !== selected.id).sort((a, b) => a.timestamp - b.timestamp).map((item) => <button key={item.id} onClick={() => { setSelectedId(item.id); setQuery(""); setSource("all"); }}><strong>{item.author} · {formatTime(item.timestamp)}</strong><span>{item.title}</span><small>{item.content.slice(0, 180)}</small></button>)}</details>}
               {selected.reason && !snapshot.triage.some((record) => record.sourceId === selected.id) && (
@@ -1218,23 +1171,75 @@ function InboxView({
   );
 }
 
-function IncomingMessageModal({ run, busy, signedIn, onClose, onCreated }: { run: RunCommand; busy: string | null; signedIn: boolean; onClose: () => void; onCreated: (id: string) => void }) {
-  const [form, setForm] = useState({ source: "gmail" as Source, author: "", title: "", content: "", threadId: "" });
+function followUpKind(entry: ReplayEntry, entries: ReplayEntry[]) {
+  const item = entry.item;
+  if (!item) return undefined;
+  const previous = entries.slice(0, entries.indexOf(entry));
+  if (previous.some((other) => other.item?.source === item.source && other.item.externalId === item.externalId)) return "Duplicate";
+  if (/correct|revis/i.test(`${entry.label} ${item.title}`)) return "Correction";
+  if (/clarif|confirm|context|same|follow.?up|adds evidence/i.test(`${entry.label} ${item.title}`) || previous.some((other) => other.item?.source === item.source && other.item.threadId === item.threadId)) return "Clarification";
+  return undefined;
+}
+
+function SimulationModal({ snapshot, run, busy, onClose, onMessage, onCalendar, onTemplate }: { snapshot: Snapshot; run: RunCommand; busy: string | null; onClose: () => void; onMessage: () => void; onCalendar: () => void; onTemplate: (id: string) => void }) {
+  const entries = snapshot.demo.events || [];
+  const [category, setCategory] = useState<"suggested" | "follow-ups">("suggested");
+  const suggested = entries.filter((entry) => !followUpKind(entry, entries));
+  const followUps = entries.filter((entry) => followUpKind(entry, entries));
+  const visible = category === "suggested" ? suggested : followUps;
+  return <Modal title="Simulate an arrival" onClose={onClose} wide>
+    <div className="simulation-panel">
+      <p className="simulation-intro">Choose what arrives next. Preview and edit a message, then watch Codex decide what to do.</p>
+      <div className="simulation-create">
+        <button onClick={onMessage}><span className="simulation-create__icon"><Mail size={20} /></span><span><strong>New incoming message</strong><small>Write an email, chat message, or issue.</small></span><Plus size={17} /></button>
+        <button onClick={onCalendar}><span className="simulation-create__icon"><CalendarDays size={20} /></span><span><strong>New calendar event</strong><small>Add a meeting and let the office prepare.</small></span><Plus size={17} /></button>
+      </div>
+      <div className="simulation-tabs" role="tablist" aria-label="Arrival templates">
+        <button role="tab" aria-selected={category === "suggested"} onClick={() => setCategory("suggested")}>Suggested arrivals <span>{suggested.filter((entry) => !entry.delivered).length}</span></button>
+        <button role="tab" aria-selected={category === "follow-ups"} onClick={() => setCategory("follow-ups")}>Follow-ups <span>{followUps.filter((entry) => !entry.delivered).length}</span></button>
+      </div>
+      <p className="simulation-hint">{category === "suggested" ? "Requests and everyday messages from the sample connections." : "Corrections, clarifications, and a duplicate delivery. These are most useful after the related request arrives."}</p>
+      <div className="simulation-suggestions" role="tabpanel" aria-label={category === "suggested" ? "Suggested arrivals" : "Follow-ups"}>
+        {visible.map((entry) => <button key={entry.id} className="simulation-suggestion" aria-label={entry.label} disabled={entry.delivered || !entry.item} onClick={() => onTemplate(entry.id)}>
+          <span className={`source-logo source-logo--${entry.source}`}>{SOURCE_META[entry.source].short}</span>
+          <span className="simulation-suggestion__copy"><strong>{entry.label}</strong><small>{SOURCE_META[entry.source].label}{entry.item ? ` · ${entry.item.author}` : " · Preview unavailable"}</small></span>
+          {entry.delivered ? <span className="simulation-delivered"><Check size={13} /> Delivered</span> : <><span className="simulation-kind">{followUpKind(entry, entries) || "Message"}</span><ChevronRight size={15} /></>}
+        </button>)}
+        {!visible.length && <p className="muted">No suggested messages in this group. You can always write a new message.</p>}
+      </div>
+      <div className="simulation-controls"><div><strong>Demo controls</strong><small>{snapshot.auth.status === "signed-in" ? "Codex reviews each message when you deliver it." : "You can preview now. Sign in with ChatGPT to deliver messages."}</small></div><button className="button button--quiet" disabled={busy !== null} onClick={() => run({ type: "demo.reset" }, "demo.reset", "Sample inbox and work history reset.")}><RotateCcw size={14} /> Reset demo data</button></div>
+    </div>
+  </Modal>;
+}
+
+function SourceAttachments({ attachments }: { attachments: SourceItem["attachments"] }) {
+  if (!attachments?.length) return null;
+  return <div className="attachment-list"><h3>Attachments · {attachments.length}</h3>{attachments.map((file) => <details key={file.id}><summary><FileText size={15} /> {file.name}<small>{file.mediaType}</small></summary><pre>{file.content}</pre></details>)}</div>;
+}
+
+function IncomingMessageModal({ run, busy, signedIn, template, onClose, onCreated }: { run: RunCommand; busy: string | null; signedIn: boolean; template?: ReplayEntry; onClose: () => void; onCreated: (id: string) => void }) {
+  const item = template?.item;
+  const [form, setForm] = useState({ source: item?.source || "gmail" as Source, author: item?.author || "", title: item?.title || "", content: item?.content || "", threadId: item?.threadId || "" });
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    const id = crypto.randomUUID();
-    const next = await run({ type: "source.ingest", item: { ...form, author: form.author.trim(), title: form.title.trim(), content: form.content.trim(), id, externalId: id, threadId: form.threadId.trim() || id, timestamp: Date.now() } });
+    if (!signedIn || template?.delivered || (template && !item)) return;
+    const id = item?.id || crypto.randomUUID();
+    const changes = { ...form, author: form.author.trim(), title: form.title.trim(), content: form.content.trim(), threadId: form.threadId.trim() || item?.threadId || id };
+    const command: Command = template ? { type: "demo.deliver", id: template.id, changes } : { type: "source.ingest", item: { ...changes, id, externalId: id, timestamp: Date.now() } };
+    const next = await run(command);
     if (next) onCreated(id);
   };
-  return <Modal title="New incoming message" onClose={onClose} closeOnBackdrop={false}><form className="form-stack" onSubmit={submit}>
-    <p className="muted">Simulate a message arriving from a connection. Codex reads its content and decides whether to create work, attach context, wait, or ignore it.</p>
+  return <Modal title={template ? "Review incoming message" : "New incoming message"} onClose={onClose} closeOnBackdrop={false}><form className="form-stack" onSubmit={submit}>
+    <p className="muted">{template ? "Edit this suggested message before it arrives. Its original message ID and attached files will be preserved." : "Simulate a message arriving from a connection. Codex reads its content and decides whether to create work, attach context, wait, or ignore it."}</p>
     <label><span>Source</span><select value={form.source} onChange={(event) => setForm({ ...form, source: event.target.value as Source })}>{SOURCES.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}</select></label>
     <label><span>Author</span><input required maxLength={200} autoFocus value={form.author} onChange={(event) => setForm({ ...form, author: event.target.value })} placeholder="Alex Morgan" /></label>
     <label><span>Subject</span><input required maxLength={300} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Could you prepare a launch summary?" /></label>
     <label><span>Message</span><textarea required rows={6} maxLength={20000} value={form.content} onChange={(event) => setForm({ ...form, content: event.target.value })} placeholder="Include the context an agent would need to do the work." /></label>
     <label><span>Thread ID <small>Optional, reuse an existing ID for a follow-up</small></span><input value={form.threadId} maxLength={200} onChange={(event) => setForm({ ...form, threadId: event.target.value })} /></label>
+    <SourceAttachments attachments={item?.attachments} />
+    {template?.delivered && <p className="field-error">This suggestion has already been delivered. Start a new message for another arrival.</p>}
     {!signedIn && <p className="field-error">Sign in with ChatGPT in Settings before delivering messages for triage.</p>}
-    <div className="form-actions"><button type="button" className="button button--quiet" onClick={onClose}>Cancel</button><button className="button button--primary" disabled={busy !== null || !signedIn || !form.author.trim() || !form.title.trim() || !form.content.trim()}><Send size={15} /> Deliver message</button></div>
+    <div className="modal-actions"><button type="button" className="button button--quiet" onClick={onClose}>Cancel</button><button className="button button--primary" disabled={busy !== null || !signedIn || template?.delivered || !form.author.trim() || !form.title.trim() || !form.content.trim()}><Send size={15} /> Deliver message</button></div>
   </form></Modal>;
 }
 
@@ -1632,7 +1637,7 @@ function HistoryView({
       <PageHeader
         eyebrow="What the office did"
         title="History"
-        description="Open a past job to review its run, notes, and output."
+        description="Open a task to review its run, notes, and output."
       />
       <div className="segmented">
         {(["all", "completed", "failed", "cancelled"] as const).map((item) => (
@@ -1846,7 +1851,7 @@ function SettingsView({
           </div>
           <div className="execution-details">
             <div><Code2 size={18} /><span><strong>Real local files</strong><p>Reports, code changes, and verification results are written to task folders on this computer. Open the finished files from a task's artifacts.</p></span></div>
-            <div><Inbox size={18} /><span><strong>Fictional incoming data</strong><p>Replay prepared messages or write your own. Codex decides what deserves work, which existing task needs the context, and what to ignore.</p></span></div>
+            <div><Inbox size={18} /><span><strong>Fictional incoming data</strong><p>Choose a suggested arrival or write your own message. Codex decides what deserves work, which existing task needs the context, and what to ignore.</p></span></div>
             <div><CalendarDays size={18} /><span><strong>Local calendar and external actions</strong><p>Calendar changes stay inside Little Office. Invitations, messages, and pull requests are not published to external services.</p></span></div>
           </div>
         </section>
@@ -2302,12 +2307,10 @@ function CalendarEventModal({ snapshot, run, busy, onClose }: { snapshot: Snapsh
   </Modal>;
 }
 
-function CalendarView({ snapshot, onOpenWork, run, busy }: { snapshot: Snapshot; onOpenWork: (id: string) => void; run: RunCommand; busy: string | null }) {
-  const [creating, setCreating] = useState(false);
+function CalendarView({ snapshot, onOpenWork, onCreate }: { snapshot: Snapshot; onOpenWork: (id: string) => void; onCreate: () => void }) {
   const events = [...snapshot.calendar].sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
   return <div className="page page--calendar">
-    <PageHeader eyebrow="Your day, made a little easier" title="Calendar" description="Your local demo calendar. New events go to Codex for meeting preparation." action={<button className="button button--primary" onClick={() => setCreating(true)}><Plus size={15} /> New calendar event</button>} />
-    {creating && <CalendarEventModal snapshot={snapshot} run={run} busy={busy} onClose={() => setCreating(false)} />}
+    <PageHeader eyebrow="Your day, made a little easier" title="Calendar" description="Your local demo calendar. New events go to Codex for meeting preparation." action={<button className="button button--primary" onClick={onCreate}><Plus size={15} /> New calendar event</button>} />
     <div className="calendar-agenda">
       {events.map((event) => {
         const linked = snapshot.work.filter((work) => work.sourceIds.some((id) => event.sourceIds.includes(id)));
