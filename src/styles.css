@@ -2097,6 +2097,12 @@ select {
   margin: 8px 0;
 }
 .markdown table { width: 100%; margin: 18px 0; border-collapse: collapse; font: 13px/1.6 ui-sans-serif, sans-serif; }
+.calendar-agenda { max-width: 980px; display: grid; gap: 18px; }
+.calendar-agenda__event { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--white); }
+.calendar-agenda__heading { display: flex; justify-content: space-between; gap: 12px; padding: 14px 22px; background: var(--mint); font-size: 12px; font-weight: 700; }
+.calendar-agenda__event .calendar-card { padding: 22px; margin: 0; }
+.calendar-agenda__description { padding: 0 22px 18px; font-size: 13px; color: var(--ink-soft); line-height: 1.6; }
+.calendar-agenda__links { display: flex; flex-wrap: wrap; gap: 16px; padding: 0 22px 20px; }
 .markdown th, .markdown td { padding: 9px 12px; border: 1px solid var(--line); text-align: left; }
 .markdown th { background: var(--mint); font-weight: 700; }
 .markdown a { color: #247667; text-decoration-thickness: 1px; text-underline-offset: 3px; }

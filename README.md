@@ -60,10 +60,13 @@ Open `http://127.0.0.1:4318`. Preview data is separate from desktop data. The pr
 ```sh
 npm test
 npm run build
+node scripts/auth-smoke.mjs
 node scripts/smoke.mjs
 ```
 
 The Electron smoke check requires a graphical session and writes screenshots to `test-results/`.
+
+The authentication check uses an isolated Codex profile to verify the real login URL and cancellation without changing your existing sign-in. It does not start a model turn.
 
 `node scripts/live-smoke.mjs` additionally verifies a real report through an existing ChatGPT login. It uses subscription allowance and keeps its workspace separate from the application's normal data.
 

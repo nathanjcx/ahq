@@ -58,6 +58,7 @@ import OfficeCanvas from "./components/OfficeCanvas";
 import type {
   Agent,
   Artifact,
+  CalendarEvent,
   Command,
   Routine,
   Scenario,
@@ -67,12 +68,13 @@ import type {
   WorkItem,
 } from "./shared/types";
 
-type Tab = "office" | "inbox" | "routines" | "history" | "settings";
+type Tab = "office" | "inbox" | "calendar" | "routines" | "history" | "settings";
 type Toast = { id: number; message: string; tone: "error" | "success" };
 
 const NAV: { id: Tab; label: string; icon: typeof Building2 }[] = [
   { id: "office", label: "Office", icon: Building2 },
   { id: "inbox", label: "Inbox", icon: Inbox },
+  { id: "calendar", label: "Calendar", icon: CalendarDays },
   { id: "routines", label: "Routines", icon: Repeat2 },
   { id: "history", label: "History", icon: HistoryIcon },
   { id: "settings", label: "Settings", icon: SettingsIcon },
@@ -96,8 +98,8 @@ const SOURCES: {
 const SCENARIOS: { id: Scenario; label: string }[] = [
   { id: "report", label: "Research brief" },
   { id: "bug", label: "Fix a bug" },
-  { id: "meeting", label: "Plan a meeting" },
-  { id: "dinner", label: "Organize dinner" },
+  { id: "meeting", label: "Prepare for a meeting" },
+  { id: "dinner", label: "Schedule dinner" },
   { id: "qa", label: "Run QA" },
 ];
 
@@ -185,11 +187,13 @@ function Modal({
   onClose,
   children,
   wide = false,
+  closeOnBackdrop = true,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  closeOnBackdrop?: boolean;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
@@ -197,7 +201,9 @@ function Modal({
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const node = panel.current;
-    node?.focus();
+    if (node && !node.contains(document.activeElement)) {
+      (node.querySelector<HTMLElement>('button, input, select, textarea, [href]') || node).focus();
+    }
     const keydown = (event: KeyboardEvent) => {
       if (event.key === "Escape") closeRef.current();
       if (event.key !== "Tab" || !node) return;
@@ -209,11 +215,11 @@ function Modal({
       if (!focusable.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === node || !node.contains(document.activeElement))) {
         event.preventDefault();
         last.focus();
       }
-      if (!event.shiftKey && document.activeElement === last) {
+      if (!event.shiftKey && (document.activeElement === last || document.activeElement === node || !node.contains(document.activeElement))) {
         event.preventDefault();
         first.focus();
       }
@@ -228,7 +234,7 @@ function Modal({
     <div
       className="modal-backdrop"
       role="presentation"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+      onMouseDown={(event) => closeOnBackdrop && event.target === event.currentTarget && onClose()}
     >
       <div
         ref={panel}
@@ -435,7 +441,8 @@ function App() {
   const attention = snapshot.work.filter(
     (work) => work.status === "failed" || work.status === "waiting",
   ).length;
-  const selectedWork = snapshot.work.find((work) => work.id === selectedWorkId);
+  const selectedWork = snapshot.work.find((work) => work.id === selectedWorkId) ||
+    (selectedAgentId ? [...snapshot.work].reverse().find((work) => work.agentId === selectedAgentId) : undefined);
   const selectedAgent = selectedWork
     ? snapshot.agents.find((agent) => agent.id === selectedWork.agentId)
     : snapshot.agents.find((agent) => agent.id === selectedAgentId);
@@ -587,6 +594,7 @@ function App() {
             }}
             onOpenWork={openWork}
             onOpenArtifact={openArtifact}
+            onOpenCalendar={() => setActiveTab("calendar")}
           />
         )}
         {activeTab === "inbox" && (
@@ -614,6 +622,7 @@ function App() {
             }}
           />
         )}
+        {activeTab === "calendar" && <CalendarView snapshot={snapshot} onOpenWork={openWork} />}
         {activeTab === "history" && (
           <HistoryView snapshot={snapshot} onOpenWork={openWork} />
         )}
@@ -683,6 +692,7 @@ function OfficeView({
   onSelectAgent,
   onOpenWork,
   onOpenArtifact,
+  onOpenCalendar,
 }: {
   snapshot: Snapshot;
   run: RunCommand;
@@ -691,6 +701,7 @@ function OfficeView({
   onSelectAgent: (id: string) => void;
   onOpenWork: (id: string) => void;
   onOpenArtifact: (id: string) => void;
+  onOpenCalendar: () => void;
 }) {
   const [scenario, setScenario] = useState<Scenario>("report");
   const [boardText, setBoardText] = useState("");
@@ -707,11 +718,10 @@ function OfficeView({
     .sort((a, b) => b.createdAt - a.createdAt)
     .slice(0, 5);
   const selectStation = (station: string) => {
+    if (station.toLowerCase().includes("calendar")) { onOpenCalendar(); return; }
     const target = station.toLowerCase().includes("board")
       ? "office-board"
-      : station.toLowerCase().includes("calendar")
-        ? "scenario-runner"
-        : "finished-shelf";
+      : "finished-shelf";
     document.getElementById(target)?.scrollIntoView({
       behavior: snapshot.settings.reducedMotion ? "auto" : "smooth",
       block: "nearest",
@@ -1428,6 +1438,7 @@ function RoutineModal({
     intervalMinutes: routine?.intervalMinutes || 60,
     dailyTime: routine?.dailyTime || "09:00",
     notes: routine?.notes || "",
+    lastRunAt: routine?.lastRunAt,
   });
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -1439,7 +1450,7 @@ function RoutineModal({
     if (next) onClose();
   };
   return (
-    <Modal title={routine ? "Edit routine" : "New routine"} onClose={onClose}>
+    <Modal title={routine ? "Edit routine" : "New routine"} onClose={onClose} closeOnBackdrop={false}>
       <form className="form-stack" onSubmit={submit}>
         <label>
           <span>Name</span>
@@ -1501,6 +1512,7 @@ function RoutineModal({
             <span>Run at</span>
             <input
               type="time"
+              required
               value={form.dailyTime}
               onChange={(event) =>
                 setForm({ ...form, dailyTime: event.target.value })
@@ -1512,6 +1524,7 @@ function RoutineModal({
             <span>Repeat every (minutes)</span>
             <input
               type="number"
+              required
               min={5}
               value={form.intervalMinutes}
               onChange={(event) =>
@@ -1963,7 +1976,8 @@ function WorkDrawer({
         (!work && agent && item.agentId === agent.id),
     )
     .sort((a, b) => b.sequence - a.sequence);
-  const runItem = snapshot.runs.find((item) => work && item.workId === work.id);
+  const runItem = [...snapshot.runs].reverse().find((item) => work && item.workId === work.id);
+  const canSteer = work?.mode === "live" && work.status === "running" && Boolean(runItem?.turnId);
   const sources = snapshot.sources.filter((item) =>
     work?.sourceIds.includes(item.id),
   );
@@ -2121,7 +2135,6 @@ function WorkDrawer({
           {selectedArtifact && (
             <ArtifactPreview
               artifact={selectedArtifact}
-              work={work}
               snapshot={snapshot}
               onOpen={() =>
                 bridge
@@ -2147,17 +2160,15 @@ function WorkDrawer({
                 id="steer"
                 value={steer}
                 onChange={(event) => setSteer(event.target.value)}
-                placeholder="Ask for a change or add context"
-                disabled={
-                  !["running", "waiting", "queued"].includes(work.status)
-                }
+                placeholder={canSteer ? "Ask for a change or add context" : "Direction is available during a live Codex turn"}
+                disabled={!canSteer}
               />
               <button
                 className="icon-button icon-button--send"
                 disabled={
                   busy !== null ||
                   !steer.trim() ||
-                  !["running", "waiting", "queued"].includes(work.status)
+                  !canSteer
                 }
                 aria-label="Send direction"
               >
@@ -2223,26 +2234,49 @@ function ArtifactGlyph({ artifact }: { artifact: Artifact }) {
   );
 }
 
+function CalendarCard({ event }: { event: CalendarEvent }) {
+  return <div className="calendar-card">
+    <span className="calendar-card__date"><b>{new Date(event.start).toLocaleDateString([], { day: "numeric" })}</b>{new Date(event.start).toLocaleDateString([], { month: "short" })}</span>
+    <div><h4>{event.title}</h4><p>{new Date(event.start).toLocaleString([], { weekday: "long", hour: "numeric", minute: "2-digit" })} to {new Date(event.end).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p><p>{event.location}</p><small>{event.attendees.join(", ")}</small></div>
+  </div>;
+}
+
+function CalendarView({ snapshot, onOpenWork }: { snapshot: Snapshot; onOpenWork: (id: string) => void }) {
+  const events = [...snapshot.calendar].sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+  return <div className="page page--calendar">
+    <PageHeader eyebrow="Your day, made a little easier" title="Calendar" description="The office's simulated calendar. All times use this computer's time zone." />
+    <div className="calendar-agenda">
+      {events.map((event) => {
+        const linked = snapshot.work.filter((work) => work.sourceIds.some((id) => event.sourceIds.includes(id)));
+        return <article className="calendar-agenda__event" key={event.id}>
+          <div className="calendar-agenda__heading"><span>{new Date(event.start).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span><span className="post-kind">{event.simulated ? "Simulated event" : "Event"}</span></div>
+          <CalendarCard event={event} />
+          <p className="calendar-agenda__description">{event.description}</p>
+          {linked.length > 0 && <div className="calendar-agenda__links">{linked.map((work) => <button className="text-link" key={work.id} onClick={() => onOpenWork(work.id)}><FileText size={14} />{work.title}<ChevronRight size={14} /></button>)}</div>}
+        </article>;
+      })}
+      {!events.length && <EmptyState icon={<CalendarDays size={24} />} title="A little breathing room" body="Run the dinner scenario to let an agent check availability and add an event here." />}
+    </div>
+  </div>;
+}
+
 function ArtifactPreview({
   artifact,
-  work,
   snapshot,
   onOpen,
 }: {
   artifact: Artifact;
-  work?: WorkItem;
   snapshot: Snapshot;
   onOpen: () => void;
 }) {
   const [linkError, setLinkError] = useState("");
-  const calendar =
-    artifact.kind === "calendar"
-      ? snapshot.calendar.find(
-          (item) =>
-            artifact.content.includes(item.id) ||
-            item.sourceIds.some((id) => work?.sourceIds.includes(id)),
-        )
-      : undefined;
+  let calendar: CalendarEvent | undefined;
+  if (artifact.kind === "calendar") {
+    try {
+      const saved = JSON.parse(artifact.content) as { id?: string };
+      calendar = snapshot.calendar.find((item) => item.id === saved.id);
+    } catch { /* Non-JSON artifacts remain readable as text. */ }
+  }
   return (
     <div className="artifact-preview">
       <header>
@@ -2264,35 +2298,7 @@ function ArtifactPreview({
           <code>{artifact.content}</code>
         </pre>
       ) : calendar ? (
-        <div className="calendar-card">
-          <span className="calendar-card__date">
-            <b>
-              {new Date(calendar.start).toLocaleDateString([], {
-                day: "numeric",
-              })}
-            </b>
-            {new Date(calendar.start).toLocaleDateString([], {
-              month: "short",
-            })}
-          </span>
-          <div>
-            <h4>{calendar.title}</h4>
-            <p>
-              {new Date(calendar.start).toLocaleString([], {
-                weekday: "long",
-                hour: "numeric",
-                minute: "2-digit",
-              })}{" "}
-              to{" "}
-              {new Date(calendar.end).toLocaleTimeString([], {
-                hour: "numeric",
-                minute: "2-digit",
-              })}
-            </p>
-            <p>{calendar.location}</p>
-            <small>{calendar.attendees.join(", ")}</small>
-          </div>
-        </div>
+        <CalendarCard event={calendar} />
       ) : (
         <div className="markdown">
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
