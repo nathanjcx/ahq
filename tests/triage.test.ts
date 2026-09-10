@@ -359,6 +359,7 @@ test('suggested arrivals expose editable previews without leaking future evidenc
     await settled(app.office, event.item.id);
     const after = app.office.snapshot();
     const incoming = after.sources.find((item) => item.id === event.item!.id)!;
+    assert.ok(incoming.timestamp <= Date.now(), 'Manual arrivals use delivery time, not the old replay offset.');
     assert.equal(incoming.title, changes.title);
     assert.equal(incoming.content, changes.content);
     assert.equal(incoming.author, changes.author);

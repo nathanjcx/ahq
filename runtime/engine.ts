@@ -313,7 +313,7 @@ class Runtime implements OfficeRuntime {
     if (!entry || !event) throw new Error('Replay event not found');
     if (entry.delivered) return;
     const item = changes ? { ...event.item, source: changes.source, author: changes.author, title: changes.title, content: changes.content, threadId: changes.threadId } : event.item;
-    this.ingestSource(item);
+    this.ingestSource({ ...item, timestamp: Date.now() });
     entry.delivered = true;
     this.state.demo.nextIndex = this.state.demo.events!.filter((item) => item.delivered).length;
     if (this.state.demo.events!.every((item) => item.delivered)) this.pauseDemo();
