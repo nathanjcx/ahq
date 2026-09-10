@@ -277,7 +277,7 @@ export async function finishLittleOffice(
       const reportPath = path.join(workspace, 'launch-build.md');
       await writeFile(reportPath, report);
       await add('Little Office launch build', 'product', reportPath, report);
-      await add('Little Office runnable preview', 'product', preview, await readFile(preview, 'utf8'));
+      await add('Little Office runnable preview', 'product', preview, 'Runnable frontend built from the pinned Little Office source. Open the preview to interact with it.');
       await add(
         'Launch bug screenshot',
         'product',
@@ -328,7 +328,7 @@ export async function finishLittleOffice(
         'Verified fixed Little Office preview',
         'product',
         path.join(workspace, 'dist/index.html'),
-        await readFile(path.join(workspace, 'dist/index.html'), 'utf8'),
+        'Runnable Little Office preview with the verified launch-button fix.',
       );
       await add(
         'Fixed launch screenshot',

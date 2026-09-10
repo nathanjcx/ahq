@@ -1,26 +1,40 @@
-# Recording the local demo
+# Little Office launch demo
 
-Open the Electron app and sign in with ChatGPT in Settings. The Meeting, Email and Slack buttons in the demo dock create local notifications. Each starts real Codex triage, then a separate employee session if work is needed. No integration credentials or cloud database are required. Codex must be installed and signed in; bug verification also uses Git. Runs consume your ChatGPT allowance.
+Open the Electron app, sign in with ChatGPT, and use the Little Office launch panel. Each action consumes your connected ChatGPT allowance. The app uses local data and files, with no Gmail, Slack or Calendar credentials.
 
-Email uses the checked-in sales CSV to produce a report PDF. Meeting uses sales, campaign data and an agenda to produce a brief. Slack copies the checked-in checkout project into a fresh workspace, checks the real fix against the original regression tests, and produces a simulated PR containing the diff. Nothing is published to GitHub.
+## Play the story
 
-The dock also accepts a goal. These demo roadmaps create dedicated employees and advance after local deliverables pass checks. Independent steps run concurrently; dependent steps receive the complete text of their predecessors' artifacts. QA receives the exact code from its bug-fix prerequisite. The normal roadmap entry retains manual review.
+1. **Prepare the launch.** Codex plans three independent assignments: complete the real 2D Little Office starter, create launch messaging, and calculate a six-month financial forecast. Open each employee stream while they work. The product source is pinned to this repository's `backend` branch, with provenance in `demo-data/little-office/fixture-manifest.json`.
+2. **Investor email.** A fictional investor reports a competitor. Finance reads the saved original forecast, applies lower growth and higher churn, and creates a revised CSV and PDF. The app checks each output row against the scenario formulas.
+3. **Slack bug.** A real screenshot captured from the completed product shows a deliberately staged launch CTA visibility regression. The coding agent works on a copy of that product, reproduces the issue, changes real code and produces a simulated PR. The host independently checks the fix. No GitHub PR is created.
+4. **Reporter meeting.** The agent uses the launch messaging, revised forecast and product-fix evidence to write an interview brief with slogans, talking points and likely questions.
+5. **Celebrate.** The office celebrates only after the current scene outputs and roadmap are verified complete.
+
+The source messages and business figures are fictional. Agent sessions, files, previews, code changes and verification are real. The product begins as the actual existing Little Office application, not an application generated from scratch.
+
+## Retake a scene
+
+Each completed scene saves a checkpoint. Finish or stop active work before restoring one. Restore keeps original artifacts and session history, returns the scene controls to that point, and gives the next arrival a fresh source key. It does not reuse recorded model output as a live run. Replaying a later scene consumes allowance again; restoring a checkpoint alone does not.
+
+The launch panel links employee streams. Notifications and saved work show the source message, attachments, intake decision, complete saved messages and downloadable artifacts. Earlier takes remain available in history.
 
 ## Trigger from a recording script
 
-While Electron is open, run:
+Electron writes `demo-connection.json` in its user-data directory on launch. Use its path explicitly:
 
 ```sh
-node scripts/demo-trigger.mjs email --user-data '/path/to/electron/userData' --key take-1-email
-node scripts/demo-trigger.mjs slack --user-data '/path/to/electron/userData' --key take-1-slack
-node scripts/demo-trigger.mjs meeting --user-data '/path/to/electron/userData' --key take-1-meeting
-node scripts/demo-trigger.mjs state --user-data '/path/to/electron/userData'
+node scripts/demo-trigger.mjs launch start --connection /path/to/demo-connection.json
+node scripts/demo-trigger.mjs launch state --connection /path/to/demo-connection.json
+node scripts/demo-trigger.mjs launch advance investor --connection /path/to/demo-connection.json
+node scripts/demo-trigger.mjs launch advance bug --connection /path/to/demo-connection.json
+node scripts/demo-trigger.mjs launch advance reporter --connection /path/to/demo-connection.json
+node scripts/demo-trigger.mjs launch advance celebrate --connection /path/to/demo-connection.json
+node scripts/demo-trigger.mjs launch restore CHECKPOINT_ID --connection /path/to/demo-connection.json
+node scripts/demo-trigger.mjs launch retry investor --connection /path/to/demo-connection.json
 ```
 
-Use `--connection /path/to/demo-connection.json` instead if convenient. Electron writes that file in its user-data directory on launch and removes it on clean exit. It contains a random localhost port and bearer token. Reusing a key returns the existing notification without starting duplicate work. A new key starts another real run.
+The same backend gates apply to UI and script actions. `GET /launch` returns the current story; `POST /launch` accepts `{action, scene?, checkpointId?}`. Send the bearer token from the connection file to the localhost port in that file. Browser mutation requests are rejected.
 
-The HTTP interface accepts `POST /notifications` with a JSON object containing `kind`, optional `idempotencyKey`, `title`, `content`, and `attachments`. Each attachment is `{name, mediaType, content}` with UTF-8 text. Binary screenshot input is not supported yet. Send `Authorization: Bearer <token>` from the connection file. `GET /state` returns notification histories and sessions. Requests bind to 127.0.0.1 only; browser mutation requests are rejected.
+Independent custom notifications remain under Custom tools. The existing `email`, `slack`, `meeting`, `state` and `retry` CLI commands remain available. `POST /notifications` accepts text attachments and PNG/JPEG attachments using `{name, mediaType, encoding: "base64", content}`. Images are decoded into real files and included directly in the Codex turn.
 
-The dock shows backend-triggered arrivals, intake and employee sessions, streamed messages, saved results and local artifacts. Failed notifications can be retried there or through `retry <notification-id>` in the CLI. Interrupted dispatches with an uncertain session ID require inspection instead of automatic retry.
-
-Current verification uses injected provider responses, real local files, real PDF generation, real tests and HTTP requests. It does not establish the quality or reliability of a fresh live Codex response. Rehearse the chosen live scenario before recording. There is no checkpoint/restore or recorded-playback mode yet.
+Codex must be installed and signed in. Git is required for simulated diffs. Frontend compilation uses dependencies shipped with the Electron app; it does not install packages during a demo task.
