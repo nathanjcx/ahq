@@ -3,6 +3,7 @@ import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { Command, Snapshot } from '../src/shared/types';
 
+if (process.env.OFFICE_DATA_DIR) app.setPath('userData', path.resolve(process.env.OFFICE_DATA_DIR));
 let window: BrowserWindow | null = null;
 let host: Electron.UtilityProcess | null = null;
 let latest: Snapshot | undefined;
@@ -62,6 +63,7 @@ function startRuntime() {
 function createWindow() {
   window = new BrowserWindow({
     title: 'Little Office', width: 1480, height: 960, minWidth: 900, minHeight: 650,
+    icon: path.join(__dirname, '../dist/icon.png'),
     backgroundColor: '#f7f5ec', autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });

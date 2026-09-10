@@ -39,6 +39,6 @@
     "productName": "Little Office",
     "directories": { "output": "release" },
     "files": ["dist/**/*", "dist-electron/**/*", "package.json"],
-    "linux": { "target": ["dir"], "category": "Office" }
+    "linux": { "target": ["dir"], "category": "Office", "icon": "public/icon.png" }
   }
 }

@@ -65,6 +65,8 @@ node scripts/smoke.mjs
 
 The Electron smoke check requires a graphical session and writes screenshots to `test-results/`.
 
+`node scripts/live-smoke.mjs` additionally verifies a real report through an existing ChatGPT login. It uses subscription allowance and keeps its workspace separate from the application’s normal data.
+
 ## Structure
 
 | Directory | Responsibility |
