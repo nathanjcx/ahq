@@ -26,6 +26,20 @@ The first window starts at local midnight. Later collections resume from the las
 
 Routines show past runs and their artifacts. AI news also has a cumulative, searchable collection with announcement/rumor filters and original post links. Structured results persist in the local SQLite snapshot and each run's `collection.json`; reports are saved beside them. This feature requires ChatGPT sign-in and internet access, but no X API key. It cannot guarantee complete or immediate X coverage.
 
+## Goals and roadmaps
+
+Open Goals, enter an objective, and start planning. A real Codex planner creates one to six tasks with explicit dependencies. The office assigns each step its own worker and runs up to two independent tasks together. Dependent tasks wait for completed prerequisite artifacts. The Goals view shows the roadmap, workers, dependencies, results, and links to each message stream. Failed or cancelled steps leave dependent work blocked until retried.
+
+The business-review example uses checked-in sales, campaign, and support CSVs. Goal workers receive these files in their isolated workspace. Supported execution is local analysis, meeting briefs, checkout fixes, and checkout QA. A roadmap combines code edits into one checkout task, followed by QA; it does not merge parallel code branches. Unsupported goals produce an explanation of the missing inputs or capabilities instead of pretending to complete external actions. One planning turn plus each task consumes Codex allowance.
+
+The active-work strip exposes intake, planning, and execution. Triage decisions have their own saved message stream; task and planner streams remain available after completion.
+
+## Slack bug to simulated PR
+
+The Slack checkout request reproduces a fixed-coupon tax bug in `demo-data/checkout/`. This is a runnable application: `npm start` in that directory serves its checkout page at `http://127.0.0.1:4179`. Its original tests intentionally fail for the reported regression.
+
+A coding worker fixes an isolated copy. The runtime compares the actual project files against the original, restores baseline regression tests in a separate verification copy, and runs `node --test`. The resulting simulated PR contains the changed files, real diff, and captured test output. No remote branch or GitHub PR is created. Failed checks retain the preview for inspection and mark the work failed. Independent QA can then verify the completed fix's exact code snapshot. Local verification requires `node` and `git` on PATH.
+
 ## Local evidence
 
 The checked-in `demo-data/projects/` directory contains the fictional project records: source CSVs, owner registers, budgets, operations notes, and planning constraints. `demo-data/checkout/` contains the checkout code and tests. Gmail and Slack conversation files and their attachments live under `demo-data/arrivals/`.

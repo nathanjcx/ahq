@@ -33,7 +33,12 @@ try {
   const completed = state.work.find((item) => item.id === work.id);
   assert.equal(completed.status, 'completed', completed.error);
   const artifact = state.artifacts.find((item) => item.workId === work.id);
-  assert.ok(artifact && !artifact.simulated && artifact.content.length > 100, 'Codex must produce a real artifact.');
+  assert.ok(artifact && artifact.content.length > 100, 'Codex must produce a saved artifact.');
+  if (scenario === 'bug') {
+    assert.match(artifact.title, /^Simulated PR:/);
+    assert.match(artifact.content, /Result: passed/);
+    assert.match(artifact.content, /checkout.js/);
+  } else assert.equal(artifact.simulated, false);
   assert.ok(state.runs.find((item) => item.workId === work.id)?.threadId, 'Run must retain its actual Codex thread.');
   console.log(`Live Codex ${scenario} passed: ${artifact.title}, ${artifact.content.length} characters, ${state.activity.filter((event) => event.workId === work.id).length} activity events.`);
 } finally {

@@ -42,7 +42,7 @@ export interface ActivityEvent {
 export interface Artifact {
   id: string; workId: string; title: string; kind: 'report' | 'brief' | 'patch' | 'calendar' | 'qa';
   content: string; createdAt: number; filePath?: string; simulated: boolean;
-  supersedesArtifactId?: string;
+  supersedesArtifactId?: string; runId?: string;
   news?: NewsCollection;
 }
 export interface BoardPost {

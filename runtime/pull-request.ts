@@ -47,12 +47,16 @@ export async function createSimulatedPullRequest(input: SimulatedPullRequestInpu
       diff = result.stdout ?? '';
     }
     const changedFiles = [...new Set([...diff.matchAll(/^(?:--- a\/base\/(.+)|\+\+\+ b\/head\/(.+))$/gm)].map(match => match[1] || match[2]))];
+    // Verify an isolated code copy with the original regression tests restored.
+    // A worker cannot pass verification by deleting or weakening those tests.
+    const verification = path.join(temporary, 'head');
+    await cp(path.join(baseline, 'test'), path.join(verification, 'test'), { recursive: true });
     let testsPassed = true;
     let testOutput: string;
     try {
       const env = { ...process.env };
       delete env.NODE_TEST_CONTEXT;
-      const result = await execute('node', ['--test'], { cwd: input.workspace, env, signal: input.signal, timeout: 60_000, maxBuffer: 4 * 1024 * 1024 });
+      const result = await execute('node', ['--test'], { cwd: verification, env, signal: input.signal, timeout: 60_000, maxBuffer: 4 * 1024 * 1024 });
       testOutput = result.stdout + result.stderr;
     } catch (error) {
       input.signal?.throwIfAborted();
@@ -69,7 +73,7 @@ export async function createSimulatedPullRequest(input: SimulatedPullRequestInpu
       'Base: pristine local checkout fixture', `Proposed branch: office/${input.workId}/${input.runId}`, '',
       '## Changed files', '', ...changedFiles.map(file => `- ${file}`),
       ...(diff ? [] : ['No project changes.']), '',
-      '## Verification', '', 'Command: node --test', `Result: ${testsPassed ? 'passed' : 'failed'}`, '',
+      '## Verification', '', 'Command: node --test', 'Executed against an isolated code copy with the original regression tests restored.', `Result: ${testsPassed ? 'passed' : 'failed'}`, '',
       `${fence}text`, testOutput.trimEnd(), fence, '',
       '## Patch', '', `${fence}diff`, diff.trimEnd() || 'No changes.', fence, '',
     ].join('\n');

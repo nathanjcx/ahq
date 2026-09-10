@@ -735,7 +735,7 @@ function GoalsView({ snapshot, run, busy, onOpenWork, onOpenArtifact }: { snapsh
     <PageHeader eyebrow="Give the office a goal" title="Goals" description="A planner breaks your goal into tasks, assigns workers, and connects the steps that depend on each other." />
     <form className="goal-composer" onSubmit={submit}>
       <label htmlFor="new-goal">What do you want to accomplish?</label>
-      <textarea id="new-goal" rows={3} required maxLength={20000} value={goal} onChange={event => setGoal(event.target.value)} placeholder="Describe the outcome and what a useful result should include." />
+      <textarea id="new-goal" rows={3} required maxLength={8000} value={goal} onChange={event => setGoal(event.target.value)} placeholder="Describe the outcome and what a useful result should include." />
       <div className="goal-composer__actions"><button type="button" className="button button--quiet" onClick={() => setGoal(STARTER_GOAL)}>Use Q3 business review example</button><button className="button button--primary" disabled={busy !== null || !signedIn || !goal.trim()}><Target size={15} />{busy === "goal.create" ? "Adding goal…" : "Build roadmap"}</button></div>
       <p className="muted">Includes the bundled sales, campaign, and support CSVs. Planning and tasks use your ChatGPT allowance.</p>
       {!signedIn && <p className="field-error">Sign in with ChatGPT in Settings to start a goal.</p>}

@@ -32,6 +32,7 @@ if (process.argv.includes('mcp')) { process.stdout.write('[]'); process.exit(0);
 const fs = require('node:fs');
 const path = require('node:path');
 let count = 0;
+let retryCodeFailed = false;
 const send = (message) => process.stdout.write(JSON.stringify(message) + '\\n');
 require('node:readline').createInterface({ input: process.stdin }).on('line', (line) => {
   const message = JSON.parse(line);
@@ -70,7 +71,9 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', (l
     const cwd = message.params.cwd;
     if (prompt.includes('patch.md')) {
       const file = path.join(cwd, 'checkout.js');
+      if (!prompt.includes('retry-code') || retryCodeFailed) {
       fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(' + (coupon > 0 ? tax : 0)', '') + '\\n// ' + prompt.split('\\n')[0]);
+      } else retryCodeFailed = true;
       fs.writeFileSync(path.join(cwd, 'patch.md'), '# Fixed this requested checkout task');
       fs.writeFileSync(path.join(cwd, 'test', 'added.test.js'), '// Additional regression coverage from the fix');
       fs.writeFileSync(path.join(cwd, 'qa.md'), '# Old notes from the parent workspace');
@@ -172,7 +175,7 @@ test('waiting QA is reconsidered when its bug arrives, consumes the exact patch 
     assert.equal(proof.parentWorkspace, parentRun.workspace);
     assert.equal(proof.qaWorkspace, qaRun.workspace);
     assert.notEqual(proof.parentWorkspace, proof.qaWorkspace);
-    assert.deepEqual(proof.files.map((file: { path: string }) => file.path).sort(), ['README.md', 'checkout.js', 'package.json', 'test/added.test.js', 'test/checkout.test.js']);
+    assert.deepEqual(proof.files.map((file: { path: string }) => file.path).sort(), ['README.md', 'checkout.js', 'index.html', 'package.json', 'server.js', 'test/added.test.js', 'test/checkout.test.js']);
     for (const file of proof.files) {
       const parentBytes = await readFile(path.join(parentRun.workspace!, file.path));
       const copiedBytes = await readFile(path.join(qaRun.workspace!, file.path));
@@ -445,6 +448,9 @@ test('goal planning runs independent steps together and passes their artifacts i
     assert.match(evidence, /Sales analysis/);
     assert.match(evidence, /Campaign analysis/);
     assert.match(evidence, /sales.csv/);
+    assert.doesNotMatch(evidence, /Pinecone launch: rollout decision/);
+    const prompts = (await readFile(path.join(app.directory, 'prompts.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string);
+    assert.ok(prompts.some(prompt => prompt.includes('No calendar meeting is required')));
     const plannerRun = state.runs.find(run => run.workId === goal.plannerWorkId)!;
     assert.ok(plannerRun.messages?.some(message => message.complete && message.text.includes('steps')));
     assert.equal(new Set(state.work.filter(work => work.goalId).map(work => work.agentId)).size, 4);
@@ -461,5 +467,28 @@ test('roadmaps reject unknown dependencies, cycles, duplicate IDs and QA without
   assert.throws(() => parse([{ ...step, dependsOn: ['b'] }, { ...step, id: 'b', dependsOn: ['a'] }]), /cycle/);
   assert.throws(() => parse([step, step]), /unique/);
   assert.throws(() => parse([{ ...step, scenario: 'qa' }]), /must depend/);
+  assert.throws(() => parse([{ ...step, scenario: 'bug' }, { ...step, id: 'b', scenario: 'bug', dependsOn: ['a'] }]), /one bug step/);
   assert.throws(() => parse(Array.from({ length: 7 }, (_, i) => ({ ...step, id: String(i) }))), /one to six/);
+});
+
+
+test('a successful code retry supplies only its own artifact to dependent QA', async () => {
+  const app = await setup();
+  try {
+    const incoming = source('retry-code', { scenario: 'bug', goal: 'retry-code: fix the coupon bug' });
+    await app.office.command({ type: 'source.ingest', item: incoming });
+    await waitFor(() => app.office.snapshot().work.some(work => work.triggerSourceId === incoming.id && work.status === 'failed'));
+    const failed = app.office.snapshot();
+    const bug = failed.work.find(work => work.triggerSourceId === incoming.id)!;
+    const oldArtifact = failed.artifacts.find(artifact => artifact.workId === bug.id)!;
+    assert.match(oldArtifact.content, /Result: failed/);
+    await app.office.command({ type: 'work.retry', id: bug.id });
+    await waitFor(() => app.office.snapshot().work.some(work => work.parentWorkId === bug.id && work.scenario === 'qa' && work.status === 'completed'));
+    const state = app.office.snapshot();
+    const qa = state.work.find(work => work.parentWorkId === bug.id && work.scenario === 'qa')!;
+    assert.equal(qa.inputArtifactIds?.length, 1);
+    assert.ok(!qa.inputArtifactIds?.includes(oldArtifact.id));
+    assert.match(state.artifacts.find(artifact => artifact.id === qa.inputArtifactIds![0])!.content, /Result: passed/);
+    assert.ok(state.artifacts.some(artifact => artifact.id === oldArtifact.id), 'Failed attempt remains inspectable.');
+  } finally { await app.close(); }
 });

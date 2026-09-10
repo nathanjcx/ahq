@@ -44,3 +44,15 @@ test('an unfixed project records failures and no patch', async () => {
     await rm(workspace, { recursive: true, force: true });
   }
 });
+
+
+test('removing regression tests cannot make the broken checkout pass verification', async () => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), 'checkout-pr-test-'));
+  try {
+    await cp(template, workspace, { recursive: true });
+    await rm(path.join(workspace, 'test'), { recursive: true });
+    const result = await createSimulatedPullRequest({ workspace, template, title: 'Weakened tests', workId: 'bug-184', runId: 'run-3' });
+    assert.equal(result.testsPassed, false);
+    assert.match(result.testOutput, /# fail 2/);
+  } finally { await rm(workspace, { recursive: true, force: true }); }
+});
