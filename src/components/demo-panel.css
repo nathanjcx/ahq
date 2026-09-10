@@ -200,3 +200,11 @@
     max-height: 55dvh;
   }
 }
+
+.demo-session > span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}

@@ -19,7 +19,7 @@ Keep the source arrival, one visible agent action, and the finished artifact in 
 
 ## Recording triggers
 
-Open Electron, sign in with ChatGPT, and choose the application storage folder if prompted. The launch panel provides the same controls as the backend. Opening the app does not start the story; **Start the launch** does.
+Open Electron, sign in with ChatGPT, and choose the application storage folder if prompted. Click **Demo controls** in the top toolbar to show the launch panel and sample triggers. The launch panel provides the same controls as the backend. Opening the app does not start the story; **Start the launch** does.
 
 Electron writes `demo-connection.json` in its user-data directory. It contains the localhost port and bearer token. Keep that file out of the video. Pass its path explicitly:
 

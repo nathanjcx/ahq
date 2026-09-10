@@ -42,7 +42,15 @@ import Modal from './Modal';
 import './office-chat.css';
 type Common = { state: AppState; update: UpdateState; notify: (message: string) => void };
 
-export function FilesPage({ state, notify }: { state: AppState; notify: (message: string) => void }) {
+export function FilesPage({
+  state,
+  notify,
+  onAddFolder,
+}: {
+  state: AppState;
+  notify: (message: string) => void;
+  onAddFolder: () => void;
+}) {
   const [files, setFiles] = useState<LocalFileEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -72,7 +80,7 @@ export function FilesPage({ state, notify }: { state: AppState; notify: (message
     try {
       await window.ahq.showFileInFinder(filePath);
     } catch (error) {
-      notify(error instanceof Error ? error.message : 'Could not open that file in Finder.');
+      notify(error instanceof Error ? error.message : 'Could not show that file in your file manager.');
     } finally {
       setBusy(false);
     }
@@ -92,6 +100,9 @@ export function FilesPage({ state, notify }: { state: AppState; notify: (message
           </button>
         </div>
         <div className="button-group">
+          <button className="button primary" onClick={onAddFolder}>
+            <Plus size={14} /> Add source folder
+          </button>
           <button
             className="button secondary"
             disabled={!window.ahq || loading}
@@ -132,7 +143,7 @@ export function FilesPage({ state, notify }: { state: AppState; notify: (message
                 </small>
               </div>
               <button className="button secondary" onClick={() => void show(database.path)}>
-                Show in Finder
+                Show in file manager
               </button>
             </div>
           )}
@@ -158,7 +169,7 @@ export function FilesPage({ state, notify }: { state: AppState; notify: (message
                 </small>
               </div>
               <button className="button secondary" onClick={() => void show(file.path)}>
-                Show in Finder
+                Show in file manager
               </button>
             </div>
           ))}
@@ -188,7 +199,7 @@ export function FilesPage({ state, notify }: { state: AppState; notify: (message
                   </small>
                 </div>
                 <button className="button secondary" onClick={() => void show(file.path)}>
-                  Show in Finder
+                  Show in file manager
                 </button>
               </div>
             ))}

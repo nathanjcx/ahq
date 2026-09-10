@@ -28,23 +28,28 @@ function AttachmentPreview({ file }: { file: DemoSnapshot['notifications'][numbe
 
 export default function DemoPanel({
   state,
+  showDemo,
   onCreateGoal,
   onWorkUpdate,
   notify,
   selectedSessionId,
   onSelectSession,
+  onReview,
 }: {
   state: AppState;
+  showDemo: boolean;
   onCreateGoal: (goal: string) => Promise<void>;
   onWorkUpdate: () => Promise<void>;
   notify: (message: string) => void;
   selectedSessionId: string | null;
   onSelectSession: (id: string | null) => void;
+  onReview: (approvalId: string) => void;
 }) {
   const [snapshot, setSnapshot] = useState<DemoSnapshot>({ notifications: [], sessions: [] });
   const [expanded, setExpanded] = useState(false);
   const [restoreVersion, setRestoreVersion] = useState(0);
   const [goal, setGoal] = useState(suggestedGoal);
+  const [historySearch, setHistorySearch] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [pollError, setPollError] = useState('');
@@ -138,87 +143,108 @@ export default function DemoPanel({
     void action(() => window.ahq!.triggerDemo({ kind }));
   }
   const active = snapshot.sessions.filter(activeSession);
-  const name = (session: CloudSession) =>
-    session.title || state.employees.find((e) => e.id === session.employeeId)?.name || 'AI session';
+  const name = (session: CloudSession) => {
+    const taskId =
+      state.roadmap?.assignments.find((item) => item.sessionId === session.id)?.commitmentId ??
+      state.approvals.find((item) => item.sessionId === session.id)?.commitmentId;
+    return (
+      state.commitments.find((item) => item.id === taskId || item.sessionId === session.id)?.title ||
+      session.title?.split('\n')[0].slice(0, 160) ||
+      state.employees.find((e) => e.id === session.employeeId)?.name ||
+      'AI session'
+    );
+  };
+  const savedSessions = [...snapshot.sessions].reverse().filter((session) => !activeSession(session));
+  const query = historySearch.trim().toLowerCase();
+  const matchingSessions = savedSessions.filter((session) =>
+    !query || `${name(session)} ${session.status} ${session.output?.content ?? ''}`.toLowerCase().includes(query),
+  );
+  const review = state.approvals.find(
+    (approval) => approval.sessionId === selectedSessionId && approval.status === 'pending',
+  );
   const messages = selected?.messages;
 
   return (
     <>
-      <LaunchPanel
-        notify={notify}
-        onWorkUpdate={onWorkUpdate}
-        onSelectSession={onSelectSession}
-        onRestore={() => {
-          setSnapshot({ notifications: [], sessions: [] });
-          setRestoreVersion((value) => value + 1);
-        }}
-      />
-      <aside className="demo-dock" aria-label="Demo controls and live work">
+      <div hidden={!showDemo}>
+        <LaunchPanel
+          notify={notify}
+          onWorkUpdate={onWorkUpdate}
+          onSelectSession={onSelectSession}
+          onRestore={() => {
+            setSnapshot({ notifications: [], sessions: [] });
+            setRestoreVersion((value) => value + 1);
+          }}
+        />
+      </div>
+      <aside className="demo-dock" aria-label="Live work and session history">
         <button className="demo-heading" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
           <span>
-            <Radio size={16} /> Live office <span className="demo-count">{active.length} active</span>
+            <Radio size={16} /> Live work <span className="demo-count">{active.length} active</span>
           </span>
           {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
         {expanded && (
           <div className="demo-body">
-            <details className="demo-tools">
-              <summary>Custom tools</summary>
-              {notice && (
-                <div className="demo-notice">
-                  <p>
-                    Sample notifications start real AI work and use your connected account allowance. PRs are
-                    simulated. Roadmap steps in this demo continue automatically.
-                  </p>
-                  <button
-                    className="text-button"
-                    onClick={() => {
-                      localStorage.setItem('ahq-demo-notice', 'seen');
-                      setNotice(false);
-                    }}
-                  >
-                    Got it
+            {showDemo && (
+              <details className="demo-tools">
+                <summary>Custom tools</summary>
+                {notice && (
+                  <div className="demo-notice">
+                    <p>
+                      Sample notifications start real AI work and use your connected account allowance. PRs
+                      are simulated. Roadmap steps in this demo continue automatically.
+                    </p>
+                    <button
+                      className="text-button"
+                      onClick={() => {
+                        localStorage.setItem('ahq-demo-notice', 'seen');
+                        setNotice(false);
+                      }}
+                    >
+                      Got it
+                    </button>
+                  </div>
+                )}
+                <div className="demo-triggers">
+                  <button className="button" disabled={!supported || busy} onClick={() => trigger('meeting')}>
+                    <Calendar size={15} /> Meeting
+                  </button>
+                  <button className="button" disabled={!supported || busy} onClick={() => trigger('email')}>
+                    <Mail size={15} /> Email
+                  </button>
+                  <button className="button" disabled={!supported || busy} onClick={() => trigger('slack')}>
+                    <MessageSquare size={15} /> Slack
                   </button>
                 </div>
-              )}
-              <div className="demo-triggers">
-                <button className="button" disabled={!supported || busy} onClick={() => trigger('meeting')}>
-                  <Calendar size={15} /> Meeting
-                </button>
-                <button className="button" disabled={!supported || busy} onClick={() => trigger('email')}>
-                  <Mail size={15} /> Email
-                </button>
-                <button className="button" disabled={!supported || busy} onClick={() => trigger('slack')}>
-                  <MessageSquare size={15} /> Slack
-                </button>
-              </div>
-              <form
-                className="demo-goal"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void action(async () => {
-                    await onCreateGoal(goal.trim());
-                    notify('Planning your goal. Independent steps will run together.');
-                  });
-                }}
-              >
-                <label htmlFor="demo-goal">Give the team a goal</label>
-                <textarea
-                  id="demo-goal"
-                  rows={3}
-                  value={goal}
-                  onChange={(e) => setGoal(e.target.value)}
-                  maxLength={500}
-                  required
-                />
-                <button
-                  className="button primary"
-                  disabled={!supported || busy || !goal.trim() || state.roadmap?.status === 'planning'}
+                <form
+                  className="demo-goal"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void action(async () => {
+                      await onCreateGoal(goal.trim());
+                      notify('Planning your goal. Independent steps will run together.');
+                    });
+                  }}
                 >
-                  Create roadmap &amp; start
-                </button>
-              </form>
-            </details>
+                  <label htmlFor="demo-goal">Give the team a goal</label>
+                  <textarea
+                    id="demo-goal"
+                    rows={3}
+                    value={goal}
+                    onChange={(e) => setGoal(e.target.value)}
+                    maxLength={500}
+                    required
+                  />
+                  <button
+                    className="button primary"
+                    disabled={!supported || busy || !goal.trim() || state.roadmap?.status === 'planning'}
+                  >
+                    Create roadmap &amp; start
+                  </button>
+                </form>
+              </details>
+            )}
             {!supported && <p>Open the desktop app to start live work.</p>}
             {(error || pollError) && (
               <p className="demo-error" role="alert">
@@ -245,9 +271,9 @@ export default function DemoPanel({
             </div>
             <details className="demo-history">
               <summary>
-                <Bell size={14} /> Notifications &amp; saved work ({snapshot.notifications.length})
+                <Bell size={14} /> Saved work &amp; notifications ({snapshot.sessions.length})
               </summary>
-              {snapshot.triggerAddress && (
+              {showDemo && snapshot.triggerAddress && (
                 <p className="demo-address">
                   External trigger: <code>{snapshot.triggerAddress}</code>
                 </p>
@@ -290,19 +316,26 @@ export default function DemoPanel({
                 </article>
               ))}
               <strong>Session history</strong>
-              {[...snapshot.sessions]
-                .reverse()
-                .filter((session) => !activeSession(session))
-                .map((session) => (
-                  <button
-                    className="demo-session"
-                    key={session.id}
-                    onClick={() => onSelectSession(session.id)}
-                  >
-                    <span>{name(session)}</span>
-                    <small>{session.status}</small>
-                  </button>
-                ))}
+              <input
+                type="search"
+                aria-label="Search saved work"
+                placeholder="Search titles, results, or status"
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+              />
+              {matchingSessions.length === 0 && (
+                <p>
+                  {historySearch.trim()
+                    ? 'No saved work matches your search.'
+                    : 'No saved work yet. Assign a task to an employee to get started.'}
+                </p>
+              )}
+              {matchingSessions.map((session) => (
+                <button className="demo-session" key={session.id} onClick={() => onSelectSession(session.id)}>
+                  <span>{name(session)}</span>
+                  <small>{session.status}</small>
+                </button>
+              ))}
             </details>
           </div>
         )}
@@ -323,6 +356,11 @@ export default function DemoPanel({
             {selected && (
               <>
                 <p>{selected.activity}</p>
+                {review && (
+                  <button className="button primary" onClick={() => onReview(review.id)}>
+                    Review result
+                  </button>
+                )}
                 <h3>Messages</h3>
                 {messages?.length ? (
                   messages.map((message) => (

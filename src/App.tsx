@@ -85,13 +85,17 @@ const nav = [
   { id: 'office', label: 'Office', icon: Home },
   { id: 'employees', label: 'Employees', icon: Users },
   { id: 'roadmap', label: 'Roadmap', icon: GitBranch },
+  { id: 'commitments', label: 'Tasks', icon: Flag },
+  { id: 'needs-you', label: 'Reviews', icon: Inbox },
+  { id: 'conversations', label: 'Chat', icon: MessageCircle },
   { id: 'files', label: 'Files', icon: FolderOpen },
+  { id: 'activity', label: 'Activity', icon: History },
 ] as const;
 const pageNames: Record<Page, string> = {
   office: 'Office',
   employees: 'Employees',
   announce: 'Announce',
-  commitments: 'Commitments',
+  commitments: 'Tasks',
   roadmap: 'Roadmap',
   files: 'Files',
   conversations: 'Chat',
@@ -166,6 +170,7 @@ export default function App() {
   }, [officeChatOpen, page]);
   const [cloud, setCloud] = useState<CloudSettings>({ endpoint: '', configured: false, connected: false });
   const [toast, setToast] = useState('');
+  const [showDemo, setShowDemo] = useState(() => localStorage.getItem('ahq-show-demo') === 'true');
   const [modal, setModal] = useState<
     'employee' | 'commitment' | 'goal' | 'search' | 'help' | 'folder' | 'files' | 'storage' | 'profile' | null
   >(null);
@@ -646,11 +651,16 @@ export default function App() {
               className={`nav-item ${page === item.id ? 'active' : ''}`}
               onClick={() => navigate(item.id)}
               aria-label={item.label}
-              title={item.label}
+              title={
+                item.id === 'needs-you' && pending.length ? `Reviews (${pending.length} pending)` : item.label
+              }
               aria-current={page === item.id ? 'page' : undefined}
             >
               <item.icon size={19} strokeWidth={1.7} />
               <span>{item.label}</span>
+              {item.id === 'needs-you' && pending.length > 0 && (
+                <span className="nav-count">{pending.length}</span>
+              )}
             </button>
           ))}
         </nav>
@@ -661,6 +671,17 @@ export default function App() {
             <span className="today">
               {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
             </span>
+            <button
+              className="button secondary"
+              aria-pressed={showDemo}
+              onClick={() => {
+                const next = !showDemo;
+                setShowDemo(next);
+                localStorage.setItem('ahq-show-demo', String(next));
+              }}
+            >
+              Demo controls
+            </button>
             <button
               className="icon-button"
               aria-label="Settings"
@@ -681,6 +702,7 @@ export default function App() {
           </div>
         </header>
         <DemoPanel
+          showDemo={showDemo}
           state={state}
           onCreateGoal={async (goal) => {
             await saveChain.current;
@@ -694,6 +716,10 @@ export default function App() {
           notify={notify}
           selectedSessionId={streamSessionId}
           onSelectSession={setStreamSessionId}
+          onReview={(approvalId) => {
+            setStreamSessionId(null);
+            setSelectedApproval(approvalId);
+          }}
         />
         <main>
           {page !== 'office' && (
@@ -1025,7 +1051,9 @@ export default function App() {
               onEditGoal={() => setModal('goal')}
             />
           )}
-          {page === 'files' && <FilesPage state={state} notify={notify} />}
+          {page === 'files' && (
+            <FilesPage state={state} notify={notify} onAddFolder={() => setModal('folder')} />
+          )}
           {page === 'conversations' && (
             <ConversationsPage {...common} initialChannel={conversationTarget} onBroadcast={broadcast} />
           )}
@@ -1162,12 +1190,13 @@ export default function App() {
       {modal === 'goal' && (
         <GoalForm
           goal={state.goal}
+          folders={state.folders}
           onClose={() => setModal(null)}
-          onSave={async (goal) => {
+          onSave={async (goal, folderIds, allowCloudUpload) => {
             if (!window.ahq)
               throw new Error('Open the desktop app to create an AI roadmap with your ChatGPT account.');
             await saveChain.current;
-            const next = await window.ahq.createRoadmap(goal);
+            const next = await window.ahq.createRoadmap(goal, { folderIds, allowCloudUpload });
             setState(next);
             navigate('roadmap');
             notify('Creating your roadmap. Your employees will start the first available steps.');
@@ -1395,7 +1424,9 @@ export default function App() {
             <ul>
               <li>Up to 100 text files, 512 KB each, 8 MB total.</li>
               <li>Hidden folders, common secrets, and unsupported files are excluded.</li>
-              <li>Nothing is uploaded until you explicitly share it in a cloud assignment.</li>
+              <li>
+                File contents are shared with AI only when you select them for an assignment or roadmap.
+              </li>
             </ul>
             {!window.ahq && (
               <div className="info-note">
@@ -1611,14 +1642,18 @@ function playSlapSound() {
 }
 function GoalForm({
   goal,
+  folders,
   onClose,
   onSave,
 }: {
   goal: string;
+  folders: WorkspaceFolder[];
   onClose: () => void;
-  onSave: (goal: string) => Promise<void>;
+  onSave: (goal: string, folderIds: string[], allowCloudUpload: boolean) => Promise<void>;
 }) {
   const [value, setValue] = useState(goal);
+  const [folderIds, setFolderIds] = useState<string[]>([]);
+  const [allow, setAllow] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   return (
@@ -1630,11 +1665,11 @@ function GoalForm({
       <form
         onSubmit={async (e) => {
           e.preventDefault();
-          if (!value.trim() || saving) return;
+          if (!value.trim() || saving || (folderIds.length > 0 && !allow)) return;
           setSaving(true);
           setError('');
           try {
-            await onSave(value.trim());
+            await onSave(value.trim(), folderIds, allow);
           } catch (error) {
             setError(error instanceof Error ? error.message : 'Please try again.');
             setSaving(false);
@@ -1652,6 +1687,38 @@ function GoalForm({
             onChange={(e) => setValue(e.target.value)}
           />
         </label>
+        <fieldset className="goal-sources" disabled={saving}>
+          <legend>Source folders</legend>
+          {folders.length ? (
+            folders.map((folder) => (
+              <label className="checkbox-label" key={folder.id}>
+                <input
+                  type="checkbox"
+                  checked={folderIds.includes(folder.id)}
+                  disabled={!folderIds.includes(folder.id) && folderIds.length >= 10}
+                  onChange={(e) => {
+                    setAllow(false);
+                    setFolderIds((ids) =>
+                      e.target.checked ? [...ids, folder.id] : ids.filter((id) => id !== folder.id),
+                    );
+                  }}
+                />
+                {folder.name} <small>{folder.files.length} files</small>
+              </label>
+            ))
+          ) : (
+            <p className="form-hint">
+              Add source folders on the Files page before creating a goal that needs your documents.
+            </p>
+          )}
+          {folderIds.length > 0 && (
+            <label className="checkbox-label cloud-consent">
+              <input type="checkbox" checked={allow} onChange={(e) => setAllow(e.target.checked)} />
+              Share these file copies with the AI planner and workers for this roadmap.
+            </label>
+          )}
+          <p className="form-hint">Only selected folders are shared. Work uses your connected AI account.</p>
+        </fieldset>
         <div className="info-note">
           <Target size={18} />
           AI creates a complete roadmap and delegates available steps to your employees. You review their work
@@ -1664,7 +1731,11 @@ function GoalForm({
         )}
         <div className="modal-footer">
           <span className="muted">{value.length}/500</span>
-          <button className="button primary" type="submit" disabled={saving || !value.trim()}>
+          <button
+            className="button primary"
+            type="submit"
+            disabled={saving || !value.trim() || (folderIds.length > 0 && !allow)}
+          >
             {saving ? 'Starting…' : 'Create roadmap & start'} <ArrowRight size={15} />
           </button>
         </div>
