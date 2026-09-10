@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
   BookOpen,
@@ -36,6 +36,7 @@ import type { UpdateState } from '../App';
 import { clockTime, dueLabel, employeeById, timeNow, uid } from '../lib/store';
 import Avatar from './Avatar';
 import Modal from './Modal';
+import './office-chat.css';
 type Common = { state: AppState; update: UpdateState; notify: (message: string) => void };
 export function EmployeesPage({
   state,
@@ -382,23 +383,59 @@ export function ConversationsPage({
   notify,
   initialChannel = 'team',
   onBroadcast,
-}: Common & { initialChannel?: string; onBroadcast: (text: string) => Promise<void> }) {
+  compact = false,
+  onChannelChange,
+}: Common & {
+  initialChannel?: string;
+  onBroadcast: (text: string) => Promise<void>;
+  compact?: boolean;
+  onChannelChange?: (channel: string) => void;
+}) {
   const [channel, setChannel] = useState(initialChannel);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
+  const messageList = useRef<HTMLDivElement>(null);
+  const followMessages = useRef(true);
+  useEffect(() => {
+    setChannel(initialChannel);
+    setSendError('');
+    followMessages.current = true;
+  }, [initialChannel]);
+  useEffect(() => {
+    if (channel !== 'team' && channel !== 'announce' && !state.employees.some((e) => e.id === channel)) {
+      setChannel('team');
+      onChannelChange?.('team');
+    }
+  }, [channel, state.employees, onChannelChange]);
+  function chooseChannel(next: string) {
+    setChannel(next);
+    setSendError('');
+    followMessages.current = true;
+    onChannelChange?.(next);
+  }
   const draft = drafts[channel] ?? '';
   const announcement = channel === 'announce';
   const person = employeeById(state.employees, channel);
   const messages = state.messages.filter((m) => m.channel === channel);
+  useEffect(() => {
+    if (messageList.current && followMessages.current) {
+      messageList.current.scrollTop = messageList.current.scrollHeight;
+    }
+  }, [channel, messages.length]);
   async function send() {
     if (!draft.trim() || sending || (announcement && !state.employees.length)) return;
+    setSendError('');
     if (announcement) {
       setSending(true);
       try {
         await onBroadcast(draft.trim());
         setDrafts((current) => ({ ...current, [channel]: '' }));
       } catch (error) {
-        notify(error instanceof Error ? error.message : 'The announcement could not be sent. Try again.');
+        const message =
+          error instanceof Error ? error.message : 'The announcement could not be sent. Try again.';
+        setSendError(message);
+        notify(message);
       } finally {
         setSending(false);
       }
@@ -412,84 +449,122 @@ export function ConversationsPage({
     notify('Message saved locally for your team’s context.');
   }
   return (
-    <div className="conversation-layout surface">
-      <aside className="conversation-channels">
-        <span className="eyebrow">SHARED SPACES</span>
-        <button
-          className={channel === 'team' ? 'selected' : ''}
-          aria-pressed={channel === 'team'}
-          disabled={sending}
-          onClick={() => setChannel('team')}
-        >
-          <MessageCircle size={18} />
-          <span>
-            team-lounge<small>The whole team, together</small>
-          </span>
-        </button>
-        <button
-          className={announcement ? 'selected' : ''}
-          aria-pressed={announcement}
-          disabled={sending}
-          onClick={() => setChannel('announce')}
-        >
-          <Megaphone size={18} />
-          <span>
-            Announcements<small>Direction for every employee</small>
-          </span>
-        </button>
-        <span className="eyebrow">A LITTLE ONE-ON-ONE</span>
-        {state.employees.map((e) => (
+    <div className={`conversation-layout surface${compact ? ' office-chat' : ''}`}>
+      {!compact && (
+        <aside className="conversation-channels">
+          <span className="eyebrow">SHARED SPACES</span>
           <button
-            className={channel === e.id ? 'selected' : ''}
-            aria-pressed={channel === e.id}
+            className={channel === 'team' ? 'selected' : ''}
+            aria-pressed={channel === 'team'}
             disabled={sending}
-            key={e.id}
-            onClick={() => setChannel(e.id)}
+            onClick={() => chooseChannel('team')}
           >
-            <Avatar employee={e} size={33} />
+            <MessageCircle size={18} />
             <span>
-              {e.name}
-              <small>{e.jobTitle}</small>
+              team-lounge<small>The whole team, together</small>
             </span>
           </button>
-        ))}
-      </aside>
-      <section className="conversation-main">
-        <header>
-          <div>
-            {person ? (
-              <Avatar employee={person} size={37} />
-            ) : (
-              <span className="channel-avatar">
-                {announcement ? <Megaphone size={22} /> : <Users size={22} />}
+          <button
+            className={announcement ? 'selected' : ''}
+            aria-pressed={announcement}
+            disabled={sending}
+            onClick={() => chooseChannel('announce')}
+          >
+            <Megaphone size={18} />
+            <span>
+              Announcements<small>Direction for every employee</small>
+            </span>
+          </button>
+          <span className="eyebrow">A LITTLE ONE-ON-ONE</span>
+          {state.employees.map((e) => (
+            <button
+              className={channel === e.id ? 'selected' : ''}
+              aria-pressed={channel === e.id}
+              disabled={sending}
+              key={e.id}
+              onClick={() => chooseChannel(e.id)}
+            >
+              <Avatar employee={e} size={33} />
+              <span>
+                {e.name}
+                <small>{e.jobTitle}</small>
               </span>
-            )}
+            </button>
+          ))}
+        </aside>
+      )}
+      <section className="conversation-main" aria-label={compact ? 'Office chat' : undefined}>
+        {compact ? (
+          <header className="office-chat-header">
+            <h2>Chat</h2>
+            <select
+              aria-label="Chat channel"
+              value={channel}
+              disabled={sending}
+              onChange={(event) => chooseChannel(event.target.value)}
+            >
+              <option value="team">Team</option>
+              <option value="announce">Announcements</option>
+              {state.employees.map((employee) => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.name} · {employee.jobTitle}
+                </option>
+              ))}
+            </select>
+          </header>
+        ) : (
+          <header>
             <div>
-              <h2>{announcement ? 'Announcements' : (person?.name ?? 'team-lounge')}</h2>
-              <p>
-                {announcement
-                  ? 'Send direction to every employee’s session. Voice announcements appear here too.'
-                  : (person?.jobTitle ?? 'A space for the little things that move work forward.')}
-              </p>
+              {person ? (
+                <Avatar employee={person} size={37} />
+              ) : (
+                <span className="channel-avatar">
+                  {announcement ? <Megaphone size={22} /> : <Users size={22} />}
+                </span>
+              )}
+              <div>
+                <h2>{announcement ? 'Announcements' : (person?.name ?? 'team-lounge')}</h2>
+                <p>
+                  {announcement
+                    ? 'Send direction to every employee’s session. Voice announcements appear here too.'
+                    : (person?.jobTitle ?? 'A space for the little things that move work forward.')}
+                </p>
+              </div>
             </div>
-          </div>
-          <span className="mode-badge">
-            {announcement ? 'To everyone' : person?.sessionId ? 'Assignment context' : 'Local workspace'}
-          </span>
-        </header>
-        <div className="conversation-messages">
+            <span className="mode-badge">
+              {announcement ? 'To everyone' : person?.sessionId ? 'Assignment context' : 'Local workspace'}
+            </span>
+          </header>
+        )}
+        <div
+          className="conversation-messages"
+          ref={messageList}
+          role="log"
+          aria-label={announcement ? 'Announcements' : `${person?.name ?? 'Team'} messages`}
+          aria-live="polite"
+          onScroll={(event) => {
+            const list = event.currentTarget;
+            followMessages.current = list.scrollHeight - list.scrollTop - list.clientHeight < 64;
+          }}
+        >
           {messages.length === 0 && (
             <div className="empty-state">
-              {announcement ? <Megaphone size={32} /> : <MessageCircle size={32} />}
+              {!compact && (announcement ? <Megaphone size={32} /> : <MessageCircle size={32} />)}
               <h3>
-                {announcement ? 'Give everyone the same direction.' : 'Every good thing starts somewhere.'}
+                {compact
+                  ? 'No messages yet'
+                  : announcement
+                    ? 'Give everyone the same direction.'
+                    : 'Every good thing starts somewhere.'}
               </h3>
               <p>
                 {announcement
                   ? state.employees.length
                     ? 'Type an announcement below, or hold Announce beneath the office to speak.'
                     : 'Add your first employee, then share a direction with the whole office.'
-                  : `Leave ${person?.name ?? 'your team'} a little context for their next assignment.`}
+                  : compact
+                    ? 'Messages are saved as context for new assignments.'
+                    : `Leave ${person?.name ?? 'your team'} a little context for their next assignment.`}
               </p>
             </div>
           )}
@@ -500,15 +575,15 @@ export function ConversationsPage({
                 <div className="conversation-date">
                   <span>
                     {new Date(m.time).toLocaleDateString([], {
-                      weekday: 'long',
-                      month: 'long',
+                      weekday: compact ? undefined : 'long',
+                      month: compact ? 'short' : 'long',
                       day: 'numeric',
                     })}
                   </span>
                 </div>
               )}
               <div className={`chat-message full ${m.authorId === 'you' ? 'from-you' : ''}`}>
-                <Avatar employee={employeeById(state.employees, m.authorId)} size={36} />
+                <Avatar employee={employeeById(state.employees, m.authorId)} size={compact ? 28 : 36} />
                 <div>
                   <div className="message-byline">
                     <strong>{employeeById(state.employees, m.authorId)?.name ?? 'You'}</strong>
@@ -543,9 +618,13 @@ export function ConversationsPage({
             maxLength={12000}
             onChange={(e) => setDrafts((current) => ({ ...current, [channel]: e.target.value }))}
             placeholder={
-              announcement
-                ? 'A new direction, changed priority, or guidance for everyone…'
-                : `A little note for ${person?.name ?? 'the team'}…`
+              compact
+                ? announcement
+                  ? 'Announce to everyone…'
+                  : `Message ${person?.name ?? 'the team'}…`
+                : announcement
+                  ? 'A new direction, changed priority, or guidance for everyone…'
+                  : `A little note for ${person?.name ?? 'the team'}…`
             }
             aria-label={announcement ? 'Announcement to every employee' : 'Message'}
             disabled={sending || (announcement && !state.employees.length)}
@@ -561,9 +640,13 @@ export function ConversationsPage({
             <span>
               {announcement
                 ? state.employees.length
-                  ? 'Starts or redirects every employee’s work'
+                  ? compact
+                    ? 'Starts or redirects work'
+                    : 'Starts or redirects every employee’s work'
                   : 'Add an employee to make an announcement.'
-                : 'Saved locally · included with new assignments'}
+                : compact
+                  ? 'Context for new assignments'
+                  : 'Saved locally · included with new assignments'}
             </span>
             <button
               type="submit"
@@ -577,10 +660,15 @@ export function ConversationsPage({
               ) : (
                 <Send size={15} />
               )}
-              {sending ? 'Sending…' : announcement ? 'Announce to everyone' : 'Send'}
+              {sending ? 'Sending…' : announcement ? (compact ? 'Announce' : 'Announce to everyone') : 'Send'}
             </button>
           </div>
         </form>
+        {sendError && (
+          <p className="office-chat-error" role="alert">
+            {sendError}
+          </p>
+        )}
       </section>
     </div>
   );

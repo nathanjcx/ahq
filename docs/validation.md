@@ -52,3 +52,10 @@ The final packaged app was reopened and displayed **ChatGPT plan · Connected** 
 - Created two milestones in an isolated localhost preview, linked their dependency, opened details, and marked the prerequisite complete. The graph showed the connection toward the goal, 100% completion, and released the dependent milestone's waiting indicator. Editing the prerequisite excluded its dependent from selectable links. These test milestones were not added to the native workspace.
 - Dependency tests cover branching graphs, duplicate/missing references, self/cross cycles, new milestone IDs, and a 1,000-node chain. The graph was additionally checked against 1,000-node chains/cycles and handles legacy invalid dependencies without hanging.
 - Chat includes typed announcements and their history; empty-office broadcast controls are disabled.
+
+## Minimal timeline and office chat
+
+- Office navigation now contains Office, Employees, and Roadmap. The old chat/review preview panels are replaced with a full chat panel on the right, using a channel selector for Team, Announcements, and employees. Reviews remain available from the top-bar bell.
+- A message was saved in an isolated browser preview and appeared in the chat; announcements remained disabled for its empty team. No verification message was added to the native workspace.
+- The timeline contains only a Beta capsule, a scrubber, and Live. In the packaged desktop app, keyboard scrubbing displayed recorded office state; Live returned to the existing two-employee workspace. The replay timestamp opened rollback confirmation, which was cancelled without restoring or changing user data.
+- TypeScript and the production renderer/desktop build pass. The packaged macOS app was rebuilt and reopened; existing employees, goal, messages, and recorded history were preserved.

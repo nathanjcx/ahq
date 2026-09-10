@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Cloud, Download, History, Mic, Pause, Play, RotateCcw, Save, Shirt } from 'lucide-react';
+import { Cloud, Download, Mic, Shirt } from 'lucide-react';
 import type {
   AppState,
   Appearance,
@@ -15,6 +15,7 @@ import type { Snapshot } from '../shared/types';
 import { applySession } from '../lib/workflow';
 import Modal from './Modal';
 import { monoWav } from '../lib/audio';
+import './timeline.css';
 const errorText = (e: unknown) => (e instanceof Error ? e.message : 'Please try again.');
 
 export function useOfficeHistory(state: AppState, update: UpdateState, notify: (s: string) => void) {
@@ -103,57 +104,30 @@ export function useOfficeHistory(state: AppState, update: UpdateState, notify: (
   };
 }
 export function OfficeTimeline({ history: h }: { history: ReturnType<typeof useOfficeHistory> }) {
+  const live = h.at === null;
   return (
-    <section className="hq-timeline surface">
-      <div className="hq-timeline-top">
-        <div>
-          <History size={18} />
-          <strong>{h.at === null ? 'Office timeline' : new Date(h.at).toLocaleString()}</strong>
-          <span>
-            {h.at === null ? 'Live · checkpoints every 5 minutes' : 'Replaying recorded office state'}
-          </span>
-        </div>
-        <button className="text-button" onClick={() => void h.checkpoint()}>
-          <Save size={14} /> Save checkpoint
-        </button>
-      </div>
-      <div className="hq-timeline-controls">
-        <button
-          className="icon-button"
-          aria-label={h.play ? 'Pause time lapse' : 'Play time lapse'}
-          disabled={!h.entries.length}
-          onClick={() => {
-            if (h.at === null) h.setAt(h.entries[0]?.time ?? h.now);
-            h.setPlay(!h.play);
-          }}
-        >
-          {h.play ? <Pause size={18} /> : <Play size={18} />}
-        </button>
+    <section className="office-scrubber" aria-label="Office history">
+      <div className="office-scrubber-row">
+        <span className="office-scrubber-beta">Beta</span>
         <input
+          className="office-scrubber-range"
           aria-label="Office history position"
+          aria-valuetext={h.at === null ? 'Live' : new Date(h.at).toLocaleString()}
           type="range"
           min={h.entries[0]?.time ?? h.now}
           max={h.now}
           step={100}
           value={h.at ?? h.now}
           onChange={(e) => {
-            h.setAt(Number(e.target.value));
+            const time = Number(e.target.value);
+            h.setAt(time >= h.now ? null : time);
             h.setPlay(false);
           }}
           disabled={!h.entries.length}
         />
-        <select
-          aria-label="Replay speed"
-          value={h.speed}
-          onChange={(e) => h.setSpeed(Number(e.target.value))}
-        >
-          <option value={1}>1×</option>
-          <option value={10}>10×</option>
-          <option value={60}>60×</option>
-          <option value={300}>300×</option>
-        </select>
         <button
-          className={`button ${h.at === null ? 'primary' : 'secondary'}`}
+          className={`office-scrubber-live${live ? ' is-live' : ''}`}
+          aria-pressed={live}
           onClick={() => {
             h.setAt(null);
             h.setPlay(false);
@@ -161,17 +135,6 @@ export function OfficeTimeline({ history: h }: { history: ReturnType<typeof useO
         >
           Live
         </button>
-        {h.at !== null && (
-          <button className="button secondary" onClick={() => h.setConfirm(true)}>
-            <RotateCcw size={14} />
-            Restore
-          </button>
-        )}
-      </div>
-      <div className="hq-timeline-meta">
-        <span>{h.entries.length} recorded states</span>
-        <span>{h.selected?.reason ?? 'Changes are recorded as they happen'}</span>
-        <span>Now</span>
       </div>
       {h.confirm && (
         <Modal title="Return to this checkpoint?" onClose={() => h.setConfirm(false)}>

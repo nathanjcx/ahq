@@ -4456,6 +4456,28 @@ html[data-desktop] .topbar .avatar {
 .office-card {
   overflow: hidden;
 }
+.office-layout.office-layout-with-chat {
+  grid-template-columns: minmax(0, 1fr) clamp(300px, 28vw, 360px);
+}
+.office-chat-column {
+  display: flex;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+.office-chat-column > div {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+}
+@media (max-width: 800px) {
+  .office-layout.office-layout-with-chat {
+    grid-template-columns: 1fr;
+  }
+  .office-chat-column {
+    height: 560px;
+  }
+}
 .hq-timeline {
   padding: 18px 22px;
   margin-top: 16px;

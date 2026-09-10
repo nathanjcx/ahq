@@ -1,13 +1,10 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ArrowDownLeft,
   History,
   ArrowRight,
   Bell,
   BookOpen,
   Check,
-  CheckCheck,
-  ChevronDown,
   ChevronRight,
   CircleHelp,
   Coffee,
@@ -81,7 +78,6 @@ import {
 const OfficeScene = lazy(() => import('./components/OfficeScene'));
 const nav = [
   { id: 'office', label: 'Office', icon: Home },
-  { id: 'conversations', label: 'Chat', icon: MessageCircle },
   { id: 'employees', label: 'Employees', icon: Users },
   { id: 'roadmap', label: 'Roadmap', icon: GitBranch },
 ] as const;
@@ -309,7 +305,7 @@ export default function App() {
   const approval = state.approvals.find((a) => a.id === selectedApproval);
   const commitment = state.commitments.find((c) => c.id === selectedCommitment);
   function navigate(to: Page) {
-    setPage(to);
+    setPage(to === 'conversations' ? 'office' : to);
     setModal(null);
     setSelectedEmployee(null);
     setSelectedCommitment(null);
@@ -593,7 +589,7 @@ export default function App() {
                   New employee
                 </button>
               </div>
-              <div className="office-layout">
+              <div className="office-layout office-layout-with-chat">
                 <div className="office-stage">
                   <section className="office-card">
                     <div className="office-card-header">
@@ -693,10 +689,15 @@ export default function App() {
                         </button>
                       </div>
                       {history.at !== null && (
-                        <div className="replay-badge">
+                        <button
+                          className="replay-badge"
+                          onClick={() => history.setConfirm(true)}
+                          title="Review this checkpoint to restore it"
+                          aria-label={`Replay at ${new Date(history.at).toLocaleTimeString()}. Review checkpoint restoration.`}
+                        >
                           <History size={14} />
                           Replay · {new Date(history.at).toLocaleTimeString()}
-                        </div>
+                        </button>
                       )}
                       {listening && (
                         <div className="replay-badge">
@@ -733,94 +734,14 @@ export default function App() {
                     notify={notify}
                   />
                 </div>
-                <aside className="activity-column">
-                  <section className="team-chat">
-                    <div className="section-heading">
-                      <h2>
-                        <MessageCircle size={17} />
-                        Around the office
-                      </h2>
-                      <span className="subtle-dot" />
-                    </div>
-                    <button className="channel-link" onClick={() => navigate('conversations')}>
-                      # team-lounge <ChevronDown size={12} />
-                      <span>{state.demo ? 'SAMPLE' : 'TEAM'}</span>
-                    </button>
-                    <div className="chat-preview">
-                      {!state.messages.some((m) => m.channel === 'team') && (
-                        <p className="section-description">Your team’s conversations will appear here.</p>
-                      )}
-                      {state.messages
-                        .filter((m) => m.channel === 'team')
-                        .slice(-3)
-                        .map((m) => {
-                          const employee = employeeById(state.employees, m.authorId);
-                          return (
-                            <div className="chat-message" key={m.id}>
-                              <Avatar employee={employee} size={31} />
-                              <div>
-                                <div className="message-byline">
-                                  <strong>{employee?.name ?? 'You'}</strong>
-                                  <time>{clockTime(m.time)}</time>
-                                  {m.id.startsWith('m') && <span className="sample-label">EXAMPLE</span>}
-                                </div>
-                                <p>{m.text}</p>
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                    <button className="chat-see-all" onClick={() => navigate('conversations')}>
-                      Pull up a chair <ArrowRight size={14} />
-                    </button>
-                  </section>
-                  <section className="needs-preview">
-                    <div className="section-heading">
-                      <h2>
-                        <Inbox size={17} />A moment of your time
-                      </h2>
-                      <span className="count-badge">{pending.length}</span>
-                    </div>
-                    <p className="section-description">Your perspective makes the difference.</p>
-                    {pending.slice(0, 2).map((a, i) => (
-                      <button
-                        className={`review-preview ${i === 0 ? 'featured' : ''}`}
-                        key={a.id}
-                        onClick={() => setSelectedApproval(a.id)}
-                      >
-                        <div className="review-preview-top">
-                          <span className={`approval-symbol ${i === 0 ? 'warm' : ''}`}>
-                            {i === 0 ? <Sparkles size={18} /> : <BookOpen size={18} />}
-                          </span>
-                          <span>
-                            {employeeById(state.employees, a.employeeId)?.name ?? 'Workspace'}
-                            <small>{a.kind === 'decision' ? 'A decision for you' : 'Ready for review'}</small>
-                          </span>
-                          <ArrowDownLeft size={15} />
-                        </div>
-                        <strong>{a.title}</strong>
-                        <p>{a.summary}</p>
-                        <span className="review-link">
-                          Take a look <ArrowRight size={14} />
-                        </span>
-                      </button>
-                    ))}
-                    {pending.length === 0 && (
-                      <div className="caught-up">
-                        <CheckCheck size={28} />
-                        <strong>A little breathing room.</strong>
-                        <p>You’re all caught up.</p>
-                      </div>
-                    )}
-                    <div className="quiet-note">
-                      <Leaf size={14} />
-                      <span>
-                        {cloud.connected
-                          ? 'Other employees can keep working.'
-                          : 'A thoughtful pause, then onward.'}
-                      </span>
-                    </div>
-                  </section>
+                <aside className="office-chat-column" aria-label="Office chat">
+                  <ConversationsPage
+                    {...common}
+                    compact
+                    initialChannel={conversationTarget}
+                    onChannelChange={setConversationTarget}
+                    onBroadcast={broadcast}
+                  />
                 </aside>
               </div>
               <OfficeTimeline history={history} />
