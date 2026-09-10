@@ -543,15 +543,15 @@ export default function OfficeCanvas(props: Props) {
               people.set(agent.id, person);
               if (agent.temporary || agent.activity !== 'idle') person.path = route(person.position, destination(agent), obstacles);
             }
-            const target = destination(agent);
+            const target = agent.activity === 'celebrating' ? person.position : destination(agent);
             if (agent.activity !== person.activity || target.x !== person.target.x || target.y !== person.target.y) {
               person.target = target;
               person.activity = agent.activity;
               person.elapsed = 0;
-              person.path = route(person.position, destination(agent), obstacles);
+              person.path = agent.activity === 'celebrating' ? [] : route(person.position, target, obstacles);
             }
             person.elapsed += dt;
-            if (reducedMotion) { person.position = destination(agent); person.path = []; }
+            if (reducedMotion) { person.position = target; person.path = []; }
             const next = person.path[0];
             if (next) {
               const dx = next.x - person.position.x, dy = next.y - person.position.y;
