@@ -12,6 +12,7 @@ export default function OfficeScene({
   listening,
   microphoneLevel,
   angle = 0,
+  resetKey = 0,
   slapMode = false,
   slapTarget,
   onSlap,
@@ -27,6 +28,7 @@ export default function OfficeScene({
   listening: boolean;
   microphoneLevel: number;
   angle?: number;
+  resetKey?: number;
   slapMode?: boolean;
   slapTarget?: { employeeId: string; token: number } | null;
   onSlap?: (employeeId: string) => void;
@@ -62,6 +64,7 @@ export default function OfficeScene({
       timeline={0}
       zoom={zoom * 37}
       angle={angle}
+      resetKey={resetKey}
       timeSeconds={timeSeconds}
       live={live}
       listening={listening}
