@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import {
   History,
+  Radio,
   ArrowRight,
   BookOpen,
   Check,
@@ -57,6 +58,7 @@ import Modal from './components/Modal';
 import SceneBoundary from './components/SceneBoundary';
 import Markdown from './components/Markdown';
 import Roadmap from './components/Roadmap';
+import DemoPanel from './components/DemoPanel';
 import EmployeeForm from './components/EmployeeForm';
 import ChatGPTProfile from './components/ChatGPTProfile';
 import { randomEmployeeAppearance } from './lib/employeeAppearance';
@@ -367,6 +369,7 @@ export default function App() {
     if (ready && state.sound && pending.length > previousPending.current) playReviewChime();
     previousPending.current = pending.length;
   }, [pending.length, ready, state.sound]);
+  const [streamSessionId, setStreamSessionId] = useState<string | null>(null);
   const person = employeeById(state.employees, selectedEmployee ?? undefined);
   const approval = state.approvals.find((a) => a.id === selectedApproval);
   const commitment = state.commitments.find((c) => c.id === selectedCommitment);
@@ -587,6 +590,21 @@ export default function App() {
             </button>
           </div>
         </header>
+        <DemoPanel
+          state={state}
+          onCreateGoal={async (goal) => {
+            await saveChain.current;
+            setState(await window.ahq!.createRoadmap(goal, { automatic: true }));
+          }}
+          onWorkUpdate={async () => {
+            await saveChain.current;
+            const saved = await window.ahq!.loadState();
+            if (saved) setState(saved);
+          }}
+          notify={notify}
+          selectedSessionId={streamSessionId}
+          onSelectSession={setStreamSessionId}
+        />
         <main>
           {page !== 'office' && (
             <div className="page-header">
@@ -1086,6 +1104,10 @@ export default function App() {
             setEditingEmployee(person);
             setSelectedEmployee(null);
             setModal('employee');
+          }}
+          onViewStream={() => {
+            setStreamSessionId(person.sessionId ?? null);
+            setSelectedEmployee(null);
           }}
           employee={person}
           state={state}
@@ -1737,6 +1759,7 @@ function CommitmentForm({
   );
 }
 function EmployeeDetail({
+  onViewStream,
   employee,
   state,
   cloud,
@@ -1746,6 +1769,7 @@ function EmployeeDetail({
   onStart,
   onEdit,
 }: {
+  onViewStream: () => void;
   employee: Employee;
   state: AppState;
   cloud: CloudSettings;
@@ -1803,6 +1827,11 @@ function EmployeeDetail({
         </div>
       </div>
       <div className="detail-section">
+        {employee.sessionId && (
+          <button className="button" onClick={onViewStream}>
+            <Radio size={16} /> View live stream &amp; saved work
+          </button>
+        )}
         <label>GIVE {employee.name.toUpperCase()} AN ASSIGNMENT</label>
         <textarea
           value={assignment}

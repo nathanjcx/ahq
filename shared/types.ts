@@ -1,3 +1,11 @@
+import type {
+  DemoTrigger,
+  DemoNotification,
+  DemoSnapshot,
+  LocalArtifact,
+  LocalTaskKind,
+  SessionMessage,
+} from './demo';
 export type Page =
   | 'office'
   | 'employees'
@@ -20,6 +28,7 @@ export interface Appearance {
   clothing: string;
 }
 export interface Employee {
+  temporary?: boolean;
   id: string;
   name: string;
   jobTitle: string;
@@ -34,6 +43,7 @@ export interface Employee {
   appearance?: Appearance;
 }
 export interface Commitment {
+  taskKind?: Exclude<LocalTaskKind, 'triage'>;
   sessionId?: string;
   assignment?: string;
   id: string;
@@ -119,6 +129,7 @@ export interface AppState {
   demo: boolean;
 }
 export interface RoadmapRun {
+  automatic?: boolean;
   id: string;
   goal: string;
   status: 'planning' | 'active' | 'paused' | 'failed' | 'complete';
@@ -149,6 +160,12 @@ export interface ChatGPTAccount {
   error?: string;
 }
 export interface CloudSession {
+  employeeId?: string;
+  title?: string;
+  workspace?: string;
+  taskKind?: LocalTaskKind;
+  messages?: SessionMessage[];
+  artifacts?: LocalArtifact[];
   reviewed?: boolean;
   id: string;
   status: 'queued' | 'running' | 'waiting_for_approval' | 'completed' | 'failed';
@@ -185,7 +202,11 @@ export interface Integration {
 }
 export interface DesktopAPI {
   generatePersonality(input: { name: string; jobTitle: string }): Promise<string>;
-  createRoadmap(goal: string): Promise<AppState>;
+  createRoadmap(goal: string, options?: { automatic?: boolean }): Promise<AppState>;
+  triggerDemo(input: DemoTrigger): Promise<DemoNotification>;
+  demoSnapshot(): Promise<DemoSnapshot>;
+  retryDemo(id: string): Promise<DemoNotification>;
+  openLocalArtifact(input: { sessionId: string; artifactId: string }): Promise<void>;
   controlRoadmap(action: 'pause' | 'resume'): Promise<AppState>;
   chatGPTAccount(): Promise<ChatGPTAccount>;
   loginChatGPT(): Promise<ChatGPTAccount>;

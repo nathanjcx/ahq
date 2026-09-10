@@ -1,3 +1,4 @@
+import { randomEmployeeAppearance } from '../src/lib/employeeAppearance';
 import { randomUUID } from 'node:crypto';
 import type { AppState, Commitment } from '../shared/types';
 
@@ -17,7 +18,7 @@ export class GoalCoordinator {
     this.closed = true;
   }
 
-  async create(goal: string): Promise<AppState> {
+  async create(goal: string, options?: { automatic?: boolean }): Promise<AppState> {
     const state = await this.deps.queue(async () => {
       const current = await this.deps.load();
       if (!current) throw new Error('Open your office first.');
@@ -31,6 +32,7 @@ export class GoalCoordinator {
         demo: false,
         roadmap: {
           id: randomUUID(),
+          automatic: options?.automatic === true,
           goal,
           status: 'planning',
           createdAt: now,
@@ -76,8 +78,30 @@ export class GoalCoordinator {
             'There is not enough room for this roadmap. Your existing work is saved; use a new workspace for the next goal.',
           );
         const now = new Date().toISOString();
+        const employees = [...current.employees];
+        if (current.roadmap.automatic) {
+          if (employees.length + commitments.length > 50)
+            throw new Error('The office has no space for this roadmap’s workers.');
+          for (const [index, task] of commitments.entries()) {
+            const id = `demo-goal-${randomUUID()}`;
+            employees.push({
+              id,
+              name: `${['Alex', 'Robin', 'Casey', 'Morgan', 'Taylor', 'Riley'][index]} · ${task.taskKind || 'analyst'}`,
+              jobTitle: `Roadmap ${task.taskKind || 'analysis'} worker`,
+              personality: 'Works from supplied files, checks results, and reports uncertainty.',
+              skills: 'Astra session',
+              status: 'ready',
+              activity: 'Ready for the assigned roadmap step',
+              location: 'desk',
+              temporary: true,
+              ...randomEmployeeAppearance(),
+            });
+            task.ownerId = id;
+          }
+        }
         const next: AppState = {
           ...current,
+          employees,
           // Earlier roadmaps stay in storage and activity. The graph shows this goal's milestones.
           commitments: [...current.commitments, ...commitments],
           roadmap: {

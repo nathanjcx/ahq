@@ -9,6 +9,7 @@ export const AppearanceSchema = z.object({
   clothing: z.string().regex(/^#[0-9a-f]{6}$/i),
 });
 export const EmployeeSchema = z.object({
+  temporary: z.boolean().optional(),
   id: z.string().min(1).max(100),
   name: z.string().min(1).max(40),
   jobTitle: z.string().min(1).max(80),
@@ -58,6 +59,7 @@ export const StateSchema = z.object({
       id: z.string().uuid(),
       goal: z.string().min(1).max(500),
       status: z.enum(['planning', 'active', 'paused', 'failed', 'complete']),
+      automatic: z.boolean().optional(),
       message: z.string().max(4000),
       createdAt: dateTime,
       generatedAt: dateTime.optional(),
@@ -83,6 +85,7 @@ export const StateSchema = z.object({
         description: z.string().max(2000),
         sessionId: z.string().max(200).optional(),
         assignment: z.string().max(12000).optional(),
+        taskKind: z.enum(['report', 'meeting', 'bug', 'qa']).optional(),
         ownerId: z.string().max(100),
         recipient: z.string().max(120),
         deadline: dateTime.or(z.literal('')),

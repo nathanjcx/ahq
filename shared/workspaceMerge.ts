@@ -26,11 +26,17 @@ export function mergeWorkspace(previous: AppState | null, incoming: AppState): A
     ...incoming,
     goal: roadmap ? previous.goal : incoming.goal,
     roadmap,
-    employees: incoming.employees.map((employee) => {
+    employees: [
+      ...previous.employees.filter(
+        (employee) => employee.temporary && !incoming.employees.some((item) => item.id === employee.id),
+      ),
+      ...incoming.employees,
+    ].map((employee) => {
       const saved = previous.employees.find((e) => e.id === employee.id);
       return saved && (saved.sessionId || employee.sessionId)
         ? {
             ...employee,
+            temporary: saved.temporary,
             sessionId: saved.sessionId,
             status: saved.status,
             activity: saved.activity,
@@ -41,8 +47,9 @@ export function mergeWorkspace(previous: AppState | null, incoming: AppState): A
     commitments: combine(
       incoming.commitments,
       previous.commitments.map((saved) => {
-        const edited = incomingCommitments.get(saved.id);
+        let edited = incomingCommitments.get(saved.id);
         if (!edited || (roadmap?.id !== incoming.roadmap?.id && planned.has(saved.id))) return saved;
+        if (roadmap?.automatic && planned.has(saved.id)) edited = { ...edited, taskKind: saved.taskKind };
         // Once dispatched, completion is driven by review of its actual session output.
         return assigned.has(saved.id)
           ? {
