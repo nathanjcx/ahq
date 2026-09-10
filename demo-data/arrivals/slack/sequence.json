@@ -1,7 +1,7 @@
 [
   {
     "id": "slack-deep-01",
-    "label": "Slack evidence 1: PIN-184 reproducible coupon regression",
+    "label": "[ACTION: FIX OR UPDATE SAME CHECKOUT BUG] Slack evidence 1: PIN-184 reproducible coupon regression",
     "threadId": "pin-release-172638.004",
     "author": "Mina Park",
     "title": "PIN-184 reproducible coupon regression",
@@ -13,7 +13,7 @@
   },
   {
     "id": "slack-deep-02",
-    "label": "Slack evidence 2: PIN-184 original source excerpt",
+    "label": "[ACTION: ATTACH ORIGINAL BROKEN CODE] Slack evidence 2: PIN-184 original source excerpt",
     "threadId": "pin-release-172638.004",
     "author": "Mina Park",
     "title": "PIN-184 original source excerpt",
@@ -24,7 +24,7 @@
   },
   {
     "id": "slack-deep-03",
-    "label": "Slack evidence 3: PIN-184 original receipt lines",
+    "label": "[ACTION: ATTACH SAME-BUG RECEIPT] Slack evidence 3: PIN-184 original receipt lines",
     "threadId": "pin-release-172638.004",
     "author": "pixelpilot",
     "title": "PIN-184 original receipt lines",
@@ -35,7 +35,7 @@
   },
   {
     "id": "slack-deep-04",
-    "label": "Slack evidence 4: PIN-184 captured original test run",
+    "label": "[ACTION: ATTACH BASELINE FAILING TESTS] Slack evidence 4: PIN-184 captured original test run",
     "threadId": "pin-release-172638.004",
     "author": "Mina Park",
     "title": "PIN-184 captured original test run",
@@ -46,7 +46,7 @@
   },
   {
     "id": "slack-deep-05",
-    "label": "Slack evidence 5: PIN-184 fixed-dollar acceptance cases",
+    "label": "[ACTION: APPLY ACCEPTANCE TESTS] Slack evidence 5: PIN-184 fixed-dollar acceptance cases",
     "threadId": "pin-release-172638.004",
     "author": "Owen Price",
     "title": "PIN-184 fixed-dollar acceptance cases",
@@ -57,7 +57,7 @@
   },
   {
     "id": "slack-deep-06",
-    "label": "Slack evidence 6: PIN-184 contract stays fixed",
+    "label": "[ACTION: KEEP FIX WITHIN CONTRACT] Slack evidence 6: PIN-184 contract stays fixed",
     "threadId": "pin-release-172638.004",
     "author": "Mina Park",
     "title": "PIN-184 contract stays fixed",
@@ -68,7 +68,7 @@
   },
   {
     "id": "slack-deep-07",
-    "label": "Slack evidence 7: PIN-185 waits for the completed patch",
+    "label": "[ACTION: WAIT FOR PATCH, THEN QA] Slack evidence 7: PIN-185 waits for the completed patch",
     "threadId": "pin-qa-172640.055",
     "author": "Owen Price",
     "title": "PIN-185 waits for the completed patch",
@@ -79,7 +79,7 @@
   },
   {
     "id": "slack-deep-08",
-    "label": "Slack evidence 8: PIN-185 handoff evidence checklist",
+    "label": "[ACTION: VERIFY EXACT PATCH WORKSPACE] Slack evidence 8: PIN-185 handoff evidence checklist",
     "threadId": "pin-qa-172640.055",
     "author": "Owen Price",
     "title": "PIN-185 handoff evidence checklist",
@@ -90,7 +90,7 @@
   },
   {
     "id": "slack-deep-09",
-    "label": "Slack evidence 9: PIN-184 full-price behavior must remain",
+    "label": "[ACTION: PRESERVE FULL-PRICE BEHAVIOR] Slack evidence 9: PIN-184 full-price behavior must remain",
     "threadId": "pin-release-172638.004",
     "author": "Mina Park",
     "title": "PIN-184 full-price behavior must remain",
@@ -98,7 +98,7 @@
   },
   {
     "id": "slack-deep-10",
-    "label": "Slack evidence 10: PIN-185 evidence belongs to launch prep",
+    "label": "[ACTION: LINK QA TO MEETING PREP] Slack evidence 10: PIN-185 evidence belongs to launch prep",
     "threadId": "pin-qa-172640.055",
     "author": "Owen Price",
     "title": "PIN-185 evidence belongs to launch prep",
@@ -106,7 +106,7 @@
   },
   {
     "id": "slack-deep-11",
-    "label": "Slack evidence 11: PIN-184 evidence received",
+    "label": "[ACTION: IGNORE ACKNOWLEDGMENT] Slack evidence 11: PIN-184 evidence received",
     "threadId": "pin-release-172638.004",
     "author": "Mina Park",
     "title": "PIN-184 evidence received",

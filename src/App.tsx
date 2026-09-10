@@ -1054,6 +1054,7 @@ function InboxView({
               <MessageRow
                 key={item.id}
                 item={item}
+                demoLabel={snapshot.demo.events?.find(entry => entry.item?.id === item.id)?.label}
                 selected={selected?.id === item.id}
                 onClick={() => setSelectedId(item.id)}
               />
@@ -1080,6 +1081,7 @@ function InboxView({
                     {selected.channel ? ` · ${selected.channel}` : ""}
                   </p>
                   <h2>{selected.title}</h2>
+                  <p className="demo-action">{snapshot.demo.events?.find(entry => entry.item?.id === selected.id)?.label.match(/^\[ACTION: [^\]]+\]/)?.[0]}</p>
                   <p>
                     {selected.author} · {formatTime(selected.timestamp)}
                   </p>
@@ -1179,8 +1181,8 @@ function followUpKind(entry: ReplayEntry, entries: ReplayEntry[]) {
   if (!item) return undefined;
   const previous = entries.slice(0, entries.indexOf(entry));
   if (previous.some((other) => other.item?.source === item.source && other.item.externalId === item.externalId)) return "Duplicate";
-  if (/correct|revis/i.test(`${entry.label} ${item.title}`)) return "Correction";
-  if (/clarif|confirm|context|same|follow.?up|adds evidence/i.test(`${entry.label} ${item.title}`) || previous.some((other) => other.item?.source === item.source && other.item.threadId === item.threadId)) return "Clarification";
+  if (/correct|revis/i.test(`${entry.label.replace(/^\[ACTION: [^\]]+\] /, "")} ${item.title}`)) return "Correction";
+  if (/clarif|confirm|context|same|follow.?up|adds evidence/i.test(`${entry.label.replace(/^\[ACTION: [^\]]+\] /, "")} ${item.title}`) || previous.some((other) => other.item?.source === item.source && other.item.threadId === item.threadId)) return "Clarification";
   return undefined;
 }
 
@@ -1236,6 +1238,7 @@ function IncomingMessageModal({ run, busy, signedIn, template, onClose, onCreate
     if (next) onCreated(id);
   };
   return <Modal title={template ? "Review incoming message" : "New incoming message"} onClose={onClose} closeOnBackdrop={false}><form className="form-stack" onSubmit={submit}>
+    {template && <p className="demo-action">{template.label}</p>}
     <p className="muted">{template ? "Edit this suggested message before it arrives. Its original message ID and attached files will be preserved." : "Simulate a message arriving from a connection. Codex reads its content and decides whether to create work, attach context, wait, or ignore it."}</p>
     <label><span>Source</span><select value={form.source} onChange={(event) => setForm({ ...form, source: event.target.value as Source })}>{SOURCES.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}</select></label>
     <label><span>Author</span><input required maxLength={200} autoFocus value={form.author} onChange={(event) => setForm({ ...form, author: event.target.value })} placeholder="Alex Morgan" /></label>
@@ -1291,10 +1294,12 @@ function TasksView({ snapshot, onOpenWork, onOpenSource, onOpenArtifact }: { sna
 
 function MessageRow({
   item,
+  demoLabel,
   selected,
   onClick,
 }: {
   item: SourceItem;
+  demoLabel?: string;
   selected: boolean;
   onClick: () => void;
 }) {
@@ -1311,7 +1316,7 @@ function MessageRow({
           <strong>{item.author}</strong>
           <time>{formatTime(item.timestamp)}</time>
         </span>
-        <b>{item.title}</b>
+        <b>{demoLabel?.match(/^\[ACTION: [^\]]+\]/)?.[0]} {item.title}</b>
         <small>{item.content}</small>
       </span>
       {(!item.disposition || item.disposition === "pending") && (

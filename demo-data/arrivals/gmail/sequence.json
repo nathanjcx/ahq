@@ -1,7 +1,7 @@
 [
   {
     "id": "gmail-deep-01",
-    "label": "Gmail evidence 1: HBR pilot readout: evidence bundle",
+    "label": "[ACTION: CREATE OR REVISE HARBOR REPORT] Gmail evidence 1: HBR pilot readout: evidence bundle",
     "threadId": "harbor-pilot-readout-88",
     "author": "Dr. Leah Moss",
     "title": "HBR pilot readout: evidence bundle",
@@ -13,7 +13,7 @@
   },
   {
     "id": "gmail-deep-02",
-    "label": "Gmail evidence 2: HBR clinic delivery reconciliation",
+    "label": "[ACTION: RECONCILE CLINIC DELIVERY ROWS] Gmail evidence 2: HBR clinic delivery reconciliation",
     "threadId": "harbor-pilot-readout-88",
     "author": "Tessa Ng",
     "title": "HBR clinic delivery reconciliation",
@@ -24,7 +24,7 @@
   },
   {
     "id": "gmail-deep-03",
-    "label": "Gmail evidence 3: HBR named clinic responsibilities",
+    "label": "[ACTION: ATTACH NAMED CLINIC OWNERS] Gmail evidence 3: HBR named clinic responsibilities",
     "threadId": "harbor-pilot-readout-88",
     "author": "Dr. Leah Moss",
     "title": "HBR named clinic responsibilities",
@@ -35,7 +35,7 @@
   },
   {
     "id": "gmail-deep-04",
-    "label": "Gmail evidence 4: HBR spending source records",
+    "label": "[ACTION: RECONCILE INVOICES AND BUDGET] Gmail evidence 4: HBR spending source records",
     "threadId": "harbor-pilot-readout-88",
     "author": "Ravi Patel",
     "title": "HBR spending source records",
@@ -47,7 +47,7 @@
   },
   {
     "id": "gmail-deep-05",
-    "label": "Gmail evidence 5: HBR front desk question rows",
+    "label": "[ACTION: VERIFY QUESTION COUNTS] Gmail evidence 5: HBR front desk question rows",
     "threadId": "harbor-pilot-readout-88",
     "author": "Tessa Ng",
     "title": "HBR front desk question rows",
@@ -58,7 +58,7 @@
   },
   {
     "id": "gmail-deep-06",
-    "label": "Gmail evidence 6: HBR translated-copy restriction",
+    "label": "[ACTION: PRESERVE PENDING COPY APPROVALS] Gmail evidence 6: HBR translated-copy restriction",
     "threadId": "harbor-pilot-readout-88",
     "author": "Dr. Leah Moss",
     "title": "HBR translated-copy restriction",
@@ -69,7 +69,7 @@
   },
   {
     "id": "gmail-deep-07",
-    "label": "Gmail evidence 7: HBR coordinator follow-up notes",
+    "label": "[ACTION: ADD APPROVAL FOLLOW-UPS] Gmail evidence 7: HBR coordinator follow-up notes",
     "threadId": "harbor-pilot-readout-88",
     "author": "Tessa Ng",
     "title": "HBR coordinator follow-up notes",
@@ -80,7 +80,7 @@
   },
   {
     "id": "gmail-deep-08",
-    "label": "Gmail evidence 8: HBR previous issue is separate",
+    "label": "[ACTION: ATTACH CLOSED-ISSUE CONTEXT] Gmail evidence 8: HBR previous issue is separate",
     "threadId": "harbor-pilot-readout-88",
     "author": "Ravi Patel",
     "title": "HBR previous issue is separate",
@@ -91,7 +91,7 @@
   },
   {
     "id": "gmail-deep-09",
-    "label": "Gmail evidence 9: HBR report review requirements",
+    "label": "[ACTION: APPLY REPORT CHECKLIST] Gmail evidence 9: HBR report review requirements",
     "threadId": "harbor-pilot-readout-88",
     "author": "Dr. Leah Moss",
     "title": "HBR report review requirements",
@@ -102,7 +102,7 @@
   },
   {
     "id": "gmail-deep-10",
-    "label": "Gmail evidence 10: HBR evidence receipt",
+    "label": "[ACTION: IGNORE ACKNOWLEDGMENT] Gmail evidence 10: HBR evidence receipt",
     "threadId": "harbor-pilot-readout-88",
     "author": "Tessa Ng",
     "title": "HBR evidence receipt",
@@ -110,7 +110,7 @@
   },
   {
     "id": "gmail-deep-11",
-    "label": "Gmail evidence 11: HBR final handoff scope",
+    "label": "[ACTION: FINALIZE SAME REPORT] Gmail evidence 11: HBR final handoff scope",
     "threadId": "harbor-pilot-readout-88",
     "author": "Dr. Leah Moss",
     "title": "HBR final handoff scope",
