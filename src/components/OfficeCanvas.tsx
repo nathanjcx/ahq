@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import 'pixi.js/unsafe-eval';
 import { Application, Container, Graphics, Rectangle, Text, type Ticker } from 'pixi.js';
 import type { ActivityKind, Agent } from '../shared/types';
 
