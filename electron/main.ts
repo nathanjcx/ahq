@@ -1,9 +1,14 @@
 import { app, BrowserWindow, dialog, ipcMain, shell, utilityProcess } from 'electron';
 import { realpath, stat } from 'node:fs/promises';
+import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import type { Command, Snapshot } from '../src/shared/types';
 
-if (process.env.OFFICE_DATA_DIR) app.setPath('userData', path.resolve(process.env.OFFICE_DATA_DIR));
+if (process.env.OFFICE_DATA_DIR) {
+  const directory = path.resolve(process.env.OFFICE_DATA_DIR);
+  mkdirSync(directory, { recursive: true });
+  app.setPath('userData', directory);
+}
 let window: BrowserWindow | null = null;
 let host: Electron.UtilityProcess | null = null;
 let latest: Snapshot | undefined;

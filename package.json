@@ -18,6 +18,7 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "sql.js": "^1.14.1"
   },
   "devDependencies": {
@@ -37,8 +38,20 @@
   "build": {
     "appId": "studio.littleoffice.desktop",
     "productName": "Little Office",
-    "directories": { "output": "release" },
-    "files": ["dist/**/*", "dist-electron/**/*", "package.json"],
-    "linux": { "target": ["dir"], "category": "Office", "icon": "public/icon.png" }
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        "dir"
+      ],
+      "category": "Office",
+      "icon": "public/icon.png"
+    }
   }
 }

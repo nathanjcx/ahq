@@ -52,6 +52,7 @@ import {
   type ReactNode,
 } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { bridge } from "./client";
 import OfficeCanvas from "./components/OfficeCanvas";
 import type {
@@ -2233,6 +2234,7 @@ function ArtifactPreview({
   snapshot: Snapshot;
   onOpen: () => void;
 }) {
+  const [linkError, setLinkError] = useState("");
   const calendar =
     artifact.kind === "calendar"
       ? snapshot.calendar.find(
@@ -2293,7 +2295,15 @@ function ArtifactPreview({
         </div>
       ) : (
         <div className="markdown">
-          <ReactMarkdown>{artifact.content}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+            a: ({ href, children }) => href?.startsWith("https://") ? (
+              <a href={href} onClick={(event) => {
+                event.preventDefault();
+                void bridge.openExternal(href).catch((error: unknown) => setLinkError(error instanceof Error ? error.message : "Could not open this link."));
+              }}>{children}</a>
+            ) : <span title={href}>{children}</span>,
+          }}>{artifact.content}</ReactMarkdown>
+          {linkError && <p className="field-error" role="alert">{linkError}</p>}
         </div>
       )}
     </div>

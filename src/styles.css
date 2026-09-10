@@ -2096,6 +2096,11 @@ select {
 .markdown p {
   margin: 8px 0;
 }
+.markdown table { width: 100%; margin: 18px 0; border-collapse: collapse; font: 13px/1.6 ui-sans-serif, sans-serif; }
+.markdown th, .markdown td { padding: 9px 12px; border: 1px solid var(--line); text-align: left; }
+.markdown th { background: var(--mint); font-weight: 700; }
+.markdown a { color: #247667; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.markdown blockquote { margin: 16px 0; padding: 10px 16px; border-left: 3px solid var(--sun); background: var(--paper); }
 .markdown ul,
 .markdown ol {
   padding-left: 20px;
