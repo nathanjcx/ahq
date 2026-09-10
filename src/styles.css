@@ -2448,6 +2448,8 @@ select {
 .simulation-create > button > span:nth-child(2) { display:grid; gap:5px; flex:1; }
 .simulation-create strong { font-size:13px; font-weight:650; }
 .simulation-create small { color:var(--ink-soft); font-size:11px; line-height:1.4; }
+.simulation-connection { display:flex; align-items:center; gap:10px; margin-bottom:12px; font-size:12px; color:var(--ink-soft); }
+.simulation-connection select { flex:1; max-width:260px; }
 .simulation-tabs { display:flex; gap:5px; border-bottom:1px solid var(--line); }
 .simulation-tabs > button { display:flex; gap:8px; align-items:center; padding:10px 12px; color:var(--ink-soft); background:transparent; border-bottom:2px solid transparent; font-size:13px; font-weight:600; }
 .simulation-tabs > button[aria-selected="true"] { color:var(--ink); border-color:var(--ink); }

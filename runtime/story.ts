@@ -1,8 +1,7 @@
 import { readArrivalSequence, readProjectEvidence } from './evidence';
 import type { CalendarEvent, Source, SourceAttachment, SourceItem } from '../src/shared/types';
 
-const HOUR = 3_600_000;
-const DAY = 24 * HOUR;
+const ARCHIVE_START = Date.parse('2026-09-08T13:00:00Z');
 const providers: Source[] = ['gmail', 'slack', 'discord', 'linear', 'asana', 'calendar', 'imessage'];
 
 interface Project {
@@ -91,7 +90,7 @@ function historicalMessages(p: Project): Array<[string, string]> {
   ];
 }
 
-export function initialSources(now: number): SourceItem[] {
+export function initialSources(): SourceItem[] {
   return projects.flatMap((project, projectIndex) => {
     const attachments = files(project);
     return historicalMessages(project).map(([title, content], index) => {
@@ -103,7 +102,7 @@ export function initialSources(now: number): SourceItem[] {
         threadId: `${source}:${project.code}:archive:${topic}`,
         author: index % 3 === 0 ? project.owner : index % 3 === 1 ? project.analyst : project.engineer,
         title: `${project.code} · ${title}`, content: `${project.name} / ${project.code}\n\n${content}`,
-        timestamp: now - (22 - Math.floor(index / 3)) * DAY - (10 - projectIndex) * HOUR + index * 60_000,
+        timestamp: ARCHIVE_START + index * 30 * 60_000 + projectIndex * 60_000,
         ...(source === 'slack' || source === 'discord' ? { channel: `#${project.id}-${source === 'slack' ? 'team' : 'community'}` } : {}),
         disposition: 'ignored' as const, reason: 'Historical context',
         ...(index < attachments.length ? { attachments: [attachments[index === 1 ? 0 : index === 0 ? 2 : index === 2 ? 1 : index === 3 ? 4 : index === 4 ? 3 : index]] } : {}),

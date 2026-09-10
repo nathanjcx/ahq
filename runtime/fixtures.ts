@@ -18,7 +18,7 @@ export function initialSnapshot(now = Date.now()): Snapshot {
     { id: 'agent-sam', name: 'Sam Okafor', role: 'Operations', color: '#4f9fb5', hair: '#17120f', skin: '#68412f', accessory: 'headphones', persistent: false, activity: 'idle', statusText: 'Available for operations work', home: 5 },
   ];
 
-  const sources = initialSources(now);
+  const sources = initialSources();
 
   const artifacts: Artifact[] = [
     { id: 'artifact-welcome-brief', workId: 'work-welcome', title: 'Monday source digest', kind: 'brief', content: '# Previous office source digest\n\nFictional historical artifact.\n\nThe Pinecone Commerce archive records 170 activated merchants of 250 eligible, or 68%. Support questions declined from 31 to 18 in the archived period. Seven merchant migrations still await confirmation. Nora Feld owns the launch decision, Eli Navarro owns reporting, and Mina Park owns engineering. The decision is to keep the staged rollout at 68% until migration checks are complete.\n\nThe seven migration owners are Nora Feld for Birch Books, Eli Navarro for Copper Coffee, Mina Park for Poppy Goods, Sam Okafor for Juniper Bikes, Jonah Brooks for Fern Market, Lena Ortiz for Oak Paper, and Maya Chen for Willow Studio.\n\nHarbor Health is a separate project: 84 of 120 reminders delivered, front desk questions down from 24 to 11, and translated reminder copy awaiting clinic approval. Its counts must not be mixed into the Pinecone report.\n\nSources: history-pinecone-02, pin-weekly-metrics.csv; history-pinecone-03, pin-owner-register.csv; history-harbor-02, hbr-weekly-metrics.csv. New arrivals may correct this archived baseline.', createdAt: now - 22 * HOUR, simulated: true },
@@ -56,9 +56,7 @@ export async function writeInitialArtifacts(dataDir: string, snapshot: Snapshot)
   }
 }
 
-export async function createBugFixture(_dataDir: string): Promise<string> {
-  return path.join(demoDataDirectory, 'checkout');
-}
+export const checkoutFixtureDirectory = path.join(demoDataDirectory, 'checkout');
 
 export async function copyBugFixture(template: string, workspace: string): Promise<void> {
   await mkdir(workspace, { recursive: true });

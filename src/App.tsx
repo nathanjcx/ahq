@@ -1184,8 +1184,10 @@ function followUpKind(entry: ReplayEntry, entries: ReplayEntry[]) {
 function SimulationModal({ snapshot, run, busy, onClose, onMessage, onCalendar, onTemplate }: { snapshot: Snapshot; run: RunCommand; busy: string | null; onClose: () => void; onMessage: () => void; onCalendar: () => void; onTemplate: (id: string) => void }) {
   const entries = snapshot.demo.events || [];
   const [category, setCategory] = useState<"suggested" | "follow-ups">("suggested");
-  const suggested = entries.filter((entry) => !followUpKind(entry, entries));
-  const followUps = entries.filter((entry) => followUpKind(entry, entries));
+  const [connection, setConnection] = useState<Source | "all">("all");
+  const filtered = entries.filter(entry => connection === "all" || entry.source === connection);
+  const suggested = filtered.filter((entry) => !followUpKind(entry, entries));
+  const followUps = filtered.filter((entry) => followUpKind(entry, entries));
   const visible = category === "suggested" ? suggested : followUps;
   return <Modal title="Simulate an arrival" onClose={onClose} wide>
     <div className="simulation-panel">
@@ -1194,6 +1196,7 @@ function SimulationModal({ snapshot, run, busy, onClose, onMessage, onCalendar, 
         <button aria-label="New incoming message" onClick={onMessage}><span className="simulation-create__icon"><Mail size={20} /></span><span><strong>New incoming message</strong><small>Write an email, chat message, or issue.</small></span><Plus size={17} /></button>
         <button aria-label="New calendar event" onClick={onCalendar}><span className="simulation-create__icon"><CalendarDays size={20} /></span><span><strong>New calendar event</strong><small>Add a meeting and let the office prepare.</small></span><Plus size={17} /></button>
       </div>
+      <label className="simulation-connection"><span>Connection</span><select aria-label="Arrival connection" value={connection} onChange={event => setConnection(event.target.value as Source | "all")}><option value="all">All connections · {entries.length}</option>{SOURCES.map(source => <option key={source.id} value={source.id}>{source.label} · {entries.filter(entry => entry.source === source.id).length}</option>)}</select></label>
       <div className="simulation-tabs" role="tablist" aria-label="Arrival templates">
         <button role="tab" aria-selected={category === "suggested"} onClick={() => setCategory("suggested")}>Suggested arrivals <span>{suggested.filter((entry) => !entry.delivered).length}</span></button>
         <button role="tab" aria-selected={category === "follow-ups"} onClick={() => setCategory("follow-ups")}>Follow-ups <span>{followUps.filter((entry) => !entry.delivered).length}</span></button>
@@ -1202,7 +1205,7 @@ function SimulationModal({ snapshot, run, busy, onClose, onMessage, onCalendar, 
       <div className="simulation-suggestions" role="tabpanel" aria-label={category === "suggested" ? "Suggested arrivals" : "Follow-ups"}>
         {visible.map((entry) => <button key={entry.id} className="simulation-suggestion" aria-label={entry.label} disabled={entry.delivered || !entry.item} onClick={() => onTemplate(entry.id)}>
           <span className={`source-logo source-logo--${entry.source}`}>{SOURCE_META[entry.source].short}</span>
-          <span className="simulation-suggestion__copy"><strong>{entry.label}</strong><small>{SOURCE_META[entry.source].label}{entry.item ? ` · ${entry.item.author}` : " · Preview unavailable"}</small></span>
+          <span className="simulation-suggestion__copy"><strong>{entry.label}</strong><small>{SOURCE_META[entry.source].label}{entry.item ? ` · ${entry.item.author}${entry.item.attachments?.length ? ` · ${entry.item.attachments.length} attachments` : ""}` : " · Preview unavailable"}</small></span>
           {entry.delivered ? <span className="simulation-delivered"><Check size={13} /> Delivered</span> : <><span className="simulation-kind">{followUpKind(entry, entries) || "Message"}</span><ChevronRight size={15} /></>}
         </button>)}
         {!visible.length && <p className="muted">No suggested messages in this group. You can always write a new message.</p>}

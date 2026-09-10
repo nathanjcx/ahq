@@ -60,12 +60,13 @@ IDs below omit the `arrival-` prefix. A follow-up updates or revises existing wo
 | cedar-report | Produce CDR report | Site totals, batch durations, kitchen constraints; no private allergy details. |
 | library-followup | Update same LIB report | West Branch service log; branch is open with phone booking. |
 | personal-date-vague | Wait | Family museum, weekend and time missing; keep separate from dinner. |
+| personal-date-confirmed | Complete the same family calendar task | Final dated confirmation and attached event details; Lumen Museum, two attendees, no external booking. |
 | harbor-acknowledgment | Ignore | Receipt confirmation, no new request. |
 | beacon-correction | Revise same BG brief | Delivered `bg-meter-correction.md`; baseline BG-M40 is unconnected. |
 | calendar-no-change | Ignore | RSVP only; event unchanged. |
 | community-social | Ignore | Social comment with no task. |
 
-The original story has no confirming reply for Dad's museum request. That arrival must wait until a later user-supplied or added confirmation gives the museum, date and time. Project data cannot supply personal consent or resolve that omission. BG and LUM preparation requests refer to already-booked meetings; runtime calendar records must include them.
+Dad's museum request waits until his confirming arrival supplies the museum, date, time and attendees. BG and LUM preparation requests refer to the matching seeded calendar events.
 
 ## Extended conversation coverage
 

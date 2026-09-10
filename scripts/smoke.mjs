@@ -47,6 +47,21 @@ try {
     await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
     await page.keyboard.press('Escape');
   }
+  for (const connection of ['gmail', 'slack']) {
+    await page.getByRole('button', { name: 'Simulate an arrival', exact: true }).click();
+    const chooser = page.getByRole('dialog');
+    await chooser.getByLabel('Arrival connection', { exact: true }).selectOption(connection);
+    const entry = state.demo.events.find(item => item.id === `arrival-${connection}-deep-01`);
+    assert.ok(entry?.item?.attachments?.length, `${connection} needs real evidence files.`);
+    if (!(await chooser.getByRole('button', { name: entry.label, exact: true }).count())) {
+      await chooser.getByRole('tab', { name: /Follow-ups/ }).click();
+    }
+    await chooser.getByRole('button', { name: entry.label, exact: true }).click();
+    await page.getByRole('dialog').locator('.attachment-list summary').first().click();
+    assert.equal(await page.getByRole('dialog').locator('.attachment-list pre').first().textContent(), entry.item.attachments[0].content);
+    await page.screenshot({ path: `test-results/${connection}-attachment-preview.png`, fullPage: true });
+    await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+  }
   await page.locator('.nav-rail').getByRole('button', { name: 'Inbox' }).click();
   await page.getByRole('tab', { name: /Slack/ }).click();
   assert.ok((await page.locator('.message-row').count()) > 0);

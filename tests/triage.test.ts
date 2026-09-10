@@ -164,7 +164,7 @@ test('waiting QA is reconsidered when its bug arrives, consumes the exact patch 
     assert.equal(proof.parentWorkspace, parentRun.workspace);
     assert.equal(proof.qaWorkspace, qaRun.workspace);
     assert.notEqual(proof.parentWorkspace, proof.qaWorkspace);
-    assert.deepEqual(proof.files.map((file: { path: string }) => file.path).sort(), ['checkout.js', 'package.json', 'test/added.test.js', 'test/checkout.test.js']);
+    assert.deepEqual(proof.files.map((file: { path: string }) => file.path).sort(), ['README.md', 'checkout.js', 'package.json', 'test/added.test.js', 'test/checkout.test.js']);
     for (const file of proof.files) {
       const parentBytes = await readFile(path.join(parentRun.workspace!, file.path));
       const copiedBytes = await readFile(path.join(qaRun.workspace!, file.path));

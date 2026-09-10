@@ -6,15 +6,23 @@ The sources and incoming streams are fictional. Triage and task execution use re
 
 ## Incoming-work demo
 
-The office contains 450 historical messages across ten projects, with 30 distinct new messages available for delivery and one deliberate duplicate delivery. The full dataset has 480 unique messages and 84 readable CSV, Markdown, and JSON attachments. Historical messages provide context without automatically starting work.
+The office contains 450 historical messages across ten projects, with 53 distinct new messages available for delivery and one deliberate duplicate delivery. The full dataset has 503 unique messages and 105 readable CSV, Markdown, JSON, JavaScript, and text attachments. Historical messages provide context without automatically starting work.
 
 Open **Simulate an arrival** to choose and edit a suggested message, write a new message, or create a meeting. Codex decides whether to ignore it, create a task, attach it to existing work, or wait for missing information or another task. Decisions and reasons appear in the Inbox and Tasks view. New tasks receive temporary worker characters; recurring agents retain their identity. Idle residents welcome new workers at the door, take coffee breaks, and tend plants. Work animations reflect reading, drafting, coding, QA, and scheduling. Reduced motion skips social movement.
 
 Tasks run through Codex against a workspace containing source messages, attachment files, and the exact prerequisite artifacts. Bug fixes use a small local checkout project with Node tests. QA uses a verified copy of its parent fix's workspace, with a file-hash manifest linking the two. Corrections can create linked revisions, completed work can release waiting tasks, and meeting briefs can be refreshed after their inputs change. Source content is evidence rather than privileged agent instructions.
 
+Gmail and Slack each include a connected 11-message conversation with file-backed attachments. The full picker offers 18 Gmail and 17 Slack deliveries, including one Slack duplicate.
+
 The curated arrivals cover a launch report, cross-provider corroboration, an acknowledgement, QA requested before its fix, a duplicate delivery, meeting preparation, a dinner request with missing details and a calendar conflict, a corrected support count, and an unrelated report request. Additional arrivals exercise nine other projects and informational messages.
 
 This requires internet access and Codex subscription allowance for both intake and execution. There is no canned-output or offline execution mode. The supported work types are document reports, local checkout fixes and QA, meeting briefs, and local calendar events. Web search and external integrations are disabled. Schedules run only while the app is open. Clicking a worker opens its activity and artifacts, not a streamed computer desktop. The board records findings and task handoffs; it is not an autonomous group chat.
+
+## Local evidence
+
+The checked-in `demo-data/projects/` directory contains the fictional project records: source CSVs, owner registers, budgets, operations notes, and planning constraints. `demo-data/checkout/` contains the checkout code and tests. Gmail and Slack conversation files and their attachments live under `demo-data/arrivals/`.
+
+Each job receives a local copy of the project corpus plus its delivered message attachments. Future arrival attachments stay out of the workspace until delivered, so agents cannot use a correction or confirmation before it arrives. The original corpus stays unchanged when an agent writes a report or fixes code.
 
 ## Run
 
@@ -89,6 +97,8 @@ The authentication check uses an isolated Codex profile to verify the real login
 `node scripts/triage-smoke.mjs` delivers the first 16 curated events through real Codex triage and execution. It writes decisions, task state, artifacts, and screenshots under `test-results/`. Set `OFFICE_TRIAGE_LIMIT` to change the number of deliveries, or `OFFICE_TRIAGE_EVENTS` to a comma-separated list of event IDs for a focused check. This uses the existing ChatGPT login and subscription allowance in an isolated temporary office.
 
 `node scripts/calendar-smoke.mjs` checks the local event form, real intake, and generated meeting brief. It also uses Codex allowance.
+
+`npx tsx scripts/verify-arrivals.mts` delivers the entire catalog through real Codex and checks that ready tasks finish with actual artifact files. It retains the isolated office, decisions, workspaces, and outputs under `test-results/arrivals-*` for inspection. Set `OFFICE_VERIFY_EVENTS` to comma-separated arrival IDs for a focused run. This uses ChatGPT Codex allowance.
 
 ## Structure
 

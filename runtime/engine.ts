@@ -16,7 +16,7 @@ import type {
 } from '../src/shared/types';
 import { copyProjectEvidence } from './evidence';
 import { CodexAppServer } from './codex';
-import { copyBugFixture, createBugFixture, initialSnapshot, writeInitialArtifacts } from './fixtures';
+import { copyBugFixture, checkoutFixtureDirectory, initialSnapshot, writeInitialArtifacts } from './fixtures';
 import { SnapshotStore } from './store';
 import { demoEvents } from './story';
 import { parseTriageDecision, relevantSources, sourceEvidence, triagePrompt, triageSchema, type TriageDecision } from './triage';
@@ -118,7 +118,7 @@ class Runtime implements OfficeRuntime {
       }
       state.demo.playing = false;
     }
-    const bugTemplate = await createBugFixture(dataDir);
+    const bugTemplate = checkoutFixtureDirectory;
     const codex = new CodexAppServer();
     const runtime = new Runtime({ ...options, dataDir }, store, state, codex, bugTemplate);
     codex.onNotification((method, params) => runtime.handleCodexNotification(method, params));

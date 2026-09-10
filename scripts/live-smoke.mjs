@@ -9,7 +9,7 @@ assert.ok(['report', 'bug', 'meeting', 'dinner', 'qa'].includes(scenario));
 const dataDir = await mkdtemp(path.join(tmpdir(), 'little-office-live-'));
 const env = { ...process.env, OFFICE_DATA_DIR: dataDir };
 delete env.ELECTRON_RUN_AS_NODE;
-const desktop = await electron.launch({ args: ['.'], env, timeout: 30_000 });
+const desktop = await electron.launch({ ...(process.env.OFFICE_EXECUTABLE ? { executablePath: process.env.OFFICE_EXECUTABLE, args: [] } : { args: ['.'] }), env, timeout: 30_000 });
 try {
   const page = await desktop.firstWindow();
   await page.waitForFunction(() => Boolean(window.office));
@@ -21,6 +21,9 @@ try {
   const work = state.work.find((item) => item.mode === 'live' && item.scenario === scenario);
   assert.ok(work);
   console.log(`Live ${scenario} started: ${work.id}`);
+  await mkdir('test-results', { recursive: true });
+  await page.screenshot({ path: `test-results/live-${scenario}.png`, fullPage: true });
+  await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].hide());
   const deadline = Date.now() + 300_000;
   do {
     await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -32,8 +35,6 @@ try {
   const artifact = state.artifacts.find((item) => item.workId === work.id);
   assert.ok(artifact && !artifact.simulated && artifact.content.length > 100, 'Codex must produce a real artifact.');
   assert.ok(state.runs.find((item) => item.workId === work.id)?.threadId, 'Run must retain its actual Codex thread.');
-  await mkdir('test-results', { recursive: true });
-  await page.screenshot({ path: `test-results/live-${scenario}.png`, fullPage: true });
   console.log(`Live Codex ${scenario} passed: ${artifact.title}, ${artifact.content.length} characters, ${state.activity.filter((event) => event.workId === work.id).length} activity events.`);
 } finally {
   await desktop.close();

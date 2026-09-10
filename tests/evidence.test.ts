@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { copyProjectEvidence, demoDataDirectory, readProjectEvidence } from '../runtime/evidence';
-import { copyBugFixture, createBugFixture } from '../runtime/fixtures';
+import { copyBugFixture, checkoutFixtureDirectory } from '../runtime/fixtures';
 import { createRuntime } from '../runtime/engine';
 import { demoEvents, initialCalendar, initialSources } from '../runtime/story';
 import { relevantSources } from '../runtime/triage';
@@ -13,7 +13,7 @@ import type { Snapshot, WorkItem } from '../src/shared/types';
 const now = Date.parse('2026-09-10T14:00:00Z');
 
 test('historical attachments read the checked-in project files exactly', async () => {
-  const sources = initialSources(now);
+  const sources = initialSources();
   for (const source of sources) {
     const project = source.id.split('-')[1];
     for (const attachment of source.attachments || []) {
@@ -26,7 +26,7 @@ test('historical attachments read the checked-in project files exactly', async (
 test('workspaces receive all project evidence and the real checkout, with no future arrivals', async (t) => {
   const workspace = await mkdtemp(path.join(os.tmpdir(), 'office-evidence-'));
   t.after(() => rm(workspace, { recursive: true, force: true }));
-  await copyBugFixture(await createBugFixture(workspace), workspace);
+  await copyBugFixture(checkoutFixtureDirectory, workspace);
   await copyProjectEvidence(workspace);
   for (const file of await readdir(path.join(demoDataDirectory, 'projects'), { recursive: true, withFileTypes: true })) {
     if (!file.isFile()) continue;
@@ -68,7 +68,7 @@ test('delivered corrections contain parseable records and family dates resolve t
 
 test('short project codes find their evidence without unrelated projects', () => {
   for (const code of ['PIN', 'HBR', 'LIB', 'BG', 'NS']) {
-    const matches = relevantSources(code, initialSources(now));
+    const matches = relevantSources(code, initialSources());
     assert.ok(matches.length > 0);
     assert.ok(matches.every((source) => source.title.startsWith(`${code} ·`)), code);
   }
