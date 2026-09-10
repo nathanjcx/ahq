@@ -1,6 +1,7 @@
 import { promises as fs, constants } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { FolderSchema } from '../shared/schemas';
 import type { WorkspaceFolder } from '../shared/types';
 import { allowedPath, containsSecret, MAX_FILES, MAX_FILE_SIZE, MAX_FOLDER_SIZE } from '../shared/workspace';
 export async function createSnapshot(source: string, snapshotsRoot: string): Promise<WorkspaceFolder> {
@@ -92,4 +93,38 @@ export async function atomicWrite(file: string, data: string | Buffer) {
   const temp = `${file}.${randomUUID()}.tmp`;
   await fs.writeFile(temp, data, { mode: 0o600 });
   await fs.rename(temp, file);
+}
+
+/** Read only the snapshots selected for this assignment or roadmap. */
+export async function readSnapshotFiles(
+  folderIds: string[],
+  folders: WorkspaceFolder[],
+  snapshotsRoot: string,
+): Promise<{ folder: string; path: string; content: string }[]> {
+  const files: { folder: string; path: string; content: string }[] = [];
+  let totalBytes = 0;
+  for (const id of new Set(folderIds)) {
+    if (!folders.some((folder) => folder.id === id))
+      throw new Error('That folder is not part of this workspace.');
+    const manifest = FolderSchema.parse(
+      JSON.parse(await fs.readFile(path.join(snapshotsRoot, id, 'manifest.json'), 'utf8')),
+    );
+    const base = await fs.realpath(path.join(snapshotsRoot, id, 'files'));
+    for (const file of manifest.files) {
+      if (!allowedPath(file.path)) throw new Error('An unsafe file was excluded from this request.');
+      const target = await fs.realpath(path.join(base, file.path));
+      if (!target.startsWith(`${base}${path.sep}`))
+        throw new Error('File access outside the snapshot is not allowed.');
+      const content = await fs.readFile(target, 'utf8');
+      totalBytes += Buffer.byteLength(content);
+      if (totalBytes > MAX_FOLDER_SIZE)
+        throw new Error('The selected context exceeds the 8 MB upload limit.');
+      if (containsSecret(content))
+        throw new Error(
+          'A file appears to contain a secret. Remove it from the source folder and make a fresh copy.',
+        );
+      files.push({ folder: manifest.name, path: file.path, content });
+    }
+  }
+  return files;
 }

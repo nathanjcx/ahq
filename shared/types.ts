@@ -133,6 +133,7 @@ export interface AppState {
   demo: boolean;
 }
 export interface RoadmapRun {
+  folderIds?: string[];
   launchId?: string;
   automatic?: boolean;
   id: string;
@@ -209,7 +210,10 @@ export interface DesktopAPI {
   launchSnapshot(): Promise<LaunchSnapshot>;
   launchAction(action: LaunchAction): Promise<LaunchSnapshot>;
   generatePersonality(input: { name: string; jobTitle: string }): Promise<string>;
-  createRoadmap(goal: string, options?: { automatic?: boolean }): Promise<AppState>;
+  createRoadmap(
+    goal: string,
+    options?: { automatic?: boolean; folderIds?: string[]; allowCloudUpload?: boolean },
+  ): Promise<AppState>;
   triggerDemo(input: DemoTrigger): Promise<DemoNotification>;
   demoSnapshot(): Promise<DemoSnapshot>;
   retryDemo(id: string): Promise<DemoNotification>;

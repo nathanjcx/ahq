@@ -18,10 +18,20 @@ export class GoalCoordinator {
     this.closed = true;
   }
 
-  async create(goal: string, options?: { automatic?: boolean; launchId?: string }): Promise<AppState> {
+  async create(
+    goal: string,
+    options?: { automatic?: boolean; launchId?: string; folderIds?: string[]; allowCloudUpload?: boolean },
+  ): Promise<AppState> {
     const state = await this.deps.queue(async () => {
       const current = await this.deps.load();
       if (!current) throw new Error('Open your office first.');
+      const folderIds = [...new Set(options?.folderIds ?? [])];
+      if (folderIds.length && !options?.allowCloudUpload)
+        throw new Error('Explicitly authorize sharing the selected copies with roadmap AI sessions.');
+      if (folderIds.some((id) => !current.folders.some((folder) => folder.id === id)))
+        throw new Error('That folder is not part of this workspace.');
+      if (options?.automatic && folderIds.length)
+        throw new Error('Example roadmaps use their supplied example files.');
       if (current.commitments.length > 980)
         throw new Error('The roadmap archive is full. Export your activity before starting a new workspace.');
       await this.deps.save(current, 'Before creating a roadmap', true);
@@ -33,6 +43,7 @@ export class GoalCoordinator {
         roadmap: {
           id: randomUUID(),
           automatic: options?.automatic === true,
+          folderIds,
           launchId: options?.launchId,
           goal,
           status: 'planning',
