@@ -27,6 +27,7 @@ export interface WorkItem {
   mode: 'demo' | 'live'; error?: string; routineId?: string;
   triggerSourceId?: string; parentWorkId?: string; dependsOnWorkIds?: string[];
   inputArtifactIds?: string[]; blockedReason?: string; needsInformation?: boolean; followUpOf?: string;
+  calendarDraft?: CalendarEvent;
 }
 export interface Run {
   id: string; workId: string; status: WorkStatus; startedAt: number; completedAt?: number;
