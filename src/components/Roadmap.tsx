@@ -5,6 +5,9 @@ import {
   Check,
   Circle,
   GitBranch,
+  LoaderCircle,
+  Pause,
+  Play,
   List,
   Plus,
   Search,
@@ -22,6 +25,7 @@ type RoadmapProps = {
   onSelect: (commitment: Commitment) => void;
   onCreate: () => void;
   onEditGoal: () => void;
+  onControl: (action: 'pause' | 'resume') => Promise<void>;
 };
 
 const CARD_WIDTH = 258;
@@ -163,10 +167,11 @@ function progressFor(commitment: Commitment) {
   return commitment.status === 'done' ? 100 : Math.round(Math.max(0, Math.min(100, commitment.progress)));
 }
 
-export default function Roadmap({ state, onSelect, onCreate, onEditGoal }: RoadmapProps) {
+export default function Roadmap({ state, onSelect, onCreate, onEditGoal, onControl }: RoadmapProps) {
   const [view, setView] = useState<'graph' | 'list'>('graph');
   const [zoom, setZoom] = useState(1);
   const [query, setQuery] = useState('');
+  const [controlling, setControlling] = useState(false);
   const markerId = useId().replace(/:/g, '');
   const graph = useMemo(() => buildRoadmapGraph(state.commitments), [state.commitments]);
   const completed = state.commitments.filter((commitment) => commitment.status === 'done').length;
@@ -210,7 +215,7 @@ export default function Roadmap({ state, onSelect, onCreate, onEditGoal }: Roadm
         <span className="roadmap-milestone-meta">
           <span>
             <Avatar employee={owner} size={22} />
-            {owner?.name ?? 'You'}
+            {owner?.name ?? 'Unassigned'}
           </span>
           <span>
             <CalendarDays size={12} />
@@ -258,6 +263,57 @@ export default function Roadmap({ state, onSelect, onCreate, onEditGoal }: Roadm
 
   return (
     <section className="roadmap-page" aria-label="Project roadmap">
+      {state.roadmap && (
+        <div className={`roadmap-run roadmap-run-${state.roadmap.status}`} role="status">
+          <span className="roadmap-run-icon">
+            {state.roadmap.status === 'planning' ? (
+              <LoaderCircle size={20} className="spin" />
+            ) : (
+              <GitBranch size={20} />
+            )}
+          </span>
+          <div>
+            <strong>
+              {
+                {
+                  planning: 'Creating your roadmap',
+                  active: 'Your team is moving the goal forward',
+                  paused: 'Delegation paused',
+                  failed: 'The roadmap needs another try',
+                  complete: 'Goal completed',
+                }[state.roadmap.status]
+              }
+            </strong>
+            <p>{state.roadmap.message}</p>
+          </div>
+          {['active', 'paused'].includes(state.roadmap.status) && (
+            <button
+              className="button secondary"
+              disabled={controlling}
+              onClick={async () => {
+                setControlling(true);
+                try {
+                  await onControl(state.roadmap!.status === 'active' ? 'pause' : 'resume');
+                } finally {
+                  setControlling(false);
+                }
+              }}
+            >
+              {state.roadmap.status === 'active' ? <Pause size={14} /> : <Play size={14} />}
+              {state.roadmap.status === 'active'
+                ? 'Pause delegation'
+                : state.roadmap.assignments.some((a) => a.status === 'stopped')
+                  ? 'Retry stopped steps'
+                  : 'Resume'}
+            </button>
+          )}
+          {state.roadmap.status === 'failed' && (
+            <button className="button secondary" onClick={onEditGoal}>
+              Try again
+            </button>
+          )}
+        </div>
+      )}
       <div className="roadmap-surface">
         <div className="roadmap-toolbar">
           <div className="roadmap-view-switch" role="group" aria-label="Roadmap view">
@@ -382,18 +438,27 @@ export default function Roadmap({ state, onSelect, onCreate, onEditGoal }: Roadm
                   <button
                     className="roadmap-start roadmap-positioned"
                     style={{ left: LEFT, top: TOP, width: CARD_WIDTH, height: CARD_HEIGHT }}
-                    onClick={onCreate}
+                    onClick={onEditGoal}
+                    disabled={state.roadmap?.status === 'planning'}
                   >
                     <span className="roadmap-start-icon">
-                      <Plus size={22} />
+                      {state.roadmap?.status === 'planning' ? (
+                        <LoaderCircle size={22} className="spin" />
+                      ) : (
+                        <Target size={22} />
+                      )}
                     </span>
-                    <strong>What comes first?</strong>
+                    <strong>
+                      {state.roadmap?.status === 'planning' ? 'Mapping the steps' : 'Start with a goal'}
+                    </strong>
                     <span>
-                      Add your first milestone.
-                      <br />A small step toward the bigger picture.
+                      {state.roadmap?.status === 'planning'
+                        ? 'Your AI roadmap will appear here.'
+                        : 'AI plans the milestones and delegates the work to your team.'}
                     </span>
                     <span className="roadmap-start-action">
-                      Create a milestone <ArrowRight size={13} />
+                      {state.roadmap?.status === 'planning' ? 'Planning…' : 'Create a roadmap'}{' '}
+                      <ArrowRight size={13} />
                     </span>
                   </button>
                 )}

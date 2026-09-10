@@ -431,3 +431,47 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+.roadmap-run {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 22px;
+  margin-bottom: 18px;
+  background: #fff;
+  border: 1px solid #e2e9e6;
+  border-radius: 16px;
+}
+.roadmap-run-icon {
+  color: #16837a;
+  display: flex;
+}
+.roadmap-run > div {
+  flex: 1;
+  min-width: 0;
+}
+.roadmap-run strong {
+  font-size: 14px;
+}
+.roadmap-run p {
+  font-size: 13px;
+  color: #64756f;
+  margin: 5px 0 0;
+  line-height: 1.5;
+}
+.roadmap-run .button {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.roadmap-run-paused,
+.roadmap-run-failed {
+  border-color: #e8d6ba;
+}
+@media (max-width: 700px) {
+  .roadmap-run {
+    flex-wrap: wrap;
+    padding: 15px;
+  }
+  .roadmap-run .button {
+    margin-left: 34px;
+  }
+}

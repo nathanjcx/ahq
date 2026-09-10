@@ -151,6 +151,8 @@ export function applySession(state: AppState, employeeId: string, session: Cloud
                 ? 'Work from your ChatGPT session is ready for review.'
                 : 'Astra cloud output is ready for review.',
               content: output.content,
+              ...(output.question ? { question: output.question } : {}),
+              ...(output.choices ? { choices: output.choices } : {}),
               createdAt: timeNow(),
               status: 'pending',
               kind: 'document',

@@ -7,12 +7,14 @@ export default function Modal({
   children,
   onClose,
   wide = false,
+  brand = true,
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  brand?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
@@ -71,7 +73,7 @@ export default function Modal({
       >
         <div className="modal-heading">
           <div>
-            <span className="eyebrow">ASTRA HQ</span>
+            {brand && <span className="eyebrow">ASTRA HQ</span>}
             <h2>{title}</h2>
             {subtitle && <p>{subtitle}</p>}
           </div>

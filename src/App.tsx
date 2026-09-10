@@ -13,7 +13,6 @@ import {
   FolderOpen,
   Home,
   Inbox,
-  Leaf,
   LoaderCircle,
   MessageCircle,
   Minus,
@@ -23,6 +22,7 @@ import {
   Sparkles,
   Target,
   Users,
+  UserRound,
   Volume2,
   X,
 } from 'lucide-react';
@@ -39,11 +39,9 @@ import {
   clockTime,
   dueLabel,
   employeeById,
-  employeeColors,
   folderBrief,
   sampleState,
   isState,
-  profileSuggestion,
   readLocalState,
   STORAGE_KEY,
   timeNow,
@@ -57,11 +55,13 @@ import Modal from './components/Modal';
 import SceneBoundary from './components/SceneBoundary';
 import Markdown from './components/Markdown';
 import Roadmap from './components/Roadmap';
+import EmployeeForm from './components/EmployeeForm';
+import ChatGPTProfile from './components/ChatGPTProfile';
+import { randomEmployeeAppearance } from './lib/employeeAppearance';
 import officeIcon from '../assets/app-icon.svg';
 import {
   useOfficeHistory,
   OfficeTimeline,
-  AppearanceEditor,
   VoiceAnnounce,
   ConnectionSettings,
   ActivityPage,
@@ -100,7 +100,7 @@ export default function App() {
   const [cloud, setCloud] = useState<CloudSettings>({ endpoint: '', configured: false, connected: false });
   const [toast, setToast] = useState('');
   const [modal, setModal] = useState<
-    'employee' | 'commitment' | 'goal' | 'search' | 'help' | 'folder' | 'files' | 'storage' | null
+    'employee' | 'commitment' | 'goal' | 'search' | 'help' | 'folder' | 'files' | 'storage' | 'profile' | null
   >(null);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
@@ -294,6 +294,36 @@ export default function App() {
       clearInterval(timer);
     };
   }, [cloud.configured, update]);
+  useEffect(() => {
+    if (!window.ahq || !ready) return;
+    let stopped = false,
+      polling = false;
+    const refresh = async () => {
+      if (polling || !stateRef.current.roadmap) return;
+      polling = true;
+      try {
+        await saveChain.current;
+        const before = stateRef.current;
+        const saved = await window.ahq!.loadState();
+        if (
+          !stopped &&
+          saved &&
+          stateRef.current === before &&
+          JSON.stringify(saved) !== JSON.stringify(before)
+        )
+          setState(saved);
+      } catch {
+        /* Preserve local edits until the next successful refresh. */
+      } finally {
+        polling = false;
+      }
+    };
+    const timer = setInterval(() => void refresh(), 2000);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [ready]);
   const pending = state.approvals.filter((a) => a.status === 'pending');
   const previousPending = useRef(pending.length);
   useEffect(() => {
@@ -325,6 +355,17 @@ export default function App() {
           decision: decision === 'approved' ? 'approve' : 'request_changes',
           feedback,
         });
+        const saved = await window.ahq.loadState();
+        if (
+          saved?.approvals.some(
+            (item) => item.id === a.id && item.version === a.version && item.status === decision,
+          )
+        ) {
+          setState(saved);
+          notify(decision === 'approved' ? 'Approved. Your team can continue.' : 'Your guidance is saved.');
+          setSelectedApproval(null);
+          return;
+        }
       }
       const latest = stateRef.current.approvals.find((item) => item.id === a.id);
       if (!latest || latest.status !== 'pending' || latest.version !== a.version)
@@ -484,7 +525,7 @@ export default function App() {
           ))}
         </nav>
       </aside>
-      <div className="main-shell">
+      <div className="main-shell" data-page={page}>
         <header className="topbar topbar-minimal">
           <div className="topbar-actions">
             <span className="today">
@@ -492,11 +533,20 @@ export default function App() {
             </span>
             <button
               className="icon-button"
-              aria-label="Settings and ChatGPT login"
-              title="Settings and ChatGPT login"
+              aria-label="Settings"
+              title="Settings"
               onClick={() => navigate('settings')}
             >
               <Settings size={18} />
+            </button>
+            <button
+              className="icon-button profile-button"
+              aria-label="Profile and ChatGPT sign-in"
+              aria-haspopup="dialog"
+              title="ChatGPT account"
+              onClick={() => setModal('profile')}
+            >
+              <UserRound size={19} />
             </button>
           </div>
         </header>
@@ -596,12 +646,21 @@ export default function App() {
                         >
                           <OfficeScene
                             employees={history.display.employees}
+                            reviewEmployeeIds={history.at === null ? pending.map((a) => a.employeeId) : []}
+                            onReview={(e) => {
+                              const review = pending.find((a) => a.employeeId === e.id);
+                              if (review) setSelectedApproval(review.id);
+                            }}
                             animate={playing && !state.reducedMotion && !systemReducedMotion}
-                            onSelect={(e) =>
-                              history.at === null
-                                ? setSelectedEmployee(e.id)
-                                : notify(`${e.name}: ${e.activity}`)
-                            }
+                            onSelect={(e) => {
+                              if (history.at !== null) {
+                                notify(`${e.name}: ${e.activity}`);
+                                return;
+                              }
+                              const review = pending.find((a) => a.employeeId === e.id);
+                              if (review) setSelectedApproval(review.id);
+                              else setSelectedEmployee(e.id);
+                            }}
                             zoom={zoom}
                             angle={angle}
                             timeSeconds={
@@ -750,7 +809,21 @@ export default function App() {
           )}
           {page === 'roadmap' && (
             <Roadmap
-              state={state}
+              state={{
+                ...state,
+                commitments: state.roadmap
+                  ? state.commitments.filter((c) => state.roadmap!.milestoneIds.includes(c.id))
+                  : state.commitments,
+              }}
+              onControl={async (action) => {
+                try {
+                  await saveChain.current;
+                  const next = await window.ahq?.controlRoadmap(action);
+                  if (next) setState(next);
+                } catch (error) {
+                  notify(error instanceof Error ? error.message : 'Please try again.');
+                }
+              }}
               onSelect={(c) => setSelectedCommitment(c.id)}
               onCreate={() => setModal('commitment')}
               onEditGoal={() => setModal('goal')}
@@ -781,6 +854,15 @@ export default function App() {
                 onSelectFolder={() => setModal('folder')}
                 onBrief={createBrief}
                 onReset={() => {
+                  if (
+                    (state.roadmap && !['complete', 'failed'].includes(state.roadmap.status)) ||
+                    state.employees.some(
+                      (e) => e.sessionId && ['working', 'review', 'offline'].includes(e.status),
+                    )
+                  ) {
+                    notify('Finish or stop your current work before opening an example office.');
+                    return;
+                  }
                   update(() => sampleState());
                   notify('Sample workspace restored.');
                 }}
@@ -839,6 +921,9 @@ export default function App() {
           </div>
         </Modal>
       )}
+      {modal === 'profile' && (
+        <ChatGPTProfile cloud={cloud} onCloud={setCloud} onClose={() => setModal(null)} />
+      )}
       {modal === 'employee' && (
         <EmployeeForm
           initial={editingEmployee ?? undefined}
@@ -859,10 +944,9 @@ export default function App() {
             }
             const employee: Employee = {
               ...fields,
-              skills: ensureCloudSkill(fields.skills),
+              skills: 'Astra session',
               id: uid(),
-              color: employeeColors[state.employees.length % employeeColors.length],
-              avatar: state.employees.length % 6,
+              ...randomEmployeeAppearance(),
               status: 'ready',
               activity: 'Ready for a first assignment',
               location: 'desk',
@@ -882,14 +966,14 @@ export default function App() {
         <GoalForm
           goal={state.goal}
           onClose={() => setModal(null)}
-          onSave={(goal) => {
-            update((s) => ({
-              ...s,
-              goal,
-              events: [...s.events, addEvent('Updated the team’s north star', 'announcement')],
-            }));
-            setModal(null);
-            notify('Your team’s north star is updated.');
+          onSave={async (goal) => {
+            if (!window.ahq)
+              throw new Error('Open the desktop app to create an AI roadmap with your ChatGPT account.');
+            await saveChain.current;
+            const next = await window.ahq.createRoadmap(goal);
+            setState(next);
+            navigate('roadmap');
+            notify('Creating your roadmap. Your employees will start the first available steps.');
           }}
         />
       )}
@@ -921,14 +1005,6 @@ export default function App() {
       )}
       {person && (
         <EmployeeDetail
-          onAppearance={(appearance) => {
-            update((s) => ({
-              ...s,
-              employees: s.employees.map((e) => (e.id === person!.id ? { ...e, appearance } : e)),
-              events: [...s.events, addEvent(`Updated ${person!.name}’s appearance`)],
-            }));
-            notify('Appearance saved.');
-          }}
           onEdit={() => {
             setEditingEmployee(person);
             setSelectedEmployee(null);
@@ -986,6 +1062,7 @@ export default function App() {
       )}
       {approval && (
         <ReviewDialog
+          key={`${approval.id}:${approval.version}`}
           approval={approval}
           employee={employeeById(state.employees, approval.employeeId)}
           busy={busy}
@@ -1247,7 +1324,7 @@ export default function App() {
               {
                 icon: Users,
                 title: 'Give someone a place on the team',
-                text: 'A name, a job title, a personality, and skills. That’s the whole profile.',
+                text: 'Enter a name and job, then let AI generate their personality.',
                 action: () => setModal('employee'),
               },
               {
@@ -1259,8 +1336,8 @@ export default function App() {
               {
                 icon: Sparkles,
                 title: 'Connect the work',
-                text: 'Sign in with ChatGPT in Settings to use your plan for employee work.',
-                action: () => navigate('settings'),
+                text: 'Open your profile and sign in with ChatGPT to put your team to work.',
+                action: () => setModal('profile'),
               },
             ].map((item, i) => (
               <button key={item.title} onClick={item.action}>
@@ -1310,160 +1387,6 @@ function playReviewChime() {
     /* Audio is optional. */
   }
 }
-function ensureCloudSkill(skills: string) {
-  return [
-    'Astra session',
-    ...skills
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s && !['astra cloud session', 'astra session'].includes(s.toLowerCase())),
-  ].join(', ');
-}
-function CloudIcon() {
-  return <Sparkles size={12} />;
-}
-function EmployeeForm({
-  initial,
-  onClose,
-  onCreate,
-}: {
-  initial?: Employee;
-  onClose: () => void;
-  onCreate: (e: Pick<Employee, 'name' | 'jobTitle' | 'personality' | 'skills'>) => void;
-}) {
-  const [integrations, setIntegrations] = useState<string[]>([]);
-  useEffect(() => {
-    void window.ahq
-      ?.integrations()
-      .then((items) => setIntegrations(items.map((i) => i.name)))
-      .catch(() => undefined);
-  }, []);
-  const [fields, setFields] = useState({
-    name: initial?.name ?? '',
-    jobTitle: initial?.jobTitle ?? '',
-    personality: initial?.personality ?? '',
-    skills: ensureCloudSkill(initial?.skills ?? ''),
-  });
-  return (
-    <Modal
-      title={initial ? `A little more about ${initial.name}.` : 'A new face. A little possibility.'}
-      subtitle="Good teammates start with a clear role. You can make it their own."
-      onClose={onClose}
-    >
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (Object.values(fields).every((v) => v.trim()))
-            onCreate({
-              name: fields.name.trim(),
-              jobTitle: fields.jobTitle.trim(),
-              personality: fields.personality.trim(),
-              skills: ensureCloudSkill(fields.skills.trim()),
-            });
-        }}
-      >
-        <div className="new-person-preview">
-          <div className="new-person-icon">
-            <Users size={29} />
-          </div>
-          <span>
-            {fields.name || 'Your next great teammate'}
-            <small>{fields.jobTitle || 'A space with their name on it'}</small>
-          </span>
-          <Leaf size={22} />
-        </div>
-        <div className="form-grid">
-          <label>
-            Name
-            <input
-              autoFocus
-              required
-              maxLength={40}
-              placeholder="e.g. Alex"
-              value={fields.name}
-              onChange={(e) => setFields({ ...fields, name: e.target.value })}
-            />
-          </label>
-          <label>
-            Job title
-            <input
-              required
-              maxLength={80}
-              placeholder="e.g. Research Assistant"
-              value={fields.jobTitle}
-              onChange={(e) => setFields({ ...fields, jobTitle: e.target.value })}
-            />
-          </label>
-        </div>
-        <div className="label-row">
-          <label htmlFor="personality">Personality</label>
-          <button
-            type="button"
-            className="text-button"
-            disabled={!fields.jobTitle.trim()}
-            onClick={() => setFields({ ...fields, ...profileSuggestion(fields.jobTitle) })}
-          >
-            <Sparkles size={13} />
-            Use a suggested profile
-          </button>
-        </div>
-        <textarea
-          id="personality"
-          required
-          maxLength={2000}
-          placeholder="How do they approach the work and talk to the team?"
-          value={fields.personality}
-          onChange={(e) => setFields({ ...fields, personality: e.target.value })}
-          rows={3}
-        />
-        <label>
-          Skills
-          <textarea
-            required
-            maxLength={2000}
-            placeholder="What should they be good at?"
-            value={fields.skills}
-            onChange={(e) => setFields({ ...fields, skills: e.target.value })}
-            rows={3}
-          />
-        </label>
-        <div className="skill-tags">
-          <span>
-            <CloudIcon /> Astra session · included
-          </span>
-          {['Web search', 'Data analysis', ...integrations].map((skill) => (
-            <button
-              type="button"
-              key={skill}
-              onClick={() =>
-                setFields({
-                  ...fields,
-                  skills: ensureCloudSkill(
-                    [...new Set([...fields.skills.split(',').map((s) => s.trim()), skill])].join(', '),
-                  ),
-                })
-              }
-            >
-              {skill} +
-            </button>
-          ))}
-        </div>
-        <p className="form-hint">
-          Astra session is included for every employee. Add connected integrations and working skills.
-        </p>
-        <div className="modal-footer">
-          <button type="button" className="button secondary" onClick={onClose}>
-            Maybe later
-          </button>
-          <button className="button primary" type="submit">
-            <Plus size={16} />
-            {initial ? 'Save profile' : 'Welcome to the team'}
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
 function GoalForm({
   goal,
   onClose,
@@ -1471,19 +1394,29 @@ function GoalForm({
 }: {
   goal: string;
   onClose: () => void;
-  onSave: (goal: string) => void;
+  onSave: (goal: string) => Promise<void>;
 }) {
   const [value, setValue] = useState(goal);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
   return (
     <Modal
       title="What are we working toward?"
-      subtitle="A clear north star gives every small step a little more meaning."
+      subtitle="Set the goal. Your team will work out the steps."
       onClose={onClose}
     >
       <form
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          if (value.trim()) onSave(value.trim());
+          if (!value.trim() || saving) return;
+          setSaving(true);
+          setError('');
+          try {
+            await onSave(value.trim());
+          } catch (error) {
+            setError(error instanceof Error ? error.message : 'Please try again.');
+            setSaving(false);
+          }
         }}
       >
         <label>
@@ -1499,12 +1432,18 @@ function GoalForm({
         </label>
         <div className="info-note">
           <Target size={18} />
-          This goal becomes context for every new assignment.
+          AI creates a complete roadmap and delegates available steps to your employees. You review their work
+          before dependent steps begin.
         </div>
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
         <div className="modal-footer">
           <span className="muted">{value.length}/500</span>
-          <button className="button primary" type="submit">
-            Set our direction <ArrowRight size={15} />
+          <button className="button primary" type="submit" disabled={saving || !value.trim()}>
+            {saving ? 'Starting…' : 'Create roadmap & start'} <ArrowRight size={15} />
           </button>
         </div>
       </form>
@@ -1706,9 +1645,7 @@ function EmployeeDetail({
   onSettings,
   onStart,
   onEdit,
-  onAppearance,
 }: {
-  onAppearance: (a: import('../shared/types').Appearance) => void;
   employee: Employee;
   state: AppState;
   cloud: CloudSettings;
@@ -1744,7 +1681,6 @@ function EmployeeDetail({
           </span>
         </div>
       </div>
-      <AppearanceEditor employee={employee} onSave={onAppearance} />
       <div className="detail-section">
         <label>PERSONALITY</label>
         <p>{employee.personality}</p>
@@ -1870,6 +1806,7 @@ function ReviewDialog({
 }) {
   const [changing, setChanging] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [choice, setChoice] = useState('');
   return (
     <Modal
       title={approval.title}
@@ -1889,6 +1826,24 @@ function ReviewDialog({
       <div className="document-preview">
         <Markdown content={approval.content} />
       </div>
+      {approval.status === 'pending' && approval.choices?.length && (
+        <fieldset className="review-choice-list">
+          <legend>{approval.question || 'What should I do next?'}</legend>
+          {approval.choices.map((option) => (
+            <label key={option}>
+              <input
+                type="radio"
+                name="review-choice"
+                value={option}
+                checked={choice === option}
+                disabled={busy}
+                onChange={() => setChoice(option)}
+              />
+              <span>{option}</span>
+            </label>
+          ))}
+        </fieldset>
+      )}
       <div className="review-sources">
         <strong>Sources</strong>
         {approval.sources.map((source) => (
@@ -1937,11 +1892,26 @@ function ReviewDialog({
             ) : (
               <>
                 <button disabled={busy} className="button secondary" onClick={() => setChanging(true)}>
-                  Request changes
+                  No · request changes
                 </button>
-                <button disabled={busy} className="button primary" onClick={() => onDecide('approved')}>
-                  {busy ? <LoaderCircle className="spin" size={16} /> : <Check size={16} />}Approve review
-                </button>
+                {approval.choices?.length ? (
+                  <button
+                    disabled={busy || !choice}
+                    className="button primary"
+                    onClick={() =>
+                      onDecide(
+                        'changes-requested',
+                        `My choice for “${approval.question || 'your question'}”: ${choice}. Continue with this choice and return the result for review.`,
+                      )
+                    }
+                  >
+                    Use this choice <ArrowRight size={15} />
+                  </button>
+                ) : (
+                  <button disabled={busy} className="button primary" onClick={() => onDecide('approved')}>
+                    {busy ? <LoaderCircle className="spin" size={16} /> : <Check size={16} />}Yes · approve
+                  </button>
+                )}
               </>
             ))}
         </div>

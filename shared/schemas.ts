@@ -53,6 +53,26 @@ export const StateSchema = z.object({
   schemaVersion: z.literal(1),
   workspaceName: z.string().min(1).max(40),
   goal: z.string().min(1).max(500),
+  roadmap: z
+    .object({
+      id: z.string().uuid(),
+      goal: z.string().min(1).max(500),
+      status: z.enum(['planning', 'active', 'paused', 'failed', 'complete']),
+      message: z.string().max(4000),
+      createdAt: dateTime,
+      milestoneIds: z.array(z.string().max(100)).max(1000),
+      assignments: z
+        .array(
+          z.object({
+            commitmentId: z.string().max(100),
+            employeeId: z.string().max(100),
+            sessionId: z.string().max(200).optional(),
+            status: z.enum(['starting', 'assigned', 'stopped']),
+          }),
+        )
+        .max(1000),
+    })
+    .optional(),
   employees: z.array(EmployeeSchema).max(50),
   commitments: z
     .array(
@@ -92,6 +112,8 @@ export const StateSchema = z.object({
         employeeId: z.string().max(100),
         title: z.string().max(255),
         summary: z.string().max(2000),
+        question: z.string().max(300).optional(),
+        choices: z.array(z.string().min(1).max(160)).min(2).max(6).optional(),
         content: z.string().max(300000),
         createdAt: dateTime,
         status: z.enum(['pending', 'approved', 'changes-requested']),
@@ -133,6 +155,8 @@ export const SessionSchema = z.object({
     .object({
       title: z.string().max(255),
       content: z.string().max(200000),
+      question: z.string().max(300).optional(),
+      choices: z.array(z.string().min(1).max(160)).min(2).max(6).optional(),
       sources: z.array(z.string().max(2000)).max(100),
       recipient: z.string().max(500),
       version: z.number().int().min(1),

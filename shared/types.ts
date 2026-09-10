@@ -56,6 +56,8 @@ export interface Message {
   acknowledgmentIds?: string[];
 }
 export interface Approval {
+  question?: string;
+  choices?: string[];
   id: string;
   employeeId: string;
   title: string;
@@ -94,6 +96,7 @@ export interface AppState {
   schemaVersion: 1;
   workspaceName: string;
   goal: string;
+  roadmap?: RoadmapRun;
   employees: Employee[];
   commitments: Commitment[];
   messages: Message[];
@@ -103,6 +106,20 @@ export interface AppState {
   reducedMotion: boolean;
   sound: boolean;
   demo: boolean;
+}
+export interface RoadmapRun {
+  id: string;
+  goal: string;
+  status: 'planning' | 'active' | 'paused' | 'failed' | 'complete';
+  message: string;
+  createdAt: string;
+  milestoneIds: string[];
+  assignments: {
+    commitmentId: string;
+    employeeId: string;
+    sessionId?: string;
+    status: 'starting' | 'assigned' | 'stopped';
+  }[];
 }
 export interface CloudSettings {
   provider?: 'chatgpt' | 'openai' | 'gateway';
@@ -125,7 +142,15 @@ export interface CloudSession {
   activity: string;
   location: Employee['location'];
   events: { id: string; text: string; time: string }[];
-  output?: { title: string; content: string; sources: string[]; recipient: string; version: number };
+  output?: {
+    title: string;
+    content: string;
+    sources: string[];
+    recipient: string;
+    version: number;
+    question?: string;
+    choices?: string[];
+  };
 }
 export interface OfficeFrame {
   time: number;
@@ -146,6 +171,9 @@ export interface Integration {
   configured: boolean;
 }
 export interface DesktopAPI {
+  generatePersonality(input: { name: string; jobTitle: string }): Promise<string>;
+  createRoadmap(goal: string): Promise<AppState>;
+  controlRoadmap(action: 'pause' | 'resume'): Promise<AppState>;
   chatGPTAccount(): Promise<ChatGPTAccount>;
   loginChatGPT(): Promise<ChatGPTAccount>;
   cancelChatGPTLogin(): Promise<ChatGPTAccount>;

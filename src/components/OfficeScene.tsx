@@ -4,6 +4,8 @@ export default function OfficeScene({
   employees,
   animate,
   onSelect,
+  reviewEmployeeIds,
+  onReview,
   zoom,
   timeSeconds,
   live,
@@ -14,6 +16,8 @@ export default function OfficeScene({
   employees: Employee[];
   animate: boolean;
   onSelect: (e: Employee) => void;
+  reviewEmployeeIds: string[];
+  onReview: (e: Employee) => void;
   zoom: number;
   timeSeconds: number;
   live: boolean;
@@ -42,6 +46,11 @@ export default function OfficeScene({
       onSelect={(id) => {
         const e = employees.find((e) => e.id === id);
         if (e) onSelect(e);
+      }}
+      reviewEmployeeIds={reviewEmployeeIds}
+      onReview={(id) => {
+        const employee = employees.find((item) => item.id === id);
+        if (employee) onReview(employee);
       }}
       motion={animate}
       timeline={0}

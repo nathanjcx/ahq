@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DesktopAPI } from '../shared/types';
 const api: DesktopAPI = {
+  generatePersonality: (input) => ipcRenderer.invoke('employee:personality', input),
+  createRoadmap: (goal) => ipcRenderer.invoke('roadmap:create', goal),
+  controlRoadmap: (action) => ipcRenderer.invoke('roadmap:control', action),
   chatGPTAccount: () => ipcRenderer.invoke('chatgpt:account'),
   loginChatGPT: () => ipcRenderer.invoke('chatgpt:login'),
   cancelChatGPTLogin: () => ipcRenderer.invoke('chatgpt:cancel-login'),

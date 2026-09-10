@@ -21,6 +21,7 @@ import {
 import { Html, Line, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Employee } from './data';
+import './office-review.css';
 
 type OfficeProps = {
   live?: boolean;
@@ -30,6 +31,8 @@ type OfficeProps = {
   team: Employee[];
   selected: string | null;
   onSelect: (id: string) => void;
+  reviewEmployeeIds?: string[];
+  onReview?: (id: string) => void;
   motion: boolean;
   timeline: number;
   zoom: number;
@@ -1115,6 +1118,8 @@ function EmployeeAvatar({
   index,
   selected,
   onSelect,
+  needsReview,
+  onReview,
   motion,
   timeline,
   timeSeconds,
@@ -1128,6 +1133,8 @@ function EmployeeAvatar({
   index: number;
   selected: boolean;
   onSelect: OfficeProps['onSelect'];
+  needsReview: boolean;
+  onReview: OfficeProps['onReview'];
   motion: boolean;
   timeline: number;
 }) {
@@ -1295,6 +1302,39 @@ function EmployeeAvatar({
           </mesh>
         )}
       </group>
+      {needsReview && onReview && (
+        <Html
+          center
+          position={[0, (isSeated ? 1.89 : 2.18) + (activity === 'discussion' ? (index % 2) * 0.28 : 0), 0]}
+          zIndexRange={[45, 40]}
+        >
+          <button
+            type="button"
+            className="office-review-marker"
+            data-motion={motion ? 'on' : 'off'}
+            aria-label={`Review work from ${employee.name}`}
+            aria-haspopup="dialog"
+            title={`Review work from ${employee.name}`}
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+            }}
+            onKeyUp={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+            }}
+            onClick={(event) => {
+              event.stopPropagation();
+              onReview(employee.id);
+            }}
+          >
+            <svg width="12" height="24" viewBox="0 0 12 24" aria-hidden="true" shapeRendering="crispEdges">
+              <path fill="currentColor" d="M2 0h8v15H2zM2 18h8v6H2z" />
+            </svg>
+          </button>
+        </Html>
+      )}
       <Html
         center
         position={[0, (isSeated ? 1.89 : 2.18) + (activity === 'discussion' ? (index % 2) * 0.28 : 0), 0]}
@@ -1613,6 +1653,8 @@ function Scene(props: OfficeProps) {
             index={index}
             selected={props.selected === employee.id}
             onSelect={props.onSelect}
+            needsReview={props.reviewEmployeeIds?.includes(employee.id) ?? false}
+            onReview={props.onReview}
             motion={props.motion}
             timeline={props.timeline}
             timeSeconds={props.timeSeconds}
@@ -1630,7 +1672,12 @@ function Scene(props: OfficeProps) {
   );
 }
 
-function Fallback({ team, onSelect }: Pick<OfficeProps, 'team' | 'onSelect'>) {
+function Fallback({
+  team,
+  onSelect,
+  reviewEmployeeIds,
+  onReview,
+}: Pick<OfficeProps, 'team' | 'onSelect' | 'reviewEmployeeIds' | 'onReview'>) {
   return (
     <div className="scene-fallback">
       <p>
@@ -1645,6 +1692,16 @@ function Fallback({ team, onSelect }: Pick<OfficeProps, 'team' | 'onSelect'>) {
               <strong>{employee.name}</strong> · {employee.role}
               <span>{employee.task}</span>
             </button>
+            {reviewEmployeeIds?.includes(employee.id) && onReview && (
+              <button
+                type="button"
+                aria-label={`Review work from ${employee.name}`}
+                aria-haspopup="dialog"
+                onClick={() => onReview(employee.id)}
+              >
+                <span aria-hidden="true">!</span> Review work
+              </button>
+            )}
           </li>
         ))}
       </ul>
@@ -1681,7 +1738,14 @@ export default function Office(props: OfficeProps) {
   const [eventSource, setEventSource] = useState<HTMLDivElement | null>(null);
   // Canvas owns and disposes all geometries, materials, lights, and renderers.
   // No external assets, manually retained GPU resources, or animation timers.
-  const fallback = <Fallback team={props.team} onSelect={props.onSelect} />;
+  const fallback = (
+    <Fallback
+      team={props.team}
+      onSelect={props.onSelect}
+      reviewEmployeeIds={props.reviewEmployeeIds}
+      onReview={props.onReview}
+    />
+  );
   return (
     <div
       className="office-canvas"
