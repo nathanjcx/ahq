@@ -63,7 +63,7 @@ export interface Snapshot {
   activity: ActivityEvent[]; artifacts: Artifact[]; board: BoardPost[]; routines: Routine[];
   calendar: CalendarEvent[]; auth: AuthState; triage: TriageRecord[];
   settings: { mode: 'demo' | 'live'; reducedMotion: boolean; sound: boolean; model: string };
-  demo: { playing: boolean; nextIndex: number; speed: number; events?: ReplayEntry[] };
+  demo: { playing: boolean; nextIndex: number; speed: number; startedAt?: number; events?: ReplayEntry[] };
 }
 export type Command =
   | { type: 'snapshot' }
