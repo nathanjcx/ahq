@@ -173,6 +173,10 @@ test('generation commits into the latest workspace and preserves historical and 
     true,
   );
   assert.deepEqual(state.roadmap?.milestoneIds, ['generated-step']);
+  assert.ok(state.roadmap?.generatedAt);
+  assert.ok(Date.parse(state.roadmap.generatedAt) >= Date.parse(state.roadmap.createdAt));
+  assert.equal(run.advanced[0].roadmap?.generatedAt, state.roadmap.generatedAt);
+  assert.match(state.events.at(-1)!.text, /Created and validated 1 milestones in [\d.]+ seconds/);
 });
 
 test('dispatch failures keep the generated roadmap available for recovery', async () => {

@@ -18,7 +18,9 @@ import {
   LoaderCircle,
   MessageCircle,
   Minus,
+  Move,
   Plus,
+  PartyPopper,
   Search,
   Settings,
   Sparkles,
@@ -98,11 +100,70 @@ const pageNames: Record<Page, string> = {
   settings: 'Workspace settings',
 };
 export type UpdateState = (update: (s: AppState) => AppState) => void;
+
+type PartyMusicStop = () => void;
+function startPartyMusic(): PartyMusicStop {
+  const AudioContextCtor =
+    window.AudioContext ||
+    (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextCtor) return () => undefined;
+  const context = new AudioContextCtor();
+  const master = context.createGain();
+  master.gain.value = 0.045;
+  master.connect(context.destination);
+  const bassline = [110, 110, 130.81, 146.83, 164.81, 146.83, 130.81, 123.47];
+  let step = 0;
+  const playTone = (
+    frequency: number,
+    duration: number,
+    type: OscillatorType,
+    when: number,
+    volume: number,
+  ) => {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(frequency, when);
+    gain.gain.setValueAtTime(0.0001, when);
+    gain.gain.exponentialRampToValueAtTime(volume, when + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+    oscillator.connect(gain);
+    gain.connect(master);
+    oscillator.start(when);
+    oscillator.stop(when + duration + 0.02);
+  };
+  const tick = () => {
+    const when = context.currentTime + 0.015;
+    const note = bassline[step % bassline.length];
+    playTone(note, 0.22, 'sawtooth', when, 0.55);
+    if (step % 4 === 0) playTone(55, 0.14, 'sine', when, 0.9);
+    if (step % 2 === 1) playTone(880, 0.035, 'square', when + 0.12, 0.08);
+    step += 1;
+  };
+  void context.resume();
+  tick();
+  const timer = window.setInterval(tick, 250);
+  return () => {
+    window.clearInterval(timer);
+    const fadeAt = context.currentTime;
+    master.gain.cancelScheduledValues(fadeAt);
+    master.gain.setValueAtTime(master.gain.value, fadeAt);
+    master.gain.exponentialRampToValueAtTime(0.0001, fadeAt + 0.12);
+    window.setTimeout(() => void context.close(), 180);
+  };
+}
 export default function App() {
   const [state, setState] = useState<AppState>(readLocalState);
   const [ready, setReady] = useState(!window.ahq);
   const [page, setPage] = useState<Page>('office');
   const [conversationTarget, setConversationTarget] = useState('team');
+  const [officeChatOpen, setOfficeChatOpen] = useState(false);
+  const officeChatRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!officeChatOpen || page !== 'office') return;
+    const messages = officeChatRef.current?.querySelector('.conversation-messages');
+    if (messages) messages.scrollTop = messages.scrollHeight;
+  }, [officeChatOpen, page]);
   const [cloud, setCloud] = useState<CloudSettings>({ endpoint: '', configured: false, connected: false });
   const [toast, setToast] = useState('');
   const [modal, setModal] = useState<
@@ -127,9 +188,12 @@ export default function App() {
   const [listening, setListening] = useState(false);
   const [microphoneLevel, setMicrophoneLevel] = useState(0);
   const [slapMode, setSlapMode] = useState(false);
+  const [partyMode, setPartyMode] = useState(false);
+  const partyMusic = useRef<PartyMusicStop | null>(null);
   const [slapTarget, setSlapTarget] = useState<{ employeeId: string; token: number } | null>(null);
   const slapReset = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [officeViewReset, setOfficeViewReset] = useState(0);
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
   const folderInput = useRef<HTMLInputElement>(null);
@@ -138,6 +202,8 @@ export default function App() {
   useEffect(
     () => () => {
       if (slapReset.current) clearTimeout(slapReset.current);
+      partyMusic.current?.();
+      partyMusic.current = null;
     },
     [],
   );
@@ -208,6 +274,18 @@ export default function App() {
     slapReset.current = setTimeout(() => setSlapTarget(null), 2_000);
     playSlapSound();
     notify(`${employee.name} got a playful 8-bit slap and will be back on their feet in a moment.`);
+  }
+  function togglePartyMode() {
+    if (history.at !== null) return;
+    setPartyMode((enabled) => {
+      const next = !enabled;
+      if (next) partyMusic.current = startPartyMusic();
+      else {
+        partyMusic.current?.();
+        partyMusic.current = null;
+      }
+      return next;
+    });
   }
   useEffect(() => {
     const room = (event: Event) => {
@@ -652,7 +730,7 @@ export default function App() {
                   New employee
                 </button>
               </div>
-              <div className="office-layout office-layout-with-chat">
+              <div className="office-layout office-layout-with-chat" data-chat-open={officeChatOpen}>
                 <div className="office-stage">
                   <section className="office-card">
                     <div className="office-card-header">
@@ -668,6 +746,16 @@ export default function App() {
                         <span className="office-weather">
                           ☀<span>A little room to grow</span>
                         </span>
+                        <button
+                          className="office-chat-toggle"
+                          aria-label={officeChatOpen ? 'Hide office chat' : 'Show office chat'}
+                          aria-expanded={officeChatOpen}
+                          aria-controls="office-chat-panel"
+                          onClick={() => setOfficeChatOpen((open) => !open)}
+                        >
+                          {officeChatOpen ? <X size={15} /> : <MessageCircle size={15} />}
+                          <span>{officeChatOpen ? 'Hide chat' : 'Chat'}</span>
+                        </button>
                         <button
                           className="icon-button"
                           aria-label="Rotate office view"
@@ -710,6 +798,7 @@ export default function App() {
                             }}
                             zoom={zoom}
                             angle={angle}
+                            resetKey={officeViewReset}
                             timeSeconds={
                               history.at !== null
                                 ? (pastFrame?.sceneTime ?? frameTime.current)
@@ -719,6 +808,7 @@ export default function App() {
                             listening={history.at !== null ? !!pastFrame?.listening : listening}
                             microphoneLevel={history.at !== null ? (pastFrame?.level ?? 0) : microphoneLevel}
                             slapMode={history.at === null && slapMode}
+                            partyMode={history.at === null && partyMode}
                             slapTarget={history.at === null ? slapTarget : null}
                             onSlap={(id) => {
                               const employee = state.employees.find((item) => item.id === id);
@@ -742,6 +832,9 @@ export default function App() {
                         </span>
                       </div>
                       <div className="scene-controls">
+                        <span className="office-pan-hint">
+                          <Move size={13} /> Drag to pan
+                        </span>
                         <button
                           aria-label="Zoom out"
                           onClick={() => setZoom((z) => Math.max(0.7, z - 0.12))}
@@ -753,6 +846,8 @@ export default function App() {
                           aria-label="Reset office view"
                           onClick={() => {
                             setZoom(1);
+                            setAngle(0);
+                            setOfficeViewReset((key) => key + 1);
                             setPlaying(true);
                           }}
                         >
@@ -774,6 +869,16 @@ export default function App() {
                           onClick={() => setSlapMode((enabled) => !enabled)}
                         >
                           <Hand size={14} />
+                        </button>
+                        <button
+                          className={`party-toggle${partyMode ? ' active' : ''}`}
+                          aria-label={partyMode ? 'Turn off party mode' : 'Turn on party mode'}
+                          title={partyMode ? 'Party mode on' : 'Party mode off'}
+                          aria-pressed={partyMode}
+                          disabled={history.at !== null}
+                          onClick={togglePartyMode}
+                        >
+                          <PartyPopper size={14} />
                         </button>
                       </div>
                       {history.at !== null && (
@@ -822,7 +927,13 @@ export default function App() {
                     notify={notify}
                   />
                 </div>
-                <aside className="office-chat-column" aria-label="Office chat">
+                <aside
+                  className="office-chat-column"
+                  id="office-chat-panel"
+                  ref={officeChatRef}
+                  aria-label="Office chat"
+                  hidden={!officeChatOpen}
+                >
                   <ConversationsPage
                     {...common}
                     compact
@@ -1596,7 +1707,8 @@ function CommitmentForm({
                   : Math.min(99, Math.max(0, Number(data.get('progress')) || 0)),
             nextStep: String(data.get('nextStep')).trim(),
             dependencies,
-            source: initial?.source ?? 'Your instruction',
+            source:
+              initial && initial.ownerId === String(data.get('owner')) ? initial.source : 'Your instruction',
             definitionOfDone: String(data.get('done')).trim(),
           });
         }}

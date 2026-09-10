@@ -9,6 +9,7 @@ import type { CodexAccount, CodexTurnResult, RunTurnOptions } from '../runtime/c
 import { initialState, sampleState } from '../src/lib/store';
 import { applySession } from '../src/lib/workflow';
 import { StateSchema } from '../shared/schemas';
+import type { CloudSession } from '../shared/types';
 
 class FakeCodex {
   account: CodexAccount = { signedIn: true, email: 'test@example.com', plan: 'plus' };
@@ -57,11 +58,13 @@ class FakeCodex {
   }
   async close() {}
 }
-async function fixture() {
+async function fixture(
+  onSessionSettled?: (employeeId: string, session: CloudSession) => void | Promise<void>,
+) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'ahq-chatgpt-test-'));
   const store = await SnapshotStore.open(directory);
   const client = new FakeCodex();
-  const engine = new ChatGPTEmployees(store, path.join(directory, 'employees'), client);
+  const engine = new ChatGPTEmployees(store, path.join(directory, 'employees'), client, onSessionSettled);
   return {
     directory,
     store,
@@ -98,6 +101,7 @@ test('structured generation uses the signed-in plan in a persistent visible plan
     const run = f.client.runs[0];
     assert.equal(run.modelProvider, 'openai');
     assert.equal(run.model, 'gpt-6-astra');
+    assert.equal(run.reasoningEffort, 'low');
     assert.equal(run.persistent, true);
     assert.equal(run.threadId, undefined);
     assert.equal(f.engine.list()[0].title, 'Planning / generation');
@@ -186,6 +190,7 @@ test('plan assignments persist thread IDs, surface real results, and resume for 
     const s = await f.engine.start(employee, 'Draft a plan', initialState());
     await eventually(() => f.engine.peek(s.id).status === 'running');
     assert.equal(f.client.runs[0].persistent, true);
+    assert.equal(f.client.runs[0].reasoningEffort, undefined);
     assert.equal(f.client.runs[0].model, 'gpt-6-astra');
     assert.equal(f.client.runs[0].modelProvider, 'openai');
     assert.match(f.client.runs[0].instructions!, /nontechnical manager/);
@@ -275,6 +280,206 @@ test('interrupted app state is marked paused after restart without replaying wor
   }
 });
 
+function holdSessionWrite(store: SnapshotStore, predicate: (value: CloudSession) => boolean) {
+  const put = store.put.bind(store);
+  let release!: () => void;
+  let entered!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  let used = false;
+  store.put = async (key, value) => {
+    const write = put(key, value);
+    if (!used && key.startsWith('chatgpt-session:') && predicate(value as CloudSession)) {
+      used = true;
+      entered();
+      await held;
+    }
+    await write;
+  };
+  return {
+    started,
+    release,
+    restore: () => {
+      release();
+      store.put = put;
+    },
+  };
+}
+const nextTask = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+test('an immediate revision waits for completion persistence and cannot race another revision', async () => {
+  const f = await fixture();
+  const hold = holdSessionWrite(f.store, (s) => s.status === 'waiting_for_approval');
+  try {
+    const session = await f.engine.start(employee, 'Draft a plan', initialState());
+    f.client.complete(1);
+    await hold.started;
+    assert.equal(f.engine.peek(session.id).status, 'waiting_for_approval');
+    let settled = false;
+    const decisions = Promise.allSettled([
+      f.engine.decide(session.id, 1, 'request_changes', 'Make it shorter.'),
+      f.engine.decide(session.id, 1, 'request_changes', 'Duplicate submission.'),
+    ]).then((results) => {
+      settled = true;
+      return results;
+    });
+    await nextTask();
+    assert.equal(settled, false);
+    assert.equal(f.client.runs.length, 1);
+    hold.release();
+    const results = await decisions;
+    assert.equal(results[0].status, 'fulfilled');
+    assert.equal(results[1].status, 'rejected');
+    if (results[1].status === 'rejected') assert.match(results[1].reason.message, /review changed/);
+    assert.equal(f.client.runs.length, 2);
+    assert.equal(f.client.runs[1].threadId, 'thread-1');
+    assert.match(f.client.runs[1].prompt, /Make it shorter/);
+    assert.equal(f.engine.peek(session.id).output, undefined);
+    f.client.complete(2, 'Persisted shorter result.');
+    await eventually(() => f.engine.peek(session.id).status === 'waiting_for_approval');
+    const approved = await f.engine.decide(session.id, 2, 'approve', '');
+    assert.equal(approved.output?.content, 'Persisted shorter result.');
+    assert.equal(approved.reviewed, true);
+  } finally {
+    hold.restore();
+    await f.close();
+  }
+});
+
+test('immediate plain continuations wait for persistence and only one concurrent call starts work', async () => {
+  const f = await fixture();
+  const hold = holdSessionWrite(f.store, (s) => s.status === 'waiting_for_approval');
+  try {
+    const session = await f.engine.start(employee, 'Draft a plan', initialState());
+    await assert.rejects(() => f.engine.continue(session.id, 'Too early'), /still working/);
+    f.client.complete(1);
+    await hold.started;
+    const calls = Promise.allSettled([
+      f.engine.continue(session.id, 'Continue with the next section.'),
+      f.engine.continue(session.id, 'Duplicate continuation.'),
+    ]);
+    await nextTask();
+    assert.equal(f.client.runs.length, 1);
+    hold.release();
+    const results = await calls;
+    assert.equal(results[0].status, 'fulfilled');
+    assert.equal(results[1].status, 'rejected');
+    if (results[1].status === 'rejected') assert.match(results[1].reason.message, /conversation changed/);
+    assert.equal(f.client.runs.length, 2);
+    assert.equal(f.client.runs[1].threadId, 'thread-1');
+  } finally {
+    hold.restore();
+    await f.close();
+  }
+});
+
+test('account changes during the completion write cannot start a revision under another account', async () => {
+  const f = await fixture();
+  const hold = holdSessionWrite(f.store, (s) => s.status === 'waiting_for_approval');
+  try {
+    const session = await f.engine.start(employee, 'Draft a plan', initialState());
+    f.client.complete(1);
+    await hold.started;
+    const revision = assert.rejects(
+      () => f.engine.decide(session.id, 1, 'request_changes', 'Revise'),
+      /account that started/,
+    );
+    await nextTask();
+    f.client.account = { signedIn: true, email: 'different@example.com', plan: 'plus' };
+    hold.release();
+    await revision;
+    assert.equal(f.client.runs.length, 1);
+    assert.equal(f.engine.peek(session.id).output?.version, 1);
+  } finally {
+    hold.restore();
+    await f.close();
+  }
+});
+
+test('polling during a queued continuation does not mark it interrupted before dispatch', async () => {
+  const f = await fixture();
+  let hold: ReturnType<typeof holdSessionWrite> | undefined;
+  try {
+    const session = await f.engine.start(employee, 'Draft a plan', initialState());
+    f.client.complete(1);
+    await eventually(() => f.engine.peek(session.id).status === 'waiting_for_approval');
+    await f.engine.decide(session.id, 1, 'approve', '');
+    hold = holdSessionWrite(f.store, (s) => s.status === 'queued');
+    const continuation = f.engine.continue(session.id, 'Next assignment.');
+    await hold.started;
+    const polling = f.engine.get(session.id);
+    await nextTask();
+    assert.equal(f.engine.peek(session.id).status, 'queued');
+    assert.equal(f.client.runs.length, 1);
+    hold.release();
+    await continuation;
+    assert.equal((await polling).status, 'running');
+    assert.equal(f.client.runs.length, 2);
+  } finally {
+    hold?.restore();
+    await f.close();
+  }
+});
+
+test('concurrent starts preserve one job per employee without blocking a different employee', async () => {
+  const f = await fixture();
+  const hold = holdSessionWrite(f.store, (s) => s.status === 'queued');
+  try {
+    const first = f.engine.start(employee, 'First assignment.', initialState());
+    await hold.started;
+    const duplicate = assert.rejects(
+      () => f.engine.start(employee, 'Duplicate assignment.', initialState()),
+      /current session|still working/,
+    );
+    const other = { ...employee, id: 'independent-employee', name: 'Independent colleague' };
+    const second = await f.engine.start(other, 'Independent assignment.', initialState());
+    assert.equal(f.client.runs.length, 1);
+    assert.equal(f.engine.peek(second.id).status, 'running');
+    hold.release();
+    const started = await first;
+    await duplicate;
+    assert.equal(f.client.runs.length, 2);
+    assert.notEqual(started.id, second.id);
+    f.client.complete(2);
+    await eventually(() => f.engine.peek(started.id).status === 'waiting_for_approval');
+    await assert.rejects(
+      () => f.engine.start(employee, 'Still awaiting review.', initialState()),
+      /current session/,
+    );
+  } finally {
+    hold.restore();
+    await f.close();
+  }
+});
+
+test('an employee cannot reuse another employee session or resume a superseded conversation', async () => {
+  const f = await fixture();
+  try {
+    const first = await f.engine.start(employee, 'First assignment.', initialState());
+    await f.engine.cancel(first.id);
+    await assert.rejects(
+      () =>
+        f.engine.start(
+          { ...employee, id: 'different-employee', sessionId: first.id },
+          'Cross-owner assignment.',
+          initialState(),
+        ),
+      /another employee/,
+    );
+    const next = await f.engine.start(employee, 'Next assignment.', initialState());
+    assert.notEqual(next.id, first.id);
+    await assert.rejects(() => f.engine.continue(first.id, 'Old conversation.'), /newer session/);
+    assert.equal(f.client.runs.length, 2);
+    assert.equal(f.client.runs[1].threadId, 'thread-1');
+  } finally {
+    await f.close();
+  }
+});
+
 test('task sessions use fresh threads, persist full streams, and reject missing deliverables', async () => {
   const f = await fixture();
   try {
@@ -307,6 +512,209 @@ test('task sessions use fresh threads, persist full streams, and reject missing 
     assert.equal((await f.engine.get(next.id)).output?.content, '{"action":"ignore"}');
     assert.equal((await f.engine.get(next.id)).artifacts?.length, 0);
   } finally {
+    await f.close();
+  }
+});
+
+test('simultaneous announcements cannot interrupt and replace the same turn twice', async () => {
+  const f = await fixture();
+  try {
+    const session = await f.engine.start(employee, 'First assignment.', initialState());
+    const results = await Promise.allSettled([
+      f.engine.continue(session.id, 'Change direction.', true),
+      f.engine.continue(session.id, 'Duplicate announcement.', true),
+    ]);
+    assert.equal(results[0].status, 'fulfilled');
+    assert.equal(results[1].status, 'rejected');
+    if (results[1].status === 'rejected') assert.match(results[1].reason.message, /conversation changed/);
+    assert.deepEqual(f.client.interrupted, ['turn-1']);
+    assert.equal(f.client.runs.length, 2);
+    await f.engine.continue(session.id, 'Later intentional guidance.', true);
+    assert.deepEqual(f.client.interrupted, ['turn-1', 'turn-2']);
+    assert.equal(f.client.runs.length, 3);
+  } finally {
+    await f.close();
+  }
+});
+
+test('competing approval and revision apply only the first decision after the result is saved', async () => {
+  const f = await fixture();
+  const hold = holdSessionWrite(f.store, (s) => s.status === 'waiting_for_approval');
+  try {
+    const session = await f.engine.start(employee, 'Draft a plan', initialState());
+    f.client.complete(1);
+    await hold.started;
+    const decisions = Promise.allSettled([
+      f.engine.decide(session.id, 1, 'approve', ''),
+      f.engine.decide(session.id, 1, 'request_changes', 'Competing decision.'),
+    ]);
+    await nextTask();
+    hold.release();
+    const results = await decisions;
+    assert.equal(results[0].status, 'fulfilled');
+    assert.equal(results[1].status, 'rejected');
+    if (results[1].status === 'rejected') assert.match(results[1].reason.message, /review changed/);
+    assert.equal(f.engine.peek(session.id).reviewed, true);
+    assert.equal(f.engine.peek(session.id).status, 'completed');
+    assert.equal(f.client.runs.length, 1);
+  } finally {
+    hold.restore();
+    await f.close();
+  }
+});
+
+test('failed completion persistence prevents an already-submitted revision from dispatching', async () => {
+  const f = await fixture();
+  const put = f.store.put.bind(f.store);
+  let release!: () => void;
+  let entered!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const reached = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  let injected = false;
+  f.store.put = async (key, value) => {
+    await put(key, value);
+    if (
+      !injected &&
+      key.startsWith('chatgpt-session:') &&
+      (value as CloudSession).status === 'waiting_for_approval'
+    ) {
+      injected = true;
+      entered();
+      await gate;
+      throw new Error('Completion write failed.');
+    }
+  };
+  try {
+    const session = await f.engine.start(employee, 'Draft a plan', initialState());
+    f.client.complete(1);
+    await reached;
+    const revision = assert.rejects(
+      () => f.engine.decide(session.id, 1, 'request_changes', 'Revise.'),
+      /review changed/,
+    );
+    await nextTask();
+    release();
+    await revision;
+    assert.equal(f.client.runs.length, 1);
+    assert.equal(f.engine.peek(session.id).status, 'failed');
+    assert.equal(f.engine.peek(session.id).output, undefined);
+    assert.match(f.engine.peek(session.id).activity, /Completion write failed/);
+  } finally {
+    release();
+    f.store.put = put;
+    await f.close();
+  }
+});
+
+test('closing during a queued start prevents provider dispatch after persistence finishes', async () => {
+  const f = await fixture();
+  const hold = holdSessionWrite(f.store, (s) => s.status === 'queued');
+  try {
+    const started = assert.rejects(
+      () => f.engine.start(employee, 'Draft a plan', initialState()),
+      /runtime is closing/,
+    );
+    await hold.started;
+    const closing = f.engine.close();
+    hold.release();
+    await Promise.all([started, closing]);
+    assert.equal(f.client.runs.length, 0);
+  } finally {
+    hold.restore();
+    await f.close();
+  }
+});
+
+test('completion notification follows persistence and job removal without blocking later work', async () => {
+  const notices: { employeeId: string; session: CloudSession }[] = [];
+  let releaseNotice!: () => void;
+  const pendingNotice = new Promise<void>((resolve) => {
+    releaseNotice = resolve;
+  });
+  const f = await fixture((employeeId, session) => {
+    notices.push({ employeeId, session: structuredClone(session) });
+    session.activity = 'Notification cannot mutate persisted state';
+    return pendingNotice;
+  });
+  const hold = holdSessionWrite(f.store, (s) => s.status === 'waiting_for_approval');
+  try {
+    const session = await f.engine.start(employee, 'Draft a plan', initialState());
+    f.client.complete(1);
+    await hold.started;
+    await nextTask();
+    assert.equal(notices.length, 0);
+    hold.release();
+    await eventually(() => notices.length === 1);
+    assert.equal(notices[0].employeeId, employee.id);
+    assert.equal(notices[0].session.id, session.id);
+    assert.equal(notices[0].session.status, 'waiting_for_approval');
+    assert.notEqual(f.engine.peek(session.id).activity, 'Notification cannot mutate persisted state');
+    // The unresolved notification does not keep the worker busy or delay a valid decision.
+    await f.engine.decide(session.id, 1, 'request_changes', 'Continue immediately.');
+    assert.equal(f.client.runs.length, 2);
+    assert.equal(notices.length, 1);
+    f.client.complete(2);
+    await eventually(() => notices.length === 2);
+    assert.equal(notices[1].session.output?.version, 2);
+  } finally {
+    releaseNotice();
+    hold.restore();
+    await f.close();
+  }
+});
+
+test('notification errors cannot change a persisted result or emit a second failure notice', async () => {
+  let calls = 0;
+  const f = await fixture(() => {
+    calls++;
+    throw new Error('Notification consumer failed.');
+  });
+  try {
+    const session = await f.engine.start(employee, 'Draft a plan', initialState());
+    f.client.complete(1);
+    await eventually(() => calls === 1);
+    await nextTask();
+    assert.equal(f.engine.peek(session.id).status, 'waiting_for_approval');
+    assert.equal(f.engine.peek(session.id).output?.content, 'Here is the result for your review.');
+    const approved = await f.engine.decide(session.id, 1, 'approve', '');
+    assert.equal(approved.status, 'completed');
+    assert.equal(calls, 1);
+  } finally {
+    await f.close();
+  }
+});
+
+test('unpersisted terminal state does not emit a successful completion notification', async () => {
+  let calls = 0;
+  const f = await fixture(() => {
+    calls++;
+  });
+  const put = f.store.put.bind(f.store);
+  let terminalAttempts = 0;
+  try {
+    const session = await f.engine.start(employee, 'Draft a plan', initialState());
+    await f.store.drain();
+    f.store.put = async (key, value) => {
+      if (
+        key.startsWith('chatgpt-session:') &&
+        ['waiting_for_approval', 'failed'].includes((value as CloudSession).status)
+      ) {
+        terminalAttempts++;
+        throw new Error('No durable storage available.');
+      }
+      return put(key, value);
+    };
+    f.client.complete(1);
+    await eventually(() => terminalAttempts === 2);
+    await nextTask();
+    assert.equal(calls, 0);
+    assert.equal(f.engine.peek(session.id).output, undefined);
+  } finally {
+    f.store.put = put;
     await f.close();
   }
 });

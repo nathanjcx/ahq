@@ -12,7 +12,9 @@ export default function OfficeScene({
   listening,
   microphoneLevel,
   angle = 0,
+  resetKey = 0,
   slapMode = false,
+  partyMode = false,
   slapTarget,
   onSlap,
 }: {
@@ -27,7 +29,9 @@ export default function OfficeScene({
   listening: boolean;
   microphoneLevel: number;
   angle?: number;
+  resetKey?: number;
   slapMode?: boolean;
+  partyMode?: boolean;
   slapTarget?: { employeeId: string; token: number } | null;
   onSlap?: (employeeId: string) => void;
 }) {
@@ -62,11 +66,13 @@ export default function OfficeScene({
       timeline={0}
       zoom={zoom * 37}
       angle={angle}
+      resetKey={resetKey}
       timeSeconds={timeSeconds}
       live={live}
       listening={listening}
       microphoneLevel={microphoneLevel}
       slapMode={slapMode}
+      partyMode={partyMode}
       slapTarget={slapTarget}
       onSlap={onSlap}
       onRoom={(room) => window.dispatchEvent(new CustomEvent('ahq:room', { detail: room }))}

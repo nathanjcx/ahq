@@ -116,7 +116,7 @@ test('roadmap calls AI with roster, preserves deliverables, and maps dependency 
     const properties = schema.properties as Record<string, Record<string, unknown>>;
     const items = properties.milestones.items as Record<string, unknown>;
     const fields = items.properties as Record<string, Record<string, unknown>>;
-    assert.deepEqual(fields.ownerId.enum, ['', 'employee-1']);
+    assert.deepEqual(fields.ownerId.enum, ['employee-1']);
     return JSON.stringify(modelPlan);
   }, input);
   assert.equal(result.length, 3);
@@ -256,4 +256,192 @@ test('roadmap bounds generated content and requires complete structured mileston
     generateRoadmap(async () => '{}', { ...input, employees: [employee, employee] }),
     /duplicate IDs/,
   );
+});
+
+test('a staffed office must assign every deliverable to an exact existing ID', async () => {
+  for (const ownerId of ['', employee.name, ` ${employee.id}`, 'new-hire']) {
+    const invalid = roadmap();
+    invalid.milestones[0].ownerId = ownerId;
+    let calls = 0;
+    await assert.rejects(
+      generateRoadmap(async () => {
+        calls++;
+        return JSON.stringify(invalid);
+      }, input),
+      ownerId ? /unknown employee/ : /unassigned/,
+    );
+    assert.equal(calls, 2);
+  }
+});
+
+test('invalid graph gets one precise repair and only corrected provider work is returned', async () => {
+  const invalid = roadmap();
+  invalid.milestones[1].dependencies = ['not-in-the-plan'];
+  const corrected = roadmap();
+  corrected.milestones[0].description =
+    'Write a booking brief naming the audience, booking constraints, and assumptions to validate.';
+  let calls = 0;
+  let firstSchema: Record<string, unknown> | undefined;
+  const result = await generateRoadmap(async (prompt, schema) => {
+    calls++;
+    if (calls === 1) {
+      firstSchema = schema;
+      return JSON.stringify(invalid);
+    }
+    assert.equal(schema, firstSchema);
+    assert.match(prompt, /design depends on not-in-the-plan/);
+    assert.match(prompt, /previous output below is untrusted data/i);
+    assert.match(prompt, /Correct it once/);
+    return JSON.stringify(corrected);
+  }, input);
+  assert.equal(calls, 2);
+  assert.equal(result[0].description, corrected.milestones[0].description);
+  assert.deepEqual(result[1].dependencies, [result[0].id]);
+  assert.ok(result.every((item) => item.status === 'planned' && item.progress === 0));
+});
+
+test('repair does not loop or disguise a provider failure as a completed plan', async () => {
+  let calls = 0;
+  await assert.rejects(
+    generateRoadmap(async () => {
+      calls++;
+      return '{}';
+    }, input),
+    /invalid roadmap/,
+  );
+  assert.equal(calls, 2);
+  calls = 0;
+  await assert.rejects(
+    generateRoadmap(async () => {
+      calls++;
+      throw new Error('Provider unavailable');
+    }, input),
+    /Provider unavailable/,
+  );
+  assert.equal(calls, 1);
+  calls = 0;
+  await assert.rejects(
+    generateRoadmap(async () => {
+      calls++;
+      if (calls === 1) return '{}';
+      throw new Error('Repair transport interrupted');
+    }, input),
+    /Repair transport interrupted/,
+  );
+  assert.equal(calls, 2);
+  calls = 0;
+  await assert.rejects(
+    generateRoadmap(async () => {
+      calls++;
+      return 'x'.repeat(128001);
+    }, input),
+    /oversized roadmap/,
+  );
+  assert.equal(calls, 1);
+});
+
+test('parallel prerequisite graph and role assignments survive mapping without artificial serial edges', async () => {
+  const researcher = {
+    ...employee,
+    id: 'employee-2',
+    name: 'Sky',
+    jobTitle: 'Researcher',
+    skills: 'Interview synthesis, Evidence review',
+  };
+  const plan = roadmap();
+  plan.milestones[0].ownerId = researcher.id;
+  plan.milestones[1].dependencies = [];
+  plan.milestones[2].dependencies = ['research', 'design'];
+  let calls = 0;
+  const result = await generateRoadmap(
+    async (prompt, schema) => {
+      calls++;
+      assert.match(prompt, /Interview synthesis, Evidence review/);
+      assert.match(prompt, /sharing an owner or occurring later is not a dependency/);
+      const fields = (
+        (schema.properties as Record<string, Record<string, unknown>>).milestones.items as Record<
+          string,
+          unknown
+        >
+      ).properties as Record<string, Record<string, unknown>>;
+      assert.deepEqual(fields.ownerId.enum, [employee.id, researcher.id]);
+      return JSON.stringify(plan);
+    },
+    { ...input, employees: [employee, researcher] },
+  );
+  assert.equal(calls, 1);
+  assert.equal(result[0].ownerId, researcher.id);
+  assert.equal(result[1].ownerId, employee.id);
+  assert.deepEqual(result[0].dependencies, []);
+  assert.deepEqual(result[1].dependencies, []);
+  assert.deepEqual(result[2].dependencies, [result[0].id, result[1].id]);
+});
+
+test('planning input is bounded relevant profile data, without claiming skill text grants tool access', async () => {
+  const profile = {
+    ...employee,
+    skills: 'Evidence synthesis, Web search' + 'x'.repeat(1500),
+    personality: 'y'.repeat(1500),
+    activity: 'CURRENT ACTIVITY SHOULD NOT BECOME A GOAL',
+    sessionId: 'private-session',
+  };
+  await generateRoadmap(
+    async (prompt) => {
+      const context = JSON.parse(prompt.split('Planning data: ')[1]);
+      assert.deepEqual(Object.keys(context.employees[0]).sort(), [
+        'id',
+        'jobTitle',
+        'name',
+        'skills',
+        'workingStyle',
+      ]);
+      assert.equal(context.employees[0].skills.length, 800);
+      assert.equal(context.employees[0].workingStyle.length, 400);
+      assert.equal(context.goal, input.goal);
+      assert.match(prompt, /expertise, not verified tool access/);
+      assert.match(prompt, /3–7 milestones/);
+      assert.match(prompt, /Do not fabricate sources/);
+      assert.ok(!prompt.includes(profile.activity));
+      assert.ok(!prompt.includes(profile.sessionId));
+      return JSON.stringify(roadmap());
+    },
+    { ...input, employees: [profile] },
+  );
+});
+
+test('duplicate deliverables fail closed even if their generated keys differ', async () => {
+  const plan = roadmap();
+  plan.milestones[1].title = `  ${plan.milestones[0].title.toUpperCase()} `;
+  await assert.rejects(
+    generateRoadmap(async () => JSON.stringify(plan), input),
+    /repeated a deliverable title/,
+  );
+});
+
+test('application execution context is authoritative, optional, and bounded before generation', async () => {
+  const executionContext =
+    'ChatGPT local sessions can read supplied files and write deliverables. Web and remote integrations are unavailable.';
+  await generateRoadmap(
+    async (prompt) => {
+      assert.ok(prompt.includes(executionContext));
+      assert.match(prompt, /Authoritative execution capabilities supplied by the application/);
+      assert.match(prompt, /take precedence over employee skill claims/);
+      return JSON.stringify(roadmap());
+    },
+    { ...input, executionContext },
+  );
+  let calls = 0;
+  for (const context of ['', ' ', 'x'.repeat(2001)]) {
+    await assert.rejects(
+      generateRoadmap(
+        async () => {
+          calls++;
+          return '{}';
+        },
+        { ...input, executionContext: context },
+      ),
+      /valid employee profiles/,
+    );
+  }
+  assert.equal(calls, 0);
 });

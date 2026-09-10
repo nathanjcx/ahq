@@ -109,6 +109,7 @@ export class GoalCoordinator {
             ...current.roadmap,
             milestoneIds: [...new Set([...current.roadmap.milestoneIds, ...commitments.map((c) => c.id)])],
             status: 'active',
+            generatedAt: now,
             message: 'Your roadmap is ready. Delegating the first available steps.',
           },
           events: [
@@ -118,7 +119,7 @@ export class GoalCoordinator {
               time: now,
               kind: 'work',
               source: 'local',
-              text: `Created ${commitments.length} milestones for “${current.goal}”.`,
+              text: `Created and validated ${commitments.length} milestones in ${Math.max(0, (Date.parse(now) - Date.parse(current.roadmap.createdAt)) / 1000).toFixed(1)} seconds for “${current.goal}”.`,
             },
           ],
           messages: [

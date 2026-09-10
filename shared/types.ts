@@ -140,6 +140,7 @@ export interface RoadmapRun {
   status: 'planning' | 'active' | 'paused' | 'failed' | 'complete';
   message: string;
   createdAt: string;
+  generatedAt?: string;
   milestoneIds: string[];
   assignments: {
     commitmentId: string;

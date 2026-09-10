@@ -36,6 +36,7 @@ export interface CodexTurnResult {
 }
 
 export interface RunTurnOptions {
+  reasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
   modelProvider?: string;
   threadId?: string;
   persistent?: boolean;
@@ -49,6 +50,48 @@ export interface RunTurnOptions {
   onStarted?(ids: { threadId: string; turnId: string }): void | Promise<void>;
   onProgress?(text: string): void;
   onMessage?(message: AgentMessage): void;
+}
+
+export function disabledMcpArguments(configured: unknown): string[] {
+  if (!Array.isArray(configured)) throw new Error('Codex returned an invalid MCP server list');
+  const seen = new Set<string>();
+  const entries = configured.map((entry: unknown) => {
+    if (!entry || typeof entry !== 'object') throw new Error('Codex returned invalid MCP server metadata');
+    const { name, transport } = entry as { name?: unknown; transport?: unknown };
+    if (
+      typeof name !== 'string' ||
+      !name.length ||
+      name.length > 200 ||
+      /[\u0000-\u001f\u007f]/.test(name) ||
+      seen.has(name)
+    ) {
+      throw new Error('Codex returned invalid MCP server identities');
+    }
+    if (!transport || typeof transport !== 'object')
+      throw new Error('Codex omitted MCP transport metadata; external tools cannot be safely disabled');
+    const value = transport as { type?: unknown; command?: unknown; url?: unknown };
+    const stdio =
+      value.type === 'stdio' &&
+      typeof value.command === 'string' &&
+      value.command.trim().length > 0 &&
+      value.url == null;
+    const http =
+      value.type === 'streamable_http' &&
+      typeof value.url === 'string' &&
+      value.url.trim().length > 0 &&
+      value.command == null;
+    if (!stdio && !http)
+      throw new Error(
+        'Codex returned an unsupported MCP transport; external tools cannot be safely disabled',
+      );
+    seen.add(name);
+    // Each override must itself carry a valid transport in current Codex.
+    // Keep the transport kind while using inert child-only endpoints; mixing a
+    // stdio command into inherited HTTP settings breaks config deserialization.
+    // Original commands, endpoints, and credentials never enter the child argv.
+    return `${JSON.stringify(name)}={enabled=false,${stdio ? 'command="false"' : 'url="http://127.0.0.1:9"'}}`;
+  });
+  return ['-c', `mcp_servers={${entries.join(',')}}`];
 }
 
 export class CodexAppServer {
@@ -75,20 +118,18 @@ export class CodexAppServer {
       'codex';
     let child: ChildProcessWithoutNullStreams;
     try {
-      const configured = JSON.parse(
-        execFileSync(executable, ['mcp', 'list', '--json'], {
-          encoding: 'utf8',
-          timeout: 5_000,
-          stdio: ['ignore', 'pipe', 'ignore'],
-        }),
-      ) as Array<{ name?: unknown }>;
-      if (!Array.isArray(configured)) throw new Error('Codex returned an invalid MCP server list');
-      const names = configured
-        .map((entry) => entry.name)
-        .filter((name): name is string => typeof name === 'string');
-      // A disabled server still requires a valid transport in current Codex config.
-      // Use inert child-only commands; never copy credentials or mutate the user's configuration.
-      const override = `mcp_servers={${names.map((name) => `${JSON.stringify(name)}={enabled=false,command="false"}`).join(',')}}`;
+      const raw = execFileSync(executable, ['mcp', 'list', '--json'], {
+        encoding: 'utf8',
+        timeout: 5_000,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      let configured: unknown;
+      try {
+        configured = JSON.parse(raw);
+      } catch {
+        throw new Error('Codex returned unreadable MCP server metadata');
+      }
+      const overrides = disabledMcpArguments(configured);
       child = spawn(
         executable,
         [
@@ -98,8 +139,7 @@ export class CodexAppServer {
           'apps',
           '--disable',
           'plugins',
-          '-c',
-          override,
+          ...overrides,
           '-c',
           'web_search="disabled"',
         ],
@@ -243,6 +283,7 @@ export class CodexAppServer {
           excludeSlashTmp: true,
         },
         outputSchema: options.outputSchema,
+        ...(options.reasoningEffort ? { effort: options.reasoningEffort } : {}),
       })) as JsonObject;
       turnId = stringValue((turnResult.turn as JsonObject)?.id);
       if (!turnId) throw new Error('Codex turn/start returned no turn id');
