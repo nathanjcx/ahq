@@ -381,33 +381,71 @@ export function ConversationsPage({
   update,
   notify,
   initialChannel = 'team',
-}: Common & { initialChannel?: string }) {
+  onBroadcast,
+}: Common & { initialChannel?: string; onBroadcast: (text: string) => Promise<void> }) {
   const [channel, setChannel] = useState(initialChannel);
-  const [draft, setDraft] = useState('');
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [sending, setSending] = useState(false);
+  const draft = drafts[channel] ?? '';
+  const announcement = channel === 'announce';
   const person = employeeById(state.employees, channel);
   const messages = state.messages.filter((m) => m.channel === channel);
-  function send() {
-    if (!draft.trim()) return;
+  async function send() {
+    if (!draft.trim() || sending || (announcement && !state.employees.length)) return;
+    if (announcement) {
+      setSending(true);
+      try {
+        await onBroadcast(draft.trim());
+        setDrafts((current) => ({ ...current, [channel]: '' }));
+      } catch (error) {
+        notify(error instanceof Error ? error.message : 'The announcement could not be sent. Try again.');
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
     update((s) => ({
       ...s,
       messages: [...s.messages, { id: uid(), authorId: 'you', channel, text: draft.trim(), time: timeNow() }],
     }));
-    setDraft('');
+    setDrafts((current) => ({ ...current, [channel]: '' }));
     notify('Message saved locally for your team’s context.');
   }
   return (
     <div className="conversation-layout surface">
       <aside className="conversation-channels">
         <span className="eyebrow">SHARED SPACES</span>
-        <button className={channel === 'team' ? 'selected' : ''} onClick={() => setChannel('team')}>
+        <button
+          className={channel === 'team' ? 'selected' : ''}
+          aria-pressed={channel === 'team'}
+          disabled={sending}
+          onClick={() => setChannel('team')}
+        >
           <MessageCircle size={18} />
           <span>
             team-lounge<small>The whole team, together</small>
           </span>
         </button>
+        <button
+          className={announcement ? 'selected' : ''}
+          aria-pressed={announcement}
+          disabled={sending}
+          onClick={() => setChannel('announce')}
+        >
+          <Megaphone size={18} />
+          <span>
+            Announcements<small>Direction for every employee</small>
+          </span>
+        </button>
         <span className="eyebrow">A LITTLE ONE-ON-ONE</span>
         {state.employees.map((e) => (
-          <button className={channel === e.id ? 'selected' : ''} key={e.id} onClick={() => setChannel(e.id)}>
+          <button
+            className={channel === e.id ? 'selected' : ''}
+            aria-pressed={channel === e.id}
+            disabled={sending}
+            key={e.id}
+            onClick={() => setChannel(e.id)}
+          >
             <Avatar employee={e} size={33} />
             <span>
               {e.name}
@@ -423,22 +461,36 @@ export function ConversationsPage({
               <Avatar employee={person} size={37} />
             ) : (
               <span className="channel-avatar">
-                <Users size={22} />
+                {announcement ? <Megaphone size={22} /> : <Users size={22} />}
               </span>
             )}
             <div>
-              <h2>{person?.name ?? 'team-lounge'}</h2>
-              <p>{person?.jobTitle ?? 'A space for the little things that move work forward.'}</p>
+              <h2>{announcement ? 'Announcements' : (person?.name ?? 'team-lounge')}</h2>
+              <p>
+                {announcement
+                  ? 'Send direction to every employee’s session. Voice announcements appear here too.'
+                  : (person?.jobTitle ?? 'A space for the little things that move work forward.')}
+              </p>
             </div>
           </div>
-          <span className="mode-badge">{person?.sessionId ? 'Assignment context' : 'Local workspace'}</span>
+          <span className="mode-badge">
+            {announcement ? 'To everyone' : person?.sessionId ? 'Assignment context' : 'Local workspace'}
+          </span>
         </header>
         <div className="conversation-messages">
           {messages.length === 0 && (
             <div className="empty-state">
-              <MessageCircle size={32} />
-              <h3>Every good thing starts somewhere.</h3>
-              <p>Leave {person?.name ?? 'your team'} a little context for their next assignment.</p>
+              {announcement ? <Megaphone size={32} /> : <MessageCircle size={32} />}
+              <h3>
+                {announcement ? 'Give everyone the same direction.' : 'Every good thing starts somewhere.'}
+              </h3>
+              <p>
+                {announcement
+                  ? state.employees.length
+                    ? 'Type an announcement below, or hold Announce beneath the office to speak.'
+                    : 'Add your first employee, then share a direction with the whole office.'
+                  : `Leave ${person?.name ?? 'your team'} a little context for their next assignment.`}
+              </p>
             </div>
           )}
           {messages.map((m, i) => (
@@ -464,6 +516,16 @@ export function ConversationsPage({
                     {m.id.startsWith('m') && <span className="sample-label">EXAMPLE</span>}
                   </div>
                   <p>{m.text}</p>
+                  {announcement && (
+                    <div className="announcement-receipt">
+                      {m.acknowledgmentIds?.length ? <CheckCheck size={15} /> : <BookOpen size={15} />}
+                      <span>
+                        {m.acknowledgmentIds?.length
+                          ? `${m.id.startsWith('m') ? 'Example · ' : ''}Delivered to ${new Set(m.acknowledgmentIds).size} employee${new Set(m.acknowledgmentIds).size === 1 ? '' : 's'}`
+                          : 'Saved · no delivery receipts yet'}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -473,28 +535,49 @@ export function ConversationsPage({
           className="conversation-compose"
           onSubmit={(e) => {
             e.preventDefault();
-            send();
+            void send();
           }}
         >
           <textarea
             value={draft}
             maxLength={12000}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder={`A little note for ${person?.name ?? 'the team'}…`}
-            aria-label="Message"
+            onChange={(e) => setDrafts((current) => ({ ...current, [channel]: e.target.value }))}
+            placeholder={
+              announcement
+                ? 'A new direction, changed priority, or guidance for everyone…'
+                : `A little note for ${person?.name ?? 'the team'}…`
+            }
+            aria-label={announcement ? 'Announcement to every employee' : 'Message'}
+            disabled={sending || (announcement && !state.employees.length)}
             rows={2}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
-                send();
+                void send();
               }
             }}
           />
           <div>
-            <span>Saved locally · included with new assignments</span>
-            <button type="submit" className="button primary" disabled={!draft.trim()}>
-              <Send size={15} />
-              Send
+            <span>
+              {announcement
+                ? state.employees.length
+                  ? 'Starts or redirects every employee’s work'
+                  : 'Add an employee to make an announcement.'
+                : 'Saved locally · included with new assignments'}
+            </span>
+            <button
+              type="submit"
+              className="button primary"
+              disabled={!draft.trim() || sending || (announcement && !state.employees.length)}
+            >
+              {sending ? (
+                <LoaderCircle size={15} className="spin" />
+              ) : announcement ? (
+                <Megaphone size={15} />
+              ) : (
+                <Send size={15} />
+              )}
+              {sending ? 'Sending…' : announcement ? 'Announce to everyone' : 'Send'}
             </button>
           </div>
         </form>

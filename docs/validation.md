@@ -7,13 +7,13 @@ Verified on macOS / Apple Silicon on September 10, 2026.
 - Birth's gateway, file-copy, approval, and workspace tests are retained.
 - Main's queue, scheduler, scenario, cancellation, authentication-race, and Codex transport tests are retained.
 - Added tests for SQLite checkpoint/history persistence and reopen, hosted Responses requests and recovery, credential exclusion from saved sessions, MCP approval continuation, cancellation before broadcast guidance, recorded microphone-level/pose replay, stale-review recovery, and safe CSV export.
-- Latest `npm run check`: 46 tests passed, 0 failed.
+- Latest `npm run check`: 52 tests passed, 0 failed.
 - TypeScript, Vite renderer, Electron preload/main bundles, and an ad-hoc signed macOS application build successfully.
-- Ultra's Architecture, Parquet, Desk, Chair, Laptop, Plant, and Framing functions were compared with `origin/Ultrabranch` after normalizing TypeScript/JSX formatting through esbuild. All match. Appearance, speaker animation, and deterministic replay extend the avatar/scene functions without changing those room and furniture functions.
+- Ultra's Architecture, Parquet, Desk, Chair, Laptop, and Plant functions were compared with `origin/Ultrabranch` after normalizing TypeScript/JSX formatting through esbuild. Those room/furniture functions are retained. Framing now includes the floating megaphone; appearance, cabinet activity, speaker animation, and deterministic replay extend the scene.
 
 ## Native desktop verification
 
-- Packaged `Astra HQ.app` launches and renders Ultra's full 3D office inside the light Birth shell, including the goal banner and all four room links.
+- Packaged `Astra HQ.app` launches and renders Ultra's full 3D office inside the light Birth shell, including the goal banner. The latest update removes the room tags and adds an accessible file-cabinet hotspot.
 - First-run local storage prompt opens the native folder picker. Cancel preserves the existing database.
 - New employee dialog has exactly Name, Job title, Personality, and Skills; Astra session is included. Appearance controls expose presentation, hair, hat, glasses, skin tone, hair color, and clothing color separately.
 - A real five-minute checkpoint was confirmed in the native SQLite history.
@@ -23,7 +23,7 @@ Verified on macOS / Apple Silicon on September 10, 2026.
 
 ## Not exercised with live credentials
 
-No OpenAI API key or integration token was supplied. Hosted session execution, live transcription, and remote integration actions were tested with deterministic transport responses, not with a billed external session. The implementation uses the documented OpenAI APIs and reports missing credentials and service failures; it does not simulate successful cloud execution. Physical microphone input and end-to-end voice broadcast must be exercised after the user grants microphone permission and supplies an API key.
+No OpenAI API key or integration token was supplied. Hosted session execution, live transcription, and remote integration actions were tested with deterministic transport responses, not with a billed external session. The implementation uses the documented OpenAI APIs and reports missing credentials and service failures; it does not simulate successful cloud execution. Physical microphone input and end-to-end voice broadcast remain a first-use permission check. ChatGPT mode uses on-device macOS transcription without an API key; the optional API mode requires its own key.
 
 The local database created during verification preserves the source brief and prior Birth checkpoints. No original imported files were modified. The original Birth JSON remains in the application data directory as a migration backup. Temporary verification goal edits remain in the audit journal by design; the current goal was restored.
 
@@ -43,3 +43,12 @@ The rebuilt macOS app was opened with the local sample employees and example ass
 - Optional API mode remains available for hosted sessions and remote MCP integrations. ChatGPT mode currently runs local work with external tools/network disabled, and shows this limitation in Settings. Closing Astra HQ stops plan turns; later assignments resume the saved conversation.
 
 The final packaged app was reopened and displayed **ChatGPT plan · Connected** using the existing sign-in, with optional API access collapsed. The office rendered the light grid and high-mounted megaphone, and the two employees created by the user during development remained intact. The packaged speech helper executes successfully and the full app passes `codesign --verify --deep --strict`.
+
+## Four-tab office and Roadmap update
+
+- Rechecked ChatGPT as the default provider, including plan-only authentication, persistent conversations, announcements, and revisions. Nineteen focused auth/runtime/audio tests pass; all 52 project tests and the production build pass.
+- Browser UI verification confirmed Office, Chat, Employees, Roadmap in order; no workspace switcher; Settings and Activity remain accessible in the top bar.
+- Inspected the light grid and elevated floating megaphone, with the original office rooms intact and their text tags removed. The cabinet opens the local folder inventory. Announce sits directly below the office card.
+- Created two milestones in an isolated localhost preview, linked their dependency, opened details, and marked the prerequisite complete. The graph showed the connection toward the goal, 100% completion, and released the dependent milestone's waiting indicator. Editing the prerequisite excluded its dependent from selectable links. These test milestones were not added to the native workspace.
+- Dependency tests cover branching graphs, duplicate/missing references, self/cross cycles, new milestone IDs, and a 1,000-node chain. The graph was additionally checked against 1,000-node chains/cycles and handles legacy invalid dependencies without hanging.
+- Chat includes typed announcements and their history; empty-office broadcast controls are disabled.

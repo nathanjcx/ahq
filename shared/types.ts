@@ -3,6 +3,7 @@ export type Page =
   | 'employees'
   | 'announce'
   | 'commitments'
+  | 'roadmap'
   | 'conversations'
   | 'needs-you'
   | 'settings'

@@ -65,6 +65,8 @@ const desks: Point[] = [
   [-6.3, 0, 3.4],
   [-3.1, 0, 3.4],
 ];
+const storagePosition: Point = [0.43, 0, -5.23];
+const speakerPosition: Point = [-1.45, 9.4, -5.75];
 
 type SurfaceMaps = {
   wood: THREE.DataTexture;
@@ -314,24 +316,34 @@ function OperationsDisplay() {
 
 function activityFor(employee: Employee) {
   const task = (employee.task + ' ' + employee.role).toLowerCase();
-  return employee.status === 'review' || /whiteboard|discuss|collaborat/.test(task)
+  if (employee.status === 'working' && /\b(storage|cabinet|files?|folders?|database)\b/i.test(employee.task))
+    return 'storage';
+  return employee.activityLocation === 'meeting' || employee.activityLocation === 'board'
     ? 'discussion'
-    : /cabinet|librar|reading|read documents|dependencies|resources/.test(task)
+    : employee.activityLocation === 'library'
       ? 'reading'
-      : employee.status === 'ready'
-        ? 'lounge'
-        : 'research';
+      : employee.activityLocation === 'desk'
+        ? 'research'
+        : employee.status === 'review' || /whiteboard|discuss|collaborat/.test(task)
+          ? 'discussion'
+          : /cabinet|librar|reading|read documents|dependencies|resources/.test(task)
+            ? 'reading'
+            : employee.status === 'ready'
+              ? 'lounge'
+              : 'research';
 }
 
 function employeeAnchor(employee: Employee, index: number): Point {
   const activity = activityFor(employee);
   return activity === 'discussion'
     ? [3.3 + (index % 3) * 0.95, 0.105, -4.94]
-    : activity === 'reading'
-      ? [-1.65 + (index % 2) * 0.75, 0.105, -4.45]
-      : activity === 'lounge'
-        ? [3.65 + (index % 3) * 1.03, 0.105, 4.68]
-        : [desks[index % desks.length][0], 0.105, desks[index % desks.length][2] + 1];
+    : activity === 'storage'
+      ? [storagePosition[0] + (index % 2) * -0.52, 0.105, -4.0]
+      : activity === 'reading'
+        ? [-1.65 + (index % 2) * 0.75, 0.105, -4.45]
+        : activity === 'lounge'
+          ? [3.65 + (index % 3) * 1.03, 0.105, 4.68]
+          : [desks[index % desks.length][0], 0.105, desks[index % desks.length][2] + 1];
 }
 
 function HandoffRoute({
@@ -539,6 +551,13 @@ function Framing({ zoom, angle }: Pick<OfficeProps, 'zoom' | 'angle'>) {
     for (const x of [-9.5, 9.5])
       for (const y of [-0.7, 3.8])
         for (const z of [-6.5, 6.5]) {
+          bounds.expandByPoint(new THREE.Vector3(x, y, z).applyMatrix4(camera.matrixWorldInverse));
+        }
+    // Fit the floating horn at its loudest expansion without giving the
+    // entire floor an unnecessarily tall bounding box.
+    for (const x of [speakerPosition[0] - 1.6, speakerPosition[0] + 2.3])
+      for (const y of [speakerPosition[1] - 2, speakerPosition[1] + 1.5])
+        for (const z of [speakerPosition[2] - 0.5, speakerPosition[2] + 2.7]) {
           bounds.expandByPoint(new THREE.Vector3(x, y, z).applyMatrix4(camera.matrixWorldInverse));
         }
     const w = bounds.max.x - bounds.min.x;
@@ -1050,7 +1069,7 @@ function Figure({
             rotation={[
               seated
                 ? -0.77 + Math.sin(phase + side) * 0.035
-                : pose === 'reading'
+                : pose === 'reading' || pose === 'storage'
                   ? -0.65
                   : pose === 'discussion' && side > 0
                     ? -0.95 + Math.sin(phase * 0.4) * 0.18
@@ -1064,7 +1083,15 @@ function Figure({
             <Round p={[0, -0.15, 0]} s={[0.16, 0.31, 0.18]} color={color} radius={0.045} />
             <group
               position={[0, -0.29, 0]}
-              rotation={[seated || pose === 'reading' ? -0.85 : pose === 'discussion' ? -0.7 : -0.15, 0, 0]}
+              rotation={[
+                seated || pose === 'reading' || pose === 'storage'
+                  ? -0.85
+                  : pose === 'discussion'
+                    ? -0.7
+                    : -0.15,
+                0,
+                0,
+              ]}
             >
               <Round p={[0, -0.11, 0]} s={[0.13, 0.25, 0.14]} color={skin} radius={0.04} />
               <Round p={[0, -0.245, 0.02]} s={[0.13, 0.12, 0.135]} color={skin} radius={0.04} />
@@ -1072,10 +1099,10 @@ function Figure({
           </group>
         </group>
       ))}
-      {pose === 'reading' && !walking && (
+      {(pose === 'reading' || pose === 'storage') && !walking && (
         <group position={[0, 1.08, 0.48]} rotation={[-0.5, 0, 0]}>
           <Box s={[0.44, 0.035, 0.34]} color="#ece4cd" />
-          <Box p={[0, -0.025, 0]} s={[0.46, 0.025, 0.37]} color={C.terra} />
+          <Box p={[0, -0.025, 0]} s={[0.46, 0.025, 0.37]} color={pose === 'storage' ? '#d4bd83' : C.terra} />
           <Box p={[0, 0.02, 0]} s={[0.014, 0.012, 0.32]} color="#b6a98e" />
         </group>
       )}
@@ -1112,35 +1139,27 @@ function EmployeeAvatar({
   const elapsed = useRef(index * 7.3 + 7);
   const lastPoseUpdate = useRef(0);
   const walkingRef = useRef(false);
-  const classification = `${employee.task} ${employee.role}`.toLowerCase();
-  const activity =
-    employee.activityLocation === 'library'
-      ? 'reading'
-      : employee.activityLocation === 'meeting' || employee.activityLocation === 'board'
-        ? 'discussion'
-        : employee.activityLocation === 'desk'
-          ? 'research'
-          : employee.status === 'review' || /whiteboard|discuss|collaborat/.test(classification)
-            ? 'discussion'
-            : /cabinet|librar|reading|read documents|dependencies|resources/.test(classification)
-              ? 'reading'
-              : employee.status === 'ready'
-                ? 'lounge'
-                : 'research';
+  const activity = activityFor(employee);
   const desk = desks[index % desks.length];
   // Seat coordinates stay attached to furniture; supplied position is used for
   // the walking waypoint when it falls in the central circulation corridor.
   const home: Point =
     activity === 'discussion'
       ? [3.3 + (index % 3) * 0.95, 0, index % 6 < 3 ? -4.94 : -1.65]
-      : activity === 'reading'
-        ? [-1.65 + (index % 2) * 0.75, 0, -4.45]
-        : activity === 'lounge'
-          ? [3.65 + (index % 3) * 1.03, 0, 4.68]
-          : [desk[0], 0, desk[2] + 1];
+      : activity === 'storage'
+        ? [storagePosition[0] + (index % 2) * -0.52, 0, -4.0]
+        : activity === 'reading'
+          ? [-1.65 + (index % 2) * 0.75, 0, -4.45]
+          : activity === 'lounge'
+            ? [3.65 + (index % 3) * 1.03, 0, 4.68]
+            : [desk[0], 0, desk[2] + 1];
   const isSeated = !listening && !walking && (activity === 'research' || activity === 'lounge');
   const idleYaw =
-    activity === 'reading' || activity === 'discussion' || activity === 'research' || activity === 'lounge'
+    activity === 'storage' ||
+    activity === 'reading' ||
+    activity === 'discussion' ||
+    activity === 'research' ||
+    activity === 'lounge'
       ? Math.PI
       : 0;
   const route = useMemo<Point[]>(() => {
@@ -1150,6 +1169,8 @@ function EmployeeAvatar({
         : 0.25;
     if (activity === 'discussion')
       return [home, [2.3, 0, -4.95], [2.3, 0, -1.42], [corridorX, 0, -1.42], [corridorX, 0, 0.6]];
+    if (activity === 'storage')
+      return [home, [corridorX, 0, -3.4], [corridorX, 0, -1.45], [corridorX, 0, 0.6]];
     if (activity === 'reading') return [home, [-0.45, 0, -4.45], [corridorX, 0, -1.45], [corridorX, 0, 0.6]];
     if (activity === 'lounge')
       return [home, [home[0], 0, 4.1], [1.15, 0, 4.1], [corridorX, 0, 3.05], [corridorX, 0, 0.6]];
@@ -1352,41 +1373,104 @@ function EmployeeAvatar({
   );
 }
 
-function RoomMarker({
-  p,
-  room,
-  label,
+function FileCabinet({
+  busy,
+  motion,
+  listening,
+  timeSeconds,
+  live,
   onRoom,
-}: {
-  p: Point;
-  room: string;
-  label: string;
-  onRoom: OfficeProps['onRoom'];
-}) {
+}: Pick<OfficeProps, 'motion' | 'listening' | 'timeSeconds' | 'live' | 'onRoom'> & { busy: boolean }) {
+  const drawer = useRef<THREE.Group>(null);
+  const [hovered, setHovered] = useState(false);
+  useFrame(() => {
+    if (!drawer.current) return;
+    const time = live && motion ? Date.now() / 1000 : (timeSeconds ?? 0);
+    drawer.current.position.z = busy && !listening ? 0.3 + Math.sin(time * 1.1) * 0.06 : 0;
+  });
   return (
-    <Html center position={p} zIndexRange={[8, 0]}>
-      <button
-        type="button"
-        className="room-label"
-        style={{
-          border: '1px solid #dce7d035',
-          color: '#e9eddb',
-          background: '#233e32d9',
-          borderRadius: 4,
-          padding: '5px 8px',
-          fontSize: 9,
-          fontWeight: 650,
-          letterSpacing: '.075em',
-          textTransform: 'uppercase',
-          whiteSpace: 'nowrap',
+    <group position={storagePosition}>
+      <group
+        onClick={(event) => {
+          event.stopPropagation();
+          onRoom('storage');
         }}
-        onClick={() => onRoom(room)}
-        aria-label={`Open ${label}`}
+        onPointerOver={() => setHovered(true)}
+        onPointerOut={() => setHovered(false)}
       >
-        {label}
-        <span aria-hidden="true"> ↗</span>
-      </button>
-    </Html>
+        <Round p={[0, 0.11, 0]} s={[1.07, 0.2, 0.93]} color="#344b42" radius={0.025} />
+        <Box p={[0, 1.13, -0.42]} s={[1.05, 1.97, 0.075]} color="#7a8d79" />
+        {[-1, 1].map((side) => (
+          <Round
+            key={side}
+            p={[side * 0.48, 1.13, 0]}
+            s={[0.09, 1.97, 0.91]}
+            color="#7a8d79"
+            radius={0.025}
+          />
+        ))}
+        <Round p={[0, 2.075, 0]} s={[1.05, 0.08, 0.91]} color="#7a8d79" radius={0.025} />
+        {[0.5, 1.08, 1.66].map((y, index) => (
+          <group key={y} ref={index === 2 ? drawer : undefined}>
+            <Box p={[0, y - 0.215, 0.07]} s={[0.87, 0.05, 0.78]} color="#485d50" />
+            {[-1, 1].map((side) => (
+              <Box key={side} p={[side * 0.415, y, 0.07]} s={[0.04, 0.44, 0.78]} color="#485d50" />
+            ))}
+            <Round
+              p={[0, y, 0.49]}
+              s={[0.95, 0.535, 0.085]}
+              color={hovered ? '#aab49a' : '#99a88d'}
+              radius={0.027}
+            />
+            <Box p={[0, y + 0.055, 0.547]} s={[0.28, 0.105, 0.025]} color={C.brass} />
+            <Box p={[0, y + 0.055, 0.564]} s={[0.2, 0.055, 0.012]} color="#e9e6d5" />
+            <Round p={[0, y - 0.095, 0.568]} s={[0.31, 0.045, 0.085]} color="#354d42" radius={0.015} />
+            {index === 2 && (
+              <group>
+                {[-0.08, 0.04, 0.16].map((z, i) => (
+                  <group key={z}>
+                    <Box
+                      p={[0, y + 0.23, z]}
+                      s={[0.75, 0.13, 0.027]}
+                      color={i === 1 ? '#d4bd83' : '#b0b89b'}
+                    />
+                    <Box
+                      p={[-0.22 + i * 0.2, y + 0.32, z]}
+                      s={[0.2, 0.07, 0.028]}
+                      color={i === 1 ? '#d4bd83' : '#b0b89b'}
+                    />
+                  </group>
+                ))}
+              </group>
+            )}
+          </group>
+        ))}
+        <mesh position={[0.4, 2.057, 0.465]}>
+          <sphereGeometry args={[0.035, 12, 8]} />
+          <meshBasicMaterial color={busy ? '#73d4a3' : '#405c4c'} />
+        </mesh>
+      </group>
+      <Html center position={[0, 1.18, 0.6]} zIndexRange={[8, 0]}>
+        <button
+          type="button"
+          aria-label="Open file storage"
+          title="Open file storage"
+          onClick={() => onRoom('storage')}
+          onPointerEnter={() => setHovered(true)}
+          onPointerLeave={() => setHovered(false)}
+          onFocus={() => setHovered(true)}
+          onBlur={() => setHovered(false)}
+          style={{
+            width: 30,
+            height: 56,
+            border: 0,
+            padding: 0,
+            background: 'transparent',
+            cursor: 'pointer',
+          }}
+        />
+      </Html>
+    </group>
   );
 }
 
@@ -1425,10 +1509,8 @@ function OfficeSpeakers({
     });
   });
   return (
-    <group position={[-1.45, 4.15, -5.75]}>
-      {/* High on the far wall, with a steel bracket and an oversized flared horn. */}
-      <Round p={[0, -0.7, -0.04]} s={[0.66, 1.8, 0.18]} color="#344942" radius={0.06} />
-      <Round p={[0, -0.37, 0.33]} s={[0.18, 0.2, 0.7]} color="#53675c" radius={0.045} />
+    <group position={speakerPosition}>
+      {/* The announcement horn floats well clear of the office and its far wall. */}
       <group rotation={[Math.PI / 10, Math.PI / 8, 0]}>
         <group ref={horn}>
           <mesh position={[0, 0, 0.21]} rotation={[Math.PI / 2, 0, 0]} castShadow>
@@ -1509,6 +1591,14 @@ function Scene(props: OfficeProps) {
       <directionalLight position={[10, 9, -2]} intensity={1.1} color="#a9c9cd" />
       <SurfaceContext.Provider value={surfaces}>
         <Architecture />
+        <FileCabinet
+          busy={props.team.some((employee) => activityFor(employee) === 'storage')}
+          motion={props.motion}
+          listening={props.listening}
+          timeSeconds={props.timeSeconds}
+          live={props.live}
+          onRoom={props.onRoom}
+        />
         <OfficeSpeakers
           level={props.microphoneLevel ?? 0}
           listening={!!props.listening}
@@ -1531,10 +1621,6 @@ function Scene(props: OfficeProps) {
           />
         ))}
       </SurfaceContext.Provider>
-      <RoomMarker p={[-4.9, 0.17, 5.63]} room="workspace" label="The studio" onRoom={props.onRoom} />
-      <RoomMarker p={[5.05, 0.17, -0.22]} room="meeting" label="Meeting room" onRoom={props.onRoom} />
-      <RoomMarker p={[4.7, 0.17, 5.68]} room="lounge" label="The lounge" onRoom={props.onRoom} />
-      <RoomMarker p={[-1.18, 0.75, -4.95]} room="library" label="Library" onRoom={props.onRoom} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.71, 0]} receiveShadow>
         <planeGeometry args={[200, 200]} />
         <meshStandardMaterial color="#ffffff" roughness={1} />

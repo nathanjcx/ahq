@@ -14,12 +14,12 @@ import {
   Ellipsis,
   Flag,
   Focus,
+  GitBranch,
   FolderOpen,
   Home,
   Inbox,
   Leaf,
   LoaderCircle,
-  Megaphone,
   MessageCircle,
   Minus,
   Plus,
@@ -57,9 +57,11 @@ import {
 import { allowedPath, containsSecret, MAX_FILES, MAX_FILE_SIZE, MAX_FOLDER_SIZE } from '../shared/workspace';
 import Avatar from './components/Avatar';
 import { applyDecision, applySession } from './lib/workflow';
+import { dependencyCandidates, validateDependencies } from './lib/roadmap';
 import Modal from './components/Modal';
 import SceneBoundary from './components/SceneBoundary';
 import Markdown from './components/Markdown';
+import Roadmap from './components/Roadmap';
 import {
   useOfficeHistory,
   OfficeTimeline,
@@ -79,19 +81,17 @@ import {
 const OfficeScene = lazy(() => import('./components/OfficeScene'));
 const nav = [
   { id: 'office', label: 'Office', icon: Home },
+  { id: 'conversations', label: 'Chat', icon: MessageCircle },
   { id: 'employees', label: 'Employees', icon: Users },
-  { id: 'announce', label: 'Announce', icon: Megaphone },
-  { id: 'commitments', label: 'Commitments', icon: Flag },
-  { id: 'conversations', label: 'Conversations', icon: MessageCircle },
-  { id: 'activity', label: 'Activity', icon: History },
-  { id: 'needs-you', label: 'Needs you', icon: Inbox },
+  { id: 'roadmap', label: 'Roadmap', icon: GitBranch },
 ] as const;
 const pageNames: Record<Page, string> = {
   office: 'Office',
   employees: 'Employees',
   announce: 'Announce',
   commitments: 'Commitments',
-  conversations: 'Conversations',
+  roadmap: 'Roadmap',
+  conversations: 'Chat',
   'needs-you': 'Needs you',
   activity: 'Activity',
   settings: 'Workspace settings',
@@ -105,12 +105,13 @@ export default function App() {
   const [cloud, setCloud] = useState<CloudSettings>({ endpoint: '', configured: false, connected: false });
   const [toast, setToast] = useState('');
   const [modal, setModal] = useState<
-    'employee' | 'commitment' | 'goal' | 'search' | 'help' | 'folder' | 'storage' | null
+    'employee' | 'commitment' | 'goal' | 'search' | 'help' | 'folder' | 'files' | 'storage' | null
   >(null);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [selectedApproval, setSelectedApproval] = useState<string | null>(null);
   const [selectedCommitment, setSelectedCommitment] = useState<string | null>(null);
+  const [editingCommitment, setEditingCommitment] = useState<Commitment | null>(null);
   const [playing, setPlaying] = useState(true);
   const [systemReducedMotion, setSystemReducedMotion] = useState(
     () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
@@ -194,6 +195,7 @@ export default function App() {
     const room = (event: Event) => {
       const key = (event as CustomEvent<string>).detail;
       if (key === 'library') setModal('folder');
+      else if (key === 'storage') setModal('files');
       else if (key === 'meeting') navigate('conversations');
       else if (key === 'lounge') navigate('employees');
       else setAngle(0);
@@ -473,68 +475,26 @@ export default function App() {
             astra<span className="brand-hq">HQ</span>
           </span>
         </a>
-        <button className="workspace-switch" onClick={() => navigate('settings')}>
-          <span className="workspace-icon">
-            <Leaf size={17} />
-          </span>
-          <span>
-            {state.workspaceName}
-            <small>Personal workspace</small>
-          </span>
-          <ChevronDown size={14} />
-        </button>
-        <span className="nav-caption">YOUR WORKSPACE</span>
         <nav aria-label="Main navigation">
           {nav.map((item) => (
             <button
               key={item.id}
               className={`nav-item ${page === item.id ? 'active' : ''}`}
               onClick={() => navigate(item.id)}
+              aria-label={item.label}
+              title={item.label}
               aria-current={page === item.id ? 'page' : undefined}
             >
               <item.icon size={19} strokeWidth={1.7} />
               <span>{item.label}</span>
-              {item.id === 'needs-you' && pending.length > 0 && (
-                <span className="nav-count">{pending.length}</span>
-              )}
-              {item.id === 'announce' && <span className="tiny-dot" />}
             </button>
           ))}
         </nav>
-        <div className="sidebar-lower">
-          <div className="workspace-note">
-            <span className="note-icon">
-              <Sparkles size={20} />
-            </span>
-            <strong>Good work starts together.</strong>
-            <p>
-              A little clarity. A little teamwork.
-              <br />A lot more possibility.
-            </p>
-            <button onClick={() => setModal('help')}>
-              Make yourself at home <ArrowRight size={14} />
-            </button>
-          </div>
-          <button
-            className={`nav-item ${page === 'settings' ? 'active' : ''}`}
-            onClick={() => navigate('settings')}
-          >
-            <Settings size={18} strokeWidth={1.7} />
-            <span>Settings & connections</span>
-          </button>
-          <button className="profile" onClick={() => navigate('settings')}>
-            <Avatar size={34} />
-            <span>
-              Your workspace<small>Let’s make good things.</small>
-            </span>
-            <Ellipsis size={18} />
-          </button>
-        </div>
       </aside>
       <div className="main-shell">
         <header className="topbar">
           <div className="breadcrumbs">
-            <span>{state.workspaceName}</span>
+            <span>Astra HQ</span>
             <ChevronRight size={13} />
             <strong>{pageNames[page]}</strong>
           </div>
@@ -560,7 +520,22 @@ export default function App() {
               <Bell size={18} />
               {pending.length > 0 && <i />}
             </button>
-            <Avatar size={31} />
+            <button
+              className="icon-button"
+              aria-label="Activity and export"
+              title="Activity and export"
+              onClick={() => navigate('activity')}
+            >
+              <History size={18} />
+            </button>
+            <button
+              className="icon-button"
+              aria-label="Settings and ChatGPT login"
+              title="Settings and ChatGPT login"
+              onClick={() => navigate('settings')}
+            >
+              <Settings size={18} />
+            </button>
           </div>
         </header>
         <main>
@@ -575,6 +550,7 @@ export default function App() {
                     employees: 'Good people. Clear roles. A shared direction.',
                     announce: 'One shared direction. Everyone on the same page.',
                     commitments: 'Flexibility in the path. Reliability in the promise.',
+                    roadmap: 'Every milestone, connected to the goal.',
                     conversations: 'The thinking, the handoffs, and the conversations in between.',
                     'needs-you': 'A few thoughtful decisions to keep good things moving.',
                     activity: 'Your decisions. Their work. Every step recorded.',
@@ -601,10 +577,10 @@ export default function App() {
                   <Plus size={16} />
                   New employee
                 </button>
-              ) : page === 'commitments' ? (
+              ) : page === 'commitments' || page === 'roadmap' ? (
                 <button className="button primary" onClick={() => setModal('commitment')}>
                   <Plus size={16} />
-                  New commitment
+                  New milestone
                 </button>
               ) : null}
             </div>
@@ -622,134 +598,145 @@ export default function App() {
                 </button>
               </div>
               <div className="office-layout">
-                <section className="office-card">
-                  <div className="office-card-header">
-                    <div>
-                      <span className="room-icon">
-                        <Home size={15} />
-                      </span>
-                      <strong>The studio</strong>
-                      <span className="small-separator" />
-                      <span>{state.employees.length} teammates</span>
+                <div className="office-stage">
+                  <section className="office-card">
+                    <div className="office-card-header">
+                      <div>
+                        <span className="room-icon">
+                          <Home size={15} />
+                        </span>
+                        <strong>The studio</strong>
+                        <span className="small-separator" />
+                        <span>{state.employees.length} teammates</span>
+                      </div>
+                      <div>
+                        <span className="office-weather">
+                          ☀<span>A little room to grow</span>
+                        </span>
+                        <button
+                          className="icon-button"
+                          aria-label="Rotate office view"
+                          onClick={() => setAngle((v) => (v + 45) % 360)}
+                        >
+                          <Ellipsis size={20} />
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      <span className="office-weather">
-                        ☀<span>A little room to grow</span>
+                    <div className="office-viewport">
+                      <div className="scene-caption">
+                        <span className="eyebrow">SPACE TO DO YOUR BEST WORK</span>
+                        <span className="scene-script">Better, together.</span>
+                      </div>
+                      <SceneBoundary onTeam={() => navigate('employees')}>
+                        <Suspense
+                          fallback={
+                            <div className="scene-loading">
+                              <LoaderCircle className="spin" size={24} />
+                              <span>Opening the studio…</span>
+                            </div>
+                          }
+                        >
+                          <OfficeScene
+                            employees={history.display.employees}
+                            animate={playing && !state.reducedMotion && !systemReducedMotion}
+                            onSelect={(e) =>
+                              history.at === null
+                                ? setSelectedEmployee(e.id)
+                                : notify(`${e.name}: ${e.activity}`)
+                            }
+                            zoom={zoom}
+                            angle={angle}
+                            timeSeconds={
+                              history.at !== null
+                                ? (pastFrame?.sceneTime ?? frameTime.current)
+                                : frameTime.current
+                            }
+                            live={history.at === null}
+                            listening={history.at !== null ? !!pastFrame?.listening : listening}
+                            microphoneLevel={history.at !== null ? (pastFrame?.level ?? 0) : microphoneLevel}
+                          />
+                        </Suspense>
+                      </SceneBoundary>
+                      <div className="office-hint">
+                        <span className={cloud.connected ? 'status-dot' : 'sample-dot'} />
+                        {!state.employees.length
+                          ? 'Your office is ready'
+                          : cloud.connected
+                            ? `${state.employees.filter((e) => e.sessionId && e.status === 'working').length} sessions active`
+                            : state.demo
+                              ? 'A preview of your future team'
+                              : 'Ready for your direction'}
+                        <span>·</span>
+                        <span>
+                          {state.employees.length ? 'Select anyone to say hello' : 'Add your first employee'}
+                        </span>
+                      </div>
+                      <div className="scene-controls">
+                        <button
+                          aria-label="Zoom out"
+                          onClick={() => setZoom((z) => Math.max(0.7, z - 0.12))}
+                          disabled={zoom <= 0.7}
+                        >
+                          <Minus size={17} />
+                        </button>
+                        <button
+                          aria-label="Reset office view"
+                          onClick={() => {
+                            setZoom(1);
+                            setPlaying(true);
+                          }}
+                        >
+                          <Focus size={17} />
+                        </button>
+                        <button
+                          aria-label="Zoom in"
+                          onClick={() => setZoom((z) => Math.min(1.5, z + 0.12))}
+                          disabled={zoom >= 1.5}
+                        >
+                          <Plus size={17} />
+                        </button>
+                      </div>
+                      {history.at !== null && (
+                        <div className="replay-badge">
+                          <History size={14} />
+                          Replay · {new Date(history.at).toLocaleTimeString()}
+                        </div>
+                      )}
+                      {listening && (
+                        <div className="replay-badge">
+                          <Volume2 size={14} />
+                          The whole office is listening
+                        </div>
+                      )}
+                    </div>
+                    <div className="office-footer">
+                      <div className="avatar-stack">
+                        {state.employees.slice(0, 6).map((e) => (
+                          <Avatar key={e.id} employee={e} size={26} />
+                        ))}
+                      </div>
+                      <span>
+                        {state.employees.length ? 'Your team is here.' : 'A space for your future team.'}
                       </span>
                       <button
-                        className="icon-button"
-                        aria-label="Rotate office view"
-                        onClick={() => setAngle((v) => (v + 45) % 360)}
-                      >
-                        <Ellipsis size={20} />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="office-viewport">
-                    <div className="scene-caption">
-                      <span className="eyebrow">SPACE TO DO YOUR BEST WORK</span>
-                      <span className="scene-script">Better, together.</span>
-                    </div>
-                    <SceneBoundary onTeam={() => navigate('employees')}>
-                      <Suspense
-                        fallback={
-                          <div className="scene-loading">
-                            <LoaderCircle className="spin" size={24} />
-                            <span>Opening the studio…</span>
-                          </div>
+                        className="text-button"
+                        onClick={() =>
+                          state.employees.length ? navigate('employees') : setModal('employee')
                         }
                       >
-                        <OfficeScene
-                          employees={history.display.employees}
-                          animate={playing && !state.reducedMotion && !systemReducedMotion}
-                          onSelect={(e) =>
-                            history.at === null
-                              ? setSelectedEmployee(e.id)
-                              : notify(`${e.name}: ${e.activity}`)
-                          }
-                          zoom={zoom}
-                          angle={angle}
-                          timeSeconds={
-                            history.at !== null
-                              ? (pastFrame?.sceneTime ?? frameTime.current)
-                              : frameTime.current
-                          }
-                          live={history.at === null}
-                          listening={history.at !== null ? !!pastFrame?.listening : listening}
-                          microphoneLevel={history.at !== null ? (pastFrame?.level ?? 0) : microphoneLevel}
-                        />
-                      </Suspense>
-                    </SceneBoundary>
-                    <div className="office-hint">
-                      <span className={cloud.connected ? 'status-dot' : 'sample-dot'} />
-                      {!state.employees.length
-                        ? 'Your office is ready'
-                        : cloud.connected
-                          ? `${state.employees.filter((e) => e.sessionId && e.status === 'working').length} sessions active`
-                          : state.demo
-                            ? 'A preview of your future team'
-                            : 'Ready for your direction'}
-                      <span>·</span>
-                      <span>
-                        {state.employees.length ? 'Select anyone to say hello' : 'Add your first employee'}
-                      </span>
-                    </div>
-                    <div className="scene-controls">
-                      <button
-                        aria-label="Zoom out"
-                        onClick={() => setZoom((z) => Math.max(0.7, z - 0.12))}
-                        disabled={zoom <= 0.7}
-                      >
-                        <Minus size={17} />
-                      </button>
-                      <button
-                        aria-label="Reset office view"
-                        onClick={() => {
-                          setZoom(1);
-                          setPlaying(true);
-                        }}
-                      >
-                        <Focus size={17} />
-                      </button>
-                      <button
-                        aria-label="Zoom in"
-                        onClick={() => setZoom((z) => Math.min(1.5, z + 0.12))}
-                        disabled={zoom >= 1.5}
-                      >
-                        <Plus size={17} />
+                        {state.employees.length ? 'Meet everyone' : 'Create your first employee'}{' '}
+                        <ArrowRight size={14} />
                       </button>
                     </div>
-                    {history.at !== null && (
-                      <div className="replay-badge">
-                        <History size={14} />
-                        Replay · {new Date(history.at).toLocaleTimeString()}
-                      </div>
-                    )}
-                    {listening && (
-                      <div className="replay-badge">
-                        <Volume2 size={14} />
-                        The whole office is listening
-                      </div>
-                    )}
-                  </div>
-                  <div className="office-footer">
-                    <div className="avatar-stack">
-                      {state.employees.slice(0, 6).map((e) => (
-                        <Avatar key={e.id} employee={e} size={26} />
-                      ))}
-                    </div>
-                    <span>
-                      {state.employees.length ? 'Your team is here.' : 'A space for your future team.'}
-                    </span>
-                    <button
-                      className="text-button"
-                      onClick={() => (state.employees.length ? navigate('employees') : setModal('employee'))}
-                    >
-                      {state.employees.length ? 'Meet everyone' : 'Create your first employee'}{' '}
-                      <ArrowRight size={14} />
-                    </button>
-                  </div>
-                </section>
+                  </section>
+                  <VoiceAnnounce
+                    disabled={!state.employees.length}
+                    onLevel={setMicrophoneLevel}
+                    onListening={setListening}
+                    onBroadcast={broadcast}
+                    notify={notify}
+                  />
+                </div>
                 <aside className="activity-column">
                   <section className="team-chat">
                     <div className="section-heading">
@@ -840,13 +827,6 @@ export default function App() {
                   </section>
                 </aside>
               </div>
-              <VoiceAnnounce
-                disabled={!state.employees.length}
-                onLevel={setMicrophoneLevel}
-                onListening={setListening}
-                onBroadcast={broadcast}
-                notify={notify}
-              />
               <OfficeTimeline history={history} />
               <div className="page-bottom">
                 <span>
@@ -885,7 +865,17 @@ export default function App() {
               onCreate={() => setModal('commitment')}
             />
           )}
-          {page === 'conversations' && <ConversationsPage {...common} initialChannel={conversationTarget} />}
+          {page === 'roadmap' && (
+            <Roadmap
+              state={state}
+              onSelect={(c) => setSelectedCommitment(c.id)}
+              onCreate={() => setModal('commitment')}
+              onEditGoal={() => setModal('goal')}
+            />
+          )}
+          {page === 'conversations' && (
+            <ConversationsPage {...common} initialChannel={conversationTarget} onBroadcast={broadcast} />
+          )}
           {page === 'needs-you' && <NeedsYouPage {...common} onReview={(a) => setSelectedApproval(a.id)} />}
           {page === 'activity' && <ActivityPage {...common} />}
           {page === 'settings' && (
@@ -1013,15 +1003,26 @@ export default function App() {
       {modal === 'commitment' && (
         <CommitmentForm
           employees={state.employees}
-          onClose={() => setModal(null)}
+          commitments={state.commitments}
+          initial={editingCommitment ?? undefined}
+          onClose={() => {
+            setModal(null);
+            setEditingCommitment(null);
+          }}
           onSave={(c) => {
             update((s) => ({
               ...s,
-              commitments: [...s.commitments, c],
-              events: [...s.events, addEvent(`A new promise: ${c.title}`)],
+              commitments: editingCommitment
+                ? s.commitments.map((item) => (item.id === c.id ? c : item))
+                : [...s.commitments, c],
+              events: [
+                ...s.events,
+                addEvent(`${editingCommitment ? 'Updated' : 'Created'} milestone: ${c.title}`),
+              ],
             }));
             setModal(null);
-            notify('A new promise, with a clear next step.');
+            setEditingCommitment(null);
+            notify('Roadmap saved.');
           }}
         />
       )}
@@ -1136,25 +1137,91 @@ export default function App() {
               </p>
             )}
             <div className="modal-footer">
-              <span className="muted">Source: {commitment.source}</span>
               <button
-                className="button primary"
+                className="button secondary"
                 onClick={() => {
-                  const related = pending.find((a) => a.commitmentId === commitment.id);
-                  if (related) {
-                    setSelectedCommitment(null);
-                    setSelectedApproval(related.id);
-                  } else {
-                    const owner = employeeById(state.employees, commitment.ownerId);
-                    setSelectedCommitment(null);
-                    if (owner) setSelectedEmployee(owner.id);
-                  }
+                  setEditingCommitment(commitment);
+                  setSelectedCommitment(null);
+                  setModal('commitment');
                 }}
               >
-                {pending.some((a) => a.commitmentId === commitment.id) ? 'Open review' : 'Speak to the owner'}
-                <ArrowRight size={15} />
+                Edit milestone
               </button>
+              {(pending.some((a) => a.commitmentId === commitment.id) ||
+                employeeById(state.employees, commitment.ownerId)) && (
+                <button
+                  className="button primary"
+                  onClick={() => {
+                    const related = pending.find((a) => a.commitmentId === commitment.id);
+                    if (related) {
+                      setSelectedCommitment(null);
+                      setSelectedApproval(related.id);
+                    } else {
+                      const owner = employeeById(state.employees, commitment.ownerId);
+                      setSelectedCommitment(null);
+                      if (owner) setSelectedEmployee(owner.id);
+                    }
+                  }}
+                >
+                  {pending.some((a) => a.commitmentId === commitment.id)
+                    ? 'Open review'
+                    : 'Speak to the owner'}
+                  <ArrowRight size={15} />
+                </button>
+              )}
             </div>
+          </div>
+        </Modal>
+      )}
+      {modal === 'files' && (
+        <Modal
+          title="File cabinet"
+          subtitle="The local folders your team can work from."
+          onClose={() => setModal(null)}
+        >
+          <div className="cabinet-folders">
+            {!state.folders.length && (
+              <div className="empty-state">
+                <FolderOpen size={32} />
+                <p>Your cabinet is empty. Add a project folder to give your team a starting point.</p>
+              </div>
+            )}
+            {state.folders.map((folder) => (
+              <section key={folder.id} className="cabinet-folder">
+                <div>
+                  <FolderOpen size={20} />
+                  <strong>{folder.name}</strong>
+                  <span>{folder.files.length} files</span>
+                </div>
+                <details>
+                  <summary>View files</summary>
+                  <ul>
+                    {folder.files.map((file) => (
+                      <li key={file.path}>{file.path}</li>
+                    ))}
+                  </ul>
+                </details>
+                <button
+                  className="text-button"
+                  onClick={() => {
+                    setModal(null);
+                    createBrief(folder);
+                  }}
+                >
+                  Prepare a source brief <ArrowRight size={14} />
+                </button>
+              </section>
+            ))}
+          </div>
+          <p className="form-hint">Choose which folders to share when you give an employee an assignment.</p>
+          <div className="modal-footer">
+            <button className="button secondary" onClick={() => navigate('settings')}>
+              Storage settings
+            </button>
+            <button className="button primary" onClick={() => setModal('folder')}>
+              <Plus size={16} />
+              Add a folder
+            </button>
           </div>
         </Modal>
       )}
@@ -1553,17 +1620,29 @@ function GoalForm({
 }
 function CommitmentForm({
   employees,
+  commitments,
+  initial,
   onClose,
   onSave,
 }: {
   employees: Employee[];
+  commitments: Commitment[];
+  initial?: Commitment;
   onClose: () => void;
   onSave: (c: Commitment) => void;
 }) {
+  const [error, setError] = useState('');
+  const id = useRef(initial?.id ?? uid()).current;
+  const candidates = dependencyCandidates(commitments, initial?.id);
+  const localDeadline = initial
+    ? new Date(new Date(initial.deadline).getTime() - new Date(initial.deadline).getTimezoneOffset() * 60_000)
+        .toISOString()
+        .slice(0, 16)
+    : '';
   return (
     <Modal
-      title="Make a little promise."
-      subtitle="An outcome, a person, and a clear definition of done."
+      title={initial ? 'Edit milestone' : 'New milestone'}
+      subtitle="A clear step toward your team’s goal."
       onClose={onClose}
     >
       <form
@@ -1571,42 +1650,61 @@ function CommitmentForm({
           e.preventDefault();
           const data = new FormData(e.currentTarget);
           const title = String(data.get('title')).trim();
+          const dependencies = data.getAll('dependencies').map(String);
           if (!title) return;
+          if (!validateDependencies(commitments, id, dependencies)) {
+            setError('Those connections would create a loop. Choose an earlier milestone.');
+            return;
+          }
+          const status = String(data.get('status') ?? 'planned') as Commitment['status'];
           onSave({
-            id: uid(),
+            id,
             title,
             description: String(data.get('description')).trim(),
             ownerId: String(data.get('owner')),
             recipient: String(data.get('recipient')).trim(),
             deadline: new Date(String(data.get('deadline'))).toISOString(),
             firm: data.get('firm') === 'on',
-            status: 'planned',
-            progress: 0,
+            status,
+            progress:
+              status === 'done'
+                ? 100
+                : status === 'planned'
+                  ? 0
+                  : Math.min(99, Math.max(0, Number(data.get('progress')) || 0)),
             nextStep: String(data.get('nextStep')).trim(),
-            dependencies: [],
-            source: 'Your instruction',
+            dependencies,
+            source: initial?.source ?? 'Your instruction',
             definitionOfDone: String(data.get('done')).trim(),
           });
         }}
       >
         <label>
-          What are we promising?
+          Milestone
           <input
             autoFocus
             required
             name="title"
             maxLength={120}
             placeholder="Prepare the weekly client update"
+            defaultValue={initial?.title}
           />
         </label>
         <label>
-          A little context
-          <textarea name="description" rows={2} placeholder="What should the owner know?" maxLength={2000} />
+          Context
+          <textarea
+            name="description"
+            rows={2}
+            placeholder="What should the owner know?"
+            maxLength={2000}
+            defaultValue={initial?.description}
+          />
         </label>
         <div className="form-grid">
           <label>
-            Accountable owner
-            <select name="owner" required>
+            Owner
+            <select name="owner" defaultValue={initial?.ownerId ?? ''}>
+              <option value="">You · unassigned</option>
               {employees.map((e) => (
                 <option key={e.id} value={e.id}>
                   {e.name} · {e.jobTitle}
@@ -1616,17 +1714,40 @@ function CommitmentForm({
           </label>
           <label>
             Who is it for?
-            <input required name="recipient" placeholder="Client or stakeholder" maxLength={120} />
+            <input
+              required
+              name="recipient"
+              placeholder="Client or stakeholder"
+              maxLength={120}
+              defaultValue={initial?.recipient ?? 'Our team'}
+            />
           </label>
         </div>
         <label>
-          Deadline · your local timezone
-          <input required name="deadline" type="datetime-local" />
+          Target date · your local timezone
+          <input required name="deadline" type="datetime-local" defaultValue={localDeadline} />
         </label>
         <label className="checkbox-label">
-          <input name="firm" type="checkbox" defaultChecked />
+          <input name="firm" type="checkbox" defaultChecked={initial?.firm ?? true} />
           This is a firm promise
         </label>
+        {initial && (
+          <div className="form-grid">
+            <label>
+              Status
+              <select name="status" defaultValue={initial.status}>
+                <option value="planned">Planned</option>
+                <option value="in-progress">In progress</option>
+                <option value="review">Needs review</option>
+                <option value="done">Done</option>
+              </select>
+            </label>
+            <label>
+              Progress (%)
+              <input name="progress" type="number" min="0" max="100" defaultValue={initial.progress} />
+            </label>
+          </div>
+        )}
         <label>
           What does done look like?
           <textarea
@@ -1635,19 +1756,48 @@ function CommitmentForm({
             name="done"
             maxLength={1000}
             placeholder="A reviewed draft with this week’s progress and next milestones"
+            defaultValue={initial?.definitionOfDone}
           />
         </label>
         <label>
-          The first useful step
-          <input required name="nextStep" maxLength={300} placeholder="Collect the project notes" />
+          Next step
+          <input
+            required
+            name="nextStep"
+            maxLength={300}
+            placeholder="Collect the project notes"
+            defaultValue={initial?.nextStep}
+          />
         </label>
+        {candidates.length > 0 && (
+          <fieldset className="milestone-dependencies">
+            <legend>Depends on</legend>
+            <p>Connect the milestones that need to finish first.</p>
+            {candidates.map((c) => (
+              <label className="checkbox-label" key={c.id}>
+                <input
+                  type="checkbox"
+                  name="dependencies"
+                  value={c.id}
+                  defaultChecked={initial?.dependencies.includes(c.id)}
+                />
+                {c.title}
+              </label>
+            ))}
+          </fieldset>
+        )}
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
         <div className="modal-footer">
           <button type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
           <button type="submit" className="button primary">
             <Flag size={16} />
-            Save commitment
+            Save milestone
           </button>
         </div>
       </form>

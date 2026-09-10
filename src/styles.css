@@ -235,6 +235,7 @@ button:active:not(:disabled) {
   display: flex;
   flex-direction: column;
   gap: 7px;
+  margin-top: 40px;
 }
 .nav-item {
   display: flex;
@@ -584,6 +585,61 @@ h1 {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 286px;
   gap: 21px;
+}
+.office-stage {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 12px;
+}
+.office-stage > .voice-announce {
+  margin: 0;
+}
+.cabinet-folders {
+  display: grid;
+  gap: 12px;
+}
+.cabinet-folder {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+}
+.cabinet-folder > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cabinet-folder > div > span {
+  margin-left: auto;
+  color: #6b796d;
+}
+.cabinet-folder details {
+  margin: 14px 0;
+  overflow-wrap: anywhere;
+}
+.cabinet-folder summary {
+  cursor: pointer;
+}
+.cabinet-folder ul {
+  max-height: 220px;
+  overflow: auto;
+  line-height: 1.8;
+}
+.milestone-dependencies {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin: 18px 0 0;
+  padding: 10px 14px;
+  max-height: 240px;
+  overflow: auto;
+}
+.milestone-dependencies legend {
+  font-weight: 600;
+}
+.milestone-dependencies p {
+  color: #6b796d;
+  font-size: 12px;
+  margin: 0 0 12px;
 }
 .office-card {
   border: 1px solid #e1e5d8;
