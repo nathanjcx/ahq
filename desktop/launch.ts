@@ -403,7 +403,7 @@ export class LaunchCoordinator {
         input = {
           kind: 'slack',
           idempotencyKey,
-          title: 'Slack #launch: Send first request is missing at 960px',
+          title: 'Slack #launch: [ACTION] Fix the missing launch button',
           content:
             'The attached actual Little Office screenshot at 960 by 720 pixels shows the launch welcome banner without its Send first request button. This is a disclosed demo regression staged after the product build. Reproduce it in the same product code, fix the responsive CSS, run the focused test and build, and prepare a simulated PR. Do not publish it.',
           attachments: files,
@@ -423,7 +423,7 @@ export class LaunchCoordinator {
         input = {
           kind: 'meeting',
           idempotencyKey,
-          title: 'Meeting with Elena Torres about Little Office',
+          title: 'Calendar: [ACTION] Prepare the Little Office reporter interview',
           content: await readFile(path.join(demoDataPath, 'launch', 'reporter-meeting.md'), 'utf8'),
           attachments: files,
         };

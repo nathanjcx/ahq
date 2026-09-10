@@ -32,11 +32,22 @@ export const DemoTriggerSchema = z
   .strict()
   .superRefine((value, ctx) => {
     for (const file of value.attachments ?? []) {
-      if (!file.encoding) { if (file.content.length > 64000) ctx.addIssue({ code: 'custom', message: 'Text attachments are limited to 64,000 characters.' }); continue; }
+      if (!file.encoding) {
+        if (file.content.length > 64000)
+          ctx.addIssue({ code: 'custom', message: 'Text attachments are limited to 64,000 characters.' });
+        continue;
+      }
       const bytes = Buffer.from(file.content, 'base64');
-      const png = file.mediaType === 'image/png' && bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
-      const jpeg = file.mediaType === 'image/jpeg' && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
-      if ((!png && !jpeg) || bytes.toString('base64') !== file.content) ctx.addIssue({ code: 'custom', message: 'Image attachments must contain a valid PNG or JPEG base64 payload.' });
+      const png =
+        file.mediaType === 'image/png' &&
+        bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+      const jpeg =
+        file.mediaType === 'image/jpeg' && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+      if ((!png && !jpeg) || bytes.toString('base64') !== file.content)
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Image attachments must contain a valid PNG or JPEG base64 payload.',
+        });
     }
   });
 const TriageSchema = z
@@ -49,7 +60,10 @@ const TriageSchema = z
   })
   .strict();
 type Triage = z.infer<typeof TriageSchema>;
-export type DemoTaskContext = Pick<LocalTaskInput, 'project' | 'launchStep' | 'launchId' | 'parentWorkspace' | 'parentSessionId'>;
+export type DemoTaskContext = Pick<
+  LocalTaskInput,
+  'project' | 'launchStep' | 'launchId' | 'parentWorkspace' | 'parentSessionId'
+>;
 export interface DemoRecord extends DemoNotification {
   taskContext?: DemoTaskContext;
   triageEmployeeId?: string;
@@ -285,7 +299,39 @@ export class DemoCoordinator {
     await this.deps.store.save(records);
     let assigned = recordAssignedTask(await this.deps.load(), employee.id, assignment, session);
     if (record.taskContext?.launchId) {
-      assigned = { ...assigned, commitments: assigned.commitments.map(task => task.sessionId === session.id ? { ...task, launchId: record.taskContext!.launchId, ...(!triage ? { launchStep: record.taskContext!.launchStep } : {}) } : task), roadmap: assigned.roadmap?.launchId === record.taskContext.launchId ? { ...assigned.roadmap, status: 'active' } : assigned.roadmap };
+      const prerequisites = triage
+        ? []
+        : record.taskContext.launchStep === 'revision'
+          ? ['forecast']
+          : record.taskContext.launchStep === 'bug'
+            ? ['product']
+            : record.taskContext.launchStep === 'reporter'
+              ? ['marketing', 'revision', 'bug']
+              : [];
+      const dependencies = assigned.commitments
+        .filter(
+          (task) =>
+            task.launchId === record.taskContext!.launchId && prerequisites.includes(task.launchStep ?? ''),
+        )
+        .map((task) => task.id);
+      assigned = {
+        ...assigned,
+        commitments: assigned.commitments.map((task) =>
+          task.sessionId === session.id
+            ? {
+                ...task,
+                launchId: record.taskContext!.launchId,
+                source: 'Launch notification',
+                dependencies,
+                ...(!triage ? { launchStep: record.taskContext!.launchStep } : {}),
+              }
+            : task,
+        ),
+        roadmap:
+          assigned.roadmap?.launchId === record.taskContext.launchId
+            ? { ...assigned.roadmap, status: 'active' }
+            : assigned.roadmap,
+      };
     }
     await this.deps.save(assigned);
   }

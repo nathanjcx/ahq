@@ -55,7 +55,10 @@ let launch: LaunchCoordinator;
 let launchQueue = Promise.resolve();
 function queueLaunch<T>(work: () => Promise<T>): Promise<T> {
   const next = launchQueue.then(work);
-  launchQueue = next.then(() => undefined, () => undefined);
+  launchQueue = next.then(
+    () => undefined,
+    () => undefined,
+  );
   return next;
 }
 let demoServer: Awaited<ReturnType<typeof startDemoServer>>;
@@ -178,33 +181,51 @@ async function setupDatabase() {
     validateArtifacts: validateLocalArtifacts,
   });
   launch = new LaunchCoordinator({
-    load: async () => { const state = await loadState(); if (!state) throw new Error('Open your office first.'); return state; },
-    store: { get: async key => database.get(key), put: (key, value) => database.put(key, value) },
+    load: async () => {
+      const state = await loadState();
+      if (!state) throw new Error('Open your office first.');
+      return state;
+    },
+    store: { get: async (key) => database.get(key), put: (key, value) => database.put(key, value) },
     queue: queueLaunch,
     createGoal: async (goal, launchId) => {
-      if ((await chatgpt.account()).status !== 'signed-in') throw new Error('Sign in with ChatGPT before starting the launch demo.');
+      if ((await chatgpt.account()).status !== 'signed-in')
+        throw new Error('Sign in with ChatGPT before starting the launch demo.');
       return goals.create(goal, { automatic: true, launchId });
     },
     trigger: (input, task) => demo.trigger(input, task),
-    retryNotification: id => demo.retry(id),
-    retryLaunch: async launchId => {
+    retryNotification: (id) => demo.retry(id),
+    retryLaunch: async (launchId) => {
       const state = await loadState();
       if (state?.roadmap?.launchId !== launchId) throw new Error('The launch roadmap is no longer current.');
-      if (state.roadmap.status === 'failed') { await goals.create(state.goal, { automatic: true, launchId }); return; }
+      if (state.roadmap.status === 'failed') {
+        await goals.create(state.goal, { automatic: true, launchId });
+        return;
+      }
       await controlRoadmap('resume');
     },
     demoSnapshot,
-    getSession: id => chatgpt.get(id),
+    getSession: (id) => chatgpt.get(id),
     validateArtifacts: validateLocalArtifacts,
-    restoreState: (checkpoint, launchId) => queued(async () => {
-      const current = await loadState();
-      if (!current) throw new Error('The office is unavailable.');
-      for (const task of current.commitments.filter(task => task.launchId === launchId && task.sessionId)) {
-        const session = await chatgpt.get(task.sessionId!);
-        if (['queued', 'running', 'waiting_for_approval'].includes(session.status)) throw new Error('Finish or stop the launch sessions before restoring a checkpoint.');
-      }
-      await database.saveHQ(restoreLaunchState(current, checkpoint, launchId), 'Restored launch checkpoint', true);
-    }),
+    restoreState: (checkpoint, launchId) =>
+      queued(async () => {
+        const current = await loadState();
+        if (!current) throw new Error('The office is unavailable.');
+        for (const task of current.commitments.filter((task) => task.launchId === launchId)) {
+          const sessionId =
+            task.sessionId ||
+            current.roadmap?.assignments.find((assignment) => assignment.commitmentId === task.id)?.sessionId;
+          if (!sessionId) continue;
+          const session = await chatgpt.get(sessionId);
+          if (['queued', 'running', 'waiting_for_approval'].includes(session.status))
+            throw new Error('Finish or stop the launch sessions before restoring a checkpoint.');
+        }
+        await database.saveHQ(
+          restoreLaunchState(current, checkpoint, launchId),
+          'Restored launch checkpoint',
+          true,
+        );
+      }),
   });
   demoServer = await startDemoServer({
     directory: root(),
@@ -606,81 +627,91 @@ async function demoSnapshot(): Promise<DemoSnapshot> {
   return { ...snapshot, sessions: chatgpt.list(), triggerAddress: demoServer?.address };
 }
 async function runLaunchAction(input: unknown) {
-  const action = z.object({ action: z.enum(['start','advance','restore','retry']), scene: z.enum(['launch','investor','bug','reporter','celebrate']).optional(), checkpointId: z.string().min(1).optional() }).strict().parse(input) as LaunchAction;
+  const action = z
+    .object({
+      action: z.enum(['start', 'advance', 'restore', 'retry']),
+      scene: z.enum(['launch', 'investor', 'bug', 'reporter', 'celebrate']).optional(),
+      checkpointId: z.string().min(1).optional(),
+    })
+    .strict()
+    .parse(input) as LaunchAction;
   if (action.action === 'start') return launch.start();
-  if (action.action === 'restore') { if (!action.checkpointId) throw new Error('Choose a checkpoint.'); return launch.restore(action.checkpointId); }
+  if (action.action === 'restore') {
+    if (!action.checkpointId) throw new Error('Choose a checkpoint.');
+    return launch.restore(action.checkpointId);
+  }
   if (!action.scene) throw new Error('Choose a launch scene.');
   return action.action === 'retry' ? launch.retry(action.scene) : launch.advance(action.scene);
 }
 
 async function controlRoadmap(input: unknown) {
   return queued(async () => {
-      const action = z.enum(['pause', 'resume']).parse(input);
-      const state = await loadState();
-      if (!state?.roadmap) throw new Error('Create a roadmap first.');
-      const plan = state.roadmap;
-      if (action === 'pause' && plan.status !== 'active') throw new Error('This roadmap is not delegating.');
-      if (action === 'resume' && plan.status !== 'paused') throw new Error('This roadmap is not paused.');
-      if (
-        action === 'resume' &&
-        plan.assignments.some((a) => a.status === 'starting' || (a.status === 'stopped' && !a.sessionId))
-      )
-        throw new Error(
-          'This roadmap has an interrupted dispatch or restored work. Set the goal again to create a new roadmap.',
-        );
-      const retry = new Set(
-        action === 'resume'
-          ? plan.assignments.filter((a) => a.status === 'stopped').map((a) => a.commitmentId)
-          : [],
+    const action = z.enum(['pause', 'resume']).parse(input);
+    const state = await loadState();
+    if (!state?.roadmap) throw new Error('Create a roadmap first.');
+    const plan = state.roadmap;
+    if (action === 'pause' && plan.status !== 'active') throw new Error('This roadmap is not delegating.');
+    if (action === 'resume' && plan.status !== 'paused') throw new Error('This roadmap is not paused.');
+    if (
+      action === 'resume' &&
+      plan.assignments.some((a) => a.status === 'starting' || (a.status === 'stopped' && !a.sessionId))
+    )
+      throw new Error(
+        'This roadmap has an interrupted dispatch or restored work. Set the goal again to create a new roadmap.',
       );
-      const resetEmployees = new Set<string>();
-      if (action === 'resume') {
-        for (const assignment of plan.assignments.filter((a) => a.status === 'stopped' && a.sessionId)) {
-          const employee = state.employees.find((e) => e.id === assignment.employeeId);
-          if (!employee || employee.sessionId !== assignment.sessionId) continue;
-          const engine = sessionEngine(assignment.sessionId!);
-          if (!engine) throw new Error('Reconnect this session before retrying its milestone.');
-          const session = await engine.get(assignment.sessionId!);
-          if (!['completed', 'failed'].includes(session.status))
-            throw new Error('This employee is still working. Stop or review that session before retrying.');
-          resetEmployees.add(employee.id);
-        }
+    const retry = new Set(
+      action === 'resume'
+        ? plan.assignments.filter((a) => a.status === 'stopped').map((a) => a.commitmentId)
+        : [],
+    );
+    const resetEmployees = new Set<string>();
+    if (action === 'resume') {
+      for (const assignment of plan.assignments.filter((a) => a.status === 'stopped' && a.sessionId)) {
+        const employee = state.employees.find((e) => e.id === assignment.employeeId);
+        if (!employee || employee.sessionId !== assignment.sessionId) continue;
+        const engine = sessionEngine(assignment.sessionId!);
+        if (!engine) throw new Error('Reconnect this session before retrying its milestone.');
+        const session = await engine.get(assignment.sessionId!);
+        if (!['completed', 'failed'].includes(session.status))
+          throw new Error('This employee is still working. Stop or review that session before retrying.');
+        resetEmployees.add(employee.id);
       }
-      const next: AppState = {
-        ...state,
-        employees: state.employees.map((e) =>
-          resetEmployees.has(e.id)
-            ? { ...e, status: 'ready', sessionId: undefined, activity: 'Ready to retry this roadmap step' }
-            : e,
-        ),
-        commitments: state.commitments.map((c) =>
-          retry.has(c.id) ? { ...c, status: 'planned', progress: 0 } : c,
-        ),
-        roadmap: {
-          ...plan,
-          status: action === 'pause' ? 'paused' : 'active',
-          assignments: plan.assignments.filter((a) => !retry.has(a.commitmentId)),
-          message:
+    }
+    const next: AppState = {
+      ...state,
+      employees: state.employees.map((e) =>
+        resetEmployees.has(e.id)
+          ? { ...e, status: 'ready', sessionId: undefined, activity: 'Ready to retry this roadmap step' }
+          : e,
+      ),
+      commitments: state.commitments.map((c) =>
+        retry.has(c.id) ? { ...c, status: 'planned', progress: 0 } : c,
+      ),
+      roadmap: {
+        ...plan,
+        status: action === 'pause' ? 'paused' : 'active',
+        assignments: plan.assignments.filter((a) => !retry.has(a.commitmentId)),
+        message:
+          action === 'pause'
+            ? 'Delegation is paused. Current sessions can finish.'
+            : 'Continuing the next available steps.',
+      },
+      events: [
+        ...state.events,
+        {
+          id: randomUUID(),
+          time: new Date().toISOString(),
+          kind: 'system',
+          source: 'local',
+          text:
             action === 'pause'
-              ? 'Delegation is paused. Current sessions can finish.'
-              : 'Continuing the next available steps.',
+              ? 'Paused roadmap delegation.'
+              : 'Resumed roadmap delegation and retried stopped steps.',
         },
-        events: [
-          ...state.events,
-          {
-            id: randomUUID(),
-            time: new Date().toISOString(),
-            kind: 'system',
-            source: 'local',
-            text:
-              action === 'pause'
-                ? 'Paused roadmap delegation.'
-                : 'Resumed roadmap delegation and retried stopped steps.',
-          },
-        ],
-      };
-      await database.saveHQ(next, 'Roadmap delegation changed');
-      return delegateRoadmap(next);
+      ],
+    };
+    await database.saveHQ(next, 'Roadmap delegation changed');
+    return delegateRoadmap(next);
   });
 }
 

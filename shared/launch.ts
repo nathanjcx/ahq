@@ -8,7 +8,11 @@ export interface LaunchScene {
   notificationId?: string;
   error?: string;
 }
-export interface LaunchCheckpoint { id: string; label: string; createdAt: string }
+export interface LaunchCheckpoint {
+  id: string;
+  label: string;
+  createdAt: string;
+}
 export interface LaunchSnapshot {
   id: string;
   status: 'idle' | 'running' | 'completed' | 'failed';

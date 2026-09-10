@@ -205,6 +205,11 @@ export default function App() {
       window.removeEventListener('ahq:launch-restored', restore);
     };
   }, []);
+  useEffect(() => {
+    if (!launchCelebrationId) return;
+    const timer = setTimeout(() => setLaunchCelebrationId(null), 8000);
+    return () => clearTimeout(timer);
+  }, [launchCelebrationId]);
   const partyMusic = useRef<PartyMusicStop | null>(null);
   const [slapTarget, setSlapTarget] = useState<{ employeeId: string; token: number } | null>(null);
   const slapReset = useRef<ReturnType<typeof setTimeout> | null>(null);

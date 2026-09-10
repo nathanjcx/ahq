@@ -149,7 +149,13 @@ Employee data: ${JSON.stringify(identity.data)}`,
 
 export async function generateRoadmap(
   generate: StructuredGenerator,
-  input: { goal: string; employees: Employee[]; executionContext?: string; automatic?: boolean; launchId?: string },
+  input: {
+    goal: string;
+    employees: Employee[];
+    executionContext?: string;
+    automatic?: boolean;
+    launchId?: string;
+  },
 ): Promise<Commitment[]> {
   const data = z
     .object({
@@ -175,8 +181,15 @@ export async function generateRoadmap(
   }
 
   const milestoneProperties = {
-    ...(input.automatic ? { taskKind: { type: 'string', enum: input.launchId ? ['product','meeting','report'] : ['report', 'meeting', 'bug', 'qa'] } } : {}),
-    ...(input.launchId ? { launchStep: { type: 'string', enum: ['product','marketing','forecast'] } } : {}),
+    ...(input.automatic
+      ? {
+          taskKind: {
+            type: 'string',
+            enum: input.launchId ? ['product', 'meeting', 'report'] : ['report', 'meeting', 'bug', 'qa'],
+          },
+        }
+      : {}),
+    ...(input.launchId ? { launchStep: { type: 'string', enum: ['product', 'marketing', 'forecast'] } } : {}),
     key: { type: 'string', pattern: '^[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}$' },
     title: { type: 'string', minLength: 1, maxLength: 120 },
     description: { type: 'string', minLength: 20, maxLength: 2000 },
@@ -249,7 +262,12 @@ Previous output${raw.length > 32_000 ? ' (truncated to 32,000 characters; regene
   }
   if (input.launchId) {
     const kinds = { product: 'product', marketing: 'meeting', forecast: 'report' };
-    if (milestones.length !== 3 || new Set(milestones.map(m => m.launchStep)).size !== 3 || milestones.some(m => !m.launchStep || m.taskKind !== kinds[m.launchStep] || m.dependencies.length)) throw new Error('Launch planning must create independent product, marketing and forecast milestones.');
+    if (
+      milestones.length !== 3 ||
+      new Set(milestones.map((m) => m.launchStep)).size !== 3 ||
+      milestones.some((m) => !m.launchStep || m.taskKind !== kinds[m.launchStep] || m.dependencies.length)
+    )
+      throw new Error('Launch planning must create independent product, marketing and forecast milestones.');
   }
   if (
     input.automatic &&

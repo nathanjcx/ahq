@@ -50,7 +50,13 @@ export function mergeWorkspace(previous: AppState | null, incoming: AppState): A
       previous.commitments.map((saved) => {
         let edited = incomingCommitments.get(saved.id);
         if (!edited || (roadmap?.id !== incoming.roadmap?.id && planned.has(saved.id))) return saved;
-        if (roadmap?.automatic && planned.has(saved.id)) edited = { ...edited, taskKind: saved.taskKind, launchStep: saved.launchStep, launchId: saved.launchId };
+        if (roadmap?.automatic && planned.has(saved.id))
+          edited = {
+            ...edited,
+            taskKind: saved.taskKind,
+            launchStep: saved.launchStep,
+            launchId: saved.launchId,
+          };
         // Once dispatched, completion is driven by review of its actual session output.
         return assigned.has(saved.id)
           ? {
