@@ -365,19 +365,29 @@ function destination(agent: FloorAgent): Point {
     default: return home(agent);
   }
 }
+type Gesture = 'wave' | 'stretch' | 'coffee' | 'plant';
+type Greeting = { newcomerId: string; greeterId: string; stage: 'approach' | 'wave'; startedAt: number };
+type IdleTrip = { agentId: string; kind: 'coffee' | 'plant'; target: Point; stage: 'out' | 'pause' | 'back'; startedAt: number };
+const WELCOME_NEWCOMER = { x: 359, y: 439 };
+const WELCOME_GREETER = { x: 304, y: 439 };
+const distanceBetween = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 type Person = {
-  root: Container; body: Graphics; shadow: Graphics; badge: Graphics; name: Text;
+  root: Container; body: Graphics; shadow: Graphics; badge: Graphics; name: Text; speech: Container; speechShape: Graphics; speechText: Text;
   position: Point; target: Point; path: Point[]; activity: ActivityKind; elapsed: number;
 };
-function drawPerson(g: Graphics, agent: Agent, phase: number, moving: boolean, reduced: boolean, elapsed: number) {
+function drawPerson(g: Graphics, agent: Agent, phase: number, moving: boolean, reduced: boolean, elapsed: number, gesture?: Gesture) {
   g.clear();
   const color = Number.parseInt(agent.color.replace('#', ''), 16);
   const hair = Number.parseInt(agent.hair.replace('#', ''), 16);
   const skin = Number.parseInt(agent.skin.replace('#', ''), 16);
   const step = moving && !reduced ? Math.round(Math.sin(phase * 9) * 2) : 0;
-  const active = !reduced && (agent.activity === 'coding' || agent.activity === 'drafting');
+  const active = !reduced && ['coding', 'drafting', 'scheduling'].includes(agent.activity);
   const hand = active ? Math.round(Math.sin(phase * 11) * 2) : 0;
   const cheer = agent.activity === 'celebrating' && elapsed < 3.5;
+  const stretch = gesture === 'stretch';
+  const waving = gesture === 'wave';
+  const blink = !reduced && phase % 6.7 < 0.16;
+  const glance = agent.activity === 'idle' && !reduced && phase % 12 > 9.5 ? (phase % 12 > 10.8 ? 1 : -1) : 0;
   rect(g, -8, -9, 7, 8 + step, C.navy);
   rect(g, 2, -9, 7, 8 - step, C.navy);
   rect(g, -9, -3 + step, 9, 4, C.ink);
@@ -385,10 +395,10 @@ function drawPerson(g: Graphics, agent: Agent, phase: number, moving: boolean, r
   box(g, -11, -23, 23, 17, color);
   rect(g, -7, -21, 4, 12, C.cream, 0.13);
   rect(g, 7, -19, 3, 11, C.ink, 0.16);
-  rect(g, -13, cheer ? -33 : -20, 5, cheer ? 13 : 10, C.ink);
-  rect(g, -12, cheer ? -35 : -13 + hand, 5, 6, skin);
-  rect(g, 10, cheer ? -33 : -20, 5, cheer ? 13 : 10, C.ink);
-  rect(g, 10, cheer ? -35 : -13 - hand, 5, 6, skin);
+  rect(g, -13, cheer || stretch ? -33 : -20, 5, cheer || stretch ? 13 : 10, C.ink);
+  rect(g, -12, cheer || stretch ? -35 : -13 + hand, 5, 6, skin);
+  rect(g, 10, cheer || stretch || waving ? -33 : -20, 5, cheer || stretch || waving ? 13 : 10, C.ink);
+  rect(g, 10 + (waving ? Math.round(Math.sin(phase * 12) * 3) : 0), cheer || stretch || waving ? -35 : -13 - hand, 5, 6, skin);
   box(g, -13, -42, 27, 23, hair);
   rect(g, -10, -35, 21, 14, skin);
   rect(g, -14, -33, 4, 8, skin);
@@ -397,15 +407,15 @@ function drawPerson(g: Graphics, agent: Agent, phase: number, moving: boolean, r
   rect(g, -11, -34, 4, 8, hair);
   rect(g, 9, -35, 3, 5, hair);
   rect(g, -8, -40, 9, 2, C.cream, 0.12);
-  rect(g, -5, -30, 3, 3, C.ink);
-  rect(g, 5, -30, 3, 3, C.ink);
+  rect(g, -5 + glance, -30, 3, blink ? 1 : 3, C.ink);
+  rect(g, 5 + glance, -30, 3, blink ? 1 : 3, C.ink);
   rect(g, 0, -23, 4, 1, 0x975f4e);
   if (agent.accessory === 'glasses') {
     box(g, -9, -32, 9, 7, skin);
     box(g, 2, -32, 9, 7, skin);
     rect(g, 0, -30, 2, 2, C.ink);
-    rect(g, -6, -30, 2, 2, C.ink);
-    rect(g, 5, -30, 2, 2, C.ink);
+    rect(g, -6 + glance, -30, 2, blink ? 1 : 2, C.ink);
+    rect(g, 5 + glance, -30, 2, blink ? 1 : 2, C.ink);
   } else if (agent.accessory === 'cap') {
     box(g, -13, -44, 27, 11, color);
     rect(g, -6, -35, 23, 4, C.ink);
@@ -415,20 +425,49 @@ function drawPerson(g: Graphics, agent: Agent, phase: number, moving: boolean, r
     box(g, -16, -35, 6, 13, C.blue);
     box(g, 12, -35, 6, 13, C.blue);
   }
+  if (gesture === 'coffee') {
+    mug(g, 8, -20 - (!reduced && phase % 4 < 1.4 ? 5 : 0));
+    if (!reduced) for (let i = 0; i < 2; i++) rect(g, 10 + i * 4, -29 - Math.round((phase * 3 + i * 2) % 7), 2, 3, C.cream, .65);
+  }
+  if (gesture === 'plant') {
+    box(g, 9, -19, 13, 10, C.blue);
+    rect(g, 20, -16, 9, 3, C.blue);
+    if (!reduced) for (let i = 0; i < 3; i++) rect(g, 28 + i * 3, -12 + Math.round((phase * 8 + i * 3) % 12), 2, 3, C.blue);
+  }
+  if (!moving && agent.activity === 'coding') {
+    if (/qa|quality|verification/i.test(agent.role)) {
+      box(g, -9, -20, 20, 21, C.cream);
+      for (let row = 0; row < 3; row++) {
+        box(g, -6, -16 + row * 5, 4, 4, row <= (reduced ? 2 : Math.floor(phase) % 3) ? C.green : C.wallShade, C.woodDark);
+        rect(g, 0, -15 + row * 5, 7, 1, C.wallShade);
+      }
+    } else {
+      box(g, -14, -9, 28, 9, C.navy);
+      for (let x = -10; x < 12; x += 5) rect(g, x, -6, 3, 2, C.blue);
+      rect(g, -9, -12 + hand, 5, 4, skin);
+      rect(g, 5, -12 - hand, 5, 4, skin);
+    }
+  }
   if (!moving && (agent.activity === 'reading' || agent.activity === 'researching')) {
     box(g, -12, -17, 25, 15, C.cream);
     rect(g, 0, -15, 2, 11, C.woodDark);
     for (const x of [-8, 5]) for (let y = -13; y < -4; y += 3) rect(g, x, y, 5, 1, C.wallShade);
+    if (!reduced && phase % 3 < .45) rect(g, -4 + Math.round(phase % 3 * 20), -15, 4, 11, C.wall);
+    if (agent.activity === 'researching') { g.circle(15, -16, 5).stroke({ color: C.navy, width: 2 }); rect(g, 18, -13, 3, 7, C.woodDark); }
   }
   if (!moving && agent.activity === 'drafting') {
     box(g, -7, -14, 19, 15, C.cream);
     rect(g, 7, -21 + hand, 3, 16, 0xdca342);
     rect(g, 7, -6 + hand, 3, 2, C.ink);
+    for (let i = 0; i < (reduced ? 3 : Math.floor(phase * 2) % 4); i++) rect(g, -4, -10 + i * 3, 8, 1, C.wallShade);
   }
   if (!moving && agent.activity === 'scheduling') {
     box(g, -8, -16, 19, 16, C.cream);
     rect(g, -6, -14, 15, 3, C.terra);
     rect(g, 12, -29 - hand, 3, 16, C.woodDark);
+    for (let i = 0; i < 6; i++) rect(g, -5 + i % 3 * 5, -8 + Math.floor(i / 3) * 4, 3, 2, C.wallShade);
+    const checked = reduced ? 3 : Math.floor(phase) % 6;
+    rect(g, -5 + checked % 3 * 5, -8 + Math.floor(checked / 3) * 4, 3, 3, C.green);
   }
   if (!moving && agent.activity === 'collaborating') {
     box(g, 16, -48, 26, 16, C.cream);
@@ -454,6 +493,7 @@ export default function OfficeCanvas(props: Props) {
   const latest = useRef(props);
   latest.current = props;
   const [error, setError] = useState(false);
+  const [officeMoment, setOfficeMoment] = useState('');
   const waitingRows = Math.ceil(floorAgents(props.agents).filter(agent => agent.waitingSlot !== undefined).length / 6);
   useEffect(() => {
     const element = host.current;
@@ -464,6 +504,13 @@ export default function OfficeCanvas(props: Props) {
     let tick: ((ticker: Ticker) => void) | undefined;
     let initialized = false;
     const people = new Map<string, Person>();
+    const mountedAt = Date.now();
+    const seenAgents = new Set(latest.current.agents.map(agent => agent.id));
+    let arrivals: string[] = [];
+    let greeting: Greeting | undefined;
+    let idleTrip: IdleTrip | undefined;
+    let nextIdleTrip = 12;
+    let idleTripCount = 0;
     let hovered: string | undefined;
     void (async () => {
       try {
@@ -535,15 +582,80 @@ export default function OfficeCanvas(props: Props) {
               root.addChild(shadow, body, badge);
               const name = label(root, agent.name, 0, -59, 8);
               name.anchor.set(0.5, 0);
-              person = { root, shadow, body, badge, name, position: agent.temporary ? { x: 359, y: 473 } : home(agent), target: destination(agent), path: [], activity: 'idle', elapsed: 0 };
+              const speech = new Container();
+              const speechShape = new Graphics();
+              speech.addChild(speechShape);
+              const speechText = label(speech, '', 0, -85, 8);
+              speechText.anchor.set(.5, 0);
+              speech.visible = false;
+              root.addChild(speech);
+              const arriving = !reducedMotion && agent.temporary && !seenAgents.has(agent.id) && (agent.spawnedAt || 0) >= mountedAt;
+              seenAgents.add(agent.id);
+              if (arriving) arrivals.push(agent.id);
+              const entranceIndex = arrivals.filter(id => agents.find(item => item.id === id)?.waitingSlot === undefined).indexOf(agent.id);
+              const position = arriving && agent.waitingSlot === undefined ? (!greeting && arrivals[0] === agent.id ? { x: 359, y: 473 } : { x: 450 + entranceIndex * 45, y: 439 }) : destination(agent);
+              person = { root, shadow, body, badge, name, speech, speechShape, speechText, position, target: destination(agent), path: [], activity: 'idle', elapsed: 0 };
               clickTarget(root, new Rectangle(-28, -66, 56, 73), () => latest.current.onSelectAgent(agent.id));
               root.on('pointerover', () => { hovered = agent.id; });
               root.on('pointerout', () => { if (hovered === agent.id) hovered = undefined; });
               world.addChild(root);
               people.set(agent.id, person);
-              if (agent.temporary || agent.activity !== 'idle') person.path = route(person.position, destination(agent), obstacles);
             }
-            const target = agent.activity === 'celebrating' ? person.position : destination(agent);
+          }
+          arrivals = arrivals.filter(id => agents.some(agent => agent.id === id && agent.activity !== 'celebrating'));
+          if (reducedMotion) {
+            arrivals = [];
+            greeting = undefined;
+            idleTrip = undefined;
+            nextIdleTrip = time + 12;
+          } else {
+            if (greeting) {
+              const greeter = agents.find(agent => agent.id === greeting!.greeterId);
+              const newcomer = agents.find(agent => agent.id === greeting!.newcomerId);
+              if (greeter?.activity !== 'idle' || !newcomer || newcomer.activity === 'celebrating') greeting = undefined;
+              else if (greeting.stage === 'approach') {
+                if (distanceBetween(people.get(greeter.id)!.position, WELCOME_GREETER) < 7 && distanceBetween(people.get(newcomer.id)!.position, WELCOME_NEWCOMER) < 7) {
+                  greeting.stage = 'wave';
+                  greeting.startedAt = time;
+                  setOfficeMoment(`${greeter.name} welcomes ${newcomer.name} to the office.`);
+                } else if (time - greeting.startedAt > 4.2) greeting = undefined;
+              } else if (time - greeting.startedAt > 1.2) greeting = undefined;
+            }
+            if (!greeting && arrivals.length) {
+              const newcomerId = arrivals.shift()!;
+              const greeter = agents.filter(agent => agent.persistent && !agent.temporary && agent.activity === 'idle').sort((a, b) => distanceBetween(people.get(a.id)!.position, WELCOME_GREETER) - distanceBetween(people.get(b.id)!.position, WELCOME_GREETER))[0];
+              if (greeter) {
+                greeting = { newcomerId, greeterId: greeter.id, stage: 'approach', startedAt: time };
+                if (idleTrip?.agentId === greeter.id) idleTrip = undefined;
+              }
+            }
+            if (idleTrip) {
+              const agent = agents.find(item => item.id === idleTrip!.agentId);
+              const person = agent && people.get(agent.id);
+              if (agent?.activity !== 'idle' || !person) { idleTrip = undefined; nextIdleTrip = time + 18; }
+              else if (idleTrip.stage === 'out' && distanceBetween(person.position, idleTrip.target) < 6) { idleTrip.stage = 'pause'; idleTrip.startedAt = time; }
+              else if (idleTrip.stage === 'pause' && time - idleTrip.startedAt > 3) { idleTrip.stage = 'back'; idleTrip.startedAt = time; }
+              else if ((idleTrip.stage === 'back' && distanceBetween(person.position, home(agent)) < 6) || time - idleTrip.startedAt > 12) { idleTrip = undefined; nextIdleTrip = time + 22; }
+            }
+            if (!idleTrip && !greeting && !arrivals.length && time >= nextIdleTrip) {
+              const resting = agents.filter(agent => agent.persistent && !agent.temporary && agent.activity === 'idle');
+              if (resting.length) {
+                const agent = resting[idleTripCount % resting.length];
+                const kind = idleTripCount++ % 2 ? 'plant' : 'coffee';
+                idleTrip = { agentId: agent.id, kind, target: kind === 'coffee' ? { x: 154, y: 292 } : { x: 673, y: 440 }, stage: 'out', startedAt: time };
+              }
+              nextIdleTrip = time + 22;
+            }
+          }
+          const waitingAtEntrance = arrivals.filter(id => agents.find(agent => agent.id === id)?.waitingSlot === undefined);
+          for (const agent of agents) {
+            const person = people.get(agent.id)!;
+            const greetingRole = greeting?.newcomerId === agent.id ? 'newcomer' : greeting?.greeterId === agent.id ? 'greeter' : undefined;
+            let target = destination(agent);
+            if (idleTrip?.agentId === agent.id && agent.activity === 'idle') target = idleTrip.stage === 'back' ? home(agent) : idleTrip.target;
+            if (arrivals.includes(agent.id) && agent.waitingSlot === undefined) target = { x: 450 + waitingAtEntrance.indexOf(agent.id) * 45, y: 439 };
+            if (greetingRole) target = greetingRole === 'newcomer' ? WELCOME_NEWCOMER : WELCOME_GREETER;
+            if (agent.activity === 'celebrating') target = person.position;
             if (agent.activity !== person.activity || target.x !== person.target.x || target.y !== person.target.y) {
               person.target = target;
               person.activity = agent.activity;
@@ -551,20 +663,20 @@ export default function OfficeCanvas(props: Props) {
               person.path = agent.activity === 'celebrating' ? [] : route(person.position, target, obstacles);
             }
             person.elapsed += dt;
-            if (reducedMotion) { person.position = target; person.path = []; }
+            if (reducedMotion) { person.position = { ...target }; person.path = []; }
             const next = person.path[0];
             if (next) {
               const dx = next.x - person.position.x, dy = next.y - person.position.y;
               const distance = Math.hypot(dx, dy);
-              const speed = dt * 49;
-              if (distance <= speed) { person.position = next; person.path.shift(); }
+              const speed = dt * (greetingRole ? 160 : idleTrip?.agentId === agent.id ? 65 : 56);
+              if (distance <= speed) { person.position = { ...next }; person.path.shift(); }
               else { person.position.x += dx / distance * speed; person.position.y += dy / distance * speed; }
             }
             const moving = person.path.length > 0;
             const bob = reducedMotion ? 0 : moving ? Math.round(Math.sin(time * 18) * 1) : agent.activity === 'celebrating' && person.elapsed < 3.5 ? -Math.round(Math.abs(Math.sin(time * 7)) * 5) : 0;
             person.root.position.set(Math.round(person.position.x), Math.round(person.position.y));
             person.root.zIndex = person.position.y + 1;
-            person.body.y = bob;
+            person.body.y = bob + (!reducedMotion && !moving && agent.activity === 'idle' && Math.sin(time * 1.8 + homeIndex(agent)) > .8 ? -1 : 0);
             const showName = !moving || hovered === agent.id || selectedAgentId === agent.id;
             person.name.visible = showName;
             person.badge.visible = showName;
@@ -577,7 +689,27 @@ export default function OfficeCanvas(props: Props) {
             person.shadow.clear();
             person.shadow.ellipse(1, 0, 16, 5).fill({ color: C.ink, alpha: 0.18 });
             if (selectedAgentId === agent.id || hovered === agent.id) person.shadow.ellipse(1, 1, 20, 8).stroke({ color: selectedAgentId === agent.id ? 0xfff2b1 : C.cream, width: 2 });
-            drawPerson(person.body, agent, time + homeIndex(agent), moving, Boolean(reducedMotion), person.elapsed);
+            const phase = time + homeIndex(agent) * 2.3;
+            let gesture: Gesture | undefined;
+            if (!reducedMotion && !moving) {
+              if (greetingRole && greeting?.stage === 'wave') gesture = 'wave';
+              else if (idleTrip?.agentId === agent.id && idleTrip.stage === 'pause') gesture = idleTrip.kind;
+              else if (agent.persistent && agent.activity === 'idle' && phase % 21 > 19.3) gesture = 'stretch';
+            }
+            const speaking = greeting?.stage === 'wave' && (time - greeting.startedAt < .7 ? greetingRole === 'greeter' : greetingRole === 'newcomer');
+            person.speech.visible = Boolean(speaking);
+            if (speaking) {
+              const message = greetingRole === 'greeter' ? `Welcome, ${agents.find(item => item.id === greeting!.newcomerId)!.name.split(' ')[0]}!` : 'On it!';
+              if (person.speechText.text !== message) {
+                person.speechText.text = message;
+                const width = Math.ceil(person.speechText.width) + 14;
+                person.speechShape.clear();
+                box(person.speechShape, -width / 2, -90, width, 20, C.cream);
+                rect(person.speechShape, -3, -70, 7, 5, C.ink);
+                rect(person.speechShape, -1, -72, 3, 5, C.cream);
+              }
+            }
+            drawPerson(person.body, agent, phase, moving, Boolean(reducedMotion), person.elapsed, gesture);
           }
           const hoveredAgent = agents.find(agent => agent.id === hovered);
           const hoveredPerson = hovered ? people.get(hovered) : undefined;
@@ -611,6 +743,7 @@ export default function OfficeCanvas(props: Props) {
     };
   }, []);
   return <div ref={host} style={{ width: '100%', height: '100%', minHeight: 380 + waitingRows * 80, overflow: 'hidden' }}>
+    <span className="sr-only" aria-live="polite">{officeMoment}</span>
     {error && <p role="status" style={{ padding: 24, color: '#fff5d8' }}>The office view could not start. Your agents are available in the roster.</p>}
   </div>;
 }
