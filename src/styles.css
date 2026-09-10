@@ -1977,8 +1977,7 @@ select {
 .calendar-agenda__event { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--white); }
 .calendar-agenda__heading { display: flex; justify-content: space-between; gap: 12px; padding: 14px 22px; background: var(--mint); font-size: 12px; font-weight: 700; }
 .calendar-agenda__event .calendar-card { padding: 22px; margin: 0; }
-.calendar-agenda__description { padding: 0 22px 18px; font-size: 13px; color: var(--ink-soft); line-height: 1.6; }
-.calendar-agenda__links { display: flex; flex-wrap: wrap; gap: 16px; padding: 0 22px 20px; }
+.calendar-agenda__description { white-space: pre-line; padding: 0 22px 18px; font-size: 13px; color: var(--ink-soft); line-height: 1.6; }
 .markdown th, .markdown td { padding: 9px 12px; border: 1px solid var(--line); text-align: left; }
 .markdown th { background: var(--mint); font-weight: 700; }
 .markdown a { color: #247667; text-decoration-thickness: 1px; text-underline-offset: 3px; }
@@ -2530,3 +2529,12 @@ select {
 .agent-message header { margin-bottom: 12px; font-size: 12px; }
 .agent-message time, .agent-message header > span { color: var(--ink-soft); }
 .agent-message pre { overflow-x: auto; }
+
+.calendar-pre-reads { margin: 0 22px 18px; }
+.calendar-pre-reads > summary { cursor: pointer; font-size: 13px; font-weight: 650; padding: 8px 0; }
+.calendar-preparation { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 22px; border-top: 1px solid var(--line); background: #edf2e9; }
+.calendar-preparation small { display: block; margin-top: 5px; color: var(--ink-soft); font-size: 12px; }
+.calendar-preparation .button { flex-shrink: 0; }
+@media (max-width: 750px) { .calendar-preparation { align-items: stretch; flex-direction: column; } }
+
+.calendar-agenda-details > summary { padding: 0 22px 18px; font-size: 13px; font-weight: 650; cursor: pointer; }

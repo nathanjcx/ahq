@@ -66,3 +66,16 @@ test('every demo message has a display-only action label, including the archive'
   }
   assert.ok(deliveries.filter(entry => entry.id.startsWith('arrival-pdf-')).every(entry => entry.item.attachments?.[0].name.endsWith('.csv')));
 });
+
+
+test('report reviews have business-day times, timed agendas and the matching CSV pre-read', () => {
+  const meetings = initialCalendar(now).filter(event => event.id.startsWith('calendar-review-'));
+  assert.equal(meetings.length, 3);
+  for (const meeting of meetings) {
+    assert.ok(![0, 6].includes(new Date(meeting.start).getDay()));
+    assert.match(meeting.description, /Goal:.*\n\nAgenda/);
+    assert.equal(meeting.attachments?.length, 1);
+    assert.ok(meeting.attendees.length >= 3);
+    assert.equal(Date.parse(meeting.end) - Date.parse(meeting.start), 30 * 60_000);
+  }
+});

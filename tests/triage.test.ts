@@ -392,3 +392,28 @@ test('every channel carries an uploaded attachment into its completed task works
     }
   } finally { await app.close(); }
 });
+
+
+test('calendar preparation carries its CSV and completed report, and repeated clicks do not duplicate work', async () => {
+  const app = await setup();
+  try {
+    await app.office.command({ type: 'source.ingest', item: source('source-pdf-sales') });
+    await settled(app.office, 'source-pdf-sales');
+    await waitFor(() => app.office.snapshot().work.some(work => work.triggerSourceId === 'source-pdf-sales' && work.status === 'completed'));
+    const report = app.office.snapshot().artifacts.at(-1)!;
+    await app.office.command({ type: 'calendar.prepare', id: 'calendar-review-sales' });
+    await app.office.command({ type: 'calendar.prepare', id: 'calendar-review-sales' });
+    const id = 'source-prep-calendar-review-sales';
+    await settled(app.office, id);
+    await waitFor(() => app.office.snapshot().work.some(work => work.triggerSourceId === id && work.status === 'completed'));
+    const state = app.office.snapshot();
+    const incoming = state.sources.find(source => source.id === id)!;
+    assert.ok(incoming.attachments?.some(file => file.name === 'sales.csv' && file.content.includes('July,Starter,120')));
+    assert.ok(incoming.attachments?.some(file => file.id === report.id && file.content === report.content));
+    assert.match(state.artifacts.at(-1)!.content, /September margin|Q4 priorities/);
+    assert.equal(state.work.filter(work => work.triggerSourceId === id).length, 1);
+    assert.equal(state.triage.filter(record => record.sourceId === id).length, 1);
+    assert.ok(state.calendar.find(event => event.id === 'calendar-review-sales')!.sourceIds.includes(id));
+    await assert.rejects(app.office.command({ type: 'calendar.prepare', id: 'calendar-focus' }), /not a meeting/);
+  } finally { await app.close(); }
+});

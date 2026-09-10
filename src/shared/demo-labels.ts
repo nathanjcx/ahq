@@ -7,6 +7,7 @@ const archiveActions = [
 ];
 
 export function messageDemoAction(item: SourceItem, entries: ReplayEntry[] = []): string | undefined {
+  if (item.id.startsWith('source-prep-calendar-')) return '[ACTION: PREPARE MEETING NOTES]';
   const arrival = entries.find(entry => entry.item?.id === item.id);
   if (arrival) return arrival.label.match(/^\[ACTION: [^\]]+\]/)?.[0];
   const archive = item.id.match(/^history-[a-z]+-(\d{2})$/);

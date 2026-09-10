@@ -139,3 +139,10 @@ Choose **Simulate an arrival → New incoming message**, select any channel, and
 **Use sales report example** fills a complete request and attaches `demo-data/custom-arrival/sales.csv`. The picker also includes campaign and support CSV report requests across Gmail and Slack. Codex calculates and writes each report, and the app exports a PDF locally. Use **Open PDF** on the completed artifact. Delivering the message starts real Codex triage and execution. Open its task or worker, then **Agent messages** to follow the response live or revisit it after completion. Existing historical runs retain only the activity they originally saved.
 
 Demo action labels appear on suggested arrivals and historical messages. They describe the intended demonstration in the UI and are excluded from the model's message content.
+
+
+## Meeting preparation
+
+Calendar meetings have timed agendas, named attendees, locations, and decisions to discuss. The sales, campaign-budget, and support reviews include CSV pre-reads and link to their related report requests. Meetings fall on the next business day; focus time and personal commitments remain separate calendar blocks.
+
+Choose **Prepare meeting notes** to send a meeting through real Codex intake and execution. Its evidence includes the meeting agenda, CSV, and related completed reports. The resulting brief contains verified figures, discussion questions, proposed actions, and blank space for decisions made during the meeting. It does not fabricate minutes. **View meeting notes** opens the saved brief and full agent messages. Repeated preparation clicks reuse the same request.

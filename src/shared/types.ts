@@ -59,6 +59,7 @@ export interface Routine {
 export interface CalendarEvent {
   id: string; title: string; start: string; end: string; attendees: string[];
   location: string; description: string; sourceIds: string[]; simulated: boolean;
+  kind?: 'meeting' | 'focus' | 'personal'; attachments?: SourceAttachment[];
 }
 export interface AuthState {
   status: 'checking' | 'unavailable' | 'signed-out' | 'signing-in' | 'signed-in' | 'error';
@@ -78,6 +79,7 @@ export type Command =
   | { type: 'demo.speed'; speed: number }
   | { type: 'demo.deliver'; id: string; changes?: Pick<SourceItem, 'source' | 'author' | 'title' | 'content' | 'threadId'> }
   | { type: 'source.ingest'; item: Omit<SourceItem, 'scenario' | 'disposition' | 'reason'> }
+  | { type: 'calendar.prepare'; id: string }
   | { type: 'calendar.create'; event: Omit<CalendarEvent, 'id' | 'sourceIds' | 'simulated'> }
   | { type: 'scenario.run'; scenario: Scenario }
   | { type: 'source.evaluate'; id: string }

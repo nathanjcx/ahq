@@ -87,11 +87,37 @@ function dated(now: number): string {
 }
 
 export function initialCalendar(now: number): CalendarEvent[] {
-  return [{ id: 'calendar-focus', title: 'Pinecone release focus', start: dinnerTime(now, 9, 0), end: dinnerTime(now, 11, 0), attendees: ['mina@example.test'], location: 'Office', description: 'Fictional calendar block reserved for PIN release work.', sourceIds: ['history-pinecone-07'], simulated: true },
-    { id: 'calendar-dinner-conflict', title: 'Avery: ceramics class', start: dinnerTime(now, 19, 0), end: dinnerTime(now, 20, 0), attendees: ['avery@example.test'], location: 'Union Square Arts Studio', description: 'Existing personal commitment. Avery needs fifteen minutes to walk from the studio to the restaurant.', sourceIds: [], simulated: true },
-    { id: 'calendar-leadership', title: 'Pinecone launch review', start: dinnerTime(now, 14, 0), end: dinnerTime(now, 14, 30), attendees: ['nora@example.test', 'mina@example.test', 'owen@example.test'], location: 'Board room / demo video call', description: 'Review PIN launch metrics, open migrations, and verified checkout QA. Meeting already exists; prepare its brief.', sourceIds: [], simulated: true },
-    { id: 'calendar-beacon', title: 'Beacon Grid facilities review', start: dinnerTime(now, 11, 30), end: dinnerTime(now, 12, 0), attendees: ['amir@example.test', 'sofia@example.test', 'chen@example.test'], location: 'Beacon Tower conference room', description: 'Review BG meter coverage, spending, and delayed feeds. Prepare a brief for this existing meeting.', sourceIds: [], simulated: true },
-    { id: 'calendar-lumen', title: 'Lumen Museum visitor services briefing', start: dinnerTime(now, 15, 0), end: dinnerTime(now, 15, 30), attendees: ['hazel@example.test', 'finn@example.test', 'ada@example.test'], location: 'Lumen Museum Learning Studio', description: 'Review LUM bookings, access tours, and volunteer coverage. Prepare a brief for this existing meeting.', sourceIds: [], simulated: true }];
+  const at = (hour: number, minute: number) => {
+    const day = new Date(now); day.setDate(day.getDate() + 1);
+    while (day.getDay() === 0 || day.getDay() === 6) day.setDate(day.getDate() + 1);
+    day.setHours(hour, minute, 0, 0); return day.toISOString();
+  };
+  const reports = reportDemos(now);
+  const reviews = [
+    { name: 'sales', title: 'Sales review: September margin and Q4 priorities', hour: 10, minute: 0,
+      attendees: ['Alex Morgan · Sales', 'Priya Shah · Finance', 'You'], location: 'Juniper room · Video call',
+      description: 'Organized by Alex Morgan. Monthly commercial review.\n\nGoal: agree on two actions to improve gross profit before Q4 planning.\n\nAgenda\n5 min · July–September revenue and gross margin\n10 min · Starter versus Pro performance and September unit costs\n10 min · Pricing, cost recovery, and sales priorities\n5 min · Confirm proposed owners and follow-up questions\n\nPre-read: sales.csv and the completed sales report. Bring calculations and questions; decisions are still open.' },
+    { name: 'campaigns', title: 'Growth planning: allocate the next $1,000', hour: 10, minute: 45,
+      attendees: ['Jordan Lee · Growth', 'Alex Morgan · Sales', 'You'], location: 'Juniper room · Video call',
+      description: 'Organized by Jordan Lee. Working session with Growth and Sales.\n\nGoal: decide a test allocation for the next $1,000 of campaign spend.\n\nAgenda\n5 min · Results from Search, Newsletter, Social, and Partners\n10 min · Acquisition cost, signup cost, and revenue per dollar\n10 min · Compare two budget splits and discuss scaling uncertainty\n5 min · Choose success metrics and a review date\n\nPre-read: campaigns.csv and the campaign comparison report. This is campaign spend, not the product sales dataset. Proposed allocations are not approved budgets.' },
+    { name: 'support', title: 'Support weekly: Setup backlog and response times', hour: 15, minute: 0,
+      attendees: ['Sam Rivera · Support', 'Lena Ortiz · Quality', 'Priya Shah · Operations', 'You'], location: 'Support team room · Video call',
+      description: 'Organized by Sam Rivera. Weekly operations review.\n\nGoal: prioritize support improvements for next week without sacrificing resolution quality.\n\nAgenda\n5 min · Week 1 versus week 2 ticket volume and resolution rate\n10 min · Setup demand and unresolved cases\n10 min · Billing, Login, and Setup response-time changes\n5 min · Proposed actions, owners, and missing evidence\n\nPre-read: support.csv and the support performance report. Category medians cannot establish an overall median. Bring questions about staffing and causes; the CSV does not answer them.' },
+  ].map(review => {
+    const report = reports.find(report => report.id === `arrival-pdf-${review.name}`)!;
+    return { id: `calendar-review-${review.name}`, kind: 'meeting' as const, title: review.title,
+      start: at(review.hour, review.minute), end: at(review.hour, review.minute + 30),
+      attendees: review.attendees, location: review.location, description: review.description,
+      sourceIds: [report.item.id], attachments: report.item.attachments, simulated: true };
+  });
+  return [
+    { id: 'calendar-focus', kind: 'focus', title: 'Focus time: Pinecone release checks', start: at(9, 0), end: at(10, 0), attendees: ['Mina Park'], location: 'Office', description: 'Protected time to finish release checks before the afternoon launch decision.', sourceIds: ['history-pinecone-07'], simulated: true },
+    ...reviews,
+    { id: 'calendar-dinner-conflict', kind: 'personal', title: 'Avery: ceramics class', start: dinnerTime(now, 19, 0), end: dinnerTime(now, 20, 0), attendees: ['avery@example.test'], location: 'Union Square Arts Studio', description: 'Existing personal commitment. Avery needs fifteen minutes to walk from the studio to the restaurant.', sourceIds: [], simulated: true },
+    { id: 'calendar-leadership', kind: 'meeting', title: 'Pinecone launch: rollout decision', start: at(14, 0), end: at(14, 45), attendees: ['Nora Feld · Product', 'Mina Park · Engineering', 'Owen Price · QA', 'You'], location: 'Board room · Video call', description: 'Organized by Nora Feld.\n\nGoal: decide whether checkout access can expand beyond the current rollout.\n\nAgenda\n10 min · Adoption, support trend, and launch report\n15 min · Seven migration owners and open confirmations\n10 min · Coupon patch and actual QA evidence\n10 min · Go/no-go proposal, blockers, and owners\n\nUse the PIN project records and completed launch/QA artifacts. Keep unverified fixes and proposed decisions clearly marked.', sourceIds: ['history-pinecone-02', 'history-pinecone-03', 'history-pinecone-06'], simulated: true },
+    { id: 'calendar-beacon', kind: 'meeting', title: 'Beacon Grid: meter gaps and facilities budget', start: at(11, 30), end: at(12, 0), attendees: ['Amir Khan · Facilities', 'Sofia Reed · Analytics', 'Chen Wu · Engineering'], location: 'Beacon Tower · Conference room 2', description: 'Organized by Amir Khan.\n\nGoal: agree on next steps for incomplete meter coverage.\n\nAgenda\n10 min · Connected meters and dated readings\n10 min · Spending against the approved budget\n10 min · Delayed feeds, proposed owners, and next checks\n\nPre-read: BG weekly metrics, budget, and meter register. Identify stale feeds rather than estimate missing usage.', sourceIds: ['history-beacon-01', 'history-beacon-02'], simulated: true },
+    { id: 'calendar-lumen', kind: 'meeting', title: 'Lumen Museum: weekend visitor-services huddle', start: at(16, 0), end: at(16, 30), attendees: ['Hazel Wright · Visitor services', 'Finn Murphy · Membership', 'Ada Chen · Operations'], location: 'Learning Studio', description: 'Organized by Hazel Wright.\n\nGoal: prepare the weekend booking and access-tour plan.\n\nAgenda\n10 min · Member bookings and remaining slots\n10 min · Access-tour coverage and volunteer gaps\n10 min · Questions for the access coordinator and proposed actions\n\nPre-read: LUM metrics, owner register, and operations notes. Keep reserved step-free slots protected until release is approved.', sourceIds: ['history-lumen-01', 'history-lumen-02'], simulated: true },
+  ];
 }
 
 type EventInput = { id: string; label: string; source: Source; thread: string; author: string; title: string; content: string; attachments?: SourceAttachment[] };

@@ -623,7 +623,7 @@ function App() {
           />
         )}
         {activeTab === "tasks" && <TasksView snapshot={snapshot} onOpenWork={openWork} onOpenSource={openSource} onOpenArtifact={openArtifact} />}
-        {activeTab === "calendar" && <CalendarView snapshot={snapshot} onOpenWork={openWork} onCreate={() => setComposer({ kind: "calendar" })} />}
+        {activeTab === "calendar" && <CalendarView snapshot={snapshot} onOpenArtifact={openArtifact} run={run} busy={busy} onOpenSource={openSource} onOpenWork={openWork} onCreate={() => setComposer({ kind: "calendar" })} />}
         {activeTab === "history" && (
           <HistoryView snapshot={snapshot} onOpenWork={openWork} />
         )}
@@ -2412,21 +2412,35 @@ function CalendarEventModal({ snapshot, run, busy, onClose }: { snapshot: Snapsh
   </Modal>;
 }
 
-function CalendarView({ snapshot, onOpenWork, onCreate }: { snapshot: Snapshot; onOpenWork: (id: string) => void; onCreate: () => void }) {
+function CalendarView({ snapshot, run, busy, onOpenWork, onOpenSource, onOpenArtifact, onCreate }: { snapshot: Snapshot; run: RunCommand; busy: string | null; onOpenWork: (id: string) => void; onOpenSource: (id: string) => void; onOpenArtifact: (id: string) => void; onCreate: () => void }) {
   const events = [...snapshot.calendar].sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
   return <div className="page page--calendar">
-    <PageHeader eyebrow="Your day, made a little easier" title="Calendar" description="Your local demo calendar. New events go to Codex for meeting preparation." action={<button className="button button--primary" onClick={onCreate}><Plus size={15} /> New calendar event</button>} />
+    <PageHeader eyebrow="Know the context before you join" title="Calendar" description="Agendas, pre-reads, and notes for your upcoming meetings." action={<button className="button button--primary" onClick={onCreate}><Plus size={15} /> New calendar event</button>} />
     <div className="calendar-agenda">
       {events.map((event) => {
-        const linked = snapshot.work.filter((work) => work.sourceIds.some((id) => event.sourceIds.includes(id)));
+        const linked = snapshot.work.filter(work => work.sourceIds.some(id => event.sourceIds.includes(id)));
+        const notes = [...linked].reverse().find(work => work.scenario === "meeting");
+        const brief = [...snapshot.artifacts].reverse().find(artifact => artifact.workId === notes?.id && artifact.kind === "brief");
+        const reviewing = snapshot.triage.some(record => event.sourceIds.includes(record.sourceId) && ["queued", "running"].includes(record.status));
+        const failedReview = [...snapshot.triage].reverse().find(record => event.sourceIds.includes(record.sourceId) && record.status === "failed")?.error;
+        const sources = snapshot.sources.filter(source => event.sourceIds.includes(source.id) && source.source !== "calendar");
+        const meeting = !event.kind || event.kind === "meeting";
         return <article className="calendar-agenda__event" key={event.id}>
-          <div className="calendar-agenda__heading"><span>{new Date(event.start).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span><span className="post-kind">{event.simulated ? "Local demo event" : "Event"}</span></div>
+          <div className="calendar-agenda__heading"><span>{new Date(event.start).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span><span className="post-kind">{meeting ? `${Math.round((Date.parse(event.end) - Date.parse(event.start)) / 60000)} min meeting` : event.kind === "focus" ? "Focus time" : "Personal"}</span></div>
           <CalendarCard event={event} />
-          <p className="calendar-agenda__description">{event.description}</p>
-          {linked.length > 0 && <div className="calendar-agenda__links">{linked.map((work) => <button className="text-link" key={work.id} onClick={() => onOpenWork(work.id)}><FileText size={14} />{work.title}<ChevronRight size={14} /></button>)}</div>}
+          {meeting ? <details className="calendar-agenda-details"><summary>Agenda and meeting goal</summary><p className="calendar-agenda__description">{event.description}</p></details> : <p className="calendar-agenda__description">{event.description}</p>}
+          {(event.attachments?.length || sources.length || linked.some(work => work.scenario !== "meeting")) ? <details className="calendar-pre-reads"><summary>Pre-reads and related work</summary>
+            <SourceAttachments attachments={event.attachments} />
+            {sources.map(source => <button className="context-link" key={source.id} onClick={() => onOpenSource(source.id)}><Mail size={14} /><span>{source.title}</span><small>{SOURCE_META[source.source].label}</small><ChevronRight size={14} /></button>)}
+            {linked.filter(work => work.scenario !== "meeting").map(work => <button className="context-link" key={work.id} onClick={() => onOpenWork(work.id)}><FileText size={14} /><span>{work.title}</span><small>{work.status}</small><ChevronRight size={14} /></button>)}
+          </details> : null}
+          {meeting && <div className="calendar-preparation">
+            <div><strong>{notes?.status === "completed" ? "Meeting notes ready" : notes ? `Preparation ${notes.status}` : reviewing ? "Reviewing meeting context" : failedReview ? "Preparation needs attention" : "Ready to prepare"}</strong><small>{failedReview || (notes ? "Open the task for agent messages and the meeting brief." : "Creates a pre-read and discussion notes with Codex. Uses subscription allowance.")}</small></div>
+            {notes ? <button className="button button--primary" onClick={() => brief ? onOpenArtifact(brief.id) : onOpenWork(notes.id)}><FileText size={15} />{notes.status === "completed" ? "View meeting notes" : "View preparation"}</button> : <button className="button button--primary" disabled={busy !== null || reviewing || snapshot.auth.status !== "signed-in"} onClick={() => void run({ type: "calendar.prepare", id: event.id })}><Sparkles size={15} />{reviewing ? "Preparing…" : failedReview ? "Retry preparation" : "Prepare meeting notes"}</button>}
+          </div>}
         </article>;
       })}
-      {!events.length && <EmptyState icon={<CalendarDays size={24} />} title="A little breathing room" body="Deliver a scheduling request from the Office or Inbox to let an agent check availability and prepare an event." />}
+      {!events.length && <EmptyState icon={<CalendarDays size={24} />} title="A little breathing room" body="Add a meeting with its agenda to let an agent prepare a brief." />}
     </div>
   </div>;
 }

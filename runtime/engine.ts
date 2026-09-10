@@ -23,7 +23,7 @@ import { copyProjectEvidence } from './evidence';
 import { CodexAppServer } from './codex';
 import { copyBugFixture, checkoutFixtureDirectory, initialSnapshot, writeInitialArtifacts } from './fixtures';
 import { SnapshotStore } from './store';
-import { demoEvents, initialSources } from './story';
+import { demoEvents, initialSources, initialCalendar } from './story';
 import { parseTriageDecision, relevantSources, sourceEvidence, triagePrompt, triageSchema, type TriageDecision } from './triage';
 
 const ACTIVITY_LIMIT = 150;
@@ -83,6 +83,11 @@ class Runtime implements OfficeRuntime {
     this.replay = demoEvents(state.demo.startedAt);
     state.triage ??= [];
     const contextIds = new Set(initialSources().map(source => source.id));
+    for (const event of initialCalendar(state.demo.startedAt)) {
+      const existing = state.calendar.find(item => item.id === event.id);
+      if (existing) Object.assign(existing, event, { sourceIds: [...new Set([...existing.sourceIds, ...event.sourceIds])] });
+      else state.calendar.push(event);
+    }
     const linkedIds = new Set(state.work.flatMap(work => work.sourceIds));
     state.sources = state.sources.filter(source => !source.id.startsWith('history-') || contextIds.has(source.id) || linkedIds.has(source.id));
     state.demo.events = this.replay.map((event, index) => ({ id: event.id, label: event.label, source: event.item.source, item: event.item, delivered: state.demo.events ? state.demo.events.find((entry) => entry.id === event.id)?.delivered || false : index < state.demo.nextIndex }));
@@ -167,6 +172,7 @@ class Runtime implements OfficeRuntime {
         case 'source.evaluate': this.evaluateSource(command.id); break;
         case 'source.ingest': this.ingestSource(command.item); break;
         case 'calendar.create': this.createCalendar(command.event); break;
+        case 'calendar.prepare': this.prepareCalendar(command.id); break;
         case 'demo.deliver': this.deliverDemo(command.id, command.changes); break;
         case 'work.cancel': await this.cancelWork(command.id); break;
         case 'work.retry': this.retryWork(command.id); break;
@@ -415,6 +421,31 @@ class Runtime implements OfficeRuntime {
     this.state.calendar.push(event);
     this.ingestSource(source);
     this.event('system', `Added ${event.title} to the local calendar and queued meeting preparation.`);
+  }
+
+  private prepareCalendar(id: string): void {
+    this.requireTriageAuth();
+    const event = this.state.calendar.find(item => item.id === id);
+    if (!event) throw new Error('Calendar event not found');
+    if (event.kind === 'focus' || event.kind === 'personal') throw new Error('This calendar block is not a meeting');
+    const sourceId = `source-prep-${id}`;
+    if (this.state.sources.some(source => source.id === sourceId)) {
+      this.evaluateSource(sourceId);
+      return;
+    }
+    const related = this.state.work.filter(work => work.scenario !== 'meeting' && work.sourceIds.some(id => event.sourceIds.includes(id)));
+    const artifacts = this.state.artifacts.filter(artifact => related.some(work => work.id === artifact.workId));
+    this.ingestSource({ id: sourceId, source: 'calendar', externalId: sourceId, threadId: id, author: event.attendees[0] || 'You',
+      title: `Prepare meeting notes: ${event.title}`,
+      content: `Prepare a meeting brief for this existing meeting, not another report or calendar event. Include a concise pre-read, verified figures, discussion questions for each agenda topic, proposed actions and owners, and a blank decisions/action-items section to fill during the meeting. Do not invent discussion, attendance, approved decisions, or commitments.\nMeeting: ${event.title}\n${event.description}\nRelated source IDs: ${event.sourceIds.join(', ')}. Related completed artifacts: ${artifacts.map(artifact => artifact.id).join(', ') || 'none yet; use the attached CSV and relevant local project records'}.`,
+      timestamp: Date.now(), attachments: [
+        { id: `meeting-${id}`, name: 'meeting.json', mediaType: 'application/json', content: JSON.stringify(event, null, 2) },
+        ...(event.attachments || []),
+        ...artifacts.map(artifact => ({ id: artifact.id, name: `${artifact.id}.md`, mediaType: 'text/markdown', content: artifact.content })),
+      ],
+    });
+    event.sourceIds.push(sourceId);
+    this.event('system', `Queued meeting preparation for ${event.title}.`);
   }
 
   private ingestSource(input: Omit<SourceItem, 'scenario' | 'disposition' | 'reason'>): void {
@@ -1251,7 +1282,7 @@ function livePrompt(work: WorkItem): string {
   const directions: Record<Scenario, string> = {
     report: 'Write the requested source-grounded report to report.md. The app automatically exports report.md to report.pdf, so do not install PDF tools or create the PDF yourself. Keep simple reports concise, about two pages. Compute figures from the supplied attachments when relevant. Preserve uncertainty and cite evidence. Do not invent facts.',
     bug: 'Run the tests, fix the checkout bug, rerun the tests, and write patch.md with the cause, exact change, and test result. Do not create or claim a remote PR.',
-    meeting: 'Write brief.md grounded in the linked message evidence, relevant local project records, and completed prerequisite artifacts. Include decisions, risks, direct questions, and source references. Do not claim simulated work was verified.',
+    meeting: 'Write brief.md as preparation for the named meeting, using its agenda, attached pre-reads, linked messages, relevant local project records, and completed artifacts. Include verified figures, agenda-specific questions, risks, proposed actions and owners, and source references. Add a blank section for decisions and action items to fill during the meeting. Never invent meeting discussion, attendance, agreed decisions, or commitments. Do not claim simulated work was verified.',
     dinner: 'Return only the requested structured local calendar event. Use the dates, duration, attendees, and corrections in the linked evidence and confirm it does not overlap another event. Never invent a different week to avoid a conflict. Do not change any external calendar.',
     qa: 'Read provenance.json when present: the runtime copied and hash-verified the exact parent code into this isolated workspace. Its path intentionally differs from the parent path. Verify this snapshot by running npm test without changing the implementation. Write qa.md with the parent work/run IDs, provenance file reference, commands, actual result, and any failure. Distinguish verified code identity from the test outcome. Do not claim a pass if a test fails.',
   };
