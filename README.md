@@ -4,6 +4,26 @@ A desktop office where local agents turn incoming requests into reports, code ch
 
 This V1 uses fictional Gmail, Google Calendar, iMessage, Slack, Discord, Linear, and Asana data. It includes deterministic demo execution and live execution through a locally installed Codex CLI signed in with ChatGPT. External calendar changes and PR publication are simulated in both modes.
 
+## V1 checkpoint
+
+This is a working desktop prototype with five scripted workflows and optional real Codex execution. It is not yet a general autonomous life CRM.
+
+The Electron app, local persistence, animated office, inbox filters, source and artifact links, calendar view, routine editor and scheduler, and bulletin board work. ChatGPT authentication is real. Live report generation and a local checkout fix passed end-to-end checks with Codex. Live meeting preparation, scheduling, and QA are implemented but have not received real-model end-to-end verification.
+
+The current limits are:
+
+- All seven sources are fixtures. No real inboxes or external services are monitored.
+- Triage uses predefined scenario labels. Demo execution uses timed steps and predefined output.
+- Calendar events stay in the app. No remote PRs are published and no messages are sent.
+- Live work uses isolated local files. Web search and external integrations are disabled.
+- Board handoffs are scripted or generated from status updates, not autonomous agent conversations. Meeting work can consume earlier artifacts.
+- Clicking a desk opens activity and artifacts, not a streamed computer desktop. Routines reuse six fixed characters.
+- Schedules run only while the application is open.
+
+The initial dataset contains 14 short source items, two per integration. Eleven actionable items map to the five workflows; three are informational. It also contains six characters, two disabled routines, one completed historical work item, two short historical artifacts, two board posts, and one calendar focus block. A full replay adds five artifacts and one dinner event.
+
+Supporting evidence consists of a few launch metrics, short meeting and dinner instructions, and a small checkout fixture with two tests. There are no substantial conversation histories or attachment collections yet. The main remaining product work is realistic demo depth and autonomous triage.
+
 ## Run
 
 Use Node.js 22 or newer and npm. Install the Codex CLI separately for ChatGPT sign-in and live execution. The demo remains available when Codex is missing.
