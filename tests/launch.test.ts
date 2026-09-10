@@ -124,7 +124,7 @@ function fixture() {
   const coordinator = new LaunchCoordinator(deps);
   const completeInitialWork = async () => {
     const launchId = (await coordinator.snapshot()).id;
-    for (const step of ['product', 'marketing', 'forecast'] as const) {
+    for (const step of ['forecast', 'marketing', 'product'] as const) {
       const session = artifact(
         `session-${step}`,
         step === 'forecast' ? 'month,customers,price_usd\n2026-10,120,12' : step,
@@ -347,4 +347,42 @@ test('failed notifications retry through the source coordinator', async () => {
   await f.coordinator.tick();
   assert.equal((await f.coordinator.snapshot()).scenes[2].status, 'ready');
   assert.equal(f.triggerCount(), 1);
+});
+
+test('handoff retains report text after PDF export and worker labels have a stable order', async () => {
+  const f = fixture();
+  await f.coordinator.start();
+  await f.completeInitialWork();
+  f.setState({ ...f.state(), commitments: [...f.state().commitments].reverse() });
+  const snapshot = await f.coordinator.snapshot();
+  assert.deepEqual(snapshot.scenes[0].sessionIds, [
+    'session-product',
+    'session-marketing',
+    'session-forecast',
+  ]);
+  const report = f.sessions.get('session-forecast')!.artifacts![0];
+  report.filePath = '/tmp/forecast-report.pdf';
+  report.content = 'Complete baseline narrative behind exported PDF.';
+  await f.coordinator.advance('investor');
+  assert.ok(
+    f.notifications[0].attachments.some(
+      (file) => file.name.endsWith('.md') && file.content === report.content,
+    ),
+  );
+});
+
+test('ignored triage fails visibly and retries with a fresh source key', async () => {
+  const f = fixture();
+  await f.coordinator.start();
+  await f.completeInitialWork();
+  await f.coordinator.advance('investor');
+  f.notifications[0].status = 'ignored';
+  const failed = await f.coordinator.snapshot();
+  assert.equal(failed.scenes[1].status, 'failed');
+  assert.match(failed.scenes[1].error!, /ignored during triage/);
+  f.deps.retryNotification = async () => {
+    throw new Error('Ignored notifications cannot use failed-session retry.');
+  };
+  assert.equal((await f.coordinator.retry('investor')).scenes[1].status, 'running');
+  assert.notEqual(f.notifications[0].idempotencyKey, f.notifications[1].idempotencyKey);
 });

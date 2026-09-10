@@ -124,6 +124,13 @@ export class LaunchCoordinator {
       const scene = record.snapshot.scenes.find((item) => item.id === id);
       if (!scene) throw new Error('Unknown launch scene.');
       if (scene.status !== 'failed') throw new Error(`The ${scene.title} scene has not failed.`);
+      const source = scene.notificationId
+        ? (await this.deps.demoSnapshot()).notifications.find((item) => item.id === scene.notificationId)
+        : undefined;
+      if (source?.status === 'ignored') {
+        scene.notificationId = undefined;
+        delete record.dispatchKeys?.[id];
+      }
       if (scene.notificationId && this.deps.retryNotification) {
         const notification = await this.deps.retryNotification(scene.notificationId);
         record.notificationIds = [...(record.notificationIds ?? []), notification.id];
@@ -262,7 +269,10 @@ export class LaunchCoordinator {
       tasks.some((item) => !item.sessionId)
     )
       return;
-    scene.sessionIds = tasks.map((item) => item.sessionId!);
+    const order = ['product', 'marketing', 'forecast'];
+    scene.sessionIds = tasks
+      .sort((a, b) => order.indexOf(a.launchStep!) - order.indexOf(b.launchStep!))
+      .map((item) => item.sessionId!);
     const sessions = await this.sessions(scene.sessionIds);
     const failed = sessions.find((session) => session.status === 'failed');
     if (failed) return this.fail(scene, failed.activity || 'Initial launch work failed.');
@@ -286,6 +296,8 @@ export class LaunchCoordinator {
     scene.sessionIds = [notification.triageSessionId, notification.sessionId].filter(
       (value): value is string => !!value,
     );
+    if (notification.status === 'ignored')
+      return this.fail(scene, 'The launch request was ignored during triage. Retry to classify it again.');
     if (notification.status === 'failed') return this.fail(scene, notification.error || 'The scene failed.');
     if (notification.status !== 'completed' || !notification.sessionId) return;
     const session =
@@ -315,9 +327,9 @@ export class LaunchCoordinator {
     for (const step of steps) {
       const session = await this.sessionFor(record, step);
       for (const artifact of session.artifacts ?? []) {
-        if (!/\.(md|csv|txt)$/i.test(artifact.filePath)) continue;
+        if (!/\.(md|csv|txt|pdf)$/i.test(artifact.filePath)) continue;
         files.push({
-          name: `${step}-${path.basename(artifact.filePath)}`,
+          name: `${step}-${path.basename(artifact.filePath).replace(/\.pdf$/i, '.md')}`,
           mediaType: 'text/plain',
           content: artifact.content,
         });
