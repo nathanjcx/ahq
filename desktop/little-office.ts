@@ -164,11 +164,19 @@ async function capture(workspace: string, fixed: boolean, signal?: AbortSignal):
     height: 720,
     useContentSize: true,
     webPreferences: {
+      partition: `little-office-preview-${randomUUID()}`,
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
       backgroundThrottling: false,
     },
+  });
+  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.webContents.on('will-navigate', event => event.preventDefault());
+  window.webContents.session.webRequest.onBeforeRequest((details, callback) => {
+    let allowed = details.url.startsWith('data:') || details.url.startsWith('blob:');
+    if (details.url.startsWith('file:')) allowed = fileURLToPath(details.url).startsWith(`${workspace}${path.sep}`);
+    callback({ cancel: !allowed });
   });
   const abort = () => {
     if (!window.isDestroyed()) window.destroy();
