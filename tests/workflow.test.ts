@@ -1,28 +1,41 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { initialState, isState, folderBrief } from '../src/lib/store';
+import { initialState, sampleState, isState, folderBrief } from '../src/lib/store';
 import { applyDecision, applySession } from '../src/lib/workflow';
 import type { CloudSession } from '../shared/types';
 
-test('the starter workspace is valid and explicitly marked as a sample', () => {
+test('the starter workspace is valid, empty, and separate from the optional sample', () => {
   const state = initialState();
   assert.equal(isState(state), true);
-  assert.equal(state.demo, true);
+  assert.equal(state.demo, false);
+  for (const entries of [
+    state.employees,
+    state.commitments,
+    state.messages,
+    state.approvals,
+    state.events,
+    state.folders,
+  ])
+    assert.equal(entries.length, 0);
+  const sample = sampleState();
+  assert.equal(isState(sample), true);
+  assert.equal(sample.demo, true);
+  assert.equal(sample.employees.length, 6);
   assert.equal(
-    state.employees.some((e) => e.sessionId),
+    sample.employees.some((e) => e.sessionId),
     false,
   );
   assert.equal(
-    state.events.every((e) => e.source === 'example'),
+    sample.events.every((e) => e.source === 'example'),
     true,
   );
 });
 test('malformed stored profiles are rejected before rendering', () => {
-  assert.equal(isState({ ...initialState(), employees: [{ name: null }] }), false);
-  assert.equal(isState({ ...initialState(), schemaVersion: 8 }), false);
+  assert.equal(isState({ ...sampleState(), employees: [{ name: null }] }), false);
+  assert.equal(isState({ ...sampleState(), schemaVersion: 8 }), false);
 });
 test('approval completes its linked promise exactly once and preserves other work', () => {
-  const state = initialState();
+  const state = sampleState();
   const result = applyDecision(state, 'a1', 1, 'approved');
   assert.equal(result.approvals[0].status, 'approved');
   assert.equal(result.commitments[0].status, 'done');
@@ -33,15 +46,15 @@ test('approval completes its linked promise exactly once and preserves other wor
   assert.equal(state.approvals[0].status, 'pending');
 });
 test('a stale version cannot authorize a changed deliverable', () => {
-  assert.throws(() => applyDecision(initialState(), 'a1', 2, 'approved'), /no longer current/);
+  assert.throws(() => applyDecision(sampleState(), 'a1', 2, 'approved'), /no longer current/);
 });
 test('feedback reopens the linked commitment without fabricating cloud execution', () => {
-  const state = applyDecision(initialState(), 'a1', 1, 'changes-requested', 'Verify the lead times.');
+  const state = applyDecision(sampleState(), 'a1', 1, 'changes-requested', 'Verify the lead times.');
   assert.equal(state.commitments[0].status, 'in-progress');
   assert.equal(state.commitments[0].nextStep, 'Verify the lead times.');
   assert.equal(state.employees[0].status, 'ready');
   assert.match(state.messages.at(-1)!.text, /Verify the lead times/);
-  assert.throws(() => applyDecision(initialState(), 'a1', 1, 'changes-requested'), /include the changes/);
+  assert.throws(() => applyDecision(sampleState(), 'a1', 1, 'changes-requested'), /include the changes/);
 });
 const session: CloudSession = {
   id: 'session-1',
@@ -60,7 +73,7 @@ const session: CloudSession = {
   },
 };
 test('cloud events and outputs are idempotent across polling and restart recovery', () => {
-  const one = applySession(initialState(), 'maya', session);
+  const one = applySession(sampleState(), 'maya', session);
   const two = applySession(JSON.parse(JSON.stringify(one)), 'maya', session);
   assert.deepEqual(two, one);
   assert.equal(two.events.filter((e) => e.id === 'session-1:event-1').length, 1);
@@ -69,7 +82,7 @@ test('cloud events and outputs are idempotent across polling and restart recover
   assert.equal(two.messages.at(-1)?.text, session.events[0].text);
 });
 test('a newer output supersedes its pending version; a late old version cannot overwrite it', () => {
-  const one = applySession(initialState(), 'maya', session);
+  const one = applySession(sampleState(), 'maya', session);
   const newer = { ...session, output: { ...session.output!, version: 2, content: '# Revised facts' } };
   const two = applySession(one, 'maya', newer);
   assert.equal(
@@ -95,7 +108,7 @@ test('a local folder brief identifies its source and does not claim AI analysis 
 });
 
 test('duplicate events in one gateway response appear only once', () => {
-  const result = applySession(initialState(), 'maya', {
+  const result = applySession(sampleState(), 'maya', {
     ...session,
     events: [session.events[0], session.events[0]],
   });

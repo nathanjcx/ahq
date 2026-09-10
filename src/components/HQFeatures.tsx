@@ -294,11 +294,13 @@ export function AppearanceEditor({
 }
 
 export function VoiceAnnounce({
+  disabled = false,
   onLevel,
   onListening,
   onBroadcast,
   notify,
 }: {
+  disabled?: boolean;
   onLevel: (n: number) => void;
   onListening: (b: boolean) => void;
   onBroadcast: (s: string) => Promise<void>;
@@ -346,7 +348,7 @@ export function VoiceAnnounce({
     };
   }, []);
   async function start() {
-    if (busy || held.current || recording) return;
+    if (disabled || busy || held.current || recording) return;
     held.current = true;
     setBusy(true);
     try {
@@ -424,7 +426,7 @@ export function VoiceAnnounce({
       <button
         className="button primary"
         aria-label="Hold to announce to all employees"
-        disabled={busy}
+        disabled={disabled || busy}
         onPointerDown={(e) => {
           e.preventDefault();
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -449,9 +451,11 @@ export function VoiceAnnounce({
         {recording ? 'Listening · release to send' : busy ? 'Preparing announcement…' : 'Hold to announce'}
       </button>
       <span>
-        {recording
-          ? 'Everyone is listening through the office speakers.'
-          : 'Release to transcribe and send to every employee.'}
+        {disabled
+          ? 'Add your first employee to make an announcement.'
+          : recording
+            ? 'Everyone is listening through the office speakers.'
+            : 'Release to transcribe and send to every employee.'}
       </span>
       {transcript && <p className="voice-transcript">“{transcript}”</p>}
     </div>

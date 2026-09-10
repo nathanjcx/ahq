@@ -46,7 +46,7 @@ import {
   employeeById,
   employeeColors,
   folderBrief,
-  initialState,
+  sampleState,
   isState,
   profileSuggestion,
   readLocalState,
@@ -177,6 +177,7 @@ export default function App() {
     lastFrame.current = 0;
   }, [listening, state.reducedMotion]);
   async function broadcast(text: string) {
+    if (!state.employees.length) throw new Error('Create an employee before making an announcement.');
     if (!window.ahq) throw new Error('Open the desktop app to announce to your employees.');
     await saveChain.current;
     const results = await window.ahq.broadcast(text);
@@ -586,7 +587,7 @@ export default function App() {
               {page === 'office' && (
                 <span className="mode-badge">
                   <span className={cloud.connected ? 'status-dot' : 'sample-dot'} />
-                  {cloud.connected ? 'Cloud connected' : 'Sample office'}
+                  {cloud.connected ? 'Cloud connected' : state.demo ? 'Sample office' : 'Your office'}
                 </span>
               )}
               {page === 'office' || page === 'employees' ? (
@@ -675,11 +676,17 @@ export default function App() {
                     </SceneBoundary>
                     <div className="office-hint">
                       <span className={cloud.connected ? 'status-dot' : 'sample-dot'} />
-                      {cloud.connected
-                        ? `${state.employees.filter((e) => e.sessionId && e.status === 'working').length} cloud sessions active`
-                        : 'A preview of your future team'}
+                      {!state.employees.length
+                        ? 'Your office is ready'
+                        : cloud.connected
+                          ? `${state.employees.filter((e) => e.sessionId && e.status === 'working').length} cloud sessions active`
+                          : state.demo
+                            ? 'A preview of your future team'
+                            : 'Ready for your direction'}
                       <span>·</span>
-                      <span>Select anyone to say hello</span>
+                      <span>
+                        {state.employees.length ? 'Select anyone to say hello' : 'Add your first employee'}
+                      </span>
                     </div>
                     <div className="scene-controls">
                       <button
@@ -725,9 +732,15 @@ export default function App() {
                         <Avatar key={e.id} employee={e} size={26} />
                       ))}
                     </div>
-                    <span>{cloud.connected ? 'Your team is here.' : 'Meet your next great team.'}</span>
-                    <button className="text-button" onClick={() => navigate('employees')}>
-                      Meet everyone <ArrowRight size={14} />
+                    <span>
+                      {state.employees.length ? 'Your team is here.' : 'A space for your future team.'}
+                    </span>
+                    <button
+                      className="text-button"
+                      onClick={() => (state.employees.length ? navigate('employees') : setModal('employee'))}
+                    >
+                      {state.employees.length ? 'Meet everyone' : 'Create your first employee'}{' '}
+                      <ArrowRight size={14} />
                     </button>
                   </div>
                 </section>
@@ -745,6 +758,9 @@ export default function App() {
                       <span>{state.demo ? 'SAMPLE' : 'TEAM'}</span>
                     </button>
                     <div className="chat-preview">
+                      {!state.messages.some((m) => m.channel === 'team') && (
+                        <p className="section-description">Your team’s conversations will appear here.</p>
+                      )}
                       {state.messages
                         .filter((m) => m.channel === 'team')
                         .slice(-3)
@@ -819,6 +835,7 @@ export default function App() {
                 </aside>
               </div>
               <VoiceAnnounce
+                disabled={!state.employees.length}
                 onLevel={setMicrophoneLevel}
                 onListening={setListening}
                 onBroadcast={broadcast}
@@ -846,6 +863,7 @@ export default function App() {
           {page === 'announce' && (
             <>
               <VoiceAnnounce
+                disabled={!state.employees.length}
                 onLevel={setMicrophoneLevel}
                 onListening={setListening}
                 onBroadcast={broadcast}
@@ -874,7 +892,7 @@ export default function App() {
                 onSelectFolder={() => setModal('folder')}
                 onBrief={createBrief}
                 onReset={() => {
-                  update(() => initialState());
+                  update(() => sampleState());
                   notify('Sample workspace restored.');
                 }}
               />
@@ -1288,8 +1306,10 @@ export default function App() {
             ))}
           </div>
           <div className="info-note">
-            You’re exploring a sample workspace. Example conversations and deliverables are labeled. New
-            actions are saved locally; employee work starts only with a connected Astra cloud session.
+            {state.demo
+              ? 'You’re exploring a sample workspace. Example conversations and deliverables are labeled. '
+              : 'Your office starts empty. Add employees when you’re ready. '}
+            Actions are saved locally; employee work starts only with a connected Astra cloud session.
           </div>
         </Modal>
       )}

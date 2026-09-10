@@ -21,6 +21,8 @@ Open `release/mac-arm64/Astra HQ.app`. The development build is ad-hoc signed fo
 
 ## Set up your office
 
+New workspaces start with an empty office: no employees, assignments, conversations, or reviews. Add your first employee when you are ready. Existing workspaces are preserved; an example office remains available explicitly in Settings.
+
 1. Choose a local database folder when prompted, or keep the application folder. Existing Birth data is imported without deleting its original JSON file.
 2. Open **Settings & connections**, add your **Astra / OpenAI API key**, and keep `gpt-6-astra` or choose another model available to your API account. API usage has separate billing from ChatGPT subscriptions.
 3. Create an employee with **Name, Job title, Personality, Skills**. Every employee includes **Astra cloud session**. Web search, Data analysis, and connected integrations can be added as skills.

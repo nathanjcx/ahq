@@ -166,7 +166,11 @@ export function AnnouncePage({
           />
           <div className="composer-footer">
             <span>Shared context for every new assignment</span>
-            <button className="button primary" onClick={send} disabled={!message.trim()}>
+            <button
+              className="button primary"
+              onClick={send}
+              disabled={!message.trim() || !state.employees.length}
+            >
               <Megaphone size={15} />
               Announce
             </button>

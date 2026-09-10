@@ -25,4 +25,10 @@ Verified on macOS / Apple Silicon on September 10, 2026.
 
 No OpenAI API key or integration token was supplied. Hosted session execution, live transcription, and remote integration actions were tested with deterministic transport responses, not with a billed external session. The implementation uses the documented OpenAI APIs and reports missing credentials and service failures; it does not simulate successful cloud execution. Physical microphone input and end-to-end voice broadcast must be exercised after the user grants microphone permission and supplies an API key.
 
-The local database created during verification preserves the prior Birth workspace and its source brief. No original imported files were modified. The original Birth JSON remains in the application data directory as a migration backup. Temporary verification goal edits remain in the audit journal by design; the current goal was restored.
+The local database created during verification preserves the source brief and prior Birth checkpoints. No original imported files were modified. The original Birth JSON remains in the application data directory as a migration backup. Temporary verification goal edits remain in the audit journal by design; the current goal was restored.
+
+## Empty office default
+
+New workspaces start without employees, assignments, messages, reviews, or example activity. The optional sample remains an explicit Settings action. Existing saved workspaces still load normally. The starter-state test was updated, while workflow and hosted-session tests continue to use the explicit sample fixture. `npm run check` passes all 38 tests and the production build.
+
+The rebuilt macOS app was opened with the local sample employees and example assignments cleared. It displayed zero teammates, an empty 3D office, zero pending reviews, and a disabled voice announcement button. “Create your first employee” opened the four-field form with Astra cloud session included. The imported folder, approved source brief, goal, and historical journal remain intact; both a database copy and a checkpoint were saved before clearing the sample. The app was left open on the empty office.

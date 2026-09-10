@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { SnapshotStore } from '../runtime/store';
 import { HostedEmployees } from '../desktop/hosted';
-import { initialState } from '../src/lib/store';
+import { sampleState } from '../src/lib/store';
 const config = {
   key: 'test-key-never-saved',
   model: 'gpt-6-astra',
@@ -28,7 +28,7 @@ async function fixture() {
 test('checkpoints preserve exact workspace states and the activity journal survives reopen', async () => {
   const f = await fixture();
   try {
-    const a = initialState();
+    const a = sampleState();
     await f.store.saveHQ(a, 'Start', false, 1000);
     const b = {
       ...a,
@@ -94,12 +94,12 @@ test('hosted employees use real background responses, persist session IDs, and d
   };
   try {
     const employee = {
-      ...initialState().employees[0],
+      ...sampleState().employees[0],
       skills: 'Astra cloud session, Web search, Tracker',
       sessionId: undefined,
     };
     const engine = new HostedEmployees(f.store, async () => config);
-    const started = await engine.start(employee, 'Produce a report', initialState());
+    const started = await engine.start(employee, 'Produce a report', sampleState());
     assert.equal(started.status, 'running');
     assert.equal(requests[0].body.background, true);
     assert.equal(requests[0].body.model, 'gpt-6-astra');
@@ -151,9 +151,9 @@ test('integration approval continues only with the reviewed approval ID and fres
     );
   };
   try {
-    const employee = { ...initialState().employees[0], skills: 'Tracker', sessionId: undefined };
+    const employee = { ...sampleState().employees[0], skills: 'Tracker', sessionId: undefined };
     const engine = new HostedEmployees(f.store, async () => config);
-    const s = await engine.start(employee, 'Draft a task', initialState());
+    const s = await engine.start(employee, 'Draft a task', sampleState());
     assert.equal(s.status, 'waiting_for_approval');
     const next = await engine.decide(s.id, 1, 'approve', '');
     assert.equal(next.status, 'running');
@@ -187,7 +187,7 @@ test('broadcast guidance cancels the old turn before starting a new hosted turn'
   };
   try {
     const engine = new HostedEmployees(f.store, async () => config);
-    const s = await engine.start(initialState().employees[0], 'Work on a plan', initialState());
+    const s = await engine.start(sampleState().employees[0], 'Work on a plan', sampleState());
     const next = await engine.continue(s.id, 'New announcement: focus on quality', true);
     assert.ok(routes[1].endsWith('/responses/resp_first/cancel'));
     assert.ok(routes[2].endsWith('/responses'));
@@ -220,7 +220,7 @@ test('office replay retains microphone levels and holds the same pose while list
 });
 test('an approved hosted result reconciles a stale local review after restart', async () => {
   const { applySession } = await import('../src/lib/workflow');
-  const state = initialState();
+  const state = sampleState();
   const employee = state.employees[0];
   const output = { title: 'A plan', content: 'Completed work', sources: [], recipient: 'You', version: 1 };
   const waiting = {

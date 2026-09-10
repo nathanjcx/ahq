@@ -19,6 +19,24 @@ export function initialState(): AppState {
   return {
     schemaVersion: 1,
     workspaceName: 'My headquarters',
+    goal: 'Give your team a goal to work toward.',
+    reducedMotion: false,
+    sound: false,
+    demo: false,
+    employees: [],
+    commitments: [],
+    messages: [],
+    approvals: [],
+    events: [],
+    folders: [],
+  };
+}
+
+// Example data is available only when explicitly selected in Settings.
+export function sampleState(): AppState {
+  return {
+    schemaVersion: 1,
+    workspaceName: 'My headquarters',
     goal: 'Make room for the big picture. Keep every client promise.',
     reducedMotion: false,
     sound: false,

@@ -1472,7 +1472,11 @@ function Scene(props: OfficeProps) {
 function Fallback({ team, onSelect }: Pick<OfficeProps, 'team' | 'onSelect'>) {
   return (
     <div className="scene-fallback">
-      <p>Your team is here. Select someone to see what they’re working on.</p>
+      <p>
+        {team.length
+          ? 'Your team is here. Select someone to see what they’re working on.'
+          : 'Your office is ready. Add your first employee to get started.'}
+      </p>
       <ul>
         {team.map((employee) => (
           <li key={employee.id}>

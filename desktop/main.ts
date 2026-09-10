@@ -387,6 +387,7 @@ function registerHandlers() {
       const text = z.string().trim().min(1).max(12000).parse(input);
       let state = await loadState();
       if (!state) throw new Error('Open your workspace first.');
+      if (!state.employees.length) throw new Error('Create an employee before making an announcement.');
       await hostedConfig();
       const message = {
         id: randomUUID(),
