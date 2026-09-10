@@ -1,6 +1,8 @@
 import { cp, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { Agent, Artifact, BoardPost, Snapshot, SourceItem } from '../src/shared/types';
+import type { Agent, Artifact, BoardPost, Snapshot } from '../src/shared/types';
+
+import { demoEvents, initialCalendar, initialSources } from './story';
 
 const HOUR = 60 * 60 * 1_000;
 
@@ -14,26 +16,11 @@ export function initialSnapshot(now = Date.now()): Snapshot {
     { id: 'agent-sam', name: 'Sam Okafor', role: 'Operations', color: '#4f9fb5', hair: '#17120f', skin: '#68412f', accessory: 'headphones', persistent: false, activity: 'idle', statusText: 'Available for operations work', home: 5 },
   ];
 
-  const sources: SourceItem[] = [
-    { id: 'src-gmail-report', source: 'gmail', externalId: 'gmail-8841', threadId: 'quarterly-readout', author: 'Nora Feld', title: 'Friday leadership readout', content: 'Could you turn the launch notes into a one-page brief before Friday?', timestamp: now - 4 * HOUR, scenario: 'report', disposition: 'pending' },
-    { id: 'src-gmail-dinner', source: 'gmail', externalId: 'gmail-8840', threadId: 'client-dinner', author: 'Avery Ross', title: 'Dinner after the workshop', content: 'Six people, quiet enough to talk, vegetarian options, around 7:30 Thursday.', timestamp: now - 7 * HOUR, scenario: 'dinner', disposition: 'pending' },
-    { id: 'src-calendar-planning', source: 'calendar', externalId: 'cal-220', threadId: 'leadership-meeting', author: 'Team calendar', title: 'Friday leadership meeting', content: 'Prepare Nora for Friday: launch readout, checkout fix status, decisions, and open risks.', timestamp: now - 3 * HOUR, scenario: 'meeting', disposition: 'pending' },
-    { id: 'src-calendar-focus', source: 'calendar', externalId: 'cal-219', threadId: 'focus-block', author: 'Team calendar', title: 'Engineering focus block', content: 'Wednesday 9:00–11:00 AM is reserved for release work.', timestamp: now - 21 * HOUR, disposition: 'ignored', reason: 'No action requested' },
-    { id: 'src-imessage-dinner', source: 'imessage', externalId: 'msg-601', threadId: 'client-dinner', author: 'Avery', title: 'Re: dinner', content: 'Patio would be nice if the weather holds. Somewhere near Union Square.', timestamp: now - 2 * HOUR, scenario: 'dinner', disposition: 'pending' },
-    { id: 'src-imessage-travel', source: 'imessage', externalId: 'msg-598', threadId: 'train-note', author: 'Dad', title: 'Train update', content: 'Made the earlier train. No need to change anything.', timestamp: now - 11 * HOUR, disposition: 'ignored', reason: 'Informational message' },
-    { id: 'src-slack-bug', source: 'slack', externalId: 'slack-442', threadId: 'checkout-total', author: 'Mina Park', channel: '#release-room', title: 'Checkout total regression', content: 'Tax is counted twice when a percentage coupon is present. Repro is in the fixture.', timestamp: now - 96 * 60_000, scenario: 'bug', disposition: 'pending' },
-    { id: 'src-slack-qa', source: 'slack', externalId: 'slack-438', threadId: 'release-qa', author: 'Owen Price', channel: '#release-room', title: 'QA pass requested', content: 'Please run a focused checkout test after the tax fix lands.', timestamp: now - 5 * HOUR, scenario: 'qa', disposition: 'pending' },
-    { id: 'src-discord-bug', source: 'discord', externalId: 'discord-901', threadId: 'checkout-total', author: 'pixelpilot', channel: '#beta-feedback', title: 'Coupon total looks wrong', content: 'My $10 coupon checkout adds tax twice. Screenshot values: subtotal 100, total 107.60.', timestamp: now - 73 * 60_000, scenario: 'bug', disposition: 'pending' },
-    { id: 'src-discord-note', source: 'discord', externalId: 'discord-897', threadId: 'theme-chat', author: 'nightowl', channel: '#lounge', title: 'Office theme', content: 'The little plants in the office mockup are delightful.', timestamp: now - 9 * HOUR, disposition: 'ignored', reason: 'Social conversation' },
-    { id: 'src-linear-bug', source: 'linear', externalId: 'LIN-184', threadId: 'checkout-total', author: 'Mina Park', title: 'LIN-184: correct discounted tax calculation', content: 'Expected tax to apply once to the discounted subtotal. Priority: high.', timestamp: now - 60 * 60_000, scenario: 'bug', disposition: 'pending' },
-    { id: 'src-linear-qa', source: 'linear', externalId: 'LIN-182', threadId: 'release-qa', author: 'Lena Ortiz', title: 'LIN-182: checkout smoke test', content: 'Verify fixed totals and unchanged full-price totals.', timestamp: now - 6 * HOUR, scenario: 'qa', disposition: 'pending' },
-    { id: 'src-asana-report', source: 'asana', externalId: 'asana-310', threadId: 'quarterly-readout', author: 'Nora Feld', title: 'Draft launch readout', content: 'Summarize adoption, support volume, and the two open launch decisions.', timestamp: now - 3.5 * HOUR, scenario: 'report', disposition: 'pending' },
-    { id: 'src-asana-meeting', source: 'asana', externalId: 'asana-307', threadId: 'leadership-meeting', author: 'Jonah Brooks', title: 'Prepare Friday leadership meeting', content: 'Bring the launch summary, checkout patch status, decisions, and unresolved risks.', timestamp: now - 2.5 * HOUR, scenario: 'meeting', disposition: 'pending' },
-  ];
+  const sources = initialSources(now);
 
   const artifacts: Artifact[] = [
-    { id: 'artifact-welcome-brief', workId: 'work-welcome', title: 'Monday source digest', kind: 'brief', content: 'SIMULATED DEMO ARTIFACT\n\nA short digest of messages already waiting in the office.', createdAt: now - 22 * HOUR, simulated: true },
-    { id: 'artifact-welcome-qa', workId: 'work-welcome', title: 'Previous checkout QA notes', kind: 'qa', content: 'SIMULATED DEMO ARTIFACT\n\nBaseline checkout passed before the reported percentage-coupon regression.', createdAt: now - 20 * HOUR, simulated: true },
+    { id: 'artifact-welcome-brief', workId: 'work-welcome', title: 'Monday source digest', kind: 'brief', content: '# Previous office source digest\n\nFictional historical artifact.\n\nThe Pinecone Commerce archive records 170 activated merchants of 250 eligible, or 68%. Support questions declined from 31 to 18 in the archived period. Seven merchant migrations still await confirmation. Nora Feld owns the launch decision, Eli Navarro owns reporting, and Mina Park owns engineering. The decision is to keep the staged rollout at 68% until migration checks are complete.\n\nThe seven migration owners are Nora Feld for Birch Books, Eli Navarro for Copper Coffee, Mina Park for Poppy Goods, Sam Okafor for Juniper Bikes, Jonah Brooks for Fern Market, Lena Ortiz for Oak Paper, and Maya Chen for Willow Studio.\n\nHarbor Health is a separate project: 84 of 120 reminders delivered, front desk questions down from 24 to 11, and translated reminder copy awaiting clinic approval. Its counts must not be mixed into the Pinecone report.\n\nSources: history-pinecone-02, pin-weekly-metrics.csv; history-pinecone-03, pin-owner-register.csv; history-harbor-02, hbr-weekly-metrics.csv. New arrivals may correct this archived baseline.', createdAt: now - 22 * HOUR, simulated: true },
+    { id: 'artifact-welcome-qa', workId: 'work-welcome', title: 'Previous checkout QA notes', kind: 'qa', content: '# Previous checkout QA scope\n\nFictional historical artifact.\n\nThe previous release verified a full-price checkout: $100 subtotal plus 8% tax equals $108. PIN-172, the narrow-screen receipt footer issue, was fixed and its reporter confirmed the result.\n\nThat check did not exercise a fixed-value coupon. It cannot establish that a later coupon change is correct. If a new checkout issue arrives, QA must use that issue\'s reproduction, run against its completed patch, and record both coupon and full-price results.\n\nSource: history-pinecone-06 and pin-release-notes.md. The full-price baseline is historical; the coupon result requires fresh verification.', createdAt: now - 20 * HOUR, simulated: true },
   ];
   const board: BoardPost[] = [
     { id: 'board-welcome-1', agentId: 'agent-maya', workId: 'work-welcome', artifactId: 'artifact-welcome-brief', kind: 'complete', text: 'Simulated history: Monday source digest is ready.', timestamp: now - 22 * HOUR },
@@ -43,21 +30,17 @@ export function initialSnapshot(now = Date.now()): Snapshot {
   return {
     revision: 1, sources, agents, triage: [], work: [{
       id: 'work-welcome', title: 'Prepare the office source digest', goal: 'Summarize the fictional office sources and prior checkout QA.',
-      sourceIds: [], agentId: 'agent-maya', status: 'completed', scenario: 'report',
+      sourceIds: ['history-pinecone-02', 'history-pinecone-03', 'history-pinecone-06', 'history-harbor-02'], agentId: 'agent-maya', status: 'completed', scenario: 'report',
       createdAt: now - 23 * HOUR, completedAt: now - 20 * HOUR, mode: 'demo',
     }], runs: [], activity: [
       { id: 'event-1', sequence: 1, timestamp: now - HOUR, kind: 'system', text: 'Demo office loaded. New output is marked as simulated.' },
     ], artifacts, board, routines: [
       { id: 'routine-1', agentId: 'agent-eli', name: 'Morning launch readout', instructions: 'Summarize the launch evidence and list open decisions.', enabled: false, schedule: 'daily', intervalMinutes: 60, dailyTime: '09:00', nextRunAt: now + 24 * HOUR, notes: 'Keep the readout concise. Enable this routine when ready.' },
       { id: 'routine-2', agentId: 'agent-lena', name: 'Checkout verification', instructions: 'Run focused checkout QA and report any failures.', enabled: false, schedule: 'daily', intervalMinutes: 60, dailyTime: '10:00', nextRunAt: now + 25 * HOUR, notes: 'Check full-price and coupon totals after a live fix.' },
-    ], calendar: [{
-      id: 'calendar-focus', title: 'Engineering focus block (simulated)',
-      start: nextWeekday(now, 3, 9), end: nextWeekday(now, 3, 11), attendees: ['priya@example.test'],
-      location: 'Office', description: 'SIMULATED DEMO CALENDAR EVENT. Reserved for release work.', sourceIds: ['src-calendar-focus'], simulated: true,
-    }],
+    ], calendar: initialCalendar(now),
     auth: { status: 'checking' },
     settings: { mode: 'demo', reducedMotion: false, sound: true, model: '' },
-    demo: { playing: false, nextIndex: 0, speed: 1 },
+    demo: { playing: false, nextIndex: 0, speed: 1, events: demoEvents(now).map(event => ({ id: event.id, label: event.label, source: event.item.source, delivered: false })) },
   };
 }
 
@@ -83,11 +66,4 @@ export async function createBugFixture(dataDir: string): Promise<string> {
 export async function copyBugFixture(template: string, workspace: string): Promise<void> {
   await mkdir(workspace, { recursive: true });
   await cp(template, workspace, { recursive: true });
-}
-
-function nextWeekday(now: number, day: number, hour: number): string {
-  const date = new Date(now);
-  date.setDate(date.getDate() + ((day - date.getDay() + 7) % 7 || 7));
-  date.setHours(hour, 0, 0, 0);
-  return date.toISOString();
 }
