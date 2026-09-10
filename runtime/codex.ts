@@ -2,6 +2,8 @@ import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:c
 import { existsSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 
+import type { SessionMessage as AgentMessage } from '../shared/demo';
+
 type JsonObject = Record<string, unknown>;
 type NotificationListener = (method: string, params: JsonObject) => void;
 
@@ -45,6 +47,7 @@ export interface RunTurnOptions {
   outputSchema?: JsonObject;
   onStarted?(ids: { threadId: string; turnId: string }): void | Promise<void>;
   onProgress?(text: string): void;
+  onMessage?(message: AgentMessage): void;
 }
 
 export class CodexAppServer {
@@ -188,47 +191,78 @@ export class CodexAppServer {
     const threadId = stringValue(thread?.id);
     if (!threadId) throw new Error('Codex thread/start returned no thread id');
 
-    options.signal?.throwIfAborted();
-    const turnResult = (await this.request('turn/start', {
-      threadId,
-      input: [{ type: 'text', text: options.prompt, text_elements: [] }],
-      cwd: options.cwd,
-      approvalPolicy: 'never',
-      ...(options.model.trim() ? { model: options.model.trim() } : {}),
-      sandboxPolicy: {
-        type: 'workspaceWrite',
-        writableRoots: [options.cwd],
-        networkAccess: false,
-        excludeTmpdirEnvVar: true,
-        excludeSlashTmp: true,
-      },
-      outputSchema: options.outputSchema,
-    })) as JsonObject;
-    const turn = turnResult.turn as JsonObject;
-    const turnId = stringValue(turn?.id);
-    if (!turnId) throw new Error('Codex turn/start returned no turn id');
-    await options.onStarted?.({ threadId, turnId });
-
+    let turnId = '';
+    const messages = new Map<string, AgentMessage>();
+    const dirty = new Set<string>();
+    let flushTimer: NodeJS.Timeout | undefined;
+    const flush = () => {
+      clearTimeout(flushTimer);
+      flushTimer = undefined;
+      for (const id of dirty) options.onMessage?.({ ...messages.get(id)! });
+      dirty.clear();
+    };
+    const completedMessage = (item: JsonObject) => {
+      const text = agentMessageText(item);
+      if (!text) return;
+      const id = stringValue(item.id) || `message-${messages.size}`;
+      messages.set(id, { id, text, complete: true, timestamp: messages.get(id)?.timestamp || Date.now() });
+      dirty.add(id);
+      flush();
+      options.onProgress?.(text);
+    };
+    // Subscribe before turn/start: fast turns can emit messages before its response.
     const unsubscribe = this.onNotification((method, params) => {
-      if (params.threadId !== threadId || params.turnId !== turnId) return;
-      if (method === 'item/completed') {
-        const text = agentMessageText(params.item as JsonObject);
-        if (text) options.onProgress?.(text);
-      }
+      if (params.threadId !== threadId || (turnId && params.turnId !== turnId)) return;
+      if (
+        method === 'item/agentMessage/delta' &&
+        typeof params.itemId === 'string' &&
+        typeof params.delta === 'string'
+      ) {
+        const id = params.itemId;
+        const message = messages.get(id) || { id, text: '', complete: false, timestamp: Date.now() };
+        message.text += params.delta;
+        messages.set(id, message);
+        dirty.add(id);
+        if (!flushTimer) flushTimer = setTimeout(flush, 200);
+      } else if (method === 'item/completed' && params.item) completedMessage(params.item as JsonObject);
     });
     try {
+      options.signal?.throwIfAborted();
+      const turnResult = (await this.request('turn/start', {
+        threadId,
+        input: [{ type: 'text', text: options.prompt, text_elements: [] }],
+        cwd: options.cwd,
+        approvalPolicy: 'never',
+        ...(options.model.trim() ? { model: options.model.trim() } : {}),
+        sandboxPolicy: {
+          type: 'workspaceWrite',
+          writableRoots: [options.cwd],
+          networkAccess: false,
+          excludeTmpdirEnvVar: true,
+          excludeSlashTmp: true,
+        },
+        outputSchema: options.outputSchema,
+      })) as JsonObject;
+      turnId = stringValue((turnResult.turn as JsonObject)?.id);
+      if (!turnId) throw new Error('Codex turn/start returned no turn id');
+      await options.onStarted?.({ threadId, turnId });
       const completed = await this.waitForTurn(turnId, 10 * 60_000);
       const finished = completed.turn as JsonObject;
-      const status = stringValue(finished.status) as CodexTurnResult['status'];
+      if (Array.isArray(finished.items)) {
+        for (const item of finished.items as JsonObject[]) {
+          if (!messages.get(stringValue(item.id))?.complete) completedMessage(item);
+        }
+      }
       return {
         threadId,
         turnId,
-        status,
+        status: stringValue(finished.status) as CodexTurnResult['status'],
         message: this.turnMessages.get(turnId) || lastAgentMessage(finished.items) || '',
         error: turnError(finished.error),
       };
     } finally {
       unsubscribe();
+      flush();
       this.turnMessages.delete(turnId);
       this.completedTurns.delete(turnId);
     }

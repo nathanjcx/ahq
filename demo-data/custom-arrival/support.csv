@@ -1,0 +1,7 @@
+week,category,tickets,resolved,median_response_minutes
+1,Billing,24,20,90
+1,Login,36,30,45
+1,Setup,20,18,60
+2,Billing,18,17,55
+2,Login,22,21,25
+2,Setup,26,23,50
