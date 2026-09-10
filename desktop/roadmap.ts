@@ -59,10 +59,15 @@ function reconcile(
 ): AppState {
   const employee = state.employees.find((item) => item.id === employeeId);
   const previousEmployees = state.employees;
-  state = applySession(state, employeeId, session);
-  if (state.roadmap?.automatic && session.status === 'completed' && session.reviewed && session.artifacts?.length) {
-    state = { ...state, approvals: state.approvals.map(approval => approval.sessionId === session.id && approval.version === session.output?.version ? { ...approval, status: 'approved' as const } : approval) };
+  if (
+    state.roadmap?.automatic &&
+    session.status === 'completed' &&
+    session.reviewed &&
+    session.artifacts?.length
+  ) {
+    state = applySession(state, employeeId, { ...session, status: 'waiting_for_approval', reviewed: false });
   }
+  state = applySession(state, employeeId, session);
   // A completed older session must never move an employee out of a newer, manual session.
   if (employee?.sessionId && employee.sessionId !== session.id)
     state = { ...state, employees: previousEmployees };

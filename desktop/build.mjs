@@ -6,7 +6,7 @@ await build({
   target: 'node22',
   format: 'cjs',
   outfile: 'dist-desktop/main.cjs',
-  external: ['electron', 'sql.js'],
+  external: ['electron', 'sql.js', 'pdfkit'],
   sourcemap: true,
 });
 await build({
@@ -16,7 +16,7 @@ await build({
   target: 'node22',
   format: 'cjs',
   outfile: 'dist-desktop/preload.cjs',
-  external: ['electron', 'sql.js'],
+  external: ['electron', 'sql.js', 'pdfkit'],
 });
 
 if (process.platform === 'darwin') {

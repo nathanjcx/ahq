@@ -1,4 +1,11 @@
-import type { DemoTrigger, DemoNotification, DemoSnapshot, LocalArtifact, LocalTaskKind, SessionMessage } from './demo';
+import type {
+  DemoTrigger,
+  DemoNotification,
+  DemoSnapshot,
+  LocalArtifact,
+  LocalTaskKind,
+  SessionMessage,
+} from './demo';
 export type Page =
   | 'office'
   | 'employees'
@@ -152,8 +159,12 @@ export interface ChatGPTAccount {
   error?: string;
 }
 export interface CloudSession {
-  employeeId?: string; title?: string; workspace?: string; taskKind?: LocalTaskKind;
-  messages?: SessionMessage[]; artifacts?: LocalArtifact[];
+  employeeId?: string;
+  title?: string;
+  workspace?: string;
+  taskKind?: LocalTaskKind;
+  messages?: SessionMessage[];
+  artifacts?: LocalArtifact[];
   reviewed?: boolean;
   id: string;
   status: 'queued' | 'running' | 'waiting_for_approval' | 'completed' | 'failed';

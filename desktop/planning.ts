@@ -138,7 +138,13 @@ Planning data: ${JSON.stringify(data.data)}`,
     },
   );
   const { milestones } = parseOutput(raw, RoadmapOutput, 'roadmap');
-  if (input.automatic && (milestones.length > 6 || milestones.some(item => !item.taskKind) || milestones.filter(item => item.taskKind === 'bug').length > 1)) throw new Error('The local roadmap requires 3–6 supported tasks and at most one code change task.');
+  if (
+    input.automatic &&
+    (milestones.length > 6 ||
+      milestones.some((item) => !item.taskKind) ||
+      milestones.filter((item) => item.taskKind === 'bug').length > 1)
+  )
+    throw new Error('The local roadmap requires 3–6 supported tasks and at most one code change task.');
   const byKey = new Map(milestones.map((milestone) => [milestone.key, milestone]));
   if (byKey.size !== milestones.length) {
     throw new Error('The AI roadmap repeated a milestone. Please generate it again.');
@@ -174,7 +180,13 @@ Planning data: ${JSON.stringify(data.data)}`,
   }
   for (const milestone of milestones) visit(milestone.key);
 
-  if (input.automatic && milestones.some(item => item.taskKind === 'qa' && !item.dependencies.some(id => byKey.get(id)?.taskKind === 'bug'))) throw new Error('QA must depend on its code change task.');
+  if (
+    input.automatic &&
+    milestones.some(
+      (item) => item.taskKind === 'qa' && !item.dependencies.some((id) => byKey.get(id)?.taskKind === 'bug'),
+    )
+  )
+    throw new Error('QA must depend on its code change task.');
   const ids = new Map(milestones.map((milestone) => [milestone.key, randomUUID()]));
   const now = Date.now();
   return milestones.map((milestone) => ({

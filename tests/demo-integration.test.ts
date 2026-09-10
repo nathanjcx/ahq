@@ -55,20 +55,20 @@ class FilesystemCodex {
       if (source === 'email') {
         assert.match(
           await readFile(path.join(options.cwd, 'attachments/1-sales.csv'), 'utf8'),
-          /August,108000/,
+          /August,Starter,145,25,8/,
         );
         await writeFile(
           path.join(options.cwd, 'report.md'),
-          '# Financial report\n\nAugust revenue was $108,000 and costs were $61,000. Profit was $47,000. Source: attachments/1-sales.csv.',
+          '# Financial report\n\nAugust revenue was $8,545 and costs were $2,800. Gross profit was $5,745. Source: attachments/1-sales.csv.',
         );
       } else if (source === 'meeting') {
         assert.match(
-          await readFile(path.join(options.cwd, 'attachments/2-agenda.md'), 'utf8'),
-          /Quarterly sales review/,
+          await readFile(path.join(options.cwd, 'attachments/1-agenda.md'), 'utf8'),
+          /Northstar Q3 sales review/,
         );
         await writeFile(
           path.join(options.cwd, 'brief.md'),
-          '# Meeting brief\n\nDiscuss August profit of $47,000. Proposed action: review next-quarter costs. Source: attachments/1-sales.csv and attachments/2-agenda.md.\n\n## Decisions\nPending discussion.',
+          '# Meeting brief\n\nDiscuss August gross profit of $5,745. Proposed action: review next-quarter costs. Source: attachments/2-sales.csv and attachments/1-agenda.md.\n\n## Decisions\nPending discussion.',
         );
       } else {
         assert.equal(source, 'slack');
