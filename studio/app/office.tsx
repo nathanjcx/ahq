@@ -30,6 +30,7 @@ type OfficeProps = {
   listening?: boolean;
   microphoneLevel?: number;
   slapMode?: boolean;
+  partyMode?: boolean;
   slapTarget?: { employeeId: string; token: number } | null;
   onSlap?: (id: string) => void;
   team: Employee[];
@@ -998,6 +999,7 @@ function Figure({
   seated,
   pose,
   walking,
+  dancing,
   phase,
   appearance,
 }: {
@@ -1007,6 +1009,7 @@ function Figure({
   seated: boolean;
   pose: string;
   walking: boolean;
+  dancing: boolean;
   phase: number;
 }) {
   const skin =
@@ -1064,7 +1067,13 @@ function Figure({
           <group
             position={[side * 0.14, seated ? 0.56 : 0.85, 0]}
             rotation={[
-              seated ? -Math.PI / 2 : walking ? Math.sin(phase + (side < 0 ? Math.PI : 0)) * 0.48 : 0,
+              seated
+                ? -Math.PI / 2
+                : dancing
+                  ? -0.55 + Math.sin(phase * 0.52 + side) * 0.72
+                  : walking
+                    ? Math.sin(phase + (side < 0 ? Math.PI : 0)) * 0.48
+                    : 0,
               0,
               0,
             ]}
@@ -1094,9 +1103,11 @@ function Figure({
                   ? -0.65
                   : pose === 'discussion' && side > 0
                     ? -0.95 + Math.sin(phase * 0.4) * 0.18
-                    : walking
-                      ? -Math.sin(phase + (side < 0 ? Math.PI : 0)) * 0.4
-                      : -0.1,
+                    : dancing
+                      ? -0.35 + Math.sin(phase * 0.52 + side * 1.7) * 0.62
+                      : walking
+                        ? -Math.sin(phase + (side < 0 ? Math.PI : 0)) * 0.4
+                        : -0.1,
               0,
               side * (pose === 'discussion' ? 0.2 : 0.07),
             ]}
@@ -1105,11 +1116,13 @@ function Figure({
             <group
               position={[0, -0.29, 0]}
               rotation={[
-                seated || pose === 'reading' || pose === 'storage'
-                  ? -0.85
-                  : pose === 'discussion'
-                    ? -0.7
-                    : -0.15,
+                dancing
+                  ? -0.15 + Math.sin(phase * 0.52 + side) * 0.45
+                  : seated || pose === 'reading' || pose === 'storage'
+                    ? -0.85
+                    : pose === 'discussion'
+                      ? -0.7
+                      : -0.15,
                 0,
                 0,
               ]}
@@ -1144,6 +1157,7 @@ function EmployeeAvatar({
   live,
   listening,
   slapMode,
+  partyMode,
   slapTarget,
   onSlap,
 }: {
@@ -1151,6 +1165,7 @@ function EmployeeAvatar({
   timeSeconds?: number;
   listening?: boolean;
   slapMode?: boolean;
+  partyMode?: boolean;
   slapTarget?: { employeeId: string; token: number } | null;
   onSlap?: (id: string) => void;
   employee: Employee;
@@ -1184,7 +1199,7 @@ function EmployeeAvatar({
           : activity === 'lounge'
             ? [3.65 + (index % 3) * 1.03, 0, 4.68]
             : [desk[0], 0, desk[2] + 1];
-  const isSeated = !listening && !walking && (activity === 'research' || activity === 'lounge');
+  const isSeated = !listening && !walking && !partyMode && (activity === 'research' || activity === 'lounge');
   const idleYaw =
     activity === 'storage' ||
     activity === 'reading' ||
@@ -1276,6 +1291,27 @@ function EmployeeAvatar({
       }
       return;
     }
+    if (partyMode && !listening) {
+      const danceTime = (live ? Date.now() / 1000 : (timeSeconds ?? 0)) + index * 0.73;
+      const bounce = Math.abs(Math.sin(danceTime * 5.2)) * 0.08;
+      group.current.position.set(
+        home[0] + Math.sin(danceTime * 2.1) * 0.16,
+        bounce,
+        home[2] + Math.cos(danceTime * 1.7) * 0.12,
+      );
+      group.current.rotation.y = idleYaw + Math.sin(danceTime * 2.8) * 0.42;
+      if (figure.current)
+        figure.current.rotation.set(Math.sin(danceTime * 3.2) * 0.1, 0, Math.sin(danceTime * 4.1) * 0.16);
+      if (Math.abs(danceTime - lastPoseUpdate.current) > 0.04) {
+        lastPoseUpdate.current = danceTime;
+        setPhase(danceTime * 8);
+      }
+      if (walkingRef.current) {
+        walkingRef.current = false;
+        setWalking(false);
+      }
+      return;
+    }
     if (listening) {
       const cameraPosition = _.camera.position;
       group.current.rotation.y = Math.atan2(
@@ -1360,6 +1396,7 @@ function EmployeeAvatar({
             seated={isSeated}
             pose={activity}
             walking={walking}
+            dancing={!!partyMode}
             phase={phase}
           />
         </group>
@@ -1688,18 +1725,99 @@ function OfficeSpeakers({
   );
 }
 
+function PartyEffects({
+  active,
+  timeSeconds,
+  live,
+}: {
+  active: boolean;
+  timeSeconds?: number;
+  live?: boolean;
+}) {
+  const disco = useRef<THREE.Group>(null);
+  const pieces = useMemo(
+    () =>
+      Array.from({ length: 72 }, (_, index) => ({
+        x: ((index * 37) % 160) / 10 - 8,
+        y: 0.6 + ((index * 19) % 54) / 10,
+        z: ((index * 53) % 110) / 10 - 5.5,
+        phase: index * 0.71,
+        color: ['#ff4f9a', '#ffd43b', '#57e8ff', '#a980ff', '#65f28d'][index % 5],
+        tilt: (index % 4) * 0.35,
+      })),
+    [],
+  );
+  const confetti = useRef<(THREE.Mesh | null)[]>([]);
+  useFrame((_, delta) => {
+    if (!active) return;
+    const now = live ? Date.now() / 1000 : (timeSeconds ?? 0);
+    if (disco.current) {
+      disco.current.rotation.y += delta * 1.8;
+      disco.current.rotation.z = Math.sin(now * 0.7) * 0.08;
+    }
+    confetti.current.forEach((piece, index) => {
+      if (!piece) return;
+      const item = pieces[index];
+      const fall = (now * (0.18 + (index % 5) * 0.025) + item.phase) % 6.2;
+      piece.position.y = 0.35 + ((item.y - 0.35 - fall + 6.2) % 6.2);
+      piece.rotation.x = now * (2 + (index % 3)) + item.phase;
+      piece.rotation.y = item.tilt + Math.sin(now * 2 + item.phase) * 0.6;
+    });
+  });
+  return (
+    <group visible={active}>
+      <group ref={disco} position={[0, 8.15, -0.9]}>
+        <mesh position={[0, 0.85, 0]}>
+          <cylinderGeometry args={[0.025, 0.025, 1.7, 8]} />
+          <meshBasicMaterial color="#b9c5ff" />
+        </mesh>
+        <mesh>
+          <sphereGeometry args={[0.68, 16, 12]} />
+          <meshStandardMaterial
+            color="#c8d2ff"
+            metalness={1}
+            roughness={0.12}
+            emissive="#4640a6"
+            emissiveIntensity={0.7}
+          />
+        </mesh>
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.73, 0.045, 8, 32]} />
+          <meshBasicMaterial color="#f9e7ff" />
+        </mesh>
+      </group>
+      <pointLight position={[-5, 5, 3]} color="#ff4f9a" intensity={5} distance={17} />
+      <pointLight position={[5, 4, 1]} color="#4ee8ff" intensity={5} distance={17} />
+      <pointLight position={[0, 3, -5]} color="#a980ff" intensity={4} distance={15} />
+      {pieces.map((item, index) => (
+        <mesh
+          key={index}
+          ref={(mesh) => {
+            confetti.current[index] = mesh;
+          }}
+          position={[item.x, item.y, item.z]}
+          rotation={[item.phase, item.tilt, item.phase * 0.3]}
+        >
+          <boxGeometry args={[0.13, 0.035, 0.24]} />
+          <meshBasicMaterial color={item.color} toneMapped={false} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 function Scene(props: OfficeProps & { eventSource: HTMLDivElement }) {
   const surfaces = useSurfaceTextures();
   return (
     <>
-      <color attach="background" args={['#f1f4ee']} />
+      <color attach="background" args={[props.partyMode ? '#11142d' : '#f1f4ee']} />
       <Framing zoom={props.zoom} angle={props.angle} resetKey={props.resetKey} source={props.eventSource} />
-      <ambientLight intensity={0.38} />
-      <hemisphereLight args={['#dce7df', '#3e4631', 0.72]} />
+      <ambientLight intensity={props.partyMode ? 0.18 : 0.38} />
+      <hemisphereLight args={props.partyMode ? ['#27245d', '#0b0b1d', 0.38] : ['#dce7df', '#3e4631', 0.72]} />
       <directionalLight
         position={[-12, 14, 9]}
-        intensity={3.8}
-        color="#ffe6ba"
+        intensity={props.partyMode ? 0.9 : 3.8}
+        color={props.partyMode ? '#6d72ff' : '#ffe6ba'}
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-camera-left={-16}
@@ -1715,6 +1833,7 @@ function Scene(props: OfficeProps & { eventSource: HTMLDivElement }) {
       <directionalLight position={[10, 9, -2]} intensity={1.1} color="#a9c9cd" />
       <SurfaceContext.Provider value={surfaces}>
         <Architecture />
+        <PartyEffects active={!!props.partyMode} timeSeconds={props.timeSeconds} live={props.live} />
         <FileCabinet
           busy={props.team.some((employee) => activityFor(employee) === 'storage')}
           motion={props.motion}
@@ -1745,6 +1864,7 @@ function Scene(props: OfficeProps & { eventSource: HTMLDivElement }) {
             live={props.live}
             listening={props.listening}
             slapMode={props.slapMode}
+            partyMode={props.partyMode}
             slapTarget={props.slapTarget}
             onSlap={props.onSlap}
           />
@@ -1752,9 +1872,12 @@ function Scene(props: OfficeProps & { eventSource: HTMLDivElement }) {
       </SurfaceContext.Provider>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.71, 0]} receiveShadow>
         <planeGeometry args={[200, 200]} />
-        <meshStandardMaterial color="#ffffff" roughness={1} />
+        <meshStandardMaterial color={props.partyMode ? '#1c2040' : '#ffffff'} roughness={1} />
       </mesh>
-      <gridHelper args={[200, 200, '#a7b6a3', '#b8c4b4']} position={[0, -0.7, 0]} />
+      <gridHelper
+        args={[200, 200, props.partyMode ? '#413a86' : '#a7b6a3', props.partyMode ? '#292657' : '#b8c4b4']}
+        position={[0, -0.7, 0]}
+      />
     </>
   );
 }
@@ -1873,7 +1996,9 @@ export default function Office(props: OfficeProps) {
             shadows={{ type: THREE.PCFShadowMap }}
             camera={{ position: [28, 27, 28], zoom: 25, near: 0.1, far: 150 }}
             dpr={[1, 1.75]}
-            frameloop={props.motion || props.listening || !!props.slapTarget ? 'always' : 'demand'}
+            frameloop={
+              props.motion || props.listening || !!props.slapTarget || !!props.partyMode ? 'always' : 'demand'
+            }
             fallback={fallback}
             gl={{
               antialias: true,
