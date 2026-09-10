@@ -107,7 +107,7 @@ export class SnapshotStore {
           time: new Date(now).toISOString(),
           text: `${e.name}: ${e.activity}`,
           kind: 'system',
-          source: e.sessionId ? 'cloud' : 'local',
+          source: e.sessionId?.startsWith('chatgpt-') ? 'chatgpt' : e.sessionId ? 'cloud' : 'local',
         });
       if (previous.goal !== state.goal)
         this.insertActivity({

@@ -4295,7 +4295,7 @@ html[data-desktop] .topbar .avatar {
 /* Astra HQ desktop: Birth's light shell, Ultra's complete office. */
 .office-viewport {
   height: clamp(440px, 52vh, 690px);
-  background: #172724;
+  background: #f1f4ee;
   isolation: isolate;
 }
 .scene-caption {

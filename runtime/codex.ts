@@ -34,12 +34,16 @@ export interface CodexTurnResult {
 }
 
 export interface RunTurnOptions {
+  modelProvider?: string;
+  threadId?: string;
+  persistent?: boolean;
+  instructions?: string;
   cwd: string;
   model: string;
   signal?: AbortSignal;
   prompt: string;
   outputSchema?: JsonObject;
-  onStarted?(ids: { threadId: string; turnId: string }): void;
+  onStarted?(ids: { threadId: string; turnId: string }): void | Promise<void>;
   onProgress?(text: string): void;
 }
 
@@ -55,6 +59,7 @@ export class CodexAppServer {
 
   async start(): Promise<void> {
     if (this.child) return;
+    this.closed = false;
     const executable =
       process.env.CODEX_BIN ||
       [
@@ -115,7 +120,7 @@ export class CodexAppServer {
     child.stderr.resume();
 
     await this.request('initialize', {
-      clientInfo: { name: 'little-office', title: 'Little Office', version: '0.1.0' },
+      clientInfo: { name: 'astra-hq', title: 'Astra HQ', version: '0.2.0' },
       capabilities: null,
     });
     this.notify('initialized', {});
@@ -168,14 +173,16 @@ export class CodexAppServer {
 
   async runTurn(options: RunTurnOptions): Promise<CodexTurnResult> {
     options.signal?.throwIfAborted();
-    const threadResult = (await this.request('thread/start', {
+    const threadResult = (await this.request(options.threadId ? 'thread/resume' : 'thread/start', {
+      ...(options.threadId ? { threadId: options.threadId } : { ephemeral: !options.persistent }),
       cwd: options.cwd,
+      ...(options.modelProvider ? { modelProvider: options.modelProvider } : {}),
       ...(options.model.trim() ? { model: options.model.trim() } : {}),
       approvalPolicy: 'never',
       sandbox: 'workspace-write',
-      ephemeral: true,
       developerInstructions:
-        'You are working for Little Office in the provided workspace. Stay inside this workspace. Do not call external apps, services, or MCP tools. Do not read credentials. Complete only the stated task.',
+        'You are working for Astra HQ in the provided workspace. Stay inside this workspace. Do not call external apps, services, or MCP tools. Do not read credentials. Complete only the stated task. ' +
+        (options.instructions ?? ''),
     })) as JsonObject;
     const thread = threadResult.thread as JsonObject;
     const threadId = stringValue(thread?.id);
@@ -200,7 +207,7 @@ export class CodexAppServer {
     const turn = turnResult.turn as JsonObject;
     const turnId = stringValue(turn?.id);
     if (!turnId) throw new Error('Codex turn/start returned no turn id');
-    options.onStarted?.({ threadId, turnId });
+    await options.onStarted?.({ threadId, turnId });
 
     const unsubscribe = this.onNotification((method, params) => {
       if (params.threadId !== threadId || params.turnId !== turnId) return;

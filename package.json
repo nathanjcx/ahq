@@ -39,10 +39,14 @@
       "identity": "-",
       "notarize": false,
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Hold Announce to speak to your Astra HQ employees. Audio is sent for transcription only when you release."
+        "NSMicrophoneUsageDescription": "Hold Announce to speak to your Astra HQ employees. Audio is sent for transcription only when you release.",
+        "NSSpeechRecognitionUsageDescription": "Astra HQ transcribes office announcements on this Mac when you release the microphone button."
       }
     },
-    "npmRebuild": false
+    "npmRebuild": false,
+    "asarUnpack": [
+      "dist-desktop/transcribe"
+    ]
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.3.0",

@@ -1,4 +1,13 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, systemPreferences } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  safeStorage,
+  session,
+  shell,
+  systemPreferences,
+} from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -11,6 +20,8 @@ import { atomicWrite, createSnapshot } from './workspace';
 import { checkGateway, gatewayRequest, readSession, validateEndpoint } from './gateway';
 import { SnapshotStore } from '../runtime/store';
 import { createRuntime, type OfficeRuntime } from '../runtime/engine';
+import { transcribeOnDevice } from './speech';
+import { ChatGPTEmployees } from './chatgpt';
 import { HostedEmployees, openAIRequest, type HostedConfig } from './hosted';
 import { applySession, applyDecision } from '../src/lib/workflow';
 import type { Command } from '../src/shared/types';
@@ -21,6 +32,9 @@ const root = () => app.getPath('userData');
 let dataDir = '';
 let database: SnapshotStore;
 let hosted: HostedEmployees;
+let chatgpt: ChatGPTEmployees;
+const selectedProvider = () => database.get<string>('employee-provider') ?? 'chatgpt';
+const sessionEngine = (id: string) => (chatgpt.owns(id) ? chatgpt : hosted.owns(id) ? hosted : undefined);
 let localRuntime: OfficeRuntime | undefined;
 let pollTimer: ReturnType<typeof setInterval>;
 let snapshotTimer: ReturnType<typeof setInterval>;
@@ -70,6 +84,7 @@ async function setupDatabase() {
   }
   database = await SnapshotStore.open(dataDir);
   hosted = new HostedEmployees(database, hostedConfig);
+  chatgpt = new ChatGPTEmployees(database, path.join(root(), 'employee-workspaces'));
   if (!database.get<AppState>('workspace')) {
     try {
       const old = StateSchema.parse(JSON.parse(await fs.readFile(statePath(), 'utf8')));
@@ -84,9 +99,10 @@ async function setupDatabase() {
         let current = await loadState();
         if (!current) return;
         for (const employee of current.employees.filter((e) => e.sessionId && e.status !== 'ready')) {
-          if (!hosted.owns(employee.sessionId!)) continue;
+          const engine = sessionEngine(employee.sessionId!);
+          if (!engine) continue;
           try {
-            current = applySession(current, employee.id, await hosted.get(employee.sessionId!));
+            current = applySession(current, employee.id, await engine.get(employee.sessionId!));
           } catch {
             /* Keep the last known state; the renderer displays connection failures. */
           }
@@ -129,6 +145,17 @@ async function credentials() {
   };
 }
 async function cloudSettings(): Promise<CloudSettings> {
+  if (selectedProvider() === 'chatgpt') {
+    const account = await chatgpt.account();
+    return {
+      provider: 'chatgpt',
+      model: 'gpt-6-astra',
+      endpoint: '',
+      configured: account.status === 'signed-in',
+      connected: account.status === 'signed-in',
+      account,
+    };
+  }
   const v = await vault();
   if (v.key)
     return {
@@ -177,6 +204,29 @@ async function knownSession(id: string) {
     throw new Error('That session is not part of this workspace.');
 }
 function registerHandlers() {
+  handle('chatgpt:account', async () => chatgpt.account());
+  handle('chatgpt:login', async () => {
+    const url = new URL(await chatgpt.login());
+    if (
+      url.protocol !== 'https:' ||
+      !['auth.openai.com', 'chatgpt.com', 'auth0.openai.com'].includes(url.hostname) ||
+      url.username ||
+      url.password
+    )
+      throw new Error('The sign-in service returned an unexpected login address.');
+    await shell.openExternal(url.href);
+    return chatgpt.account();
+  });
+  handle('chatgpt:cancel-login', async () => chatgpt.cancelLogin());
+  handle('chatgpt:use', async () =>
+    queued(async () => {
+      const account = await chatgpt.account();
+      if (account.status !== 'signed-in') throw new Error(account.error ?? 'Complete ChatGPT sign-in first.');
+      await database.put('employee-provider', 'chatgpt');
+      await log('Employee assignments will use your ChatGPT plan.');
+      return cloudSettings();
+    }),
+  );
   handle('office:frame', async (input) => {
     await database.recordFrame(
       z
@@ -271,6 +321,13 @@ function registerHandlers() {
     return queued(async () => {
       const destination = path.join(await fs.realpath(result.filePaths[0]), 'Astra HQ');
       if (destination === dataDir) return database.filePath;
+      if (
+        (await loadState())?.employees.some(
+          (e) => e.sessionId?.startsWith('chatgpt-') && e.status === 'working',
+        )
+      )
+        throw new Error('Stop employee work before moving the database.');
+      await chatgpt.close();
       await fs.mkdir(destination, { recursive: true, mode: 0o700 });
       const file = path.join(destination, 'office.sqlite');
       await fs.copyFile(database.filePath, file, 1); // Never overwrite another workspace.
@@ -280,6 +337,7 @@ function registerHandlers() {
       database = next;
       dataDir = destination;
       hosted = new HostedEmployees(database, hostedConfig);
+      chatgpt = new ChatGPTEmployees(database, path.join(root(), 'employee-workspaces'));
       await log('Selected a local database folder.');
       return database.filePath;
     });
@@ -298,6 +356,7 @@ function registerHandlers() {
       const old = await vault();
       await openAIRequest({ ...old, ...fields }, `/models/${encodeURIComponent(fields.model)}`);
       await saveVault({ ...old, ...fields });
+      await database.put('employee-provider', 'openai');
       await log('Updated the Astra / OpenAI connection.');
       return cloudSettings();
     }),
@@ -351,17 +410,31 @@ function registerHandlers() {
     const fields = z
       .object({
         audio: z.instanceof(ArrayBuffer),
-        mime: z.enum(['audio/webm', 'audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4']),
+        mime: z.enum([
+          'audio/wav',
+          'audio/webm',
+          'audio/webm;codecs=opus',
+          'audio/ogg;codecs=opus',
+          'audio/mp4',
+        ]),
       })
       .parse(input);
     if (fields.audio.byteLength < 100 || fields.audio.byteLength > 24_000_000)
       throw new Error('Record between a short sentence and two minutes of audio.');
+    if (selectedProvider() === 'chatgpt') {
+      if (fields.mime !== 'audio/wav') throw new Error('Record again using the current version of Astra HQ.');
+      return transcribeOnDevice(fields.audio, app.getPath('temp'));
+    }
     const body = new FormData();
     body.set('model', 'gpt-4o-mini-transcribe');
     body.set(
       'file',
       new Blob([fields.audio], { type: fields.mime }),
-      fields.mime.includes('mp4') ? 'announcement.mp4' : 'announcement.webm',
+      fields.mime === 'audio/wav'
+        ? 'announcement.wav'
+        : fields.mime.includes('mp4')
+          ? 'announcement.mp4'
+          : 'announcement.webm',
     );
     const result = z
       .object({ text: z.string().max(12000) })
@@ -372,8 +445,9 @@ function registerHandlers() {
     queued(async () => {
       const id = z.string().max(200).parse(input);
       await knownSession(id);
-      if (!hosted.owns(id)) throw new Error('Stop this session through your Astra gateway before restoring.');
-      const result = await hosted.cancel(id);
+      const engine = sessionEngine(id);
+      if (!engine) throw new Error('Stop this session through your Astra gateway before restoring.');
+      const result = await engine.cancel(id);
       const state = await loadState();
       if (state) {
         const e = state.employees.find((e) => e.sessionId === id)!;
@@ -388,7 +462,12 @@ function registerHandlers() {
       let state = await loadState();
       if (!state) throw new Error('Open your workspace first.');
       if (!state.employees.length) throw new Error('Create an employee before making an announcement.');
-      await hostedConfig();
+      const provider = selectedProvider();
+      if (provider === 'openai') await hostedConfig();
+      else if (provider === 'chatgpt') {
+        const account = await chatgpt.account();
+        if (account.status !== 'signed-in') throw new Error(account.error ?? 'Sign in with ChatGPT first.');
+      } else throw new Error('Use ChatGPT or OpenAI for office announcements.');
       const message = {
         id: randomUUID(),
         authorId: 'you',
@@ -402,14 +481,25 @@ function registerHandlers() {
       const results = [];
       for (const employee of state.employees) {
         try {
+          const existingEngine = employee.sessionId ? sessionEngine(employee.sessionId) : undefined;
+          if (employee.sessionId && !existingEngine)
+            throw new Error('This employee uses a gateway. Give guidance through that gateway.');
+          const engine = provider === 'chatgpt' ? chatgpt : hosted;
+          if (employee.sessionId && existingEngine && existingEngine !== engine) {
+            const previous = await existingEngine.get(employee.sessionId);
+            if (!['completed', 'failed'].includes(previous.status))
+              throw new Error(
+                'Finish or stop this employee’s previous session before switching connections.',
+              );
+          }
           const result =
-            employee.sessionId && hosted.owns(employee.sessionId)
-              ? await hosted.continue(
+            employee.sessionId && existingEngine === engine
+              ? await engine.continue(
                   employee.sessionId,
                   `Announcement from your manager: ${text}. Explain what this changes for your work, then act accordingly.`,
                   true,
                 )
-              : await hosted.start(
+              : await engine.start(
                   employee,
                   `Announcement from your manager: ${text}. Explain what this means for your role and take the next useful step.`,
                   state,
@@ -486,9 +576,10 @@ function registerHandlers() {
           ).values(),
         ];
       }
-      for (const employee of merged.employees)
-        if (employee.sessionId && hosted.owns(employee.sessionId))
-          merged = applySession(merged, employee.id, hosted.peek(employee.sessionId));
+      for (const employee of merged.employees) {
+        const engine = employee.sessionId ? sessionEngine(employee.sessionId) : undefined;
+        if (engine) merged = applySession(merged, employee.id, engine.peek(employee.sessionId!));
+      }
       await database.saveHQ(merged);
     });
   });
@@ -515,6 +606,7 @@ function registerHandlers() {
     return true;
   });
   handle('cloud:settings', async () => {
+    if (selectedProvider() === 'chatgpt') return cloudSettings();
     if ((await vault()).key) return cloudSettings();
     const value = await savedSettings();
     if (value) {
@@ -546,6 +638,7 @@ function registerHandlers() {
       JSON.stringify({ endpoint, encryptedToken: safeStorage.encryptString(token).toString('base64') }),
     );
     connected = true;
+    await database.put('employee-provider', 'gateway');
     return cloudSettings();
   });
   handle('cloud:disconnect', async () => {
@@ -556,6 +649,7 @@ function registerHandlers() {
     await saveVault({ ...v, key: '' });
     await fs.rm(settingsPath(), { force: true });
     connected = false;
+    await database.put('employee-provider', 'chatgpt');
     return cloudSettings();
   });
   handle('cloud:start', async (input) => {
@@ -571,13 +665,18 @@ function registerHandlers() {
     if (fields.folderIds.length && !fields.allowCloudUpload)
       throw new Error('Explicitly authorize cloud sharing for the selected copies.');
     return queued(async () => {
-      const useHosted = !!(await vault()).key;
-      const config = useHosted ? { endpoint: '', token: '' } : await credentials();
+      const provider = selectedProvider();
+      const engine = provider === 'chatgpt' ? chatgpt : provider === 'openai' ? hosted : undefined;
+      const config = engine ? { endpoint: '', token: '' } : await credentials();
       const state = await loadState();
       const employee = state?.employees.find((e) => e.id === fields.employee.id);
       if (!employee) throw new Error('Save the employee before starting a cloud session.');
-      if (employee.sessionId && !useHosted) {
-        const previousSession = await readSession(config.endpoint, config.token, employee.sessionId);
+      if (employee.sessionId) {
+        const previousEngine = sessionEngine(employee.sessionId);
+        const previousConfig = previousEngine ? config : await credentials();
+        const previousSession = previousEngine
+          ? await previousEngine.get(employee.sessionId)
+          : await readSession(previousConfig.endpoint, previousConfig.token, employee.sessionId);
         if (!['completed', 'failed'].includes(previousSession.status))
           throw new Error('This employee already has an active session. Finish or review that work first.');
       }
@@ -605,8 +704,8 @@ function registerHandlers() {
           files.push({ folder: manifest.name, path: file.path, content });
         }
       }
-      if (useHosted) {
-        const cloudSession = await hosted.start(employee, fields.assignment, state!, files);
+      if (engine) {
+        const cloudSession = await engine.start(employee, fields.assignment, state!, files);
         await database.saveHQ(applySession(state!, employee.id, cloudSession), 'Cloud session started');
         return cloudSession;
       }
@@ -690,7 +789,8 @@ function registerHandlers() {
   handle('cloud:session', async (input) => {
     const id = z.string().min(1).max(200).parse(input);
     await knownSession(id);
-    if (hosted.owns(id)) return queued(() => hosted.get(id));
+    const engine = sessionEngine(id);
+    if (engine) return queued(() => engine.get(id));
     const config = await credentials();
     try {
       const result = await readSession(config.endpoint, config.token, id);
@@ -711,9 +811,10 @@ function registerHandlers() {
       })
       .parse(input);
     await knownSession(decision.sessionId);
-    if (hosted.owns(decision.sessionId))
+    const engine = sessionEngine(decision.sessionId);
+    if (engine)
       return queued(async () => {
-        const result = await hosted.decide(
+        const result = await engine.decide(
           decision.sessionId,
           decision.version,
           decision.decision,
@@ -855,6 +956,7 @@ else {
     clearInterval(pollTimer);
     void (async () => {
       await diskQueue;
+      await chatgpt?.close();
       await localRuntime?.close();
       await database?.drain();
       database?.close();

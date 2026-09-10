@@ -4,6 +4,7 @@ import type {
   AppState,
   Appearance,
   CloudSettings,
+  ChatGPTAccount,
   Employee,
   HistoryEntry,
   Integration,
@@ -13,6 +14,7 @@ import type { UpdateState } from '../App';
 import type { Snapshot } from '../shared/types';
 import { applySession } from '../lib/workflow';
 import Modal from './Modal';
+import { monoWav } from '../lib/audio';
 const errorText = (e: unknown) => (e instanceof Error ? e.message : 'Please try again.');
 
 export function useOfficeHistory(state: AppState, update: UpdateState, notify: (s: string) => void) {
@@ -391,10 +393,20 @@ export function VoiceAnnounce({
         setBusy(true);
         void (async () => {
           try {
-            const text = await window.ahq!.transcribe({
-              audio: await new Blob(chunks, { type: mime }).arrayBuffer(),
-              mime,
-            });
+            const decoder = new AudioContext();
+            let audio: ArrayBuffer;
+            try {
+              const decoded = await decoder.decodeAudioData(
+                await new Blob(chunks, { type: mime }).arrayBuffer(),
+              );
+              audio = monoWav(
+                Array.from({ length: decoded.numberOfChannels }, (_, i) => decoded.getChannelData(i)),
+                decoded.sampleRate,
+              );
+            } finally {
+              await decoder.close();
+            }
+            const text = await window.ahq!.transcribe({ audio, mime: 'audio/wav' });
             if (!text) throw new Error('No speech was heard. Hold the button and try again.');
             setTranscript(text);
             await onBroadcast(text);
@@ -462,6 +474,129 @@ export function VoiceAnnounce({
   );
 }
 
+function ChatGPTConnection({
+  cloud,
+  onCloud,
+  notify,
+}: {
+  cloud: CloudSettings;
+  onCloud: (s: CloudSettings) => void;
+  notify: (s: string) => void;
+}) {
+  const [account, setAccount] = useState<ChatGPTAccount | undefined>(cloud.account);
+  const [busy, setBusy] = useState(false);
+  const refresh = useCallback(async () => {
+    if (!window.ahq) return;
+    const a = await window.ahq.chatGPTAccount();
+    setAccount(a);
+    onCloud(await window.ahq.getCloudSettings());
+  }, [onCloud]);
+  useEffect(() => {
+    void refresh().catch((e) => notify(errorText(e)));
+    const focused = () => void refresh().catch(() => undefined);
+    window.addEventListener('focus', focused);
+    return () => window.removeEventListener('focus', focused);
+  }, [refresh, notify]);
+  useEffect(() => {
+    if (account?.status !== 'signing-in') return;
+    const timer = setInterval(() => void refresh().catch(() => undefined), 2000);
+    return () => clearInterval(timer);
+  }, [account?.status, refresh]);
+  async function connect() {
+    if (!window.ahq) return;
+    setBusy(true);
+    try {
+      if (account?.status === 'signed-in') {
+        onCloud(await window.ahq.useChatGPT());
+        notify('Employees will use your ChatGPT plan.');
+      } else {
+        setAccount(await window.ahq.loginChatGPT());
+      }
+    } catch (e) {
+      notify(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="surface settings-section">
+      <div className="section-heading">
+        <h2>
+          <Cloud size={19} /> ChatGPT plan
+        </h2>
+        <span className={`status-pill ${account?.status === 'signed-in' ? 'ready' : 'waiting'}`}>
+          {account?.status === 'signed-in'
+            ? cloud.provider === 'chatgpt'
+              ? 'Connected'
+              : 'Signed in'
+            : account?.status === 'signing-in'
+              ? 'Finish in your browser'
+              : 'Not connected'}
+        </span>
+      </div>
+      <p>
+        Sign in with ChatGPT to let employees use the Codex allowance in your plan. No API key is needed for
+        employee work.
+      </p>
+      {account?.status === 'signed-in' && (
+        <div className="info-note">
+          <strong>{account.email || 'ChatGPT account'}</strong>
+          <span>
+            {' '}
+            ·{' '}
+            {account.plan &&
+            ['free', 'plus', 'pro', 'team', 'business', 'enterprise', 'edu'].includes(account.plan)
+              ? `${account.plan.charAt(0).toUpperCase()}${account.plan.slice(1)} plan`
+              : 'ChatGPT plan'}
+          </span>
+        </div>
+      )}
+      <p className="form-hint">
+        Sessions run from this Mac while Astra HQ is open. Your existing Codex sign-in is shared; credentials
+        stay with Codex. Local files and analysis are supported. Voice uses on-device macOS speech
+        recognition. Remote integrations below use API mode.
+      </p>
+      {account?.error && (
+        <p className="form-error" role="alert">
+          {account.error}
+        </p>
+      )}
+      <div className="button-group">
+        {!(account?.status === 'signed-in' && cloud.provider === 'chatgpt') && (
+          <button
+            className="button primary"
+            disabled={busy || !window.ahq || account?.status === 'signing-in'}
+            onClick={() => void connect()}
+          >
+            {account?.status === 'signed-in' ? 'Use ChatGPT plan' : 'Sign in with ChatGPT'}
+          </button>
+        )}
+        {account?.status === 'signing-in' && (
+          <button
+            className="button secondary"
+            disabled={busy}
+            onClick={() =>
+              void window
+                .ahq!.cancelChatGPTLogin()
+                .then(setAccount)
+                .catch((e) => notify(errorText(e)))
+            }
+          >
+            Cancel sign-in
+          </button>
+        )}
+        <button
+          className="button secondary"
+          disabled={busy || !window.ahq}
+          onClick={() => void refresh().catch((e) => notify(errorText(e)))}
+        >
+          Refresh connection
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export function ConnectionSettings({
   cloud,
   onCloud,
@@ -500,71 +635,75 @@ export function ConnectionSettings({
   }
   return (
     <div className="hq-connection-settings">
-      <section className="surface settings-section">
-        <h2>
-          <Cloud size={19} />
-          Astra cloud
-        </h2>
-        <p>
-          Each employee works in a hosted Astra session. Add your OpenAI API key to start work and transcribe
-          announcements.
-        </p>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void action(async () => {
-              if (!window.ahq) throw new Error('Open the desktop app to save keys.');
-              onCloud(await window.ahq.configureOpenAI({ key, model }));
-              setKey('');
-              notify('Astra cloud connected.');
-            });
-          }}
-        >
-          <label>
-            Astra / OpenAI API key
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              required
-              placeholder={
-                cloud.provider === 'openai' && cloud.configured
-                  ? 'A key is saved securely · enter to replace'
-                  : 'sk-…'
-              }
-            />
-          </label>
-          <label>
-            Model
-            <input required value={model} onChange={(e) => setModel(e.target.value)} />
-          </label>
-          <div className="form-hint">
-            Keys are encrypted by macOS and stay out of activity exports. API billing is separate from your
-            ChatGPT subscription.
-          </div>
-          <div className="button-group">
-            <button className="button primary" disabled={busy || !window.ahq}>
-              Connect Astra
-            </button>
-            {cloud.provider === 'openai' && cloud.configured && (
-              <button
-                type="button"
-                className="button secondary"
-                disabled={busy}
-                onClick={() =>
-                  void action(async () => {
-                    onCloud(await window.ahq!.disconnectCloud());
-                    notify('Cloud key removed from this device.');
-                  })
+      <ChatGPTConnection cloud={cloud} onCloud={onCloud} notify={notify} />
+      <details className="surface settings-section">
+        <summary>Optional API access</summary>
+        <section className="surface settings-section">
+          <h2>
+            <Cloud size={19} />
+            Astra cloud
+          </h2>
+          <p>
+            Use API billing for hosted employee sessions, remote integrations, and voice transcription.
+            Connecting here switches new assignments to API mode.
+          </p>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void action(async () => {
+                if (!window.ahq) throw new Error('Open the desktop app to save keys.');
+                onCloud(await window.ahq.configureOpenAI({ key, model }));
+                setKey('');
+                notify('Astra cloud connected.');
+              });
+            }}
+          >
+            <label>
+              Astra / OpenAI API key
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
+                required
+                placeholder={
+                  cloud.provider === 'openai' && cloud.configured
+                    ? 'A key is saved securely · enter to replace'
+                    : 'sk-…'
                 }
-              >
-                Disconnect
+              />
+            </label>
+            <label>
+              Model
+              <input required value={model} onChange={(e) => setModel(e.target.value)} />
+            </label>
+            <div className="form-hint">
+              Keys are encrypted by macOS and stay out of activity exports. API billing is separate from your
+              ChatGPT subscription.
+            </div>
+            <div className="button-group">
+              <button className="button primary" disabled={busy || !window.ahq}>
+                Connect Astra
               </button>
-            )}
-          </div>
-        </form>
-      </section>
+              {cloud.provider === 'openai' && cloud.configured && (
+                <button
+                  type="button"
+                  className="button secondary"
+                  disabled={busy}
+                  onClick={() =>
+                    void action(async () => {
+                      onCloud(await window.ahq!.disconnectCloud());
+                      notify('Cloud key removed from this device.');
+                    })
+                  }
+                >
+                  Disconnect
+                </button>
+              )}
+            </div>
+          </form>
+        </section>
+      </details>
       <section className="surface settings-section">
         <h2>Local database</h2>
         <p>Choose where Astra HQ keeps your workspace, recorded history, and activity journal.</p>
@@ -749,7 +888,13 @@ export function ActivityPage({
             .map((e) => (
               <article key={e.id}>
                 <span className={`activity-source ${e.source}`}>
-                  {e.source === 'cloud' ? 'Astra cloud' : e.source === 'example' ? 'Example' : 'Local'}
+                  {e.source === 'chatgpt'
+                    ? 'ChatGPT plan'
+                    : e.source === 'cloud'
+                      ? 'Astra cloud'
+                      : e.source === 'example'
+                        ? 'Example'
+                        : 'Local'}
                 </span>
                 <div>
                   <strong>
@@ -772,9 +917,7 @@ export function ActivityPage({
           <div className="integration-row" key={e.id}>
             <div>
               <strong>{e.name}</strong>
-              <small>
-                {e.sessionId ? `${e.activity} · ${e.sessionId}` : 'Ready · no cloud session started'}
-              </small>
+              <small>{e.sessionId ? `${e.activity} · ${e.sessionId}` : 'Ready · no session started'}</small>
             </div>
             {e.sessionId && (
               <button
@@ -794,9 +937,7 @@ export function ActivityPage({
       </section>
       <details className="surface settings-section">
         <summary>Local workflows</summary>
-        <p>
-          Codex workflows run in a local workspace. These jobs are separate from your Astra cloud employees.
-        </p>
+        <p>Codex workflows run in a local workspace. These jobs are separate from your office employees.</p>
         <button
           disabled={busy || !window.ahq}
           className="button secondary"

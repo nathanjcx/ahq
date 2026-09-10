@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DesktopAPI } from '../shared/types';
 const api: DesktopAPI = {
+  chatGPTAccount: () => ipcRenderer.invoke('chatgpt:account'),
+  loginChatGPT: () => ipcRenderer.invoke('chatgpt:login'),
+  cancelChatGPTLogin: () => ipcRenderer.invoke('chatgpt:cancel-login'),
+  useChatGPT: () => ipcRenderer.invoke('chatgpt:use'),
   recordFrame: (frame) => ipcRenderer.invoke('office:frame', frame),
   frameAt: (time) => ipcRenderer.invoke('office:frame-at', time),
   history: () => ipcRenderer.invoke('history:list'),

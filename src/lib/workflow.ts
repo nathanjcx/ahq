@@ -46,7 +46,11 @@ export function applyDecision(
         text: `${decision === 'approved' ? 'Approved' : 'Requested changes to'} “${approval.title}”`,
         time: timeNow(),
         kind: 'review',
-        source: approval.sessionId ? 'cloud' : 'local',
+        source: approval.sessionId?.startsWith('chatgpt-')
+          ? 'chatgpt'
+          : approval.sessionId
+            ? 'cloud'
+            : 'local',
       },
     ],
     messages:
@@ -113,7 +117,7 @@ export function applySession(state: AppState, employeeId: string, session: Cloud
         id: `${session.id}:${event.id}`,
         employeeId,
         kind: 'work' as const,
-        source: 'cloud' as const,
+        source: session.id.startsWith('chatgpt-') ? ('chatgpt' as const) : ('cloud' as const),
       })),
     ],
     messages: [
@@ -143,7 +147,9 @@ export function applySession(state: AppState, employeeId: string, session: Cloud
               id: uid(),
               employeeId,
               title: output.title,
-              summary: 'Astra cloud output is ready for review.',
+              summary: session.id.startsWith('chatgpt-')
+                ? 'Work from your ChatGPT session is ready for review.'
+                : 'Astra cloud output is ready for review.',
               content: output.content,
               createdAt: timeNow(),
               status: 'pending',

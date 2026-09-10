@@ -75,7 +75,7 @@ export interface WorkEvent {
   text: string;
   time: string;
   kind: 'work' | 'review' | 'announcement' | 'system';
-  source: 'example' | 'local' | 'cloud';
+  source: 'example' | 'local' | 'cloud' | 'chatgpt';
 }
 export interface FolderFile {
   path: string;
@@ -104,11 +104,18 @@ export interface AppState {
   demo: boolean;
 }
 export interface CloudSettings {
-  provider?: 'openai' | 'gateway';
+  provider?: 'chatgpt' | 'openai' | 'gateway';
+  account?: ChatGPTAccount;
   model?: string;
   endpoint: string;
   configured: boolean;
   connected: boolean;
+}
+export interface ChatGPTAccount {
+  status: 'signed-in' | 'signed-out' | 'signing-in' | 'unavailable';
+  email?: string;
+  plan?: string;
+  error?: string;
 }
 export interface CloudSession {
   reviewed?: boolean;
@@ -138,6 +145,10 @@ export interface Integration {
   configured: boolean;
 }
 export interface DesktopAPI {
+  chatGPTAccount(): Promise<ChatGPTAccount>;
+  loginChatGPT(): Promise<ChatGPTAccount>;
+  cancelChatGPTLogin(): Promise<ChatGPTAccount>;
+  useChatGPT(): Promise<CloudSettings>;
   recordFrame(frame: OfficeFrame): Promise<void>;
   frameAt(time: number): Promise<OfficeFrame | null>;
   history(): Promise<HistoryEntry[]>;

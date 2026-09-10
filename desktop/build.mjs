@@ -18,3 +18,31 @@ await build({
   outfile: 'dist-desktop/preload.cjs',
   external: ['electron', 'sql.js'],
 });
+
+if (process.platform === 'darwin') {
+  const { execFileSync } = await import('node:child_process');
+  const { resolve } = await import('node:path');
+  execFileSync(
+    'xcrun',
+    [
+      'swiftc',
+      '-swift-version',
+      '5',
+      '-O',
+      'desktop/transcribe.swift',
+      '-o',
+      'dist-desktop/transcribe',
+      '-framework',
+      'Speech',
+      '-Xlinker',
+      '-sectcreate',
+      '-Xlinker',
+      '__TEXT',
+      '-Xlinker',
+      '__info_plist',
+      '-Xlinker',
+      resolve('desktop/speech-info.plist'),
+    ],
+    { stdio: 'inherit' },
+  );
+}

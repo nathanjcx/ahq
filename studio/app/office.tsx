@@ -1318,7 +1318,13 @@ function EmployeeAvatar({
           />
           {employee.name.split(' ')[0]}
           <small style={{ fontSize: 9, opacity: 0.8 }}>
-            {listening ? 'Listening' : employee.sessionId ? '☁ Astra' : 'Preview'}
+            {listening
+              ? 'Listening'
+              : employee.sessionId?.startsWith('chatgpt-')
+                ? 'ChatGPT plan'
+                : employee.sessionId
+                  ? '☁ Astra'
+                  : 'Ready'}
           </small>
           {selected && <span aria-hidden="true"> ↗</span>}
         </button>
@@ -1384,31 +1390,94 @@ function RoomMarker({
   );
 }
 
-function OfficeSpeakers({ level, listening }: { level: number; listening: boolean }) {
+function OfficeSpeakers({
+  level,
+  listening,
+  timeSeconds,
+  live,
+}: {
+  level: number;
+  listening: boolean;
+  timeSeconds?: number;
+  live?: boolean;
+}) {
+  const horn = useRef<THREE.Group>(null);
+  const diaphragm = useRef<THREE.Mesh>(null);
+  const waves = useRef<(THREE.Mesh | null)[]>([]);
+  useFrame(() => {
+    const volume = listening ? Math.max(0, Math.min(1, level)) : 0;
+    const time = live ? Date.now() / 1000 : (timeSeconds ?? 0);
+    if (horn.current) {
+      horn.current.scale.set(1 + volume * 0.24, 1 + volume * 0.24, 1 + volume * 0.12);
+      horn.current.position.z = volume * 0.09;
+    }
+    if (diaphragm.current) {
+      diaphragm.current.scale.setScalar(1 + volume * 0.3);
+      (diaphragm.current.material as THREE.MeshStandardMaterial).emissiveIntensity = volume * 2.5;
+    }
+    waves.current.forEach((wave, index) => {
+      if (!wave) return;
+      const progress = (((time * 0.85 + index / 4) % 1) + 1) % 1;
+      wave.visible = listening && volume > 0.015;
+      wave.position.z = 1.7 + progress * 3.4;
+      wave.scale.setScalar(1 + progress * 1.7 + volume * 0.2);
+      (wave.material as THREE.MeshBasicMaterial).opacity = volume * (1 - progress) * 0.8;
+    });
+  });
   return (
-    <group>
-      {[-7.4, 7.4].map((x) => (
-        <group key={x} position={[x, 2.1, -5.57]}>
-          <Round s={[0.46, 0.7, 0.3]} color="#263b36" radius={0.055} />
-          {[0.14, -0.17].map((y) => (
-            <mesh key={y} position={[0, y, 0.17]} scale={1 + (listening ? level : 0) * 0.25}>
-              <circleGeometry args={[0.14, 24]} />
-              <meshStandardMaterial
-                color={listening ? '#92dbb0' : '#52635b'}
-                emissive="#57c595"
-                emissiveIntensity={listening ? level * 2 : 0}
-              />
-            </mesh>
-          ))}
-          {listening &&
-            [0, 1, 2].map((i) => (
-              <mesh key={i} position={[0, 0, 0.19 + i * 0.02]} scale={1 + level * (i + 1)}>
-                <ringGeometry args={[0.37 + i * 0.11, 0.38 + i * 0.11, 32]} />
-                <meshBasicMaterial color="#a6e2b9" transparent opacity={level * 0.7} depthWrite={false} />
-              </mesh>
-            ))}
+    <group position={[-1.45, 4.15, -5.75]}>
+      {/* High on the far wall, with a steel bracket and an oversized flared horn. */}
+      <Round p={[0, -0.7, -0.04]} s={[0.66, 1.8, 0.18]} color="#344942" radius={0.06} />
+      <Round p={[0, -0.37, 0.33]} s={[0.18, 0.2, 0.7]} color="#53675c" radius={0.045} />
+      <group rotation={[Math.PI / 10, Math.PI / 8, 0]}>
+        <group ref={horn}>
+          <mesh position={[0, 0, 0.21]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <cylinderGeometry args={[0.34, 0.34, 0.5, 32]} />
+            <meshStandardMaterial color="#34564b" roughness={0.4} metalness={0.3} />
+          </mesh>
+          <mesh position={[0, 0, 0.92]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <cylinderGeometry args={[1.07, 0.29, 1.42, 48, 1, true]} />
+            <meshStandardMaterial color="#ece7d6" roughness={0.38} metalness={0.18} side={THREE.DoubleSide} />
+          </mesh>
+          <mesh position={[0, 0, 1.63]} castShadow>
+            <torusGeometry args={[1.07, 0.075, 12, 64]} />
+            <meshStandardMaterial color="#bb9253" metalness={0.45} roughness={0.32} />
+          </mesh>
+          <mesh position={[0, 0, 0.36]}>
+            <circleGeometry args={[0.34, 32]} />
+            <meshStandardMaterial color="#203a32" />
+          </mesh>
+          <mesh ref={diaphragm} position={[0, 0, 0.39]}>
+            <sphereGeometry args={[0.2, 24, 16]} />
+            <meshStandardMaterial
+              color="#476e5d"
+              emissive="#70d8ab"
+              emissiveIntensity={0}
+              metalness={0.2}
+              roughness={0.35}
+            />
+          </mesh>
         </group>
-      ))}
+        {[0, 1, 2, 3].map((index) => (
+          <mesh
+            key={index}
+            ref={(mesh) => {
+              waves.current[index] = mesh;
+            }}
+            visible={false}
+          >
+            <ringGeometry args={[1.05, 1.11, 64]} />
+            <meshBasicMaterial
+              color="#27866b"
+              transparent
+              opacity={0}
+              side={THREE.DoubleSide}
+              depthWrite={false}
+              depthTest={false}
+            />
+          </mesh>
+        ))}
+      </group>
     </group>
   );
 }
@@ -1417,7 +1486,7 @@ function Scene(props: OfficeProps) {
   const surfaces = useSurfaceTextures();
   return (
     <>
-      <color attach="background" args={['#172724']} />
+      <color attach="background" args={['#f1f4ee']} />
       <Framing zoom={props.zoom} angle={props.angle} />
       <ambientLight intensity={0.38} />
       <hemisphereLight args={['#dce7df', '#3e4631', 0.72]} />
@@ -1440,7 +1509,12 @@ function Scene(props: OfficeProps) {
       <directionalLight position={[10, 9, -2]} intensity={1.1} color="#a9c9cd" />
       <SurfaceContext.Provider value={surfaces}>
         <Architecture />
-        <OfficeSpeakers level={props.microphoneLevel ?? 0} listening={!!props.listening} />
+        <OfficeSpeakers
+          level={props.microphoneLevel ?? 0}
+          listening={!!props.listening}
+          timeSeconds={props.timeSeconds}
+          live={props.live}
+        />
         <WorkflowHandoffs {...props} />
         {props.team.map((employee, index) => (
           <EmployeeAvatar
@@ -1460,11 +1534,12 @@ function Scene(props: OfficeProps) {
       <RoomMarker p={[-4.9, 0.17, 5.63]} room="workspace" label="The studio" onRoom={props.onRoom} />
       <RoomMarker p={[5.05, 0.17, -0.22]} room="meeting" label="Meeting room" onRoom={props.onRoom} />
       <RoomMarker p={[4.7, 0.17, 5.68]} room="lounge" label="The lounge" onRoom={props.onRoom} />
-      <RoomMarker p={[-1.18, 2.63, -5.44]} room="library" label="Library" onRoom={props.onRoom} />
+      <RoomMarker p={[-1.18, 0.75, -4.95]} room="library" label="Library" onRoom={props.onRoom} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.71, 0]} receiveShadow>
         <planeGeometry args={[200, 200]} />
-        <meshStandardMaterial color="#172724" roughness={1} />
+        <meshStandardMaterial color="#ffffff" roughness={1} />
       </mesh>
+      <gridHelper args={[200, 200, '#a7b6a3', '#b8c4b4']} position={[0, -0.7, 0]} />
     </>
   );
 }

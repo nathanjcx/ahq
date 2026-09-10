@@ -18,11 +18,11 @@ export const EmployeeSchema = z.object({
     .max(2200)
     .transform((value) =>
       [
-        'Astra cloud session',
+        'Astra session',
         ...value
           .split(',')
           .map((s) => s.trim())
-          .filter((s) => s && s.toLowerCase() !== 'astra cloud session'),
+          .filter((s) => s && !['astra cloud session', 'astra session'].includes(s.toLowerCase())),
       ].join(', '),
     ),
   color: z.string().regex(/^#[0-9a-f]{6}$/i),
@@ -112,7 +112,7 @@ export const StateSchema = z.object({
         text: z.string().max(12000),
         time: dateTime,
         kind: z.enum(['work', 'review', 'announcement', 'system']),
-        source: z.enum(['example', 'local', 'cloud']),
+        source: z.enum(['example', 'local', 'cloud', 'chatgpt']),
       }),
     )
     .max(20000),

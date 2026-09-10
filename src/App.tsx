@@ -587,7 +587,13 @@ export default function App() {
               {page === 'office' && (
                 <span className="mode-badge">
                   <span className={cloud.connected ? 'status-dot' : 'sample-dot'} />
-                  {cloud.connected ? 'Cloud connected' : state.demo ? 'Sample office' : 'Your office'}
+                  {cloud.connected
+                    ? cloud.provider === 'chatgpt'
+                      ? 'ChatGPT plan connected'
+                      : 'Cloud connected'
+                    : state.demo
+                      ? 'Sample office'
+                      : 'Your office'}
                 </span>
               )}
               {page === 'office' || page === 'employees' ? (
@@ -679,7 +685,7 @@ export default function App() {
                       {!state.employees.length
                         ? 'Your office is ready'
                         : cloud.connected
-                          ? `${state.employees.filter((e) => e.sessionId && e.status === 'working').length} cloud sessions active`
+                          ? `${state.employees.filter((e) => e.sessionId && e.status === 'working').length} sessions active`
                           : state.demo
                             ? 'A preview of your future team'
                             : 'Ready for your direction'}
@@ -1067,10 +1073,10 @@ export default function App() {
                     {
                       id: uid(),
                       employeeId: person.id,
-                      text: `Started an Astra cloud session: ${assignment}`,
+                      text: `Started ${session.id.startsWith('chatgpt-') ? 'a ChatGPT plan session' : 'an Astra session'}: ${assignment}`,
                       time: timeNow(),
                       kind: 'work',
-                      source: 'cloud',
+                      source: session.id.startsWith('chatgpt-') ? 'chatgpt' : 'cloud',
                     },
                   ],
                 },
@@ -1078,7 +1084,9 @@ export default function App() {
                 session,
               ),
             );
-            notify(`${person.name}’s Astra cloud session has started.`);
+            notify(
+              `${person.name}’s ${session.id.startsWith('chatgpt-') ? 'ChatGPT plan' : 'Astra cloud'} session has started.`,
+            );
           }}
         />
       )}
@@ -1291,7 +1299,7 @@ export default function App() {
               {
                 icon: Sparkles,
                 title: 'Connect the work',
-                text: 'Add your Astra / OpenAI API key in Settings to run real cloud sessions.',
+                text: 'Sign in with ChatGPT in Settings to use your plan for employee work.',
                 action: () => navigate('settings'),
               },
             ].map((item, i) => (
@@ -1309,7 +1317,7 @@ export default function App() {
             {state.demo
               ? 'You’re exploring a sample workspace. Example conversations and deliverables are labeled. '
               : 'Your office starts empty. Add employees when you’re ready. '}
-            Actions are saved locally; employee work starts only with a connected Astra cloud session.
+            Actions are saved locally; employee work starts only with a connected Astra session.
           </div>
         </Modal>
       )}
@@ -1344,11 +1352,11 @@ function playReviewChime() {
 }
 function ensureCloudSkill(skills: string) {
   return [
-    'Astra cloud session',
+    'Astra session',
     ...skills
       .split(',')
       .map((s) => s.trim())
-      .filter((s) => s && s.toLowerCase() !== 'astra cloud session'),
+      .filter((s) => s && !['astra cloud session', 'astra session'].includes(s.toLowerCase())),
   ].join(', ');
 }
 function CloudIcon() {
@@ -1461,7 +1469,7 @@ function EmployeeForm({
         </label>
         <div className="skill-tags">
           <span>
-            <CloudIcon /> Astra cloud session · included
+            <CloudIcon /> Astra session · included
           </span>
           {['Web search', 'Data analysis', ...integrations].map((skill) => (
             <button
@@ -1481,7 +1489,7 @@ function EmployeeForm({
           ))}
         </div>
         <p className="form-hint">
-          Astra cloud session is included for every employee. Add connected integrations and working skills.
+          Astra session is included for every employee. Add connected integrations and working skills.
         </p>
         <div className="modal-footer">
           <button type="button" className="button secondary" onClick={onClose}>
@@ -1531,7 +1539,7 @@ function GoalForm({
         </label>
         <div className="info-note">
           <Target size={18} />
-          This goal becomes context for every new cloud assignment.
+          This goal becomes context for every new assignment.
         </div>
         <div className="modal-footer">
           <span className="muted">{value.length}/500</span>
@@ -1685,9 +1693,11 @@ function EmployeeDetail({
           <span className={`status-pill ${employee.status}`}>
             {employee.sessionId
               ? employee.status === 'working'
-                ? 'Astra cloud session'
+                ? employee.sessionId.startsWith('chatgpt-')
+                  ? 'ChatGPT plan session'
+                  : 'Astra cloud session'
                 : employee.status
-              : 'Ready for a cloud assignment'}
+              : 'Ready for an assignment'}
           </span>
         </div>
       </div>
@@ -1709,7 +1719,7 @@ function EmployeeDetail({
           <p>
             {employee.sessionId
               ? `Session ${employee.sessionId}`
-              : 'No cloud session is running for this employee.'}
+              : 'No session is running for this employee.'}
           </p>
         </div>
       </div>
@@ -1745,14 +1755,14 @@ function EmployeeDetail({
         {folderIds.length > 0 && (
           <label className="checkbox-label cloud-consent">
             <input type="checkbox" checked={allow} onChange={(e) => setAllow(e.target.checked)} />
-            Share the selected copies with my configured Astra cloud service for this assignment.
+            Share the selected copies with my employee’s AI session for this assignment.
           </label>
         )}
         {!cloud.connected && (
           <div className="info-note">
             {window.ahq
-              ? 'Add your Astra / OpenAI API key in Settings to start cloud work.'
-              : 'Open the desktop app and connect Astra cloud to start an employee session.'}
+              ? 'Sign in with ChatGPT in Settings to start work using your plan.'
+              : 'Open the desktop app and sign in with ChatGPT to start an employee session.'}
           </div>
         )}
         {error && (
@@ -1788,12 +1798,12 @@ function EmployeeDetail({
               }
             }}
           >
-            {running ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}Start cloud
-            session
+            {running ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
+            {cloud.provider === 'chatgpt' ? 'Start with ChatGPT' : 'Start cloud session'}
           </button>
         ) : (
           <button className="button primary" onClick={onSettings}>
-            Connect Astra <ArrowRight size={15} />
+            Connect ChatGPT <ArrowRight size={15} />
           </button>
         )}
       </div>

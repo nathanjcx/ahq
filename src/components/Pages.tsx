@@ -84,7 +84,7 @@ export function EmployeesPage({
             </div>
             <div className="employee-card-footer">
               <span className={e.status === 'review' ? 'amber-dot' : 'status-dot'} />
-              <span>{e.sessionId ? e.activity : 'Ready for a cloud assignment'}</span>
+              <span>{e.sessionId ? e.activity : 'Ready for an assignment'}</span>
               <ArrowRight size={14} />
             </div>
           </button>
@@ -106,8 +106,8 @@ export function EmployeesPage({
         <div>
           <strong>A role gives direction. A connection makes it possible.</strong>
           <p>
-            Each employee runs in their own Astra cloud session when assigned work. Connect your gateway in
-            settings to get started.
+            Each employee has their own Astra session when assigned work. Sign in with ChatGPT in settings to
+            get started.
           </p>
         </div>
       </div>
@@ -237,9 +237,7 @@ export function AnnouncePage({
             </div>
           ))}
         </div>
-        <p className="small-note">
-          Saved announcements are included as context when a new cloud session starts.
-        </p>
+        <p className="small-note">Saved announcements are included as context when a new session starts.</p>
       </aside>
     </div>
   );
@@ -433,9 +431,7 @@ export function ConversationsPage({
               <p>{person?.jobTitle ?? 'A space for the little things that move work forward.'}</p>
             </div>
           </div>
-          <span className="mode-badge">
-            {person?.sessionId ? 'Cloud assignment context' : 'Local workspace'}
-          </span>
+          <span className="mode-badge">{person?.sessionId ? 'Assignment context' : 'Local workspace'}</span>
         </header>
         <div className="conversation-messages">
           {messages.length === 0 && (
@@ -557,7 +553,9 @@ export function NeedsYouPage({ state, onReview }: Common & { onReview: (a: Appro
               <BookOpen size={14} />
               {a.sources.length} sources included<span>·</span>
               {a.sessionId
-                ? 'Astra cloud output'
+                ? a.sessionId.startsWith('chatgpt-')
+                  ? 'ChatGPT plan output'
+                  : 'Astra cloud output'
                 : a.employeeId === 'you'
                   ? 'Local source brief'
                   : 'Example deliverable'}
@@ -721,15 +719,15 @@ export function SettingsPage({
           <div className="section-heading">
             <h2>
               <Cloud size={18} />
-              Astra cloud
+              Employee connection
             </h2>
             <span className={`status-pill ${cloud.connected ? 'ready' : 'waiting'}`}>
               {cloud.connected ? 'Connected' : 'Not connected'}
             </span>
           </div>
           <p className="muted">
-            Astra cloud uses your configured provider. The optional gateway below is for organizations running
-            their own service.
+            Employee work uses your selected connection. The optional gateway below is for organizations
+            running their own service.
           </p>
           {!window.ahq && (
             <div className="info-note">
@@ -786,7 +784,7 @@ export function SettingsPage({
                   {connecting ? <LoaderCircle size={15} className="spin" /> : <Link2 size={15} />}
                   {cloud.configured ? 'Update connection' : 'Connect Astra cloud'}
                 </button>
-                {cloud.configured && (
+                {cloud.provider === 'gateway' && cloud.configured && (
                   <button
                     type="button"
                     className="button secondary"
