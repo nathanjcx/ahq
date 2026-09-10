@@ -1,9 +1,7 @@
 .launch-panel {
-  position: fixed;
-  z-index: 36;
-  top: 76px;
-  left: 22px;
-  width: 350px;
+  position: relative;
+  min-width: 0;
+  width: 100%;
   border: 1px solid var(--border, #ddd7cb);
   border-radius: 14px;
   background: var(--surface, #fffcf5);
@@ -38,9 +36,7 @@
   white-space: nowrap;
 }
 .launch-panel__body {
-  max-height: calc(100dvh - 140px);
   padding: 0 14px 14px;
-  overflow-y: auto;
 }
 .launch-panel__intro {
   display: grid;
@@ -204,15 +200,5 @@
 @keyframes launch-spin {
   to {
     transform: rotate(360deg);
-  }
-}
-@media (max-width: 700px) {
-  .launch-panel {
-    top: 76px;
-    left: 12px;
-    width: min(350px, calc(100vw - 24px));
-  }
-  .launch-panel__body {
-    max-height: 55dvh;
   }
 }

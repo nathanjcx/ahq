@@ -9,6 +9,7 @@ import type {
 } from './demo';
 export type Page =
   | 'office'
+  | 'live-office'
   | 'employees'
   | 'announce'
   | 'commitments'

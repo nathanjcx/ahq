@@ -1,12 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { tourTime } from './demo-tour-model';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
   BookOpen,
   CalendarDays,
   CheckCheck,
+  ChevronLeft,
   ChevronRight,
   Cloud,
   Database as DatabaseIcon,
+  Download,
   FileText,
   Flag,
   FolderOpen,
@@ -37,40 +40,105 @@ import type {
 } from '../../shared/types';
 import type { UpdateState } from '../App';
 import { clockTime, dueLabel, employeeById, timeNow, uid } from '../lib/store';
+import { useOfficeEnvironment } from '../lib/office-environment';
+import {
+  downloadProductLaunchFile,
+  productLaunchFile,
+  productLaunchFilesAt,
+  PHOTO_OPTIONS,
+  PRODUCT_LAUNCH_SELECTED_PHOTO_ID,
+  PRODUCT_LAUNCH_LANDING_PAGE,
+  PRODUCT_LAUNCH_MEETING,
+  type ProductLaunchDemoFile,
+} from '../lib/product-launch-demo';
 import Avatar from './Avatar';
 import Modal from './Modal';
+import Markdown from './Markdown';
+import { TOUR_FORECAST, TOUR_SLOGAN } from './demo-tour-model';
 import './office-chat.css';
+import './file-preview.css';
 type Common = { state: AppState; update: UpdateState; notify: (message: string) => void };
 
-export function FilesPage({ state, notify }: { state: AppState; notify: (message: string) => void }) {
-  const [files, setFiles] = useState<LocalFileEntry[]>([]);
+export function FilesPage({
+  state,
+  notify,
+  demoElapsed = 0,
+}: {
+  state: AppState;
+  notify: (message: string) => void;
+  demoElapsed?: number;
+}) {
+  const { api: availableApi, isDemo } = useOfficeEnvironment();
+  const api = isDemo ? undefined : availableApi;
+  const [nativeFiles, setFiles] = useState<LocalFileEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const refresh = async () => {
-    if (!window.ahq) {
+  const [previewId, setPreviewId] = useState<ProductLaunchDemoFile['id'] | null>(null);
+  const initialPhoto =
+    demoElapsed >= tourTime(52_000)
+      ? Math.max(
+          0,
+          PHOTO_OPTIONS.findIndex((photo) => photo.id === PRODUCT_LAUNCH_SELECTED_PHOTO_ID),
+        )
+      : 0;
+  const [selectedPhoto, setSelectedPhoto] = useState(initialPhoto);
+  const [handedOffPhoto, setHandedOffPhoto] = useState<number | null>(
+    demoElapsed >= tourTime(52_000) ? initialPhoto : null,
+  );
+  const previousElapsed = useRef(demoElapsed);
+  const request = useRef(0);
+  const demoFiles = isDemo ? productLaunchFilesAt(demoElapsed) : [];
+  const files: LocalFileEntry[] = isDemo ? demoFiles : nativeFiles;
+  const preview =
+    isDemo && previewId && demoFiles.some((file) => file.id === previewId)
+      ? productLaunchFile(previewId)
+      : undefined;
+  const refresh = useCallback(async () => {
+    const token = ++request.current;
+    if (!api) {
+      setFiles([]);
       setLoading(false);
       return;
     }
     setLoading(true);
     try {
-      setFiles(await window.ahq.listFiles());
+      const next = await api.listFiles();
+      if (token === request.current) setFiles(next);
     } catch (error) {
-      notify(error instanceof Error ? error.message : 'Could not read local files.');
+      if (token === request.current)
+        notify(error instanceof Error ? error.message : 'Could not read local files.');
     } finally {
-      setLoading(false);
+      if (token === request.current) setLoading(false);
     }
-  };
+  }, [api, notify]);
   useEffect(() => {
     void refresh();
-  }, []);
+    return () => {
+      request.current += 1;
+    };
+  }, [refresh]);
+  useEffect(() => {
+    if (!isDemo || (previewId && !productLaunchFilesAt(demoElapsed).some((file) => file.id === previewId)))
+      setPreviewId(null);
+    if (!isDemo || demoElapsed < previousElapsed.current) {
+      setSelectedPhoto(0);
+      setHandedOffPhoto(null);
+    }
+    previousElapsed.current = demoElapsed;
+  }, [isDemo, demoElapsed, previewId]);
   const documents = files.filter((file) => file.kind === 'document');
   const assets = files.filter((file) => file.kind === 'asset');
   const database = files.find((file) => file.kind === 'database');
-  const show = async (filePath: string) => {
-    if (!window.ahq || busy) return;
+  const show = async (file: LocalFileEntry) => {
+    if (isDemo) {
+      const fixture = demoFiles.find((candidate) => candidate.path === file.path);
+      if (fixture) setPreviewId(fixture.id);
+      return;
+    }
+    if (!api || busy) return;
     setBusy(true);
     try {
-      await window.ahq.showFileInFinder(filePath);
+      await api.showFileInFinder(file.path);
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Could not open that file in Finder.');
     } finally {
@@ -83,6 +151,19 @@ export function FilesPage({ state, notify }: { state: AppState; notify: (message
       : bytes < 1024 * 1024
         ? `${Math.round(bytes / 1024)} KB`
         : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  const fileButton = (file: LocalFileEntry) => {
+    const fixture = isDemo ? demoFiles.find((candidate) => candidate.path === file.path) : undefined;
+    return (
+      <button
+        className="button secondary"
+        data-demo-target={fixture ? `file-${fixture.id}` : undefined}
+        disabled={isDemo ? !fixture : !api || busy}
+        onClick={() => void show(file)}
+      >
+        {isDemo ? 'Open preview' : 'Show in Finder'}
+      </button>
+    );
+  };
   return (
     <div className="files-page">
       <div className="page-toolbar">
@@ -92,19 +173,15 @@ export function FilesPage({ state, notify }: { state: AppState; notify: (message
           </button>
         </div>
         <div className="button-group">
-          <button
-            className="button secondary"
-            disabled={!window.ahq || loading}
-            onClick={() => void refresh()}
-          >
+          <button className="button secondary" disabled={!api || loading} onClick={() => void refresh()}>
             <RefreshCw size={14} className={loading ? 'spin' : undefined} /> Refresh
           </button>
           <button
             className="button primary"
-            disabled={!window.ahq || busy}
+            disabled={!api || busy}
             onClick={() =>
-              void window
-                .ahq!.showStorageInFinder()
+              void api
+                ?.showStorageInFinder()
                 .catch((error) =>
                   notify(error instanceof Error ? error.message : 'Could not open local storage.'),
                 )
@@ -131,9 +208,7 @@ export function FilesPage({ state, notify }: { state: AppState; notify: (message
                   {database.relativePath} · {size(database.size)}
                 </small>
               </div>
-              <button className="button secondary" onClick={() => void show(database.path)}>
-                Show in Finder
-              </button>
+              {fileButton(database)}
             </div>
           )}
           {state.folders.map((folder) => (
@@ -143,7 +218,11 @@ export function FilesPage({ state, notify }: { state: AppState; notify: (message
                 <strong>{folder.name}</strong>
                 <small>{folder.files.length} source files · local working copy</small>
               </div>
-              <button className="button secondary" onClick={() => void window.ahq?.showStorageInFinder()}>
+              <button
+                className="button secondary"
+                disabled={!api}
+                onClick={() => void api?.showStorageInFinder()}
+              >
                 Storage folder
               </button>
             </div>
@@ -157,9 +236,7 @@ export function FilesPage({ state, notify }: { state: AppState; notify: (message
                   {file.relativePath} · {size(file.size)}
                 </small>
               </div>
-              <button className="button secondary" onClick={() => void show(file.path)}>
-                Show in Finder
-              </button>
+              {fileButton(file)}
             </div>
           ))}
           {!database && !state.folders.length && !assets.length && (
@@ -174,7 +251,7 @@ export function FilesPage({ state, notify }: { state: AppState; notify: (message
           </h2>
           <span className="muted">{documents.length} saved</span>
         </div>
-        {loading ? (
+        {!isDemo && loading ? (
           <p className="muted">Reading your local workspace…</p>
         ) : documents.length ? (
           <div className="files-object-list">
@@ -187,9 +264,7 @@ export function FilesPage({ state, notify }: { state: AppState; notify: (message
                     {file.relativePath} · {size(file.size)}
                   </small>
                 </div>
-                <button className="button secondary" onClick={() => void show(file.path)}>
-                  Show in Finder
-                </button>
+                {fileButton(file)}
               </div>
             ))}
           </div>
@@ -197,7 +272,401 @@ export function FilesPage({ state, notify }: { state: AppState; notify: (message
           <p className="muted">Generated employee documents will appear here as they are saved.</p>
         )}
       </section>
+      {preview && (
+        <Modal
+          title={preview.name}
+          subtitle={`Prepared by ${employeeById(state.employees, preview.ownerId)?.name ?? 'your team'} · ${preview.title}`}
+          onClose={() => setPreviewId(null)}
+          wide
+        >
+          <ProductFilePreview
+            file={preview}
+            selectedPhoto={selectedPhoto}
+            handedOffPhoto={handedOffPhoto}
+            onSelectPhoto={setSelectedPhoto}
+            onPhotoHandoff={() => {
+              setHandedOffPhoto(selectedPhoto);
+              notify(
+                `Demo handoff: ${PHOTO_OPTIONS[selectedPhoto].title} is ready for the Software Engineer.`,
+              );
+            }}
+          />
+          <div className="modal-footer">
+            <button className="button secondary" onClick={() => downloadProductLaunchFile(preview.id)}>
+              <Download size={15} />{' '}
+              {preview.id === 'app'
+                ? 'Download HTML'
+                : preview.id === 'meeting'
+                  ? 'Download calendar file'
+                  : 'Download file'}
+            </button>
+            <button
+              className="button primary"
+              data-demo-target="file-preview-close"
+              onClick={() => setPreviewId(null)}
+            >
+              Close preview
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
+  );
+}
+
+function ProductFilePreview({
+  file,
+  selectedPhoto,
+  handedOffPhoto,
+  onSelectPhoto,
+  onPhotoHandoff,
+}: {
+  file: NonNullable<ReturnType<typeof productLaunchFile>>;
+  selectedPhoto: number;
+  handedOffPhoto: number | null;
+  onSelectPhoto: (index: number) => void;
+  onPhotoHandoff: () => void;
+}) {
+  if (file.id === 'meeting') return <MeetingCalendarPreview />;
+  if (file.id === 'photo')
+    return (
+      <MarketingPhotoPreview
+        selected={selectedPhoto}
+        handedOff={handedOffPhoto === selectedPhoto}
+        onSelect={onSelectPhoto}
+        onHandoff={onPhotoHandoff}
+      />
+    );
+  if (file.id === 'app') return <LandingPagePreview photoIndex={handedOffPhoto ?? selectedPhoto} />;
+  if (file.id === 'slogan')
+    return (
+      <section className="file-campaign-preview" data-demo-target="slogan-preview">
+        <div className="file-campaign-card">
+          <span className="file-landing-eyebrow">ASTRA HQ PRODUCT LAUNCH</span>
+          <h2>{TOUR_SLOGAN}</h2>
+          <p>
+            Meet the team that turns “what if” into “done.”
+            <br />
+            Build. Plan. Create. All from your little office.
+          </p>
+          <div>
+            <Sparkles size={17} />
+            <span>Coming to an office near you.</span>
+          </div>
+        </div>
+        <details className="file-preview-source">
+          <summary>View HTML source</summary>
+          <pre className="file-code-preview">
+            <code>{file.content}</code>
+          </pre>
+        </details>
+      </section>
+    );
+  if (file.previewKind === 'image')
+    return (
+      <figure className="file-image-preview">
+        <img src={file.assetUrl} alt={file.title} />
+        <figcaption>{file.title}</figcaption>
+      </figure>
+    );
+  if (file.previewKind === 'spreadsheet') {
+    const money = (value: number) =>
+      new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0,
+      }).format(value);
+    const total = TOUR_FORECAST.reduce(
+      (sum, row) => ({
+        revenue: sum.revenue + row.revenue,
+        costs: sum.costs + row.costs,
+        profit: sum.profit + row.profit,
+      }),
+      { revenue: 0, costs: 0, profit: 0 },
+    );
+    return (
+      <div className="file-sheet-preview">
+        <div className="file-sheet-scroll">
+          <table>
+            <caption>Potential profit forecast · Sample assumptions · USD</caption>
+            <thead>
+              <tr>
+                <th scope="col">Month</th>
+                <th scope="col">Customers</th>
+                <th scope="col">Revenue</th>
+                <th scope="col">Costs</th>
+                <th scope="col">Profit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {TOUR_FORECAST.map((row) => (
+                <tr key={row.month}>
+                  <th scope="row">{row.month}</th>
+                  <td>{row.customers}</td>
+                  <td>{money(row.revenue)}</td>
+                  <td>{money(row.costs)}</td>
+                  <td>{money(row.profit)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <th scope="row">Total</th>
+                <td>—</td>
+                <td>{money(total.revenue)}</td>
+                <td>{money(total.costs)}</td>
+                <td>{money(total.profit)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <Markdown
+          content={file.content
+            .split('\n')
+            .filter((line) => !line.startsWith('|') && !line.startsWith('# '))
+            .join('\n')}
+        />
+      </div>
+    );
+  }
+  if (file.previewKind === 'html')
+    return (
+      <pre className="file-code-preview">
+        <code>{file.content}</code>
+      </pre>
+    );
+  return (
+    <div className="document-preview">
+      <Markdown content={file.content} />
+    </div>
+  );
+}
+
+function MeetingCalendarPreview() {
+  return (
+    <section className="file-calendar-preview" aria-label="Created demo calendar event">
+      <header className="file-calendar-heading">
+        <div>
+          <CalendarDays size={23} />
+          <div>
+            <h3>October 2026</h3>
+            <p>{PRODUCT_LAUNCH_MEETING.date} · Eastern Time</p>
+          </div>
+        </div>
+        <span className="file-calendar-created">
+          <CheckCheck size={14} /> Created in demo calendar
+        </span>
+      </header>
+      <div className="file-calendar-scroll">
+        <div className="file-calendar-week">
+          <div className="file-calendar-hours" aria-hidden="true">
+            <span>9 AM</span>
+            <span>10 AM</span>
+            <span>11 AM</span>
+            <span>12 PM</span>
+          </div>
+          {[
+            { day: 'MON', date: 12 },
+            { day: 'TUE', date: 13 },
+            { day: 'WED', date: 14 },
+            { day: 'THU', date: 15 },
+            { day: 'FRI', date: 16 },
+          ].map(({ day, date }) => (
+            <div className={`file-calendar-day ${date === 15 ? 'selected' : ''}`} key={date}>
+              <div className="file-calendar-day-heading">
+                <span>{day}</span>
+                <strong>{date}</strong>
+              </div>
+              <div className="file-calendar-day-hours">
+                {date === 15 && (
+                  <div
+                    className="file-calendar-event"
+                    data-demo-target="meeting-event"
+                    title={`${PRODUCT_LAUNCH_MEETING.title} · ${PRODUCT_LAUNCH_MEETING.time}`}
+                  >
+                    <strong>Astra HQ launch</strong>
+                    <small>10–10:30 AM</small>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="file-calendar-details">
+        <div>
+          <h4>{PRODUCT_LAUNCH_MEETING.title}</h4>
+          <strong>{PRODUCT_LAUNCH_MEETING.time}</strong>
+          <p>{PRODUCT_LAUNCH_MEETING.attendees.join(' · ')}</p>
+        </div>
+        <ul>
+          {PRODUCT_LAUNCH_MEETING.agenda.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </div>
+      <p className="file-calendar-note">
+        Sample event created in this demo. Your connected calendar is unchanged.
+      </p>
+    </section>
+  );
+}
+
+function MarketingPhotoPreview({
+  selected,
+  handedOff,
+  onSelect,
+  onHandoff,
+}: {
+  selected: number;
+  handedOff: boolean;
+  onSelect: (index: number) => void;
+  onHandoff: () => void;
+}) {
+  const drag = useRef<{ pointerId: number; x: number; y: number } | null>(null);
+  const [offset, setOffset] = useState(0);
+  const photo = PHOTO_OPTIONS[selected];
+  const step = (direction: number) =>
+    onSelect((selected + direction + PHOTO_OPTIONS.length) % PHOTO_OPTIONS.length);
+  return (
+    <section className="file-photo-preview" aria-label="Choose a marketing image">
+      <div className="file-photo-heading">
+        <span>Marketing image options</span>
+        <strong aria-live="polite">
+          {selected + 1} / {PHOTO_OPTIONS.length} · {photo.title}
+        </strong>
+      </div>
+      <div
+        className={`file-photo-viewport ${offset ? 'dragging' : ''}`}
+        data-demo-target="photo-swipe"
+        role="group"
+        aria-label="Swipe left or right to compare marketing photos"
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+            event.preventDefault();
+            step(event.key === 'ArrowLeft' ? -1 : 1);
+          }
+        }}
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          drag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+          setOffset(0);
+          if (event.isTrusted) event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          if (drag.current?.pointerId === event.pointerId)
+            setOffset(Math.max(-90, Math.min(90, event.clientX - drag.current.x)));
+        }}
+        onPointerUp={(event) => {
+          const start = drag.current;
+          drag.current = null;
+          setOffset(0);
+          if (!start || start.pointerId !== event.pointerId) return;
+          const dx = event.clientX - start.x;
+          const dy = event.clientY - start.y;
+          if (Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy) * 1.2) step(dx < 0 ? 1 : -1);
+          if (event.isTrusted && event.currentTarget.hasPointerCapture(event.pointerId))
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        }}
+        onPointerCancel={() => {
+          drag.current = null;
+          setOffset(0);
+        }}
+      >
+        <img
+          src={photo.assetUrl}
+          alt={photo.alt}
+          draggable={false}
+          onDragStart={(event) => event.preventDefault()}
+          style={{ transform: `translateX(${offset}px)` }}
+        />
+        <span className="file-photo-swipe-hint">Swipe to compare</span>
+      </div>
+      <div className="file-photo-controls">
+        <button
+          className="button secondary"
+          data-demo-target="photo-previous"
+          aria-label="Previous marketing photo"
+          onClick={() => step(-1)}
+        >
+          <ChevronLeft size={16} />
+        </button>
+        <div className="file-photo-thumbnails" aria-label="Marketing photo options">
+          {PHOTO_OPTIONS.map((option, index) => (
+            <button
+              key={option.id}
+              className={selected === index ? 'selected' : ''}
+              data-demo-target={`photo-option-${index + 1}`}
+              aria-label={`Select ${option.title}`}
+              aria-pressed={selected === index}
+              onClick={() => onSelect(index)}
+            >
+              <img src={option.assetUrl} alt="" draggable={false} />
+              <span>{index + 1}</span>
+            </button>
+          ))}
+        </div>
+        <button
+          className="button secondary"
+          data-demo-target="photo-next"
+          aria-label="Next marketing photo"
+          onClick={() => step(1)}
+        >
+          <ChevronRight size={16} />
+        </button>
+      </div>
+      <div className="file-photo-handoff">
+        <span>
+          {handedOff
+            ? 'Image sent to the Software Engineer in this demo.'
+            : 'Choose the image for the finished landing page.'}
+        </span>
+        <button className="button primary" data-demo-target="photo-handoff" onClick={onHandoff}>
+          <Send size={14} /> Use image · send to Software Engineer
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function LandingPagePreview({ photoIndex }: { photoIndex: number }) {
+  const photo = PHOTO_OPTIONS[photoIndex];
+  return (
+    <article className="file-landing-preview" data-demo-target="landing-page-preview">
+      <header className="file-landing-nav">
+        <strong>
+          <Leaf size={18} /> Astra HQ
+        </strong>
+        <span>Your next big thing starts here.</span>
+      </header>
+      <div className="file-landing-hero">
+        <div className="file-landing-copy">
+          <span className="file-landing-eyebrow">YOUR AI WORKFORCE, TOGETHER</span>
+          <h2>{PRODUCT_LAUNCH_LANDING_PAGE.headline}</h2>
+          <p>{PRODUCT_LAUNCH_LANDING_PAGE.description}</p>
+          <span className="file-landing-cta">
+            {PRODUCT_LAUNCH_LANDING_PAGE.ctaLabel}
+            <ArrowRight size={15} />
+          </span>
+        </div>
+        <figure>
+          <img src={photo.assetUrl} alt={photo.alt} />
+          <figcaption>{photo.title} · Selected by Marketing</figcaption>
+        </figure>
+      </div>
+      <div className="file-landing-features">
+        {PRODUCT_LAUNCH_LANDING_PAGE.features.map((feature) => (
+          <section key={feature.title}>
+            <h3>{feature.title}</h3>
+            <p>{feature.description}</p>
+          </section>
+        ))}
+      </div>
+      <footer>
+        <CheckCheck size={14} /> Landing page built · Marketing image included · HTML ready to download
+      </footer>
+    </article>
   );
 }
 export function EmployeesPage({
@@ -932,6 +1401,8 @@ export function SettingsPage({
   onBrief: (f: WorkspaceFolder) => void;
   onReset: () => void;
 }) {
+  const { api: availableApi, isDemo } = useOfficeEnvironment();
+  const api = isDemo ? undefined : availableApi;
   const [name, setName] = useState(state.workspaceName);
   const [endpoint, setEndpoint] = useState(cloud.endpoint);
   const [token, setToken] = useState('');
@@ -939,11 +1410,11 @@ export function SettingsPage({
   const [error, setError] = useState('');
   const [reset, setReset] = useState(false);
   async function connect() {
-    if (!window.ahq) return;
+    if (!api) return;
     setConnecting(true);
     setError('');
     try {
-      const settings = await window.ahq.configureCloud({ endpoint, token });
+      const settings = await api.configureCloud({ endpoint, token });
       setCloud(settings);
       setToken('');
       notify('Your Astra cloud gateway is connected.');
@@ -1062,7 +1533,7 @@ export function SettingsPage({
             Employee work uses your selected connection. The optional gateway below is for organizations
             running their own service.
           </p>
-          {!window.ahq && (
+          {!api && (
             <div className="info-note">
               <Cloud size={18} />
               <span>
@@ -1086,7 +1557,7 @@ export function SettingsPage({
                   value={endpoint}
                   onChange={(e) => setEndpoint(e.target.value)}
                   placeholder="https://your-astra-gateway.example.com"
-                  disabled={!window.ahq || connecting}
+                  disabled={!api || connecting}
                   required
                 />
               </label>
@@ -1100,7 +1571,7 @@ export function SettingsPage({
                   placeholder={
                     cloud.configured ? 'Leave blank to keep the saved token' : 'Your gateway access token'
                   }
-                  disabled={!window.ahq || connecting}
+                  disabled={!api || connecting}
                   required={!cloud.configured}
                 />
               </label>
@@ -1113,7 +1584,7 @@ export function SettingsPage({
                 </p>
               )}
               <div className="button-group">
-                <button type="submit" className="button primary" disabled={!window.ahq || connecting}>
+                <button type="submit" className="button primary" disabled={!api || connecting}>
                   {connecting ? <LoaderCircle size={15} className="spin" /> : <Link2 size={15} />}
                   {cloud.configured ? 'Update connection' : 'Connect Astra cloud'}
                 </button>
@@ -1121,9 +1592,11 @@ export function SettingsPage({
                   <button
                     type="button"
                     className="button secondary"
+                    disabled={!api || connecting}
                     onClick={async () => {
+                      if (!api) return;
                       try {
-                        const next = await window.ahq!.disconnectCloud();
+                        const next = await api.disconnectCloud();
                         setCloud(next);
                         notify('Astra gateway disconnected on this device.');
                       } catch {

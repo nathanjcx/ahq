@@ -11,6 +11,26 @@ npm install
 npm run dev:desktop
 ```
 
+On macOS, the development launcher prepares a signed local **Astra HQ.app** in
+`release/dev` and opens it through Launch Services. This gives microphone and
+Speech Recognition requests the app's own permission descriptions, including when
+launched from a terminal or IDE. Use `npm start` to open the already-built renderer.
+
+**Start demo** and **Reset** sit side by side, immediately left of the date.
+Start plays a 28-second **Astra HQ Product Launch** walkthrough through the existing
+app controls, with a moving cursor and typed inputs. The existing Office chat opens
+automatically with staged launch updates and replies from all four employees. It hires a Marketing Intern,
+creates the roadmap, replies to a fictional Thrive Capital meeting request,
+prepares a calendar invitation, and reviews sample work. Marketing offers three
+photos; the selected second option goes to Engineering for the prepared landing
+page. The walkthrough finishes back in Office, with seven sample files to inspect
+and download.
+
+**Reset** prepares a fresh sample workspace without starting playback; **Start demo**
+plays it again. **Exit demo** restores your live workspace. The walkthrough does
+not change live data or send real messages. **Live office** has its own navigation
+tab for actual sessions and launch controls. See [the product launch demo](docs/product-launch-demo.md).
+
 Production build and macOS application:
 
 ```sh

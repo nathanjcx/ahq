@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { LoaderCircle, Plus, Sparkles } from 'lucide-react';
 import type { Employee } from '../../shared/types';
 import Modal from './Modal';
+import { useOfficeEnvironment } from '../lib/office-environment';
 
 export type EmployeeFields = Pick<Employee, 'name' | 'jobTitle' | 'personality'>;
 
@@ -18,6 +19,7 @@ export default function EmployeeForm({
   onClose: () => void;
   onCreate: (fields: EmployeeFields) => void;
 }) {
+  const { api, isDemo } = useOfficeEnvironment();
   const [name, setName] = useState(initial?.name ?? '');
   const [jobTitle, setJobTitle] = useState(initial?.jobTitle ?? '');
   const [personality, setPersonality] = useState(initial?.personality ?? '');
@@ -62,17 +64,14 @@ export default function EmployeeForm({
     setGenerating(true);
     setError('');
     try {
-      if (!window.ahq?.generatePersonality) {
+      if (!isDemo && !api?.generatePersonality) {
         throw new Error(
           'Open the Astra HQ desktop app and connect ChatGPT in Settings to generate a personality.',
         );
       }
-      const result = (
-        await window.ahq.generatePersonality({
-          name: name.trim(),
-          jobTitle: jobTitle.trim(),
-        })
-      ).trim();
+      const result = isDemo
+        ? `${name.trim()} is a curious, resourceful ${jobTitle.trim()} who turns ambitious ideas into clear, practical work. They bring fresh perspective, communicate thoughtfully, and ask for approval before sharing work outside the team.`
+        : (await api!.generatePersonality({ name: name.trim(), jobTitle: jobTitle.trim() })).trim();
       if (token !== request.current || identityRef.current !== forIdentity) return;
       if (!result || result.length > 2000) {
         throw new Error('The personality could not be generated. Please try again.');
@@ -106,6 +105,7 @@ export default function EmployeeForm({
               required
               maxLength={40}
               placeholder="e.g. Alex"
+              data-demo-target="employee-name"
               value={name}
               onChange={(event) => changeIdentity(event.target.value, jobTitle)}
             />
@@ -116,6 +116,7 @@ export default function EmployeeForm({
               required
               maxLength={80}
               placeholder="e.g. Research Assistant"
+              data-demo-target="employee-role"
               value={jobTitle}
               onChange={(event) => changeIdentity(name, event.target.value)}
             />
@@ -126,6 +127,7 @@ export default function EmployeeForm({
           <button
             type="button"
             className="text-button"
+            data-demo-target="employee-personality"
             disabled={!hasIdentity || generating}
             onClick={() => void generate()}
           >
@@ -156,7 +158,12 @@ export default function EmployeeForm({
           <button type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button className="button primary" type="submit" disabled={!canSave}>
+          <button
+            className="button primary"
+            type="submit"
+            disabled={!canSave}
+            data-demo-target="employee-create"
+          >
             <Plus size={16} />
             {initial ? 'Save profile' : 'New employee'}
           </button>

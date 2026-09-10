@@ -29,6 +29,8 @@ import { checkGateway, gatewayRequest, readSession, validateEndpoint } from './g
 import { SnapshotStore } from '../runtime/store';
 import { createRuntime, type OfficeRuntime } from '../runtime/engine';
 import { transcribeOnDevice } from './speech';
+import { registerManagedLaunch } from './managed-launch';
+import { loadDesktopWorkspace } from './roster-migration';
 import { ChatGPTEmployees } from './chatgpt';
 import { HostedEmployees, openAIRequest, type HostedConfig } from './hosted';
 import { GoalCoordinator } from './goals';
@@ -37,7 +39,7 @@ import { generatePersonality, generateRoadmap } from './planning';
 import { advanceRoadmap } from './roadmap';
 import { mergeWorkspace } from '../shared/workspaceMerge';
 import { assertCanAssignTask, recordAssignedTask } from '../src/lib/assignedTasks';
-import { freshWorkspaceState, isDefaultRoster } from '../src/lib/store';
+import { freshWorkspaceState } from '../src/lib/store';
 import { applySession, applyDecision } from '../src/lib/workflow';
 import type { Command } from '../src/shared/types';
 import type { AppState, CloudSession, CloudSettings, LocalFileEntry } from '../shared/types';
@@ -79,8 +81,6 @@ let pollBusy = false;
 let pollTimer: ReturnType<typeof setInterval>;
 let snapshotTimer: ReturnType<typeof setInterval>;
 let shuttingDown = false;
-let rosterMigration: Promise<void> | undefined;
-let migratedRoster: AppState | undefined;
 const vaultPath = () => path.join(root(), 'api-keys.json');
 const vaultSchema = z.object({
   key: z.string().default(''),
@@ -358,32 +358,7 @@ async function cloudSettings(): Promise<CloudSettings> {
   };
 }
 async function loadState(): Promise<AppState | null> {
-  const value = database.get<AppState>('workspace');
-  if (!value) return null;
-  const state = StateSchema.parse(value);
-  if (database.get<boolean>('default-roster-v2') === true) return state;
-  if (!isDefaultRoster(state.employees)) {
-    await database.put('default-roster-v2', true);
-    return state;
-  }
-  const migrated: AppState = {
-    ...state,
-    employees: freshWorkspaceState().employees,
-    roadmap: undefined,
-    commitments: [],
-    messages: [],
-    approvals: [],
-    events: [],
-    demo: false,
-  };
-  if (!rosterMigration) {
-    migratedRoster = migrated;
-    rosterMigration = database
-      .saveHQ(migrated, 'Replaced the default employee roster', true)
-      .then(() => database.put('default-roster-v1', true));
-  }
-  await rosterMigration;
-  return migratedRoster ?? migrated;
+  return loadDesktopWorkspace(database);
 }
 async function localFiles(): Promise<LocalFileEntry[]> {
   const storageRoot = path.dirname(database.filePath);
@@ -1543,6 +1518,7 @@ else {
   void app
     .whenReady()
     .then(async () => {
+      if (!(await registerManagedLaunch(app))) return;
       await setupDatabase();
       session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) =>
         callback(
@@ -1560,12 +1536,17 @@ else {
           details.mediaType === 'audio' &&
           details.isMainFrame,
       );
+      const devNonce = !app.isPackaged && process.env.AHQ_DEV_URL ? process.env.AHQ_DEV_CSP_NONCE : undefined;
+      const scriptPolicy =
+        devNonce && /^[A-Za-z0-9+/]{32}$/.test(devNonce)
+          ? `script-src 'self' 'nonce-${devNonce}'`
+          : "script-src 'self'";
       session.defaultSession.webRequest.onHeadersReceived((details, callback) =>
         callback({
           responseHeaders: {
             ...details.responseHeaders,
             'Content-Security-Policy': [
-              "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' ws://127.0.0.1:5173; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-src 'none'",
+              `default-src 'self'; ${scriptPolicy}; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' ws://127.0.0.1:5173; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-src 'none'`,
             ],
           },
         }),

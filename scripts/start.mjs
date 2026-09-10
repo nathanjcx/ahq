@@ -1,8 +1,12 @@
-import { spawn } from 'node:child_process';
-import electron from 'electron';
-const env = { ...process.env };
-delete env.ELECTRON_RUN_AS_NODE;
-const child = spawn(electron, ['.'], { stdio: 'inherit', env });
-child.on('exit', (code) => process.exit(code || 0));
-process.on('SIGINT', () => child.kill());
-process.on('SIGTERM', () => child.kill());
+import { launchDesktop } from './desktop-launch.mjs';
+const desktop = await launchDesktop();
+const stop = () => void desktop.stop().catch((error) => console.error(error.message));
+process.on('SIGINT', stop);
+process.on('SIGTERM', stop);
+try {
+  const { code, signal } = await desktop.closed;
+  process.exitCode = code ?? (signal ? 1 : 0);
+} finally {
+  process.off('SIGINT', stop);
+  process.off('SIGTERM', stop);
+}

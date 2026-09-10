@@ -9,7 +9,8 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build:desktop": "node desktop/build.mjs",
-    "dev:desktop": "npm run build:desktop && concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env AHQ_DEV_URL=http://127.0.0.1:5173 electron .\"",
+    "dev:desktop": "npm run build:desktop && node scripts/dev-desktop.mjs",
+    "start": "node scripts/start.mjs",
     "build": "tsc -b && vite build && npm run build:desktop",
     "preview": "vite preview --host 127.0.0.1",
     "test": "tsx --test tests/*.test.ts",

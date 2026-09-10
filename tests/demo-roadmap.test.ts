@@ -105,10 +105,7 @@ test('automatic goal runs independent analyses then hands complete verified arti
   assert.equal(state.employees.length, 3);
   assert(state.employees.every((employee) => employee.temporary));
   assert.equal(new Set(state.commitments.map((task) => task.ownerId)).size, 3);
-  assert.deepEqual(
-    starts.map((task) => task.title),
-    ['Sales', 'Support'],
-  );
+  assert.deepEqual(starts.map((task) => task.title).sort(), ['Sales', 'Support']);
   const longEvidence = `Sales evidence ${'x'.repeat(25_000)}`;
   sessions.set('chatgpt-Sales', await completedSession(root, 'chatgpt-Sales', longEvidence));
   state = await advanceRoadmap(state, deps);
@@ -116,10 +113,15 @@ test('automatic goal runs independent analyses then hands complete verified arti
   assert.equal(starts.length, 2, 'Synthesis must still wait for Support');
   sessions.set('chatgpt-Support', await completedSession(root, 'chatgpt-Support', 'Support source evidence'));
   state = await advanceRoadmap(state, deps);
+  // The independent analyses start concurrently; only Synthesis must start after both.
   assert.deepEqual(
-    starts.map((task) => task.title),
-    ['Sales', 'Support', 'Synthesis'],
+    starts
+      .slice(0, 2)
+      .map((task) => task.title)
+      .sort(),
+    ['Sales', 'Support'],
   );
+  assert.equal(starts[2].title, 'Synthesis');
   assert(
     starts[2].files.some((file) => file.content.includes(longEvidence)),
     'Full predecessor evidence must not be truncated',

@@ -1,3 +1,4 @@
+import { useOfficeEnvironment } from '../lib/office-environment';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
@@ -54,6 +55,7 @@ export default function LaunchPanel({
   onSelectSession: (id: string | null) => void;
   onRestore: () => void;
 }) {
+  const { api, isDemo } = useOfficeEnvironment();
   const [snapshot, setSnapshot] = useState<LaunchSnapshot | null>(null);
   const [expanded, setExpanded] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -66,7 +68,7 @@ export default function LaunchPanel({
   const refreshRef = useRef(onWorkUpdate);
   refreshRef.current = onWorkUpdate;
   const celebrated = useRef<string | null>(null);
-  const supported = !!window.ahq?.launchSnapshot && !!window.ahq?.launchAction;
+  const supported = !!api?.launchSnapshot && !!api?.launchAction;
 
   useEffect(() => {
     if (!supported) return;
@@ -75,7 +77,7 @@ export default function LaunchPanel({
     async function poll() {
       try {
         const requestedRevision = revision.current;
-        const next = await window.ahq!.launchSnapshot();
+        const next = await api!.launchSnapshot();
         if (disposed) return;
         if (actionPending.current || requestedRevision !== revision.current) {
           timer = setTimeout(poll, 1000);
@@ -99,10 +101,11 @@ export default function LaunchPanel({
       disposed = true;
       clearTimeout(timer);
     };
-  }, [supported]);
+  }, [supported, api]);
 
   useEffect(() => {
     if (
+      !isDemo &&
       snapshot?.celebrationId &&
       snapshot.status === 'completed' &&
       celebrated.current !== snapshot.celebrationId
@@ -110,7 +113,7 @@ export default function LaunchPanel({
       celebrated.current = snapshot.celebrationId;
       window.dispatchEvent(new CustomEvent('ahq:celebrate', { detail: { id: snapshot.celebrationId } }));
     }
-  }, [snapshot]);
+  }, [snapshot, isDemo]);
 
   async function action(input: Parameters<NonNullable<Window['ahq']>['launchAction']>[0]) {
     if (!supported || actionPending.current) return;
@@ -119,7 +122,7 @@ export default function LaunchPanel({
     setBusy(true);
     setError('');
     try {
-      const next = await window.ahq!.launchAction(input);
+      const next = await api!.launchAction(input);
       setSnapshot(next);
       setSelectedScene(null);
       if (input.action === 'restore') {

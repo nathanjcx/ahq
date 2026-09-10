@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, ExternalLink, LoaderCircle, UserRound } from 'lucide-react';
 import type { ChatGPTAccount, CloudSettings } from '../../shared/types';
 import Modal from './Modal';
+import { useOfficeEnvironment } from '../lib/office-environment';
 import './chatgpt-profile.css';
 
 export default function ChatGPTProfile({
@@ -13,6 +14,7 @@ export default function ChatGPTProfile({
   onCloud: (cloud: CloudSettings) => void;
   onClose: () => void;
 }) {
+  const { api } = useOfficeEnvironment();
   const [account, setAccount] = useState<ChatGPTAccount | undefined>(cloud.account);
   const [checking, setChecking] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -27,7 +29,7 @@ export default function ChatGPTProfile({
 
   const refresh = useCallback(async () => {
     if (!mounted.current || reading.current || changing.current) return;
-    if (!window.ahq) {
+    if (!api) {
       setChecking(false);
       setError('Open Astra HQ on your desktop to sign in with ChatGPT.');
       return;
@@ -35,8 +37,8 @@ export default function ChatGPTProfile({
     reading.current = true;
     const token = ++request.current;
     try {
-      const next = await window.ahq.chatGPTAccount();
-      const settings = await window.ahq.getCloudSettings();
+      const next = await api.chatGPTAccount();
+      const settings = await api.getCloudSettings();
       if (!mounted.current || token !== request.current) return;
       setAccount(settings.account ?? next);
       onCloudRef.current(settings);
@@ -50,7 +52,7 @@ export default function ChatGPTProfile({
         setChecking(false);
       }
     }
-  }, []);
+  }, [api]);
 
   useEffect(() => {
     mounted.current = true;
@@ -72,7 +74,6 @@ export default function ChatGPTProfile({
   }, [account?.status, refresh]);
 
   async function change(action: 'login' | 'cancel' | 'use') {
-    const api = window.ahq;
     if (!api || changing.current) return;
     changing.current = true;
     reading.current = false;
@@ -113,11 +114,11 @@ export default function ChatGPTProfile({
   const issue = error || account?.error;
 
   async function saveFallback(key: string) {
-    if (!window.ahq || busy) return;
+    if (!api || busy) return;
     setBusy(true);
     setError('');
     try {
-      const settings = await window.ahq.configureChatGPTFallback({ key });
+      const settings = await api.configureChatGPTFallback({ key });
       onCloudRef.current(settings);
       setFallbackKey('');
     } catch (e) {
@@ -180,7 +181,7 @@ export default function ChatGPTProfile({
           <div className="button-group">
             <button
               className="button secondary"
-              disabled={busy || !window.ahq || !fallbackKey.trim()}
+              disabled={busy || !api || !fallbackKey.trim()}
               onClick={() => void saveFallback(fallbackKey.trim())}
             >
               Save fallback key
@@ -201,14 +202,14 @@ export default function ChatGPTProfile({
         ) : !connected ? (
           <button
             className="button primary"
-            disabled={busy || checking || !window.ahq}
+            disabled={busy || checking || !api}
             onClick={() => void change(signedIn ? 'use' : 'login')}
           >
             {!signedIn && <ExternalLink size={15} aria-hidden="true" />}
             {signedIn ? 'Use ChatGPT plan' : 'Sign in with ChatGPT'}
           </button>
         ) : null}
-        {issue && window.ahq && (
+        {issue && api && (
           <button className="text-button" disabled={busy} onClick={() => void refresh()}>
             Try again
           </button>

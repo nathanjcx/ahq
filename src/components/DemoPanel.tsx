@@ -3,6 +3,7 @@ import { Bell, Calendar, ChevronDown, ChevronUp, Mail, MessageSquare, Radio } fr
 import type { AppState, CloudSession } from '../../shared/types';
 import type { DemoSnapshot, DemoTrigger } from '../../shared/demo';
 import Modal from './Modal';
+import { useOfficeEnvironment } from '../lib/office-environment';
 import Markdown from './Markdown';
 import LaunchPanel from './LaunchPanel';
 import './demo-panel.css';
@@ -41,8 +42,9 @@ export default function DemoPanel({
   selectedSessionId: string | null;
   onSelectSession: (id: string | null) => void;
 }) {
+  const { api, isDemo } = useOfficeEnvironment();
   const [snapshot, setSnapshot] = useState<DemoSnapshot>({ notifications: [], sessions: [] });
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [restoreVersion, setRestoreVersion] = useState(0);
   const [goal, setGoal] = useState(suggestedGoal);
   const [busy, setBusy] = useState(false);
@@ -50,14 +52,14 @@ export default function DemoPanel({
   const [pollError, setPollError] = useState('');
   const [selected, setSelected] = useState<CloudSession | null>(null);
   const [streamError, setStreamError] = useState('');
-  const [notice, setNotice] = useState(() => localStorage.getItem('ahq-demo-notice') !== 'seen');
+  const [notice, setNotice] = useState(() => !isDemo && localStorage.getItem('ahq-demo-notice') !== 'seen');
   const seen = useRef<Set<string> | null>(null);
   const refreshRef = useRef(onWorkUpdate);
   refreshRef.current = onWorkUpdate;
   const workVersion = useRef('');
   const notifyRef = useRef(notify);
   notifyRef.current = notify;
-  const supported = !!window.ahq?.demoSnapshot;
+  const supported = !!api?.demoSnapshot;
 
   useEffect(() => {
     if (!supported) return;
@@ -65,7 +67,7 @@ export default function DemoPanel({
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
       try {
-        const next = await window.ahq!.demoSnapshot();
+        const next = await api!.demoSnapshot();
         if (disposed) return;
         if (seen.current) {
           for (const item of next.notifications) {
@@ -97,17 +99,17 @@ export default function DemoPanel({
       disposed = true;
       clearTimeout(timer);
     };
-  }, [supported, restoreVersion]);
+  }, [supported, restoreVersion, api]);
 
   useEffect(() => {
     setSelected(null);
     setStreamError('');
-    if (!selectedSessionId || !window.ahq) return;
+    if (!selectedSessionId || !api) return;
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
       try {
-        const session = await window.ahq!.getSession(selectedSessionId!);
+        const session = await api!.getSession(selectedSessionId!);
         if (disposed) return;
         setSelected(session);
         setStreamError('');
@@ -121,7 +123,7 @@ export default function DemoPanel({
       disposed = true;
       clearTimeout(timer);
     };
-  }, [selectedSessionId]);
+  }, [selectedSessionId, api]);
 
   async function action(run: () => Promise<unknown>) {
     setBusy(true);
@@ -135,7 +137,7 @@ export default function DemoPanel({
     }
   }
   function trigger(kind: DemoTrigger['kind']) {
-    void action(() => window.ahq!.triggerDemo({ kind }));
+    void action(() => api!.triggerDemo({ kind }));
   }
   const active = snapshot.sessions.filter(activeSession);
   const name = (session: CloudSession) =>
@@ -153,7 +155,7 @@ export default function DemoPanel({
           setRestoreVersion((value) => value + 1);
         }}
       />
-      <aside className="demo-dock" aria-label="Demo controls and live work">
+      <aside className="demo-dock" aria-label="Live office controls and work">
         <button className="demo-heading" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
           <span>
             <Radio size={16} /> Live office <span className="demo-count">{active.length} active</span>
@@ -173,7 +175,7 @@ export default function DemoPanel({
                   <button
                     className="text-button"
                     onClick={() => {
-                      localStorage.setItem('ahq-demo-notice', 'seen');
+                      if (!isDemo) localStorage.setItem('ahq-demo-notice', 'seen');
                       setNotice(false);
                     }}
                   >
@@ -280,7 +282,7 @@ export default function DemoPanel({
                       <button
                         className="button"
                         disabled={busy}
-                        onClick={() => void action(() => window.ahq!.retryDemo(item.id))}
+                        onClick={() => void action(() => api!.retryDemo(item.id))}
                       >
                         Retry
                       </button>
@@ -362,8 +364,8 @@ export default function DemoPanel({
                         <button
                           className="button"
                           onClick={() =>
-                            void window
-                              .ahq!.openLocalArtifact({ sessionId: selected.id, artifactId: artifact.id })
+                            void api!
+                              .openLocalArtifact({ sessionId: selected.id, artifactId: artifact.id })
                               .catch((e) =>
                                 setStreamError(e instanceof Error ? e.message : 'Could not open artifact.'),
                               )

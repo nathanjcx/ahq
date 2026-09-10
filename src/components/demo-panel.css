@@ -1,9 +1,7 @@
 .demo-dock {
-  position: fixed;
-  z-index: 35;
-  top: 76px;
-  right: 22px;
-  width: 350px;
+  position: relative;
+  min-width: 0;
+  width: 100%;
   border: 1px solid var(--border, #ddd7cb);
   border-radius: 14px;
   background: var(--surface, #fffcf5);
@@ -34,8 +32,6 @@
 }
 .demo-body {
   padding: 0 14px 14px;
-  max-height: calc(100dvh - 140px);
-  overflow-y: auto;
 }
 .demo-notice {
   border-radius: 8px;
@@ -190,13 +186,7 @@
   overflow-x: auto;
 }
 @media (max-width: 700px) {
-  .demo-dock {
-    top: auto;
-    bottom: 14px;
-    right: 12px;
-    width: min(350px, calc(100vw - 24px));
-  }
-  .demo-body {
-    max-height: 55dvh;
+  .demo-triggers {
+    flex-wrap: wrap;
   }
 }

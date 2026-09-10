@@ -361,6 +361,22 @@ button:active:not(:disabled) {
   width: calc(100% - 216px);
   min-width: 0;
 }
+.live-office-content {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 20px;
+  min-width: 0;
+  padding-bottom: 24px;
+}
+.live-office-content[hidden] {
+  display: none;
+}
+@media (max-width: 1050px) {
+  .live-office-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .topbar {
   height: 74px;
   display: flex;
@@ -4650,6 +4666,7 @@ html[data-desktop] .topbar .avatar {
 }
 .voice-permission-help {
   flex-basis: 100%;
+  grid-column: 1 / -1;
   padding: 0;
   text-align: left;
   font-size: 12px;
@@ -4658,8 +4675,29 @@ html[data-desktop] .topbar .avatar {
   background: #e0efe3;
   border-color: #65a578;
 }
-.voice-announce.recording button {
+.voice-announce.recording .button.primary {
   background: #a34a38;
+}
+.voice-level {
+  display: block;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #ffffff3b;
+}
+.voice-level > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: currentColor;
+  transform: scaleX(var(--voice-level, 0));
+  transform-origin: left;
+}
+.voice-cancel {
+  min-height: 32px;
+  padding: 5px 8px;
 }
 .voice-transcript {
   width: 100%;

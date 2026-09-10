@@ -201,7 +201,7 @@ body:has(.main-shell[data-page='office']) {
 #root .main-shell[data-page='office'] .voice-announce {
   display: grid;
   flex: 0 0 auto;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 4px 10px;
   min-width: 0;
@@ -382,41 +382,45 @@ body:has(.main-shell[data-page='office']) {
   }
 }
 
-/* A narrow navigation rail leaves the office room to breathe on desktop. */
+/* Keep the app identity and every destination visible throughout the desktop workspace. */
 @media (min-width: 601px) {
-  #root .app-shell:has(.main-shell[data-page='office']) > .sidebar {
-    width: 72px;
-    align-items: center;
-    padding: 18px 8px 0;
+  #root .app-shell > .sidebar {
+    width: 208px;
+    align-items: stretch;
+    padding: 24px 12px 0;
   }
 
-  html[data-desktop='true'] #root .app-shell:has(.main-shell[data-page='office']) > .sidebar {
+  html[data-desktop='true'] #root .app-shell > .sidebar {
     padding-top: 48px;
   }
 
-  #root .app-shell:has(.main-shell[data-page='office']) > .sidebar .brand {
-    padding: 0;
+  #root .app-shell > .sidebar .brand {
+    gap: 8px;
+    padding: 0 6px;
+    font-size: 28px;
+    white-space: nowrap;
   }
 
-  #root .app-shell:has(.main-shell[data-page='office']) > .sidebar .brand > span,
-  #root .app-shell:has(.main-shell[data-page='office']) > .sidebar .nav-item > span {
-    display: none;
+  #root .app-shell > .sidebar .brand > span,
+  #root .app-shell > .sidebar .nav-item > span {
+    display: inline;
   }
 
-  #root .app-shell:has(.main-shell[data-page='office']) > .sidebar nav {
+  #root .app-shell > .sidebar nav {
     width: 100%;
     margin-top: 28px;
   }
 
-  #root .app-shell:has(.main-shell[data-page='office']) > .sidebar .nav-item {
-    height: 46px;
-    justify-content: center;
-    padding: 0;
+  #root .app-shell > .sidebar .nav-item {
+    height: 44px;
+    justify-content: flex-start;
+    padding: 0 12px !important;
+    font-size: 14px;
   }
 
-  #root .main-shell[data-page='office'] {
-    margin-left: 72px;
-    width: calc(100% - 72px);
+  #root .main-shell {
+    margin-left: 208px;
+    width: calc(100% - 208px);
   }
 }
 
@@ -463,7 +467,7 @@ body:has(.main-shell[data-page='office']) {
   }
 
   #root .main-shell[data-page='office'] .voice-announce {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
     padding: 4px 6px;
   }
 

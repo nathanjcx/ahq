@@ -1,0 +1,106 @@
+.topbar-demo-button {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid #c3ceb5;
+  border-radius: 5px;
+  padding: 6px 9px;
+  background: #e7eddb;
+  color: #49673b;
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.topbar-demo-button:hover {
+  background: #dce6cd;
+}
+.app-shell[data-demo-active='true'] .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20001;
+  background: #f6f7ee;
+}
+.app-shell[data-demo-active='true'] .modal-backdrop {
+  padding-top: 76px;
+  padding-bottom: 20px;
+}
+.app-shell[data-demo-active='true'] .modal {
+  max-height: calc(100dvh - 96px);
+}
+.app-shell[data-demo-active='true'] .document-preview {
+  max-height: min(31vh, 270px);
+}
+.app-shell[data-demo-active='true']:has(.modal-backdrop) .toast {
+  visibility: hidden;
+}
+.demo-mode-label {
+  font-size: 10px;
+  color: #829074;
+  white-space: nowrap;
+}
+.product-launch-cursor {
+  position: fixed;
+  z-index: 100000;
+  pointer-events: none;
+  transition:
+    left 0.24s ease-out,
+    top 0.24s ease-out;
+  filter: drop-shadow(1px 2px 2px #243c2630);
+}
+.product-launch-cursor > svg {
+  display: block;
+}
+.product-launch-cursor > span {
+  display: block;
+  width: fit-content;
+  margin: 0 0 0 15px;
+  padding: 3px 6px;
+  background: #49673b;
+  color: #fffef6;
+  border: 1px solid #fffef6;
+  border-radius: 3px;
+  font-size: 9px;
+}
+.product-launch-cursor > i {
+  display: none;
+  position: absolute;
+  left: -9px;
+  top: -9px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid #9eb778;
+}
+.product-launch-cursor.clicking > i {
+  display: block;
+  animation: launch-click 0.28s ease-out both;
+}
+.app-shell[data-demo-running='true'] .toast {
+  z-index: 10001;
+}
+.app-shell[data-demo-active='true'] .toast > button {
+  white-space: nowrap;
+}
+@keyframes launch-click {
+  from {
+    transform: scale(0.5);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .product-launch-cursor {
+    transition: none;
+  }
+  .product-launch-cursor.clicking > i {
+    animation: none;
+  }
+}
+@media (max-width: 700px) {
+  .demo-mode-label {
+    display: none;
+  }
+}

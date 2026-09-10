@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Cloud, Download, Mic, Shirt } from 'lucide-react';
 import type {
   AppState,
@@ -14,11 +14,16 @@ import type { UpdateState } from '../App';
 import type { Snapshot } from '../shared/types';
 import { applySession } from '../lib/workflow';
 import Modal from './Modal';
+import { useOfficeEnvironment } from '../lib/office-environment';
 import { monoWav } from '../lib/audio';
 import './timeline.css';
-const errorText = (e: unknown) => (e instanceof Error ? e.message : 'Please try again.');
+const errorText = (e: unknown) =>
+  e instanceof Error
+    ? e.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')
+    : 'Please try again.';
 
 export function useOfficeHistory(state: AppState, update: UpdateState, notify: (s: string) => void) {
+  const { api, isDemo } = useOfficeEnvironment();
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [at, setAt] = useState<number | null>(null),
     [past, setPast] = useState<AppState | null>(null);
@@ -27,13 +32,21 @@ export function useOfficeHistory(state: AppState, update: UpdateState, notify: (
     [speed, setSpeed] = useState(60);
   const [confirm, setConfirm] = useState(false);
   const refresh = useCallback(async () => {
-    if (window.ahq) setEntries(await window.ahq.history());
-  }, []);
+    if (!isDemo && api) setEntries(await api.history());
+  }, [api, isDemo]);
   useEffect(() => {
+    if (isDemo) {
+      setEntries([]);
+      setAt(null);
+      setPast(null);
+      setPlay(false);
+      setConfirm(false);
+      return;
+    }
     void refresh().catch((e) => notify(errorText(e)));
     const timer = setInterval(() => void refresh().catch(() => undefined), 5000);
     return () => clearInterval(timer);
-  }, [refresh, notify]);
+  }, [refresh, notify, isDemo]);
   useEffect(() => {
     const timer = setInterval(() => {
       setNow(Date.now());
@@ -50,11 +63,12 @@ export function useOfficeHistory(state: AppState, update: UpdateState, notify: (
     }, 100);
     return () => clearInterval(timer);
   }, [play, speed]);
-  const selected = at === null ? undefined : ([...entries].reverse().find((e) => e.time <= at) ?? entries[0]);
+  const selected =
+    isDemo || at === null ? undefined : ([...entries].reverse().find((e) => e.time <= at) ?? entries[0]);
   useEffect(() => {
     let alive = true;
-    if (selected && window.ahq)
-      void window.ahq
+    if (!isDemo && selected && api)
+      void api
         .historyState(selected.id)
         .then((s) => {
           if (alive) setPast(s);
@@ -64,10 +78,10 @@ export function useOfficeHistory(state: AppState, update: UpdateState, notify: (
     return () => {
       alive = false;
     };
-  }, [selected?.id, notify]);
+  }, [selected?.id, notify, api, isDemo]);
   return {
-    entries,
-    at,
+    entries: isDemo ? [] : entries,
+    at: isDemo ? null : at,
     setAt,
     now,
     play,
@@ -75,21 +89,23 @@ export function useOfficeHistory(state: AppState, update: UpdateState, notify: (
     speed,
     setSpeed,
     selected,
-    confirm,
+    confirm: !isDemo && confirm,
     setConfirm,
-    display: at !== null && past ? past : state,
+    display: !isDemo && at !== null && past ? past : state,
     async checkpoint() {
+      if (isDemo) return;
       try {
-        if (window.ahq) setEntries(await window.ahq.checkpoint());
+        if (api) setEntries(await api.checkpoint());
         else notify('Checkpoints are available in the desktop app.');
       } catch (e) {
         notify(errorText(e));
       }
     },
     async restore() {
+      if (isDemo) return;
       try {
-        if (selected && window.ahq) {
-          const restored = await window.ahq.restoreHistory(selected.id);
+        if (selected && api) {
+          const restored = await api.restoreHistory(selected.id);
           update(() => restored);
           setAt(null);
           setPlay(false);
@@ -271,11 +287,16 @@ export function VoiceAnnounce({
   onBroadcast: (s: string) => Promise<void>;
   notify: (s: string) => void;
 }) {
+  const { api } = useOfficeEnvironment();
   const [recording, setRecording] = useState(false),
     [busy, setBusy] = useState(false),
     [transcript, setTranscript] = useState(''),
     [permissionHelp, setPermissionHelp] = useState(false);
   const mounted = useRef(true);
+  const statusId = useId();
+  const cancelled = useRef(false);
+  const keyboardHeld = useRef(false);
+  const levelMeter = useRef<HTMLSpanElement>(null);
   const held = useRef(false),
     recorder = useRef<MediaRecorder | null>(null),
     stream = useRef<MediaStream | null>(null),
@@ -284,9 +305,14 @@ export function VoiceAnnounce({
     timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stop = () => {
     held.current = false;
+    keyboardHeld.current = false;
     if (timer.current) clearTimeout(timer.current);
     if (recorder.current?.state === 'recording') recorder.current.stop();
     else cleanup();
+  };
+  const cancel = () => {
+    cancelled.current = true;
+    stop();
   };
   const cleanup = () => {
     stream.current?.getTracks().forEach((t) => t.stop());
@@ -294,6 +320,7 @@ export function VoiceAnnounce({
     void context.current?.close();
     context.current = null;
     cancelAnimationFrame(frame.current);
+    levelMeter.current?.style.setProperty('--voice-level', '0');
     setRecording(false);
     onListening(false);
     onLevel(0);
@@ -301,8 +328,19 @@ export function VoiceAnnounce({
   useEffect(() => {
     mounted.current = true;
     const release = () => stop();
+    const cancelWithEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && (held.current || recorder.current?.state === 'recording')) {
+        event.preventDefault();
+        cancel();
+      }
+    };
+    const releaseKey = (event: KeyboardEvent) => {
+      if (keyboardHeld.current && (event.key === ' ' || event.key === 'Enter')) stop();
+    };
     window.addEventListener('blur', release);
     window.addEventListener('pointerup', release);
+    window.addEventListener('keydown', cancelWithEscape);
+    window.addEventListener('keyup', releaseKey);
     return () => {
       mounted.current = false;
       held.current = false;
@@ -311,15 +349,18 @@ export function VoiceAnnounce({
       cleanup();
       window.removeEventListener('blur', release);
       window.removeEventListener('pointerup', release);
+      window.removeEventListener('keydown', cancelWithEscape);
+      window.removeEventListener('keyup', releaseKey);
     };
   }, []);
   async function start() {
     if (disabled || busy || held.current || recording) return;
     held.current = true;
+    cancelled.current = false;
     setBusy(true);
     try {
-      if (!window.ahq) throw new Error('Open the desktop app to announce with your microphone.');
-      if (!(await window.ahq.microphonePermission())) {
+      if (!api) throw new Error('Open the desktop app to announce with your microphone.');
+      if (!(await api.microphonePermission())) {
         setPermissionHelp(true);
         throw new Error(
           'Turn on Astra HQ under System Settings → Privacy & Security → Microphone, then try again.',
@@ -342,7 +383,9 @@ export function VoiceAnnounce({
         analyser.getByteTimeDomainData(samples);
         let sum = 0;
         for (const n of samples) sum += ((n - 128) / 128) ** 2;
-        onLevel(Math.min(1, Math.sqrt(sum / samples.length) * 6));
+        const level = Math.min(1, Math.sqrt(sum / samples.length) * 6);
+        onLevel(level);
+        levelMeter.current?.style.setProperty('--voice-level', String(level));
         frame.current = requestAnimationFrame(meter);
       };
       meter();
@@ -353,12 +396,17 @@ export function VoiceAnnounce({
       const r = new MediaRecorder(stream.current, { mimeType: mime });
       recorder.current = r;
       const chunks: BlobPart[] = [];
+      let failed = false;
       r.ondataavailable = (e) => {
         if (e.data.size) chunks.push(e.data);
       };
       r.onstop = () => {
         cleanup();
         if (!mounted.current) return;
+        if (cancelled.current || failed) {
+          setBusy(false);
+          return;
+        }
         setBusy(true);
         void (async () => {
           try {
@@ -375,7 +423,7 @@ export function VoiceAnnounce({
             } finally {
               await decoder.close();
             }
-            const text = await window.ahq!.transcribe({ audio, mime: 'audio/wav' });
+            const text = await api!.transcribe({ audio, mime: 'audio/wav' });
             if (!text) throw new Error('No speech was heard. Hold the button and try again.');
             setTranscript(text);
             await onBroadcast(text);
@@ -387,7 +435,8 @@ export function VoiceAnnounce({
         })();
       };
       r.onerror = () => {
-        cleanup();
+        failed = true;
+        cancel();
         setBusy(false);
         notify('Recording stopped unexpectedly. Please try again.');
       };
@@ -407,6 +456,8 @@ export function VoiceAnnounce({
       <button
         className="button primary"
         aria-label="Hold to announce to all employees"
+        aria-describedby={statusId}
+        aria-pressed={recording}
         disabled={disabled || busy}
         onPointerDown={(e) => {
           e.preventDefault();
@@ -414,10 +465,11 @@ export function VoiceAnnounce({
           void start();
         }}
         onPointerUp={stop}
-        onPointerCancel={stop}
+        onPointerCancel={cancel}
         onKeyDown={(e) => {
           if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
             e.preventDefault();
+            keyboardHeld.current = true;
             void start();
           }
         }}
@@ -428,20 +480,35 @@ export function VoiceAnnounce({
           }
         }}
       >
-        <Mic size={17} />
+        <Mic size={17} aria-hidden="true" />
         {recording ? 'Listening · release to send' : busy ? 'Preparing announcement…' : 'Hold to announce'}
+        <span className="voice-level" ref={levelMeter} aria-hidden="true">
+          <span />
+        </span>
       </button>
-      <span>
+      <span id={statusId} role="status" aria-live="polite">
         {disabled
           ? 'Add your first employee to make an announcement.'
           : recording
-            ? 'Everyone is listening through the office speakers.'
+            ? 'The whole office is listening · Esc to cancel.'
             : 'Release to transcribe and send to every employee.'}
       </span>
-      {permissionHelp && window.ahq && (
+      {recording && (
+        <button
+          className="text-button voice-cancel"
+          type="button"
+          aria-label="Cancel announcement"
+          aria-keyshortcuts="Escape"
+          onPointerDown={cancel}
+          onClick={cancel}
+        >
+          Cancel
+        </button>
+      )}
+      {permissionHelp && api && (
         <button
           className="text-button voice-permission-help"
-          onClick={() => void window.ahq!.revealApplication().catch((error) => notify(errorText(error)))}
+          onClick={() => void api!.revealApplication().catch((error) => notify(errorText(error)))}
         >
           Reveal Astra HQ in Finder to drag it into Microphone permissions
         </button>
@@ -460,14 +527,15 @@ function ChatGPTConnection({
   onCloud: (s: CloudSettings) => void;
   notify: (s: string) => void;
 }) {
+  const { api } = useOfficeEnvironment();
   const [account, setAccount] = useState<ChatGPTAccount | undefined>(cloud.account);
   const [busy, setBusy] = useState(false);
   const refresh = useCallback(async () => {
-    if (!window.ahq) return;
-    const a = await window.ahq.chatGPTAccount();
+    if (!api) return;
+    const a = await api.chatGPTAccount();
     setAccount(a);
-    onCloud(await window.ahq.getCloudSettings());
-  }, [onCloud]);
+    onCloud(await api.getCloudSettings());
+  }, [onCloud, api]);
   useEffect(() => {
     void refresh().catch((e) => notify(errorText(e)));
     const focused = () => void refresh().catch(() => undefined);
@@ -480,14 +548,14 @@ function ChatGPTConnection({
     return () => clearInterval(timer);
   }, [account?.status, refresh]);
   async function connect() {
-    if (!window.ahq) return;
+    if (!api) return;
     setBusy(true);
     try {
       if (account?.status === 'signed-in') {
-        onCloud(await window.ahq.useChatGPT());
+        onCloud(await api.useChatGPT());
         notify('Employees will use your ChatGPT plan.');
       } else {
-        setAccount(await window.ahq.loginChatGPT());
+        setAccount(await api.loginChatGPT());
       }
     } catch (e) {
       notify(errorText(e));
@@ -542,7 +610,7 @@ function ChatGPTConnection({
         {!(account?.status === 'signed-in' && cloud.provider === 'chatgpt') && (
           <button
             className="button primary"
-            disabled={busy || !window.ahq || account?.status === 'signing-in'}
+            disabled={busy || !api || account?.status === 'signing-in'}
             onClick={() => void connect()}
           >
             {account?.status === 'signed-in' ? 'Use ChatGPT plan' : 'Sign in with ChatGPT'}
@@ -553,8 +621,8 @@ function ChatGPTConnection({
             className="button secondary"
             disabled={busy}
             onClick={() =>
-              void window
-                .ahq!.cancelChatGPTLogin()
+              void api!
+                .cancelChatGPTLogin()
                 .then(setAccount)
                 .catch((e) => notify(errorText(e)))
             }
@@ -564,7 +632,7 @@ function ChatGPTConnection({
         )}
         <button
           className="button secondary"
-          disabled={busy || !window.ahq}
+          disabled={busy || !api}
           onClick={() => void refresh().catch((e) => notify(errorText(e)))}
         >
           Refresh connection
@@ -583,6 +651,7 @@ export function ConnectionSettings({
   onCloud: (s: CloudSettings) => void;
   notify: (s: string) => void;
 }) {
+  const { api } = useOfficeEnvironment();
   const [key, setKey] = useState(''),
     [model, setModel] = useState(cloud.model ?? 'gpt-6-astra'),
     [location, setLocation] = useState(''),
@@ -592,14 +661,14 @@ export function ConnectionSettings({
     [token, setToken] = useState(''),
     [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (window.ahq)
-      void Promise.all([window.ahq.storageLocation(), window.ahq.integrations()])
+    if (api)
+      void Promise.all([api.storageLocation(), api.integrations()])
         .then(([p, i]) => {
           setLocation(p);
           setItems(i);
         })
         .catch((e) => notify(errorText(e)));
-  }, [notify]);
+  }, [notify, api]);
   async function action(fn: () => Promise<void>) {
     setBusy(true);
     try {
@@ -628,8 +697,8 @@ export function ConnectionSettings({
             onSubmit={(e) => {
               e.preventDefault();
               void action(async () => {
-                if (!window.ahq) throw new Error('Open the desktop app to save keys.');
-                onCloud(await window.ahq.configureOpenAI({ key, model }));
+                if (!api) throw new Error('Open the desktop app to save keys.');
+                onCloud(await api.configureOpenAI({ key, model }));
                 setKey('');
                 notify('Astra cloud connected.');
               });
@@ -659,7 +728,7 @@ export function ConnectionSettings({
               ChatGPT subscription.
             </div>
             <div className="button-group">
-              <button className="button primary" disabled={busy || !window.ahq}>
+              <button className="button primary" disabled={busy || !api}>
                 Connect Astra
               </button>
               {cloud.provider === 'openai' && cloud.configured && (
@@ -669,7 +738,7 @@ export function ConnectionSettings({
                   disabled={busy}
                   onClick={() =>
                     void action(async () => {
-                      onCloud(await window.ahq!.disconnectCloud());
+                      onCloud(await api!.disconnectCloud());
                       notify('Cloud key removed from this device.');
                     })
                   }
@@ -687,10 +756,10 @@ export function ConnectionSettings({
         <p className="database-path">{location || 'Available in the desktop app'}</p>
         <button
           className="button secondary"
-          disabled={busy || !window.ahq}
+          disabled={busy || !api}
           onClick={() =>
             void action(async () => {
-              const path = await window.ahq!.chooseDatabaseFolder();
+              const path = await api!.chooseDatabaseFolder();
               if (path) {
                 setLocation(path);
                 notify('Database moved to your chosen folder.');
@@ -718,7 +787,7 @@ export function ConnectionSettings({
               disabled={busy}
               onClick={() =>
                 void action(async () => {
-                  setItems(await window.ahq!.removeIntegration(i.id));
+                  setItems(await api!.removeIntegration(i.id));
                 })
               }
             >
@@ -730,7 +799,7 @@ export function ConnectionSettings({
           onSubmit={(e) => {
             e.preventDefault();
             void action(async () => {
-              setItems(await window.ahq!.saveIntegration({ name, url, key: token }));
+              setItems(await api!.saveIntegration({ name, url, key: token }));
               setName('');
               setUrl('');
               setToken('');
@@ -768,7 +837,7 @@ export function ConnectionSettings({
               placeholder="Leave empty for a public endpoint"
             />
           </label>
-          <button className="button secondary" disabled={!window.ahq || busy}>
+          <button className="button secondary" disabled={!api || busy}>
             Save integration
           </button>
         </form>
@@ -786,6 +855,7 @@ export function ActivityPage({
   update: UpdateState;
   notify: (s: string) => void;
 }) {
+  const { api } = useOfficeEnvironment();
   const [events, setEvents] = useState<WorkEvent[]>(state.events),
     [filter, setFilter] = useState('all'),
     [query, setQuery] = useState(''),
@@ -793,8 +863,8 @@ export function ActivityPage({
     [busy, setBusy] = useState(false);
   useEffect(() => {
     const refresh = () => {
-      if (window.ahq)
-        void window.ahq
+      if (api)
+        void api
           .activity()
           .then(setEvents)
           .catch((e) => notify(errorText(e)));
@@ -802,11 +872,11 @@ export function ActivityPage({
     refresh();
     const timer = setInterval(refresh, 4000);
     return () => clearInterval(timer);
-  }, [state.events, notify]);
+  }, [state.events, notify, api]);
   async function local(command: Parameters<NonNullable<Window['ahq']>['localCommand']>[0]) {
     setBusy(true);
     try {
-      setRuntime(await window.ahq!.localCommand(command));
+      setRuntime(await api!.localCommand(command));
     } catch (e) {
       notify(errorText(e));
     } finally {
@@ -823,10 +893,10 @@ export function ActivityPage({
               <button
                 key={format}
                 className="button secondary"
-                disabled={!window.ahq}
+                disabled={!api}
                 onClick={() =>
-                  void window
-                    .ahq!.exportActivity(format)
+                  void api!
+                    .exportActivity(format)
                     .then((ok) => ok && notify('Activity exported.'))
                     .catch((e) => notify(errorText(e)))
                 }
@@ -900,8 +970,8 @@ export function ActivityPage({
               <button
                 className="button secondary"
                 onClick={() =>
-                  void window
-                    .ahq!.cancelSession(e.sessionId!)
+                  void api!
+                    .cancelSession(e.sessionId!)
                     .then((session) => update((s) => applySession(s, e.id, session)))
                     .catch((error) => notify(errorText(error)))
                 }
@@ -916,7 +986,7 @@ export function ActivityPage({
         <summary>Local workflows</summary>
         <p>Codex workflows run in a local workspace. These jobs are separate from your office employees.</p>
         <button
-          disabled={busy || !window.ahq}
+          disabled={busy || !api}
           className="button secondary"
           onClick={() => void local({ type: 'snapshot' })}
         >

@@ -1,3 +1,12 @@
+import { OfficeEnvironmentProvider, useOfficeEnvironment } from './lib/office-environment';
+import {
+  productLaunchStateAt,
+  PRODUCT_LAUNCH_INTERN,
+  PRODUCT_LAUNCH_APPROVAL_IDS,
+} from './lib/product-launch-demo';
+import { ProductLaunchCursor, useProductLaunchPlayback } from './lib/use-product-launch-playback';
+import { TOUR_DURATION, tourTime } from './components/demo-tour-model';
+import './product-launch-playback.css';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import {
   History,
@@ -27,7 +36,6 @@ import {
   Target,
   Users,
   UserRound,
-  Volume2,
   X,
 } from 'lucide-react';
 import type {
@@ -83,12 +91,14 @@ import {
 const OfficeScene = lazy(() => import('./components/OfficeScene'));
 const nav = [
   { id: 'office', label: 'Office', icon: Home },
+  { id: 'live-office', label: 'Live office', icon: Radio },
   { id: 'employees', label: 'Employees', icon: Users },
   { id: 'roadmap', label: 'Roadmap', icon: GitBranch },
   { id: 'files', label: 'Files', icon: FolderOpen },
 ] as const;
 const pageNames: Record<Page, string> = {
   office: 'Office',
+  'live-office': 'Live office',
   employees: 'Employees',
   announce: 'Announce',
   commitments: 'Commitments',
@@ -153,11 +163,38 @@ function startPartyMusic(): PartyMusicStop {
   };
 }
 export default function App() {
-  const [state, setState] = useState<AppState>(readLocalState);
-  const [ready, setReady] = useState(!window.ahq);
+  const [demoRun, setDemoRun] = useState<{ id: number; autoplay: boolean } | null>(null);
+  const isDemo = demoRun !== null;
+  return (
+    <OfficeEnvironmentProvider value={{ api: isDemo ? undefined : window.ahq, isDemo }}>
+      <WorkspaceApp
+        key={isDemo ? `demo-${demoRun.id}` : 'live'}
+        demoAutoplay={demoRun?.autoplay ?? false}
+        onStartDemo={() => setDemoRun((run) => ({ id: (run?.id ?? 0) + 1, autoplay: true }))}
+        onResetDemo={() => setDemoRun((run) => ({ id: (run?.id ?? 0) + 1, autoplay: false }))}
+        onExitDemo={() => setDemoRun(null)}
+      />
+    </OfficeEnvironmentProvider>
+  );
+}
+function WorkspaceApp({
+  onStartDemo,
+  onResetDemo,
+  onExitDemo,
+  demoAutoplay,
+}: {
+  onStartDemo: () => void;
+  onResetDemo: () => void;
+  onExitDemo: () => void;
+  demoAutoplay: boolean;
+}) {
+  const { api, isDemo } = useOfficeEnvironment();
+  const appSurface = useRef<HTMLDivElement>(null);
+  const [state, setState] = useState<AppState>(() => (isDemo ? productLaunchStateAt(0) : readLocalState()));
+  const [ready, setReady] = useState(!api);
   const [page, setPage] = useState<Page>('office');
   const [conversationTarget, setConversationTarget] = useState('team');
-  const [officeChatOpen, setOfficeChatOpen] = useState(false);
+  const [officeChatOpen, setOfficeChatOpen] = useState(isDemo);
   const officeChatRef = useRef<HTMLElement>(null);
   useEffect(() => {
     if (!officeChatOpen || page !== 'office') return;
@@ -231,6 +268,19 @@ export default function App() {
   const notify = useCallback((text: string) => setToast(text), []);
   const update: UpdateState = useCallback((fn) => setState((previous) => fn(previous)), []);
   const history = useOfficeHistory(state, update, notify);
+  const demo = useProductLaunchPlayback({
+    enabled: isDemo && demoAutoplay,
+    surface: appSurface,
+    sync: (milliseconds) => setState(productLaunchStateAt(milliseconds)),
+    notify,
+    stop: onExitDemo,
+    closeDialogs: () => {
+      setSelectedApproval(null);
+      setSelectedEmployee(null);
+      setSelectedCommitment(null);
+      setModal(null);
+    },
+  });
   const [pastFrame, setPastFrame] = useState<import('../shared/types').OfficeFrame | null>(null);
   const lastFrame = useRef(0);
   const frameTime = useRef(Date.now() / 1000);
@@ -239,7 +289,7 @@ export default function App() {
   useEffect(() => {
     let active = true;
     if (history.at !== null)
-      void window.ahq?.frameAt(history.at).then((frame) => {
+      void api?.frameAt(history.at).then((frame) => {
         if (active) setPastFrame(frame);
       });
     else setPastFrame(null);
@@ -248,11 +298,11 @@ export default function App() {
     };
   }, [history.at]);
   useEffect(() => {
-    if (!window.ahq || history.at !== null || !ready) return;
+    if (!api || history.at !== null || !ready) return;
     const time = Date.now();
     if (time - lastFrame.current < (listening ? 100 : 5000)) return;
     lastFrame.current = time;
-    void window.ahq
+    void api
       .recordFrame({
         time,
         sceneTime: frameTime.current,
@@ -276,10 +326,10 @@ export default function App() {
   }, [listening, state.reducedMotion]);
   async function broadcast(text: string) {
     if (!state.employees.length) throw new Error('Create an employee before making an announcement.');
-    if (!window.ahq) throw new Error('Open the desktop app to announce to your employees.');
+    if (!api) throw new Error('Open the desktop app to announce to your employees.');
     await saveChain.current;
-    const results = await window.ahq.broadcast(text);
-    const saved = await window.ahq.loadState();
+    const results = await api.broadcast(text);
+    const saved = await api.loadState();
     if (saved) setState(saved);
     const failed = results.filter((r) => r.error);
     notify(
@@ -321,16 +371,16 @@ export default function App() {
     return () => window.removeEventListener('ahq:room', room);
   }, []);
   useEffect(() => {
-    if (!window.ahq) return;
+    if (!api) return;
     let cancelled = false;
-    Promise.all([window.ahq.loadState(), window.ahq.getCloudSettings()])
+    Promise.all([api.loadState(), api.getCloudSettings()])
       .then(([saved, settings]) => {
         if (!cancelled) {
           if (isState(saved)) setState(saved);
           setCloud(settings);
           setReady(true);
-          void window
-            .ahq!.needsStorageSetup()
+          void api!
+            .needsStorageSetup()
             .then((needs) => {
               if (needs) setModal('storage');
             })
@@ -349,17 +399,17 @@ export default function App() {
   }, [notify]);
   const saveChain = useRef(Promise.resolve());
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || isDemo) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
       notify('Storage is full. Export your documents before closing.');
     }
-    if (window.ahq)
+    if (api)
       saveChain.current = saveChain.current
-        .then(() => window.ahq!.saveState(state))
+        .then(() => api!.saveState(state))
         .catch(() => notify('Could not save to disk. Your browser cache is still available.'));
-  }, [state, ready, notify]);
+  }, [state, ready, notify, isDemo, api]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(''), 5200);
@@ -376,7 +426,7 @@ export default function App() {
     return () => document.removeEventListener('keydown', listener);
   }, []);
   useEffect(() => {
-    if (!window.ahq || !cloud.configured) return;
+    if (!api || !cloud.configured) return;
     let stopped = false,
       polling = false;
     const poll = async () => {
@@ -387,7 +437,7 @@ export default function App() {
           (e) => e.sessionId && e.status !== 'ready',
         )) {
           try {
-            const session = await window.ahq!.getSession(employee.sessionId!);
+            const session = await api!.getSession(employee.sessionId!);
             if (stopped) return;
             setCloud((c) => ({ ...c, connected: true }));
             update((s) => applySession(s, employee.id, session));
@@ -417,7 +467,7 @@ export default function App() {
     };
   }, [cloud.configured, update]);
   useEffect(() => {
-    if (!window.ahq || !ready) return;
+    if (!api || !ready) return;
     let stopped = false,
       polling = false;
     const refresh = async () => {
@@ -433,7 +483,7 @@ export default function App() {
       try {
         await saveChain.current;
         const before = stateRef.current;
-        const saved = await window.ahq!.loadState();
+        const saved = await api!.loadState();
         if (
           !stopped &&
           saved &&
@@ -468,6 +518,7 @@ export default function App() {
     setModal(null);
     setSelectedEmployee(null);
     setSelectedCommitment(null);
+    setStreamSessionId(null);
   }
   function addEvent(text: string, kind: 'system' | 'review' | 'announcement' = 'system') {
     return { id: uid(), text, time: timeNow(), kind, source: 'local' as const };
@@ -478,14 +529,14 @@ export default function App() {
     try {
       let response: import('../shared/types').CloudSession | undefined;
       if (a.sessionId) {
-        if (!window.ahq) throw new Error('Open the desktop app to review a cloud output.');
-        response = await window.ahq.decideSession({
+        if (!api) throw new Error('Open the desktop app to review a cloud output.');
+        response = await api.decideSession({
           sessionId: a.sessionId,
           version: a.version,
           decision: decision === 'approved' ? 'approve' : 'request_changes',
           feedback,
         });
-        const saved = await window.ahq.loadState();
+        const saved = await api.loadState();
         if (
           saved?.approvals.some(
             (item) => item.id === a.id && item.version === a.version && item.status === decision,
@@ -519,10 +570,9 @@ export default function App() {
     }
   }
   async function exportApproval(a: Approval) {
-    if (window.ahq) {
+    if (api) {
       try {
-        if (await window.ahq.exportDocument({ title: a.title, content: a.content }))
-          notify('Document exported.');
+        if (await api.exportDocument({ title: a.title, content: a.content })) notify('Document exported.');
       } catch {
         notify('Could not export the document.');
       }
@@ -546,10 +596,14 @@ export default function App() {
     notify(`${folder.files.length} files copied into your local workspace.`);
   }
   async function selectFolder() {
-    if (window.ahq) {
+    if (isDemo) {
+      notify('Exit the demo to add your own files.');
+      return;
+    }
+    if (api) {
       setBusy(true);
       try {
-        const result = await window.ahq.selectFolder();
+        const result = await api.selectFolder();
         if (result) registerFolder(result);
       } catch (error) {
         notify(error instanceof Error ? error.message : 'Unable to read that folder.');
@@ -623,7 +677,12 @@ export default function App() {
   }
   const common = { state, update, notify };
   return (
-    <div className={`app-shell ${state.reducedMotion ? 'reduce-motion' : ''}`}>
+    <div
+      className={`app-shell ${state.reducedMotion ? 'reduce-motion' : ''}`}
+      ref={appSurface}
+      data-demo-active={isDemo}
+      data-demo-running={demo.running}
+    >
       <aside className="sidebar">
         <a
           className="brand"
@@ -636,13 +695,14 @@ export default function App() {
         >
           <img className="brand-office-icon" src={officeIcon} alt="" />
           <span>
-            astra<span className="brand-hq">HQ</span>
+            Astra<span className="brand-hq">HQ</span>
           </span>
         </a>
         <nav aria-label="Main navigation">
           {nav.map((item) => (
             <button
               key={item.id}
+              data-demo-target={`nav-${item.id}`}
               className={`nav-item ${page === item.id ? 'active' : ''}`}
               onClick={() => navigate(item.id)}
               aria-label={item.label}
@@ -658,6 +718,40 @@ export default function App() {
       <div className="main-shell" data-page={page}>
         <header className="topbar topbar-minimal">
           <div className="topbar-actions">
+            {isDemo && (
+              <span className="demo-mode-label">
+                {demoAutoplay
+                  ? `Demo · ${Math.floor(demo.elapsed / 1000)}/${TOUR_DURATION / 1000}s`
+                  : 'Demo ready'}
+              </span>
+            )}
+            <button
+              type="button"
+              className="topbar-demo-button"
+              data-demo-control="true"
+              onClick={() => {
+                if (isDemo && demo.running) onExitDemo();
+                else void saveChain.current.then(onStartDemo);
+              }}
+            >
+              {isDemo && demo.running ? <X size={13} /> : <Sparkles size={13} />}
+              {isDemo && demo.running ? 'Stop demo' : 'Start demo'}
+            </button>
+            <button
+              type="button"
+              className="topbar-demo-button demo-reset-button"
+              aria-label="Reset demo"
+              title="Reset the sample workspace before playing again"
+              data-demo-control="true"
+              onClick={() => void saveChain.current.then(onResetDemo)}
+            >
+              Reset
+            </button>
+            {isDemo && !demo.running && (
+              <button type="button" className="text-button" data-demo-control="true" onClick={onExitDemo}>
+                Exit demo
+              </button>
+            )}
             <span className="today">
               {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
             </span>
@@ -680,21 +774,6 @@ export default function App() {
             </button>
           </div>
         </header>
-        <DemoPanel
-          state={state}
-          onCreateGoal={async (goal) => {
-            await saveChain.current;
-            setState(await window.ahq!.createRoadmap(goal, { automatic: true }));
-          }}
-          onWorkUpdate={async () => {
-            await saveChain.current;
-            const saved = await window.ahq!.loadState();
-            if (saved) setState(saved);
-          }}
-          notify={notify}
-          selectedSessionId={streamSessionId}
-          onSelectSession={setStreamSessionId}
-        />
         <main>
           {page !== 'office' && (
             <div className="page-header">
@@ -704,6 +783,7 @@ export default function App() {
                 <p>
                   {
                     {
+                      'live-office': 'Your live sessions, incoming work, and launch controls.',
                       employees: 'Good people. Clear roles. A shared direction.',
                       announce: 'One shared direction. Everyone on the same page.',
                       commitments: 'Flexibility in the path. Reliability in the promise.',
@@ -719,7 +799,11 @@ export default function App() {
               </div>
               <div className="page-actions">
                 {page === 'employees' ? (
-                  <button className="button primary" onClick={() => setModal('employee')}>
+                  <button
+                    className="button primary"
+                    data-demo-target="employee-new"
+                    onClick={() => setModal('employee')}
+                  >
                     <Plus size={16} />
                     New employee
                   </button>
@@ -732,11 +816,29 @@ export default function App() {
               </div>
             </div>
           )}
+          <div className="live-office-content" hidden={page !== 'live-office'}>
+            <DemoPanel
+              state={state}
+              onCreateGoal={async (goal) => {
+                await saveChain.current;
+                setState(await api!.createRoadmap(goal, { automatic: true }));
+              }}
+              onWorkUpdate={async () => {
+                await saveChain.current;
+                const saved = await api!.loadState();
+                if (saved) setState(saved);
+              }}
+              notify={notify}
+              selectedSessionId={page === 'live-office' ? streamSessionId : null}
+              onSelectSession={setStreamSessionId}
+            />
+          </div>
           {page === 'office' && (
             <>
               <div className="office-goal-header">
                 <button
                   className="office-goal-card"
+                  data-demo-target="goal-open"
                   onClick={() => setModal('goal')}
                   aria-label={`Goal: ${history.display.goal}. Edit goal.`}
                 >
@@ -830,7 +932,9 @@ export default function App() {
                             listening={history.at !== null ? !!pastFrame?.listening : listening}
                             microphoneLevel={history.at !== null ? (pastFrame?.level ?? 0) : microphoneLevel}
                             slapMode={history.at === null && slapMode}
-                            partyMode={history.at === null && partyMode}
+                            partyMode={
+                              history.at === null && (partyMode || (isDemo && demo.elapsed >= TOUR_DURATION))
+                            }
                             slapTarget={history.at === null ? slapTarget : null}
                             onSlap={(id) => {
                               const employee = state.employees.find((item) => item.id === id);
@@ -914,12 +1018,6 @@ export default function App() {
                           Replay · {new Date(history.at).toLocaleTimeString()}
                         </button>
                       )}
-                      {listening && (
-                        <div className="replay-badge">
-                          <Volume2 size={14} />
-                          The whole office is listening
-                        </div>
-                      )}
                     </div>
                     <div className="office-footer">
                       <div className="avatar-stack">
@@ -969,7 +1067,11 @@ export default function App() {
               <div className="page-bottom">
                 <span>
                   <span className="status-dot" />
-                  {ready ? 'Your workspace is saved on this device' : 'Loading your workspace'}
+                  {isDemo
+                    ? 'Demo workspace · sample data'
+                    : ready
+                      ? 'Your workspace is saved on this device'
+                      : 'Loading your workspace'}
                 </span>
                 <button className="text-button" onClick={() => setModal('help')}>
                   A little help getting started <CircleHelp size={13} />
@@ -1014,7 +1116,7 @@ export default function App() {
               onControl={async (action) => {
                 try {
                   await saveChain.current;
-                  const next = await window.ahq?.controlRoadmap(action);
+                  const next = await api?.controlRoadmap(action);
                   if (next) setState(next);
                 } catch (error) {
                   notify(error instanceof Error ? error.message : 'Please try again.');
@@ -1025,7 +1127,9 @@ export default function App() {
               onEditGoal={() => setModal('goal')}
             />
           )}
-          {page === 'files' && <FilesPage state={state} notify={notify} />}
+          {page === 'files' && (
+            <FilesPage state={state} notify={notify} demoElapsed={isDemo ? demo.elapsed : undefined} />
+          )}
           {page === 'conversations' && (
             <ConversationsPage {...common} initialChannel={conversationTarget} onBroadcast={broadcast} />
           )}
@@ -1091,8 +1195,8 @@ export default function App() {
             <button
               className="button secondary"
               onClick={() =>
-                void window
-                  .ahq!.useDefaultStorage()
+                void api!
+                  .useDefaultStorage()
                   .then(() => setModal(null))
                   .catch((e) => notify(String(e)))
               }
@@ -1102,8 +1206,8 @@ export default function App() {
             <button
               className="button primary"
               onClick={() =>
-                void window
-                  .ahq!.chooseDatabaseFolder()
+                void api!
+                  .chooseDatabaseFolder()
                   .then((path) => {
                     if (path) {
                       setModal(null);
@@ -1139,22 +1243,24 @@ export default function App() {
               notify('Profile updated for future assignments.');
               return;
             }
-            const employee: Employee = {
-              ...fields,
-              skills: 'Astra session',
-              id: uid(),
-              ...randomEmployeeAppearance(),
-              status: 'ready',
-              activity: 'Ready for a first assignment',
-              location: 'desk',
-            };
+            const employee: Employee = isDemo
+              ? { ...PRODUCT_LAUNCH_INTERN, ...fields }
+              : {
+                  ...fields,
+                  skills: 'Astra session',
+                  id: uid(),
+                  ...randomEmployeeAppearance(),
+                  status: 'ready',
+                  activity: 'Ready for a first assignment',
+                  location: 'desk',
+                };
             update((s) => ({
               ...s,
               employees: [...s.employees, employee],
               events: [...s.events, addEvent(`${employee.name} joined the team`)],
             }));
             setModal(null);
-            setSelectedEmployee(employee.id);
+            if (!isDemo) setSelectedEmployee(employee.id);
             notify(`${employee.name} has a place at the table.`);
           }}
         />
@@ -1164,10 +1270,16 @@ export default function App() {
           goal={state.goal}
           onClose={() => setModal(null)}
           onSave={async (goal) => {
-            if (!window.ahq)
+            if (isDemo) {
+              setState({ ...productLaunchStateAt(tourTime(12000)), goal });
+              navigate('roadmap');
+              notify('Roadmap created. Your team is getting to work.');
+              return;
+            }
+            if (!api)
               throw new Error('Open the desktop app to create an AI roadmap with your ChatGPT account.');
             await saveChain.current;
-            const next = await window.ahq.createRoadmap(goal);
+            const next = await api.createRoadmap(goal);
             setState(next);
             navigate('roadmap');
             notify('Creating your roadmap. Your employees will start the first available steps.');
@@ -1208,6 +1320,7 @@ export default function App() {
             setModal('employee');
           }}
           onViewStream={() => {
+            navigate('live-office');
             setStreamSessionId(person.sessionId ?? null);
             setSelectedEmployee(null);
           }}
@@ -1225,16 +1338,16 @@ export default function App() {
             navigate('settings');
           }}
           onStart={async (assignment, folderIds, allowCloudUpload) => {
-            if (!window.ahq) throw new Error('Cloud sessions are available in the desktop app.');
+            if (!api) throw new Error('Cloud sessions are available in the desktop app.');
             await saveChain.current;
-            const session = await window.ahq.startSession({
+            const session = await api.startSession({
               employee: person,
               assignment,
               goal: state.goal,
               folderIds,
               allowCloudUpload,
             });
-            const saved = await window.ahq.loadState().catch(() => null);
+            const saved = await api.loadState().catch(() => null);
             if (saved) setState(saved);
             else update((s) => applySession(s, person.id, session));
             notify(`Task assigned to ${person.name}. You can follow it in Roadmap.`);
@@ -1397,7 +1510,7 @@ export default function App() {
               <li>Hidden folders, common secrets, and unsupported files are excluded.</li>
               <li>Nothing is uploaded until you explicitly share it in a cloud assignment.</li>
             </ul>
-            {!window.ahq && (
+            {!api && (
               <div className="info-note">
                 Browser preview stores short text excerpts locally. Use the desktop app for complete file
                 snapshots and cloud assignments.
@@ -1543,10 +1656,35 @@ export default function App() {
           </div>
         </Modal>
       )}
+      {isDemo && <ProductLaunchCursor playback={demo} />}
       {toast && (
         <div className="toast" role="status">
           <Check size={17} />
           <span>{toast}</span>
+          {isDemo && demo.elapsed >= tourTime(19000) && demo.elapsed < tourTime(27000) && (
+            <button
+              data-demo-target="review-email"
+              onClick={() => setSelectedApproval(PRODUCT_LAUNCH_APPROVAL_IDS.email)}
+            >
+              Review reply
+            </button>
+          )}
+          {isDemo && demo.elapsed >= tourTime(31000) && demo.elapsed < tourTime(37000) && (
+            <button
+              data-demo-target="review-pr"
+              onClick={() => setSelectedApproval(PRODUCT_LAUNCH_APPROVAL_IDS.pr)}
+            >
+              Review pull request
+            </button>
+          )}
+          {isDemo && demo.elapsed >= tourTime(55000) && demo.elapsed < tourTime(60000) && (
+            <button
+              data-demo-target="review-campaign"
+              onClick={() => setSelectedApproval(PRODUCT_LAUNCH_APPROVAL_IDS.campaign)}
+            >
+              Review launch kit
+            </button>
+          )}
           <button aria-label="Dismiss notification" onClick={() => setToast('')}>
             <X size={15} />
           </button>
@@ -1649,6 +1787,7 @@ function GoalForm({
             maxLength={500}
             required
             value={value}
+            data-demo-target="goal-input"
             onChange={(e) => setValue(e.target.value)}
           />
         </label>
@@ -1664,7 +1803,12 @@ function GoalForm({
         )}
         <div className="modal-footer">
           <span className="muted">{value.length}/500</span>
-          <button className="button primary" type="submit" disabled={saving || !value.trim()}>
+          <button
+            className="button primary"
+            data-demo-target="goal-save"
+            type="submit"
+            disabled={saving || !value.trim()}
+          >
             {saving ? 'Starting…' : 'Create roadmap & start'} <ArrowRight size={15} />
           </button>
         </div>
@@ -1881,6 +2025,7 @@ function EmployeeDetail({
   onEdit: () => void;
   onStart: (assignment: string, folderIds: string[], allow: boolean) => Promise<void>;
 }) {
+  const { api } = useOfficeEnvironment();
   const [assignment, setAssignment] = useState('');
   const [folderIds, setFolderIds] = useState<string[]>([]);
   const [allow, setAllow] = useState(false);
@@ -1970,7 +2115,7 @@ function EmployeeDetail({
         )}
         {!cloud.connected && (
           <div className="info-note">
-            {window.ahq
+            {api
               ? 'Sign in with ChatGPT in Settings to start work using your plan.'
               : 'Open the desktop app and sign in with ChatGPT to start an employee session.'}
           </div>
@@ -2139,7 +2284,12 @@ function ReviewDialog({
                     Use this choice <ArrowRight size={15} />
                   </button>
                 ) : (
-                  <button disabled={busy} className="button primary" onClick={() => onDecide('approved')}>
+                  <button
+                    disabled={busy}
+                    className="button primary"
+                    data-demo-target="review-approve"
+                    onClick={() => onDecide('approved')}
+                  >
                     {busy ? <LoaderCircle className="spin" size={16} /> : <Check size={16} />}Yes · approve
                   </button>
                 )}
