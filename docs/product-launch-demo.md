@@ -119,8 +119,12 @@ approval times. Reset and completion leave no pending demo review cues.
 
 ## Current validation
 
-`npm run check` passed all **244 tests**, TypeScript, production renderer, and
+`npm run check` passed all **249 tests**, TypeScript, production renderer, and
 desktop/speech-helper builds. The focused demo suite includes 18 cases.
+
+Startup regression tests also verify that failed or slow AI connection checks do
+not block loading the saved office. If the native workspace cannot be loaded or
+is invalid, cache and native autosave stay paused instead of overwriting saved data.
 
 `node scripts/product-launch-ui-smoke.mjs` passed against the real App in a private
 browser context at 1440 × 836. It verified all eight clicks on visible employee

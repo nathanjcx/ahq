@@ -1,4 +1,5 @@
 import { OfficeEnvironmentProvider, useOfficeEnvironment } from './lib/office-environment';
+import { beginWorkspaceStartup } from './lib/workspace-startup';
 import {
   productLaunchStateAt,
   productLaunchOfficeReviewsAt,
@@ -56,7 +57,6 @@ import {
   employeeById,
   folderBrief,
   sampleState,
-  isState,
   readLocalState,
   STORAGE_KEY,
   timeNow,
@@ -200,6 +200,7 @@ function WorkspaceApp({
   const appSurface = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<AppState>(() => (isDemo ? productLaunchStateAt(0) : readLocalState()));
   const [ready, setReady] = useState(!api);
+  const [workspaceWritable, setWorkspaceWritable] = useState(!api);
   const [page, setPage] = useState<Page>('office');
   const [conversationTarget, setConversationTarget] = useState('team');
   const [officeChatOpen, setOfficeChatOpen] = useState(isDemo);
@@ -384,34 +385,39 @@ function WorkspaceApp({
   }, []);
   useEffect(() => {
     if (!api) return;
+    const startup = beginWorkspaceStartup(api, {
+      workspaceLoaded: (saved) => {
+        if (saved) setState(saved);
+        setWorkspaceWritable(true);
+        setReady(true);
+      },
+      workspaceFailed: () => {
+        notify(
+          'Your saved office could not be loaded. Showing the cache; saving is paused. Reopen the app to retry.',
+        );
+        setReady(true);
+      },
+      connectionLoaded: setCloud,
+      connectionFailed: () => notify('Could not check your AI connection. Open Settings to reconnect.'),
+    });
+    return startup.cancel;
+  }, [api, notify]);
+  useEffect(() => {
+    if (!api || !workspaceWritable) return;
     let cancelled = false;
-    Promise.all([api.loadState(), api.getCloudSettings()])
-      .then(([saved, settings]) => {
-        if (!cancelled) {
-          if (isState(saved)) setState(saved);
-          setCloud(settings);
-          setReady(true);
-          void api!
-            .needsStorageSetup()
-            .then((needs) => {
-              if (needs) setModal('storage');
-            })
-            .catch(() => undefined);
-        }
+    void api
+      .needsStorageSetup()
+      .then((needs) => {
+        if (!cancelled && needs) setModal('storage');
       })
-      .catch(() => {
-        if (!cancelled) {
-          notify('Your desktop workspace could not be loaded. Using the local cache.');
-          setReady(true);
-        }
-      });
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [notify]);
+  }, [api, workspaceWritable]);
   const saveChain = useRef(Promise.resolve());
   useEffect(() => {
-    if (!ready || isDemo) return;
+    if (!ready || isDemo || !workspaceWritable) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
@@ -421,7 +427,7 @@ function WorkspaceApp({
       saveChain.current = saveChain.current
         .then(() => api!.saveState(state))
         .catch(() => notify('Could not save to disk. Your browser cache is still available.'));
-  }, [state, ready, notify, isDemo, api]);
+  }, [state, ready, workspaceWritable, notify, isDemo, api]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(''), 5200);
