@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "tsc --noEmit && vite build && node scripts/build-electron.mjs",
-    "start": "electron .",
+    "start": "node scripts/start.mjs",
     "preview": "node scripts/preview.mjs",
     "test": "tsx --test tests/*.test.ts",
     "package": "npm run build && electron-builder --dir"

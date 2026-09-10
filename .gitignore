@@ -5,3 +5,4 @@ release/
 .local-data/
 test-results/
 *.log
+.claude/
