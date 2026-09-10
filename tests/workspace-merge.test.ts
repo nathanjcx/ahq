@@ -93,3 +93,44 @@ test('restored review entries cannot regain their old session from a delayed sav
   const merged = mergeWorkspace(restored, stale);
   assert.equal(merged.approvals[0].sessionId, undefined);
 });
+
+test('manual assignments retain session progress through stale saves without an AI roadmap', () => {
+  const input = fixture();
+  const current: AppState = {
+    ...input,
+    roadmap: undefined,
+    commitments: [
+      { ...input.commitments[0], sessionId: 'chatgpt-new', assignment: 'The full original request' },
+    ],
+  };
+  const stale: AppState = {
+    ...current,
+    commitments: [
+      {
+        ...current.commitments[0],
+        title: 'Edited title',
+        assignment: undefined,
+        sessionId: 'chatgpt-old',
+        status: 'planned',
+        progress: 0,
+      },
+    ],
+  };
+  const task = mergeWorkspace(current, stale).commitments[0];
+  assert.equal(task.title, 'Edited title');
+  assert.equal(task.assignment, 'The full original request');
+  assert.equal(task.sessionId, 'chatgpt-new');
+  assert.equal(task.status, 'review');
+  assert.equal(task.progress, 90);
+  assert.deepEqual(mergeWorkspace(current, { ...stale, commitments: [] }).commitments, current.commitments);
+});
+
+test('restored manual tasks cannot reconnect to old sessions through a delayed save', () => {
+  const input = fixture();
+  const stale: AppState = {
+    ...input,
+    commitments: [{ ...input.commitments[0], sessionId: 'chatgpt-old', assignment: 'Saved task' }],
+  };
+  const restored: AppState = { ...stale, commitments: [{ ...stale.commitments[0], sessionId: undefined }] };
+  assert.equal(mergeWorkspace(restored, stale).commitments[0].sessionId, undefined);
+});

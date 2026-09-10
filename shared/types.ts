@@ -33,6 +33,8 @@ export interface Employee {
   appearance?: Appearance;
 }
 export interface Commitment {
+  sessionId?: string;
+  assignment?: string;
   id: string;
   title: string;
   description: string;

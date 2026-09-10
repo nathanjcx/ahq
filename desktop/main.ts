@@ -28,6 +28,7 @@ import { GoalCoordinator } from './goals';
 import { generatePersonality, generateRoadmap } from './planning';
 import { advanceRoadmap } from './roadmap';
 import { mergeWorkspace } from '../shared/workspaceMerge';
+import { assertCanAssignTask, recordAssignedTask } from '../src/lib/assignedTasks';
 import { applySession, applyDecision } from '../src/lib/workflow';
 import type { Command } from '../src/shared/types';
 import type { AppState, CloudSettings } from '../shared/types';
@@ -448,6 +449,7 @@ function registerHandlers() {
           status: 'ready' as const,
           activity: 'Restored checkpoint · ready for your direction',
         })),
+        commitments: previous.commitments.map((c) => (c.sessionId ? { ...c, sessionId: undefined } : c)),
         approvals: previous.approvals.map((a) => ({ ...a, sessionId: undefined })),
         events: [
           ...current.events,
@@ -824,7 +826,7 @@ function registerHandlers() {
     const fields = z
       .object({
         employee: EmployeeSchema,
-        assignment: z.string().min(1).max(12000),
+        assignment: z.string().trim().min(1).max(12000),
         goal: z.string().max(500),
         folderIds: z.array(z.string().uuid()).max(10),
         allowCloudUpload: z.boolean(),
@@ -839,6 +841,7 @@ function registerHandlers() {
       const state = await loadState();
       const employee = state?.employees.find((e) => e.id === fields.employee.id);
       if (!employee) throw new Error('Save the employee before starting a cloud session.');
+      assertCanAssignTask(state!);
       if (employee.sessionId) {
         const previousEngine = sessionEngine(employee.sessionId);
         const previousConfig = previousEngine ? config : await credentials();
@@ -874,7 +877,10 @@ function registerHandlers() {
       }
       if (engine) {
         const cloudSession = await engine.start(employee, fields.assignment, state!, files);
-        await database.saveHQ(applySession(state!, employee.id, cloudSession), 'Cloud session started');
+        await database.saveHQ(
+          recordAssignedTask(state!, employee.id, fields.assignment, cloudSession),
+          'Task assigned',
+        );
         return cloudSession;
       }
       const request = {
@@ -933,41 +939,31 @@ function registerHandlers() {
       );
       connected = true;
       // Save the session before returning so a renderer crash cannot orphan the work.
-      await database.saveHQ({
-        ...state!,
-        employees: state!.employees.map((e) =>
-          e.id === employee.id
-            ? {
-                ...e,
-                sessionId: cloudSession.id,
-                status:
-                  cloudSession.status === 'completed'
-                    ? 'ready'
-                    : cloudSession.status === 'waiting_for_approval'
-                      ? 'review'
-                      : 'working',
-                activity: cloudSession.activity,
-              }
-            : e,
-        ),
-      });
+      await database.saveHQ(
+        recordAssignedTask(state!, employee.id, fields.assignment, cloudSession),
+        'Task assigned',
+      );
       return cloudSession;
     });
   });
   handle('cloud:session', async (input) => {
     const id = z.string().min(1).max(200).parse(input);
-    await knownSession(id);
-    const engine = sessionEngine(id);
-    if (engine) return queued(() => engine.get(id));
-    const config = await credentials();
-    try {
-      const result = await readSession(config.endpoint, config.token, id);
-      connected = true;
-      return result;
-    } catch (e) {
-      connected = false;
-      throw e;
-    }
+    return queued(async () => {
+      await knownSession(id);
+      const engine = sessionEngine(id);
+      try {
+        const config = engine ? undefined : await credentials();
+        const result = engine ? await engine.get(id) : await readSession(config!.endpoint, config!.token, id);
+        if (!engine) connected = true;
+        const current = await loadState();
+        const employee = current?.employees.find((e) => e.sessionId === id);
+        if (current && employee) await database.saveHQ(applySession(current, employee.id, result));
+        return result;
+      } catch (e) {
+        if (!engine) connected = false;
+        throw e;
+      }
+    });
   });
   handle('cloud:decide', async (input) => {
     const decision = z

@@ -35,7 +35,9 @@ export class GoalCoordinator {
           status: 'planning',
           createdAt: now,
           message: 'Turning your goal into milestones and finding the right employees for each step.',
-          milestoneIds: [],
+          milestoneIds: current.commitments
+            .filter((c) => c.sessionId && c.status !== 'done')
+            .map((c) => c.id),
           assignments: [],
         },
         events: [
@@ -80,7 +82,7 @@ export class GoalCoordinator {
           commitments: [...current.commitments, ...commitments],
           roadmap: {
             ...current.roadmap,
-            milestoneIds: commitments.map((c) => c.id),
+            milestoneIds: [...new Set([...current.roadmap.milestoneIds, ...commitments.map((c) => c.id)])],
             status: 'active',
             message: 'Your roadmap is ready. Delegating the first available steps.',
           },
@@ -120,7 +122,7 @@ export class GoalCoordinator {
             ...current,
             roadmap: {
               ...current.roadmap,
-              status: current.roadmap.milestoneIds.length ? 'paused' : 'failed',
+              status: current.roadmap.status === 'planning' ? 'failed' : 'paused',
               message,
             },
             events: [

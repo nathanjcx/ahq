@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { advanceRoadmap } from '../desktop/roadmap';
 import { initialState } from '../src/lib/store';
-import { applyDecision } from '../src/lib/workflow';
+import { applyDecision, applySession } from '../src/lib/workflow';
+import { recordAssignedTask } from '../src/lib/assignedTasks';
 import type { AppState, CloudSession, Commitment, Employee } from '../shared/types';
 
 const now = '2026-09-10T15:00:00.000Z';
@@ -97,6 +98,39 @@ test('claims are durable before model execution and repeated ticks never duplica
   const restarted = await advanceRoadmap(structuredClone(first), h.deps);
   assert.equal(h.starts.length, 1);
   assert.deepEqual(restarted.roadmap?.assignments, first.roadmap?.assignments);
+});
+
+test('manual assignments are never dispatched twice and their approval unlocks dependent work', async () => {
+  const h = harness();
+  const manualSession = session('chatgpt-manual');
+  let state = recordAssignedTask(
+    workspace([]),
+    'engineer',
+    'Investigate the launch requirements',
+    manualSession,
+  );
+  const manualId = state.commitments[0].id;
+  state.commitments.push(milestone('Build', [manualId]));
+  state.roadmap!.milestoneIds.push('Build');
+  state = await advanceRoadmap(state, h.deps);
+  state = await advanceRoadmap(state, h.deps);
+  assert.equal(h.starts.length, 0);
+  assert.equal(state.roadmap!.assignments.length, 0);
+  assert.equal(state.commitments[0].sessionId, manualSession.id);
+  state = applySession(state, 'engineer', { ...manualSession, status: 'waiting_for_approval', output });
+  state = await advanceRoadmap(state, h.deps);
+  assert.equal(h.starts.length, 0);
+  state = applyDecision(state, state.approvals[0].id, 1, 'approved');
+  h.sessions.set(manualSession.id, { ...manualSession, status: 'completed', output, reviewed: true });
+  state = await advanceRoadmap(state, h.deps);
+  assert.equal(h.starts.length, 1);
+  assert.match(h.starts[0].assignment, /Approved research to build on/);
+  assert.equal(state.commitments[0].status, 'done');
+  assert.equal(state.commitments[1].status, 'in-progress');
+  assert.deepEqual(
+    state.roadmap!.assignments.map((a) => a.commitmentId),
+    ['Build'],
+  );
 });
 
 test('dependent work waits for approval, then receives the approved deliverable', async () => {

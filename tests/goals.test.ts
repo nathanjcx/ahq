@@ -4,6 +4,7 @@ import test from 'node:test';
 import { GoalCoordinator } from '../desktop/goals';
 import type { AppState, Commitment } from '../shared/types';
 import { initialState } from '../src/lib/store';
+import { recordAssignedTask } from '../src/lib/assignedTasks';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -183,6 +184,67 @@ test('dispatch failures keep the generated roadmap available for recovery', asyn
   assert.equal(run.state().roadmap?.message, 'Connection needs attention.');
   assert.deepEqual(run.state().roadmap?.milestoneIds, ['generated-step']);
   assert.equal(run.state().commitments.length, 1);
+});
+
+test('existing and newly assigned tasks stay visible when AI generation completes', async () => {
+  const existing = {
+    ...milestone('existing-task'),
+    status: 'in-progress' as const,
+    sessionId: 'chatgpt-existing',
+    assignment: 'Existing request',
+  };
+  const run = harness({ ...initialState(), commitments: [existing] });
+  const planning = await run.coordinator.create('A new goal');
+  assert.deepEqual(planning.roadmap?.milestoneIds, ['existing-task']);
+  await run.edit((state) => ({
+    ...state,
+    employees: [
+      {
+        id: 'employee',
+        name: 'Alex',
+        jobTitle: 'Writer',
+        personality: '',
+        skills: 'Astra session',
+        color: '#123456',
+        avatar: 1,
+        status: 'ready',
+        activity: 'Ready',
+        location: 'desk',
+      },
+    ],
+  }));
+  await run.edit((state) =>
+    recordAssignedTask(state, 'employee', 'Write a launch note', {
+      id: 'chatgpt-concurrent',
+      status: 'running',
+      activity: 'Writing a launch note',
+      location: 'desk',
+      events: [],
+    }),
+  );
+  const manualId = run.state().commitments.find((c) => c.sessionId === 'chatgpt-concurrent')!.id;
+  run.generated.get('A new goal')!.resolve([milestone('generated-step')]);
+  await run.settle();
+  assert.equal(run.state().roadmap?.status, 'active');
+  assert.deepEqual(run.state().roadmap?.milestoneIds, ['existing-task', manualId, 'generated-step']);
+  assert.deepEqual(run.advanced[0].roadmap?.milestoneIds, ['existing-task', manualId, 'generated-step']);
+  assert.equal(run.state().commitments.find((c) => c.id === manualId)?.sessionId, 'chatgpt-concurrent');
+});
+
+test('failed generation stays retryable even when assigned work is visible', async () => {
+  const task = {
+    ...milestone('manual-task'),
+    sessionId: 'chatgpt-running',
+    assignment: 'Current request',
+    status: 'in-progress' as const,
+  };
+  const run = harness({ ...initialState(), commitments: [task] });
+  await run.coordinator.create('A new goal');
+  run.generated.get('A new goal')!.reject(new Error('Connection interrupted.'));
+  await run.settle();
+  assert.equal(run.state().roadmap?.status, 'failed');
+  assert.deepEqual(run.state().roadmap?.milestoneIds, ['manual-task']);
+  assert.deepEqual(run.state().commitments, [task]);
 });
 
 test('closing the coordinator prevents a late generation from starting employee work', async () => {

@@ -68,7 +68,7 @@ export function applyDecision(
         : state.messages,
   };
 }
-export function applySession(state: AppState, employeeId: string, session: CloudSession): AppState {
+function applyEmployeeSession(state: AppState, employeeId: string, session: CloudSession): AppState {
   const existingEvents = new Set(state.events.map((e) => e.id));
   const freshEvents = session.events.filter((event) => {
     const key = `${session.id}:${event.id}`;
@@ -89,6 +89,7 @@ export function applySession(state: AppState, employeeId: string, session: Cloud
   const newOutput =
     output && !state.approvals.some((a) => a.sessionId === session.id && a.version >= output.version);
   if (
+    existing?.sessionId === session.id &&
     existing?.status === nextStatus &&
     existing.activity === session.activity &&
     existing.location === session.location &&
@@ -169,5 +170,42 @@ export function applySession(state: AppState, employeeId: string, session: Cloud
                 : a,
             )
           : state.approvals,
+  };
+}
+
+export function applySession(state: AppState, employeeId: string, session: CloudSession): AppState {
+  const next = applyEmployeeSession(state, employeeId, session);
+  const task = next.commitments.find((c) => c.sessionId === session.id);
+  if (!task) return next;
+  const approved =
+    session.reviewed ||
+    (session.output &&
+      next.approvals.some(
+        (a) => a.sessionId === session.id && a.version === session.output!.version && a.status === 'approved',
+      ));
+  const done = session.status === 'completed' && approved;
+  const stopped = session.status === 'failed' || (session.status === 'completed' && !done);
+  const status = done ? 'done' : session.status === 'waiting_for_approval' ? 'review' : 'in-progress';
+  const progress = done
+    ? 100
+    : status === 'review'
+      ? 90
+      : Math.min(70, Math.max(stopped ? 0 : 10, task.progress));
+  const nextStep = done
+    ? 'Reviewed and approved'
+    : stopped
+      ? `Task stopped. ${session.activity}`
+      : session.activity;
+  const taskChanged = task.status !== status || task.progress !== progress || task.nextStep !== nextStep;
+  const linkChanged = next.approvals.some((a) => a.sessionId === session.id && a.commitmentId !== task.id);
+  if (!taskChanged && !linkChanged) return next;
+  return {
+    ...next,
+    commitments: taskChanged
+      ? next.commitments.map((c) => (c.id === task.id ? { ...c, status, progress, nextStep } : c))
+      : next.commitments,
+    approvals: linkChanged
+      ? next.approvals.map((a) => (a.sessionId === session.id ? { ...a, commitmentId: task.id } : a))
+      : next.approvals,
   };
 }

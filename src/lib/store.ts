@@ -313,10 +313,12 @@ export function employeeById(employees: Employee[], id?: string) {
   return employees.find((e) => e.id === id);
 }
 export function clockTime(time: string) {
+  if (!time || !Number.isFinite(new Date(time).getTime())) return '';
   return new Date(time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 export function dueLabel(time: string) {
   const day = new Date(time);
+  if (!time || !Number.isFinite(day.getTime())) return 'No due date';
   const today = new Date();
   const delta = Math.round(
     (new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime() -

@@ -299,7 +299,14 @@ export default function App() {
     let stopped = false,
       polling = false;
     const refresh = async () => {
-      if (polling || !stateRef.current.roadmap) return;
+      if (
+        polling ||
+        !(
+          stateRef.current.roadmap ||
+          stateRef.current.commitments.some((c) => c.sessionId && c.status !== 'done')
+        )
+      )
+        return;
       polling = true;
       try {
         await saveChain.current;
@@ -1033,30 +1040,10 @@ export default function App() {
               folderIds,
               allowCloudUpload,
             });
-            update((s) =>
-              applySession(
-                {
-                  ...s,
-                  demo: false,
-                  events: [
-                    ...s.events,
-                    {
-                      id: uid(),
-                      employeeId: person.id,
-                      text: `Started ${session.id.startsWith('chatgpt-') ? 'a ChatGPT plan session' : 'an Astra session'}: ${assignment}`,
-                      time: timeNow(),
-                      kind: 'work',
-                      source: session.id.startsWith('chatgpt-') ? 'chatgpt' : 'cloud',
-                    },
-                  ],
-                },
-                person.id,
-                session,
-              ),
-            );
-            notify(
-              `${person.name}’s ${session.id.startsWith('chatgpt-') ? 'ChatGPT plan' : 'Astra cloud'} session has started.`,
-            );
+            const saved = await window.ahq.loadState().catch(() => null);
+            if (saved) setState(saved);
+            else update((s) => applySession(s, person.id, session));
+            notify(`Task assigned to ${person.name}. You can follow it in Roadmap.`);
           }}
         />
       )}
@@ -1074,11 +1061,15 @@ export default function App() {
       {commitment && (
         <Modal
           title={commitment.title}
-          subtitle={`${dueLabel(commitment.deadline)} · ${clockTime(commitment.deadline)} · ${commitment.firm ? 'Firm promise' : 'Flexible target'}`}
+          subtitle={
+            commitment.deadline
+              ? `${dueLabel(commitment.deadline)} · ${clockTime(commitment.deadline)} · ${commitment.firm ? 'Firm promise' : 'Flexible target'}`
+              : 'No due date'
+          }
           onClose={() => setSelectedCommitment(null)}
         >
           <div className="commitment-detail">
-            <p>{commitment.description}</p>
+            <p style={{ whiteSpace: 'pre-wrap' }}>{commitment.assignment ?? commitment.description}</p>
             <div className="detail-grid">
               <div>
                 <label>ACCOUNTABLE OWNER</label>
@@ -1466,7 +1457,7 @@ function CommitmentForm({
   const [error, setError] = useState('');
   const id = useRef(initial?.id ?? uid()).current;
   const candidates = dependencyCandidates(commitments, initial?.id);
-  const localDeadline = initial
+  const localDeadline = initial?.deadline
     ? new Date(new Date(initial.deadline).getTime() - new Date(initial.deadline).getTimezoneOffset() * 60_000)
         .toISOString()
         .slice(0, 16)
@@ -1490,12 +1481,13 @@ function CommitmentForm({
           }
           const status = String(data.get('status') ?? 'planned') as Commitment['status'];
           onSave({
+            ...(initial ? { sessionId: initial.sessionId, assignment: initial.assignment } : {}),
             id,
             title,
             description: String(data.get('description')).trim(),
             ownerId: String(data.get('owner')),
             recipient: String(data.get('recipient')).trim(),
-            deadline: new Date(String(data.get('deadline'))).toISOString(),
+            deadline: data.get('deadline') ? new Date(String(data.get('deadline'))).toISOString() : '',
             firm: data.get('firm') === 'on',
             status,
             progress:
@@ -1557,7 +1549,7 @@ function CommitmentForm({
         </div>
         <label>
           Target date · your local timezone
-          <input required name="deadline" type="datetime-local" defaultValue={localDeadline} />
+          <input name="deadline" type="datetime-local" defaultValue={localDeadline} />
         </label>
         <label className="checkbox-label">
           <input name="firm" type="checkbox" defaultChecked={initial?.firm ?? true} />
@@ -1778,7 +1770,7 @@ function EmployeeDetail({
             }}
           >
             {running ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
-            {cloud.provider === 'chatgpt' ? 'Start with ChatGPT' : 'Start cloud session'}
+            {running ? 'Assigning…' : 'Assign task'}
           </button>
         ) : (
           <button className="button primary" onClick={onSettings}>

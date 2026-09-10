@@ -16,7 +16,10 @@ export function mergeWorkspace(previous: AppState | null, incoming: AppState): A
       ]),
     ];
   }
-  const assigned = new Set(roadmap?.assignments.map((a) => a.commitmentId));
+  const assigned = new Set([
+    ...(roadmap?.assignments.map((a) => a.commitmentId) ?? []),
+    ...previous.commitments.filter((c) => c.assignment !== undefined).map((c) => c.id),
+  ]);
   const planned = new Set(roadmap?.milestoneIds);
   const incomingCommitments = new Map(incoming.commitments.map((c) => [c.id, c]));
   return {
@@ -48,6 +51,9 @@ export function mergeWorkspace(previous: AppState | null, incoming: AppState): A
               progress: saved.progress,
               nextStep: saved.nextStep,
               ownerId: saved.ownerId,
+              ...(saved.assignment !== undefined
+                ? { assignment: saved.assignment, sessionId: saved.sessionId }
+                : {}),
             }
           : edited;
       }),
