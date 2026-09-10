@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import {
   ArrowRight,
   CalendarDays,
@@ -172,6 +172,32 @@ export default function Roadmap({ state, onSelect, onCreate, onEditGoal, onContr
   const [zoom, setZoom] = useState(1);
   const [query, setQuery] = useState('');
   const [controlling, setControlling] = useState(false);
+  const [now, setNow] = useState(Date.now);
+  const planning = state.roadmap?.status === 'planning';
+  useEffect(() => {
+    if (!planning) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [planning, state.roadmap?.id]);
+  const elapsed = state.roadmap
+    ? Math.max(
+        0,
+        Math.floor(
+          ((state.roadmap.generatedAt ? Date.parse(state.roadmap.generatedAt) : now) -
+            Date.parse(state.roadmap.createdAt)) /
+            1000,
+        ),
+      )
+    : 0;
+  const dispatchedIds = new Set([
+    ...(state.roadmap?.assignments.filter((a) => a.sessionId).map((a) => a.commitmentId) ?? []),
+    ...state.commitments.filter((c) => c.sessionId).map((c) => c.id),
+  ]);
+  const running = state.commitments.filter(
+    (c) => dispatchedIds.has(c.id) && c.status === 'in-progress',
+  ).length;
+  const dispatched = state.commitments.filter((c) => dispatchedIds.has(c.id)).length;
   const markerId = useId().replace(/:/g, '');
   const graph = useMemo(() => buildRoadmapGraph(state.commitments), [state.commitments]);
   const completed = state.commitments.filter((commitment) => commitment.status === 'done').length;
@@ -285,6 +311,30 @@ export default function Roadmap({ state, onSelect, onCreate, onEditGoal, onContr
               }
             </strong>
             <p>{state.roadmap.message}</p>
+            {planning ? (
+              <div className="roadmap-planning-steps">
+                <span>
+                  <Check size={12} /> Goal saved
+                </span>
+                <span className="current">
+                  <LoaderCircle size={12} className="spin" /> Map steps & match employees
+                </span>
+                <span>Then start ready work</span>
+                <span className="roadmap-elapsed" role="timer" aria-live="off">
+                  {elapsed}s elapsed
+                </span>
+              </div>
+            ) : state.roadmap.generatedAt ? (
+              <div className="roadmap-planning-steps">
+                <span>
+                  <Check size={12} /> Planned in {elapsed}s
+                </span>
+                <span>{dispatched} sessions started</span>
+                <span>{running} in progress</span>
+                <span>{reviews} awaiting review</span>
+                <span>{completed} approved</span>
+              </div>
+            ) : null}
           </div>
           {['active', 'paused'].includes(state.roadmap.status) && (
             <button

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { createRuntime, type OfficeRuntime } from '../runtime/engine';
-import { CodexAppServer } from '../runtime/codex';
+import { CodexAppServer, disabledMcpArguments } from '../runtime/codex';
 
 process.env.CODEX_BIN = path.join(os.tmpdir(), 'little-office-codex-not-installed');
 
@@ -23,7 +23,11 @@ test('deduplicates active scenarios and correlated source items', async () => {
 
     const evaluated = await office.command({ type: 'source.evaluate', id: 'src-discord-bug' });
     assert.equal(evaluated.work.filter((work) => work.scenario === 'bug').length, 1);
-    assert.ok(['attached', 'work'].includes(evaluated.sources.find((item) => item.id === 'src-discord-bug')?.disposition || ''));
+    assert.ok(
+      ['attached', 'work'].includes(
+        evaluated.sources.find((item) => item.id === 'src-discord-bug')?.disposition || '',
+      ),
+    );
   } finally {
     await office.close();
   }
@@ -50,8 +54,14 @@ test('runs a saved routine once and updates agent persistence', async () => {
     const saved = await office.command({
       type: 'routine.save',
       routine: {
-        agentId: 'agent-maya', name: 'Morning decision memo', instructions: 'Write a report about open decisions.',
-        enabled: true, schedule: 'daily', intervalMinutes: 60, dailyTime: '09:00', notes: 'For the morning review',
+        agentId: 'agent-maya',
+        name: 'Morning decision memo',
+        instructions: 'Write a report about open decisions.',
+        enabled: true,
+        schedule: 'daily',
+        intervalMinutes: 60,
+        dailyTime: '09:00',
+        notes: 'For the morning review',
       },
     });
     const id = saved.routines.at(-1)!.id;
@@ -103,8 +113,10 @@ test('dinner demo writes a labeled artifact and linked local calendar event', as
 test('Codex transport keeps completion notifications that beat turn/start response', async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'little-office-codex-test-'));
   const executable = path.join(directory, 'mock-codex');
-  await writeFile(executable, `#!/usr/bin/env node
-if (process.argv.includes('mcp')) { process.stdout.write('[{"name":"external-server"}]'); process.exit(0); }
+  await writeFile(
+    executable,
+    `#!/usr/bin/env node
+if (process.argv.includes('mcp')) { process.stdout.write('[{"name":"external-server","transport":{"type":"stdio","command":"fixture"}}]'); process.exit(0); }
 if (!process.argv.includes('mcp_servers={"external-server"={enabled=false,command="false"}}')) process.exit(9);
 const readline = require('node:readline');
 const send = (message) => process.stdout.write(JSON.stringify(message) + '\\n');
@@ -114,14 +126,16 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   if (message.method === 'thread/start' && Object.hasOwn(message.params, 'model')) throw new Error('Model should inherit settings');
   if (message.method === 'thread/start') send({ id: message.id, result: { thread: { id: 'thread-1' } } });
   if (message.method === 'turn/start') {
-    if (Object.hasOwn(message.params, 'model') || message.params.sandboxPolicy.networkAccess !== false) throw new Error('Unsafe turn settings');
+    if (Object.hasOwn(message.params, 'model') || Object.hasOwn(message.params, 'effort') || message.params.sandboxPolicy.networkAccess !== false) throw new Error('Unsafe turn settings');
     const turn = { id: 'turn-1', status: 'completed', error: null, items: [{ type: 'agentMessage', text: 'early result' }] };
     send({ method: 'item/completed', params: { threadId: 'thread-1', turnId: 'turn-1', item: turn.items[0] } });
     send({ method: 'turn/completed', params: { threadId: 'thread-1', turn } });
     send({ id: message.id, result: { turn: { id: 'turn-1' } } });
   }
 });
-`, { mode: 0o700 });
+`,
+    { mode: 0o700 },
+  );
   await chmod(executable, 0o700);
   const previous = process.env.CODEX_BIN;
   process.env.CODEX_BIN = executable;
@@ -141,21 +155,35 @@ test('seed references resolve, snapshots do not write, and routine edits preserv
   const office = await runtime();
   try {
     const initial = office.snapshot();
-    assert.ok(initial.artifacts.every((artifact) => initial.work.some((work) => work.id === artifact.workId)));
+    assert.ok(
+      initial.artifacts.every((artifact) => initial.work.some((work) => work.id === artifact.workId)),
+    );
     assert.ok(initial.routines.length > 0 && initial.calendar.length > 0);
     const read = await office.command({ type: 'snapshot' });
     assert.equal(read.revision, initial.revision);
     const routine = read.routines[0];
     await office.command({ type: 'routine.run', id: routine.id });
     const lastRunAt = office.snapshot().routines[0].lastRunAt;
-    const edited = await office.command({ type: 'routine.save', routine: {
-      id: routine.id, agentId: routine.agentId, name: routine.name, instructions: routine.instructions,
-      enabled: false, schedule: 'daily', intervalMinutes: 60, dailyTime: '09:00', notes: 'Keep this note',
-    } });
+    const edited = await office.command({
+      type: 'routine.save',
+      routine: {
+        id: routine.id,
+        agentId: routine.agentId,
+        name: routine.name,
+        instructions: routine.instructions,
+        enabled: false,
+        schedule: 'daily',
+        intervalMinutes: 60,
+        dailyTime: '09:00',
+        notes: 'Keep this note',
+      },
+    });
     assert.equal(edited.routines[0].lastRunAt, lastRunAt);
     assert.equal(edited.routines[0].notes, 'Keep this note');
     await assert.rejects(office.command({ type: 'unknown' } as never), /Unknown command/);
-  } finally { await office.close(); }
+  } finally {
+    await office.close();
+  }
 });
 
 test('completed sources attach without rerunning and repeated dinner actions retain the calendar id', async () => {
@@ -172,7 +200,9 @@ test('completed sources attach without rerunning and repeated dinner actions ret
     await waitFor(() => office.snapshot().work.at(-1)?.status === 'completed', 4_000);
     assert.equal(office.snapshot().calendar.length, first.calendar.length);
     assert.equal(office.snapshot().calendar.at(-1)!.id, event.id);
-  } finally { await office.close(); }
+  } finally {
+    await office.close();
+  }
 });
 
 test('full demo ends after five scenarios and each work starts once', async () => {
@@ -180,19 +210,28 @@ test('full demo ends after five scenarios and each work starts once', async () =
   try {
     await office.command({ type: 'demo.speed', speed: 4 });
     await office.command({ type: 'demo.play' });
-    await waitFor(() => !office.snapshot().demo.playing && office.snapshot().demo.nextIndex === 5
-      && office.snapshot().work.every((work) => work.status === 'completed'), 12_000);
+    await waitFor(
+      () =>
+        !office.snapshot().demo.playing &&
+        office.snapshot().demo.nextIndex === 5 &&
+        office.snapshot().work.every((work) => work.status === 'completed'),
+      12_000,
+    );
     const snapshot = office.snapshot();
     assert.equal(snapshot.runs.length, 5);
     assert.equal(new Set(snapshot.runs.map((run) => run.workId)).size, 5);
     assert.equal(snapshot.work.length, 6);
-  } finally { await office.close(); }
+  } finally {
+    await office.close();
+  }
 });
 
 test('early login completes and live artifacts come from files, including the applied checkout patch', async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'little-office-live-test-'));
   const executable = path.join(directory, 'mock-codex');
-  await writeFile(executable, `#!/usr/bin/env node
+  await writeFile(
+    executable,
+    `#!/usr/bin/env node
 if (process.argv.includes('mcp')) { process.stdout.write('[]'); process.exit(0); }
 const fs = require('node:fs');
 const path = require('node:path');
@@ -224,7 +263,9 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', (l
     reply({ turn: { id: turn.id } });
   }
 });
-`, { mode: 0o700 });
+`,
+    { mode: 0o700 },
+  );
   const previous = process.env.CODEX_BIN;
   process.env.CODEX_BIN = executable;
   const office = await createRuntime({ dataDir: path.join(directory, 'data'), onSnapshot: () => undefined });
@@ -239,10 +280,19 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', (l
     await waitFor(() => office.snapshot().work.at(-1)?.status === 'completed', 2_000);
     const run = office.snapshot().runs.at(-1)!;
     assert.doesNotMatch(await readFile(path.join(run.workspace!, 'checkout.js'), 'utf8'), /coupon > 0/);
-    const saved = await office.command({ type: 'routine.save', routine: {
-      agentId: 'agent-maya', name: 'Missing artifact', instructions: 'omit-artifact report',
-      enabled: false, schedule: 'daily', intervalMinutes: 60, dailyTime: '09:00', notes: '',
-    } });
+    const saved = await office.command({
+      type: 'routine.save',
+      routine: {
+        agentId: 'agent-maya',
+        name: 'Missing artifact',
+        instructions: 'omit-artifact report',
+        enabled: false,
+        schedule: 'daily',
+        intervalMinutes: 60,
+        dailyTime: '09:00',
+        notes: '',
+      },
+    });
     await office.command({ type: 'routine.run', id: saved.routines.at(-1)!.id });
     await waitFor(() => office.snapshot().work.at(-1)?.status === 'failed', 2_000);
     assert.match(office.snapshot().work.at(-1)!.error!, /without producing report.md/);
@@ -260,7 +310,6 @@ async function waitFor(condition: () => boolean, timeout: number): Promise<void>
   }
 }
 
-
 test('demo playback stops at a mode switch and never starts live turns', async () => {
   const office = await runtime();
   try {
@@ -272,5 +321,105 @@ test('demo playback stops at a mode switch and never starts live turns', async (
     assert.equal(office.snapshot().work.length, live.work.length);
   } finally {
     await office.close();
+  }
+});
+
+test('MCP child overrides preserve mixed HTTP and stdio transports without copying configuration values', () => {
+  const configured = [
+    {
+      name: 'local',
+      transport: {
+        type: 'stdio',
+        command: '/private/server',
+        args: ['private-argument'],
+        env: { TOKEN: 'private-env' },
+      },
+    },
+    {
+      name: 'docs.with.dots',
+      transport: {
+        type: 'streamable_http',
+        url: 'https://private.example/mcp',
+        http_headers: { Authorization: 'private-header' },
+      },
+    },
+  ];
+  const before = JSON.stringify(configured);
+  const args = disabledMcpArguments(configured);
+  assert.deepEqual(args, [
+    '-c',
+    'mcp_servers={"local"={enabled=false,command="false"},"docs.with.dots"={enabled=false,url="http://127.0.0.1:9"}}',
+  ]);
+  assert.doesNotMatch(args.join(' '), /private/);
+  assert.equal(JSON.stringify(configured), before);
+  assert.deepEqual(disabledMcpArguments([]), ['-c', 'mcp_servers={}']);
+});
+
+test('missing, ambiguous and unknown MCP metadata cannot silently enable inherited servers', () => {
+  for (const input of [
+    null,
+    {},
+    [null],
+    [{}],
+    [{ name: 'missing' }],
+    [{ name: 'unknown', transport: { type: 'future_transport' } }],
+    [{ name: 'stdio', transport: { type: 'stdio' } }],
+    [{ name: 'http', transport: { type: 'streamable_http' } }],
+    [{ name: 'mixed', transport: { type: 'stdio', command: 'fixture', url: 'https://example.test' } }],
+    [{ name: 'bad\nname', transport: { type: 'stdio', command: 'fixture' } }],
+  ]) {
+    assert.throws(() => disabledMcpArguments(input), /MCP/);
+  }
+  const row = { name: 'duplicate', transport: { type: 'stdio', command: 'fixture' } };
+  assert.throws(() => disabledMcpArguments([row, row]), /identities/);
+});
+
+test('Codex starts with disabled mixed transports and forwards explicit reasoning effort only on turn/start', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'ahq-codex-mixed-'));
+  const executable = path.join(directory, 'mock-codex');
+  const configured = [
+    { name: 'local', transport: { type: 'stdio', command: 'fixture' } },
+    { name: 'openaiDeveloperDocs', transport: { type: 'streamable_http', url: 'https://example.test/mcp' } },
+  ];
+  const expected = disabledMcpArguments(configured)[1];
+  await writeFile(
+    executable,
+    `#!/usr/bin/env node
+if (process.argv.includes('mcp')) { process.stdout.write(${JSON.stringify(JSON.stringify(configured))}); process.exit(0); }
+if (!process.argv.includes(${JSON.stringify(expected)})) process.exit(9);
+const send = (message) => process.stdout.write(JSON.stringify(message) + '\\n');
+require('node:readline').createInterface({input:process.stdin}).on('line', line => {
+ const message=JSON.parse(line);
+ const reply=result=>send({id:message.id,result});
+ if(message.method==='initialize') reply({});
+ if(message.method==='thread/start') {
+   if(Object.hasOwn(message.params,'effort')) process.exit(8);
+   reply({thread:{id:'thread-low'}});
+ }
+ if(message.method==='turn/start') {
+   if(message.params.effort!=='low' || message.params.model!=='gpt-6-astra') process.exit(7);
+   reply({turn:{id:'turn-low'}});
+   send({method:'turn/completed',params:{threadId:'thread-low',turn:{id:'turn-low',status:'completed',items:[{type:'agentMessage',text:'fixture result'}]}}});
+ }
+});
+`,
+    { mode: 0o700 },
+  );
+  const previous = process.env.CODEX_BIN;
+  process.env.CODEX_BIN = executable;
+  const client = new CodexAppServer();
+  try {
+    await client.start();
+    const result = await client.runTurn({
+      cwd: directory,
+      model: 'gpt-6-astra',
+      prompt: 'fixture',
+      reasoningEffort: 'low',
+    });
+    assert.equal(result.status, 'completed');
+    assert.equal(result.message, 'fixture result');
+  } finally {
+    await client.close();
+    process.env.CODEX_BIN = previous;
   }
 });

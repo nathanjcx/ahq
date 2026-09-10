@@ -60,6 +60,7 @@ export const StateSchema = z.object({
       status: z.enum(['planning', 'active', 'paused', 'failed', 'complete']),
       message: z.string().max(4000),
       createdAt: dateTime,
+      generatedAt: dateTime.optional(),
       milestoneIds: z.array(z.string().max(100)).max(1000),
       assignments: z
         .array(

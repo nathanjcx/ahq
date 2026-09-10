@@ -462,6 +462,26 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
+.roadmap-planning-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 11px;
+  font-size: 11px;
+  color: #697973;
+}
+.roadmap-planning-steps span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.roadmap-planning-steps .current {
+  color: #12776e;
+  font-weight: 600;
+}
+.roadmap-elapsed {
+  font-variant-numeric: tabular-nums;
+}
 .roadmap-run-paused,
 .roadmap-run-failed {
   border-color: #e8d6ba;

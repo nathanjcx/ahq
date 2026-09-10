@@ -1529,7 +1529,8 @@ function CommitmentForm({
                   : Math.min(99, Math.max(0, Number(data.get('progress')) || 0)),
             nextStep: String(data.get('nextStep')).trim(),
             dependencies,
-            source: initial?.source ?? 'Your instruction',
+            source:
+              initial && initial.ownerId === String(data.get('owner')) ? initial.source : 'Your instruction',
             definitionOfDone: String(data.get('done')).trim(),
           });
         }}
