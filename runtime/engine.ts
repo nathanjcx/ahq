@@ -18,7 +18,7 @@ import { CodexAppServer } from './codex';
 import { copyBugFixture, createBugFixture, initialSnapshot, writeInitialArtifacts } from './fixtures';
 import { SnapshotStore } from './store';
 import { demoEvents } from './story';
-import { parseTriageDecision, sourceEvidence, triagePrompt, triageSchema, type TriageDecision } from './triage';
+import { parseTriageDecision, relevantSources, sourceEvidence, triagePrompt, triageSchema, type TriageDecision } from './triage';
 
 const ACTIVITY_LIMIT = 150;
 const AGENT_FOR: Record<Scenario, string> = {
@@ -325,6 +325,7 @@ class Runtime implements OfficeRuntime {
       this.demoTimer = undefined;
       void this.exclusive(async () => {
         if (!this.state.demo.playing) return;
+        if (this.activeTriage || this.state.triage.some((record) => record.status === 'queued')) { this.scheduleDemo(); return; }
         try { this.advanceDemo(); } catch (error) { this.pauseDemo(); this.event('error', safeError(error)); }
         await this.persistAndEmit();
         this.drainQueue();
@@ -370,17 +371,17 @@ class Runtime implements OfficeRuntime {
     const existing = this.state.work.find((work) => work.scenario === scenario && work.routineId === routineId && activeStatus(work.status));
     if (existing) return existing;
     const id = `work-${scenario}-${nextNumber(this.state.work.map((item) => item.id))}`;
-    const sources = this.state.sources.filter((source) => source.scenario === scenario && source.disposition !== 'ignored');
+    const goal = routineId ? requiredRoutine(this.state, routineId).instructions : scenarioGoal(scenario);
+    const sources = relevantSources(goal, this.state.sources);
     const work: WorkItem = {
       id,
       title: scenarioTitle(scenario),
-      goal: scenarioGoal(scenario),
+      goal,
       sourceIds: sources.map((source) => source.id),
       agentId: routineId ? requiredRoutine(this.state, routineId).agentId : this.spawnWorker(scenario),
       status: 'queued', scenario, createdAt: Date.now(), mode: 'live', routineId,
     };
     this.state.work.push(work);
-    for (const source of sources) source.disposition = 'work';
     this.event('status', `${agentName(this.state, work.agentId)} queued “${work.title}”.`, work.id, work.agentId);
     return work;
   }
@@ -388,9 +389,9 @@ class Runtime implements OfficeRuntime {
   private createCalendar(input: Omit<CalendarEvent, 'id' | 'sourceIds' | 'simulated'>): void {
     this.requireTriageAuth();
     const start = Date.parse(input.start); const end = Date.parse(input.end);
-    if (!input.title?.trim() || input.title.length > 200 || !Number.isFinite(start) || !Number.isFinite(end) || end <= start
-      || typeof input.location !== 'string' || typeof input.description !== 'string' || input.description.length > 20_000
-      || !Array.isArray(input.attendees) || input.attendees.some((attendee) => typeof attendee !== 'string')) throw new Error('Calendar event needs a title, valid start/end, and attendee details');
+    if (typeof input.title !== 'string' || !input.title.trim() || input.title.length > 200 || !Number.isFinite(start) || !Number.isFinite(end) || end <= start
+      || typeof input.location !== 'string' || input.location.length > 500 || typeof input.description !== 'string' || input.description.length > 20_000
+      || !Array.isArray(input.attendees) || input.attendees.length > 100 || input.attendees.some((attendee) => typeof attendee !== 'string' || attendee.length > 300)) throw new Error('Calendar event needs a title, valid start/end, and attendee details');
     const id = `calendar-${randomUUID()}`;
     const sourceId = `source-${id}`;
     const event: CalendarEvent = { ...input, id, title: input.title.trim(), start: new Date(start).toISOString(), end: new Date(end).toISOString(), sourceIds: [sourceId], simulated: true };
@@ -408,7 +409,10 @@ class Runtime implements OfficeRuntime {
     if (!['gmail', 'calendar', 'imessage', 'slack', 'discord', 'linear', 'asana'].includes(input.source)
       || ['id', 'externalId', 'threadId', 'author', 'title', 'content'].some((key) => typeof input[key as keyof typeof input] !== 'string')
       || !input.externalId.trim() || !input.title.trim() || !input.content.trim()
-      || !Number.isFinite(input.timestamp) || input.content.length > 60_000) throw new Error('Incoming message is invalid');
+      || !input.id.trim() || !Number.isFinite(new Date(input.timestamp).getTime()) || input.content.length > 60_000
+      || (input.attachments !== undefined && (!Array.isArray(input.attachments) || input.attachments.length > 50
+        || input.attachments.some((attachment) => !attachment || ['id', 'name', 'mediaType', 'content'].some((key) => typeof attachment[key as keyof typeof attachment] !== 'string')
+          || attachment.name.length > 200 || attachment.content.length > 200_000)))) throw new Error('Incoming message is invalid');
     const duplicate = this.state.sources.find((source) => source.source === input.source && source.externalId === input.externalId);
     if (duplicate) { this.event('system', `Duplicate ${input.source} delivery ignored: ${duplicate.title}`); return; }
     if (this.state.sources.some((source) => source.id === input.id)) throw new Error('Incoming message id is already in use');
@@ -507,7 +511,7 @@ class Runtime implements OfficeRuntime {
         ...decision, title: decision.title || `Update ${parent.title}`, goal: decision.goal || parent.goal,
         scenario: parent.scenario, sourceIds: [...new Set([...parent.sourceIds, ...decision.sourceIds])],
         dependsOnWorkIds: [...new Set([parent.id, ...decision.dependsOnWorkIds])],
-      }, source.id, parent.mode, parent.id);
+      }, source.id, parent.id);
     }
     if (!work) work = this.createTriggeredWork(decision, source.id);
     else {
@@ -528,7 +532,7 @@ class Runtime implements OfficeRuntime {
     this.event('status', `Maya ${decision.action === 'attach' ? 'linked the message to' : 'created'} “${work.title}”: ${decision.reason}`, work.id, 'agent-maya');
   }
 
-  private createTriggeredWork(decision: TriageDecision, sourceId: string, _mode = this.state.settings.mode, followUpOf?: string): WorkItem {
+  private createTriggeredWork(decision: TriageDecision, sourceId: string, followUpOf?: string): WorkItem {
     const scenario = decision.scenario!;
     const work: WorkItem = {
       id: `work-${randomUUID()}`, title: decision.title, goal: decision.goal,
@@ -562,11 +566,12 @@ class Runtime implements OfficeRuntime {
       if (this.state.work.some((item) => item.scenario === 'qa' && (item.parentWorkId === work.id || item.dependsOnWorkIds?.includes(work.id)))) continue;
       const waitingQA = this.state.work.filter((item) => item.scenario === 'qa' && item.status === 'waiting' && item.needsInformation);
       if (this.state.triage.some((record) => ['queued', 'running'].includes(record.status) && waitingQA.some((item) => item.triggerSourceId === record.sourceId))) continue;
+      const previousQA = work.followUpOf ? this.state.work.find((item) => item.scenario === 'qa' && item.parentWorkId === work.followUpOf && item.status === 'completed') : undefined;
       const qa = this.createTriggeredWork({
         action: 'create', reason: 'The code fix is ready for independent verification.', scenario: 'qa',
         title: `Verify ${work.title}`, goal: `Verify the exact fix produced by “${work.title}”. Run its tests without changing the implementation and report actual failures.`,
         workId: null, sourceIds: [...work.sourceIds], dependsOnWorkIds: [work.id], needsInformation: false, requiresFollowUp: false, calendarDraft: null,
-      }, work.triggerSourceId, work.mode);
+      }, work.triggerSourceId, previousQA?.id);
       const artifact = [...this.state.artifacts].reverse().find((item) => item.workId === work.id);
       this.addBoard(work.agentId, qa.id, 'handoff', `Please verify the fix from ${work.title}. The completed patch is attached.`, artifact?.id);
     }
@@ -582,7 +587,7 @@ class Runtime implements OfficeRuntime {
         title: `Refresh ${meeting.title}`, goal: `${meeting.goal} Update the brief using the revised prerequisite results.`, workId: null,
         sourceIds: [...meeting.sourceIds], dependsOnWorkIds: meeting.dependsOnWorkIds.map((id) => id === changed.followUpOf ? changed.id : id),
         needsInformation: false, requiresFollowUp: false, calendarDraft: null,
-      }, meeting.triggerSourceId, meeting.mode, meeting.id);
+      }, meeting.triggerSourceId, meeting.id);
     }
   }
 
@@ -597,6 +602,14 @@ class Runtime implements OfficeRuntime {
     this.state.agents.push({ ...template, id, name: `${names[(count - 1) % names.length]} ${count}`, persistent: false,
       temporary: true, spawnedAt: Date.now(), retiredAt: undefined, home, workId: undefined, activity: 'walking', statusText: 'Joining the office' });
     return id;
+  }
+
+  private syncSourceStatus(work: WorkItem): void {
+    for (const source of this.state.sources) {
+      if ([...this.state.triage].reverse().find((record) => record.sourceId === source.id && record.workId)?.workId !== work.id) continue;
+      source.disposition = work.status === 'waiting' ? 'waiting' : work.status === 'failed' ? 'error' : work.status === 'cancelled' ? 'attached' : 'work';
+      source.reason = (work.status === 'waiting' ? work.blockedReason : work.error) || `${work.title}: ${work.status}`;
+    }
   }
 
   private refreshDependencies(): void {
@@ -617,6 +630,7 @@ class Runtime implements OfficeRuntime {
           this.addBoard(work.agentId, work.id, 'handoff', `The required information is ready. Starting ${work.title}.`);
         }
       }
+      this.syncSourceStatus(work);
     }
   }
 
@@ -651,6 +665,7 @@ class Runtime implements OfficeRuntime {
         workId, status: 'running' as const, startedAt: Date.now(),
       };
       this.state.runs.push(run);
+      this.syncSourceStatus(work);
       this.setAgent(work.agentId, scenarioActivity(work.scenario, 0), `Starting ${work.title}`, work.id);
       this.event('status', `${agentName(this.state, work.agentId)} started ${work.title}.`, work.id, work.agentId);
     }, active);
@@ -662,6 +677,7 @@ class Runtime implements OfficeRuntime {
       if (work.status !== 'running') return;
       work.status = 'completed';
       work.completedAt = Date.now();
+      this.syncSourceStatus(work);
       const run = latestRun(this.state, workId);
       if (run) { run.status = 'completed'; run.completedAt = work.completedAt; }
       if (work.followUpOf) artifact.supersedesArtifactId = [...this.state.artifacts].reverse().find((item) => item.workId === work.followUpOf)?.id;
@@ -706,6 +722,7 @@ class Runtime implements OfficeRuntime {
       const agent = this.state.agents.find((item) => item.id === work.agentId);
       if (agent?.temporary) agent.retiredAt = Date.now();
       this.refreshDependencies();
+      this.syncSourceStatus(work);
       this.event('error', `${work.title} failed: ${work.error}`, work.id, work.agentId);
     }, active);
   }
@@ -795,7 +812,7 @@ class Runtime implements OfficeRuntime {
     return {
       id: `artifact-${work.scenario}-${randomUUID()}`,
       workId: work.id,
-      title: details.title,
+      title: work.title,
       kind: details.kind,
       content,
       createdAt: Date.now(),
@@ -811,6 +828,7 @@ class Runtime implements OfficeRuntime {
     active?.abort.abort();
     work.status = 'cancelled';
     work.completedAt = Date.now();
+    this.syncSourceStatus(work);
     const run = latestRun(this.state, id);
     if (run && activeStatus(run.status)) { run.status = 'cancelled'; run.completedAt = work.completedAt; }
     this.setAgent(work.agentId, 'idle', 'Available');
@@ -1027,15 +1045,14 @@ function scenarioActivity(scenario: Scenario, stage: number): ActivityKind {
   return activities[scenario][Math.min(stage, 3)];
 }
 
-function liveArtifactSpec(scenario: Scenario): { title: string; kind: Artifact['kind']; file: string } {
-  const specs: Record<Scenario, { title: string; kind: Artifact['kind']; file: string }> = {
-    report: { title: 'Codex launch readout', kind: 'report', file: 'report.md' },
-    bug: { title: 'Codex checkout patch', kind: 'patch', file: 'patch.md' },
-    meeting: { title: 'Codex leadership meeting brief', kind: 'brief', file: 'brief.md' },
-    dinner: { title: 'Validated dinner calendar event', kind: 'calendar', file: 'calendar.json' },
-    qa: { title: 'Codex checkout QA', kind: 'qa', file: 'qa.md' },
-  };
-  return specs[scenario];
+function liveArtifactSpec(scenario: Scenario): { kind: Artifact['kind']; file: string } {
+  return {
+    report: { kind: 'report' as const, file: 'report.md' },
+    bug: { kind: 'patch' as const, file: 'patch.md' },
+    meeting: { kind: 'brief' as const, file: 'brief.md' },
+    dinner: { kind: 'calendar' as const, file: 'calendar.json' },
+    qa: { kind: 'qa' as const, file: 'qa.md' },
+  }[scenario];
 }
 
 async function writeLiveEvidence(work: WorkItem, workspace: string, state: Snapshot): Promise<void> {

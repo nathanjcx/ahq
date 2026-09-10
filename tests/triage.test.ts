@@ -44,7 +44,8 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', (l
   let output;
   let delay = 20;
   if (prompt.startsWith('You are Maya')) {
-    const config = JSON.parse(prompt.match(/MOCK:(.+)\\n/)[1]);
+    const matched = prompt.split('EXISTING TASKS:')[0].match(/MOCK:(.+)\\n/);
+    const config = matched ? JSON.parse(matched[1]) : ${JSON.stringify(decision({ scenario: 'meeting', title: 'Prepare the new calendar meeting' }))};
     delay = config.delay || delay;
     const tasks = JSON.parse(prompt.split('EXISTING TASKS:\\n')[1].split('\\n\\nAVAILABLE ARTIFACTS:')[0]);
     const incomingId = prompt.split('NEW MESSAGE:\\nSOURCE ')[1].split(' | ')[0];
@@ -67,6 +68,7 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', (l
     if (prompt.includes('report.md')) fs.writeFileSync(path.join(cwd, 'report.md'), fs.readFileSync(path.join(cwd, 'evidence.md'), 'utf8'));
     if (prompt.includes('brief.md')) fs.writeFileSync(path.join(cwd, 'brief.md'), fs.readFileSync(path.join(cwd, 'evidence.md'), 'utf8'));
     output = 'Completed';
+    if (prompt.includes('slow-work')) delay = 350;
     if (message.params.outputSchema?.properties?.start) output = fs.readFileSync(path.join(cwd, 'evidence.md'), 'utf8').split('Validated calendar proposal: ')[1].split('\\n')[0];
   }
   reply({ turn: { id: turnId } });
@@ -216,5 +218,50 @@ test('invalid triage is visible, reset cancels late decisions, and missing-infor
       assert.equal(reopened.snapshot().work.find((item) => item.id === work.id)!.status, 'waiting');
       assert.equal(reopened.snapshot().demo.startedAt, anchor);
     } finally { await reopened.close(); }
+  } finally { await app.close(); }
+});
+
+test('cancelled work ignores a late model result and retry revives its worker', async () => {
+  const app = await setup();
+  try {
+    await app.office.command({ type: 'source.ingest', item: source('cancel-me', { goal: 'slow-work report' }) });
+    await settled(app.office, 'cancel-me');
+    const work = app.office.snapshot().work.find((item) => item.triggerSourceId === 'cancel-me')!;
+    await waitFor(() => app.office.snapshot().runs.some((run) => run.workId === work.id && run.turnId));
+    await app.office.command({ type: 'work.cancel', id: work.id });
+    await new Promise((resolve) => setTimeout(resolve, 450));
+    assert.equal(app.office.snapshot().work.find((item) => item.id === work.id)!.status, 'cancelled');
+    assert.ok(app.office.snapshot().agents.find((agent) => agent.id === work.agentId)!.retiredAt);
+    assert.equal(app.office.snapshot().artifacts.filter((artifact) => artifact.workId === work.id).length, 0);
+    await app.office.command({ type: 'work.retry', id: work.id });
+    await waitFor(() => app.office.snapshot().work.find((item) => item.id === work.id)!.status === 'completed');
+    assert.equal(app.office.snapshot().runs.filter((run) => run.workId === work.id).length, 2);
+    assert.equal(app.office.snapshot().agents.find((agent) => agent.id === work.agentId)!.retiredAt, undefined);
+  } finally { await app.close(); }
+});
+
+test('automatic playback waits for intake and calendar creation triggers actual meeting work', async () => {
+  const app = await setup();
+  try {
+    await app.office.command({ type: 'source.ingest', item: source('slow-intake', { action: 'ignore' }, { delay: 1_800 }) });
+    await app.office.command({ type: 'demo.play' });
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    assert.equal(app.office.snapshot().demo.nextIndex, 0);
+    await app.office.command({ type: 'demo.pause' });
+    await settled(app.office, 'slow-intake');
+    const count = app.office.snapshot().calendar.length;
+    const event = { title: 'Customer review', start: '2031-03-04T15:00:00Z', end: '2031-03-04T15:45:00Z', attendees: ['customer@example.test'], location: 'Office', description: 'Review the supplied customer evidence.' };
+    await assert.rejects(app.office.command({ type: 'calendar.create', event: { ...event, end: '2030-01-01T00:00:00Z' } }), /valid start\/end/);
+    assert.equal(app.office.snapshot().calendar.length, count);
+    await app.office.command({ type: 'calendar.create', event });
+    const created = app.office.snapshot().calendar.at(-1)!;
+    await waitFor(() => app.office.snapshot().work.some((work) => work.triggerSourceId === created.sourceIds[0] && work.status === 'completed'));
+    assert.equal(created.simulated, true);
+    const work = app.office.snapshot().work.find((item) => item.triggerSourceId === created.sourceIds[0])!;
+    const run = app.office.snapshot().runs.find((item) => item.workId === work.id)!;
+    const evidence = await readFile(path.join(run.workspace!, 'evidence.md'), 'utf8');
+    assert.match(evidence, /sources\//);
+    assert.match(evidence, /attachments\//);
+    assert.match(app.office.snapshot().artifacts.find((artifact) => artifact.workId === work.id)!.content, /Customer review/);
   } finally { await app.close(); }
 });
