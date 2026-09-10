@@ -539,62 +539,58 @@ export default function App() {
           </div>
         </header>
         <main>
-          <div className="page-header">
-            <div>
-              <div className="page-eyebrow">A LITTLE SPACE FOR BIG THINGS</div>
-              <h1>{page === 'office' ? 'Your office, in good company.' : pageNames[page]}</h1>
-              <p>
-                {
+          {page !== 'office' && (
+            <div className="page-header">
+              <div>
+                <div className="page-eyebrow">A LITTLE SPACE FOR BIG THINGS</div>
+                <h1>{pageNames[page]}</h1>
+                <p>
                   {
-                    office: 'The big picture, the little details, and everyone moving things forward.',
-                    employees: 'Good people. Clear roles. A shared direction.',
-                    announce: 'One shared direction. Everyone on the same page.',
-                    commitments: 'Flexibility in the path. Reliability in the promise.',
-                    roadmap: 'Every milestone, connected to the goal.',
-                    conversations: 'The thinking, the handoffs, and the conversations in between.',
-                    'needs-you': 'A few thoughtful decisions to keep good things moving.',
-                    activity: 'Your decisions. Their work. Every step recorded.',
-                    settings: 'Make this space work for you.',
-                  }[page]
-                }
-              </p>
+                    {
+                      employees: 'Good people. Clear roles. A shared direction.',
+                      announce: 'One shared direction. Everyone on the same page.',
+                      commitments: 'Flexibility in the path. Reliability in the promise.',
+                      roadmap: 'Every milestone, connected to the goal.',
+                      conversations: 'The thinking, the handoffs, and the conversations in between.',
+                      'needs-you': 'A few thoughtful decisions to keep good things moving.',
+                      activity: 'Your decisions. Their work. Every step recorded.',
+                      settings: 'Make this space work for you.',
+                    }[page]
+                  }
+                </p>
+              </div>
+              <div className="page-actions">
+                {page === 'employees' ? (
+                  <button className="button primary" onClick={() => setModal('employee')}>
+                    <Plus size={16} />
+                    New employee
+                  </button>
+                ) : page === 'commitments' || page === 'roadmap' ? (
+                  <button className="button primary" onClick={() => setModal('commitment')}>
+                    <Plus size={16} />
+                    New milestone
+                  </button>
+                ) : null}
+              </div>
             </div>
-            <div className="page-actions">
-              {page === 'office' && (
-                <span className="mode-badge">
-                  <span className={cloud.connected ? 'status-dot' : 'sample-dot'} />
-                  {cloud.connected
-                    ? cloud.provider === 'chatgpt'
-                      ? 'ChatGPT plan connected'
-                      : 'Cloud connected'
-                    : state.demo
-                      ? 'Sample office'
-                      : 'Your office'}
-                </span>
-              )}
-              {page === 'office' || page === 'employees' ? (
-                <button className="button primary" onClick={() => setModal('employee')}>
-                  <Plus size={16} />
-                  New employee
-                </button>
-              ) : page === 'commitments' || page === 'roadmap' ? (
-                <button className="button primary" onClick={() => setModal('commitment')}>
-                  <Plus size={16} />
-                  New milestone
-                </button>
-              ) : null}
-            </div>
-          </div>
+          )}
           {page === 'office' && (
             <>
-              <div className="goal-banner">
-                <span className="goal-icon">
-                  <Target size={19} />
-                </span>
-                <span className="goal-label">OUR NORTH STAR</span>
-                <p>{history.display.goal}</p>
-                <button className="text-button" onClick={() => setModal('goal')}>
-                  Edit goal <ArrowRight size={14} />
+              <div className="office-goal-header">
+                <button
+                  className="office-goal-card"
+                  onClick={() => setModal('goal')}
+                  aria-label={`Goal: ${history.display.goal}. Edit goal.`}
+                >
+                  <span className="office-goal-copy">
+                    <span className="office-goal-label">GOAL</span>
+                    <strong>{history.display.goal}</strong>
+                  </span>
+                  <ArrowRight size={18} aria-hidden="true" />
+                </button>
+                <button className="button primary office-hire-button" onClick={() => setModal('employee')}>
+                  <Plus size={16} />
+                  New employee
                 </button>
               </div>
               <div className="office-layout">
