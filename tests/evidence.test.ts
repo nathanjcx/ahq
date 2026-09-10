@@ -89,6 +89,9 @@ test('Gmail and Slack sequences load their checked-in attachments as arrival inp
       }
     }
   }
+  const attachments = arrivals.flatMap((event) => event.item.attachments || []);
+  assert.ok(attachments.some((attachment) => attachment.name.endsWith('.js') && attachment.mediaType === 'text/javascript'));
+  assert.ok(attachments.some((attachment) => attachment.name.endsWith('.txt') && attachment.mediaType === 'text/plain'));
 });
 
 for (const status of ['queued', 'waiting', 'running', 'completed'] as const) {

@@ -21,7 +21,7 @@ export function readArrivalSequence(source: 'gmail' | 'slack') {
     attachments: (attachments || []).map((file): SourceAttachment => {
       if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(file)) throw new Error('Invalid arrival attachment path');
       return { id: `${event.id}-${file}`, name: file, content: readFileSync(path.join(directory, file), 'utf8'),
-        mediaType: file.endsWith('.csv') ? 'text/csv' : file.endsWith('.json') ? 'application/json' : 'text/markdown' };
+        mediaType: ({ '.csv': 'text/csv', '.json': 'application/json', '.js': 'text/javascript', '.txt': 'text/plain', '.md': 'text/markdown' } as Record<string, string>)[path.extname(file)] || 'text/plain' };
     }),
   }));
 }
