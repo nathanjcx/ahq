@@ -73,6 +73,7 @@ export type Command =
   | { type: 'demo.speed'; speed: number }
   | { type: 'demo.deliver'; id: string }
   | { type: 'source.ingest'; item: Omit<SourceItem, 'scenario' | 'disposition' | 'reason'> }
+  | { type: 'calendar.create'; event: Omit<CalendarEvent, 'id' | 'sourceIds' | 'simulated'> }
   | { type: 'scenario.run'; scenario: Scenario }
   | { type: 'source.evaluate'; id: string }
   | { type: 'work.cancel' | 'work.retry'; id: string }
