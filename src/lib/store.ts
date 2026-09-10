@@ -2,7 +2,8 @@ import { StateSchema } from '../../shared/schemas';
 import type { AppState, Employee, WorkspaceFolder } from '../../shared/types';
 import { randomEmployeeAppearance } from './employeeAppearance';
 export const STORAGE_KEY = 'astra-hq:v1';
-const DEFAULT_ROSTER_MIGRATION_KEY = 'astra-hq:default-roster-v1';
+const DEFAULT_ROSTER_MIGRATION_KEY = 'astra-hq:default-roster-v2';
+const DEFAULT_ROSTER_IDS = new Set(['software-engineer', 'finance-bro', 'assistant']);
 export const uid = () => crypto.randomUUID();
 export const timeNow = () => new Date().toISOString();
 export const employeeColors = ['#c49871', '#667e6b', '#718da1', '#c8a465', '#a0889b', '#82958a'];
@@ -64,8 +65,10 @@ export function defaultEmployees(random: () => number = Math.random): Employee[]
     activity: string,
     location: Employee['location'],
     colorIndex: number,
+    skin: string,
   ): Employee => {
     const appearance = randomEmployeeAppearance(random);
+    appearance.appearance.skin = skin;
     return {
       id,
       name: pickName(),
@@ -89,6 +92,7 @@ export function defaultEmployees(random: () => number = Math.random): Employee[]
       'Creating the Astra HQ application',
       'desk',
       0,
+      '#f1c9a5',
     ),
     make(
       'finance-bro',
@@ -98,6 +102,7 @@ export function defaultEmployees(random: () => number = Math.random): Employee[]
       'Creating an Excel sheet and potential profit scenarios',
       'library',
       1,
+      '#c58c62',
     ),
     make(
       'assistant',
@@ -107,12 +112,20 @@ export function defaultEmployees(random: () => number = Math.random): Employee[]
       'Creating meetings and replying to email',
       'meeting',
       2,
+      '#54392e',
     ),
   ];
 }
 
 export function freshWorkspaceState(): AppState {
   return { ...initialState(), employees: defaultEmployees() };
+}
+
+export function isDefaultRoster(employees: Employee[]): boolean {
+  return (
+    employees.length === DEFAULT_ROSTER_IDS.size &&
+    employees.every((employee) => DEFAULT_ROSTER_IDS.has(employee.id))
+  );
 }
 
 // Example data is available only when explicitly selected in Settings.
@@ -362,6 +375,10 @@ export function readLocalState(): AppState {
     const value: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
     if (isState(value)) {
       if (localStorage.getItem(DEFAULT_ROSTER_MIGRATION_KEY) === 'done') return value;
+      if (!isDefaultRoster(value.employees)) {
+        localStorage.setItem(DEFAULT_ROSTER_MIGRATION_KEY, 'done');
+        return value;
+      }
       const migrated: AppState = {
         ...value,
         employees: defaultEmployees(),
@@ -378,7 +395,13 @@ export function readLocalState(): AppState {
   } catch {
     /* Recover a fresh workspace if local cache is damaged. */
   }
-  return freshWorkspaceState();
+  const fresh = freshWorkspaceState();
+  try {
+    localStorage.setItem(DEFAULT_ROSTER_MIGRATION_KEY, 'done');
+  } catch {
+    /* The in-memory default still works when browser storage is unavailable. */
+  }
+  return fresh;
 }
 export function profileSuggestion(title: string) {
   const role = title.toLowerCase();
