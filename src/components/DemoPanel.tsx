@@ -4,11 +4,21 @@ import type { AppState, CloudSession } from '../../shared/types';
 import type { DemoSnapshot, DemoTrigger } from '../../shared/demo';
 import Modal from './Modal';
 import Markdown from './Markdown';
+import LaunchPanel from './LaunchPanel';
 import './demo-panel.css';
 
 const suggestedGoal =
   'Analyze sales.csv and support.csv in parallel, then synthesize both findings into an executive report with recommendations and source evidence.';
 const activeSession = (session: CloudSession) => ['queued', 'running'].includes(session.status);
+const imageTypes = new Set(['image/png', 'image/jpeg']);
+
+function AttachmentPreview({ file }: { file: DemoSnapshot['notifications'][number]['attachments'][number] }) {
+  const isImage = 'encoding' in file && file.encoding === 'base64' && imageTypes.has(file.mediaType);
+  if (isImage) {
+    return <img className="demo-attachment-image" src={`data:${file.mediaType};base64,${file.content}`} alt={file.name} />;
+  }
+  return <pre>{file.content}</pre>;
+}
 
 export default function DemoPanel({
   state,
@@ -127,6 +137,11 @@ export default function DemoPanel({
 
   return (
     <>
+      <LaunchPanel
+        notify={notify}
+        onWorkUpdate={onWorkUpdate}
+        onSelectSession={onSelectSession}
+      />
       <aside className="demo-dock" aria-label="Demo controls and live work">
         <button className="demo-heading" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
           <span>
@@ -136,60 +151,63 @@ export default function DemoPanel({
         </button>
         {expanded && (
           <div className="demo-body">
-            {notice && (
-              <div className="demo-notice">
-                <p>
-                  Sample notifications start real AI work and use your connected account allowance. PRs are
-                  simulated. Roadmap steps in this demo continue automatically.
-                </p>
-                <button
-                  className="text-button"
-                  onClick={() => {
-                    localStorage.setItem('ahq-demo-notice', 'seen');
-                    setNotice(false);
-                  }}
-                >
-                  Got it
+            <details className="demo-tools">
+              <summary>Custom tools</summary>
+              {notice && (
+                <div className="demo-notice">
+                  <p>
+                    Sample notifications start real AI work and use your connected account allowance. PRs are
+                    simulated. Roadmap steps in this demo continue automatically.
+                  </p>
+                  <button
+                    className="text-button"
+                    onClick={() => {
+                      localStorage.setItem('ahq-demo-notice', 'seen');
+                      setNotice(false);
+                    }}
+                  >
+                    Got it
+                  </button>
+                </div>
+              )}
+              <div className="demo-triggers">
+                <button className="button" disabled={!supported || busy} onClick={() => trigger('meeting')}>
+                  <Calendar size={15} /> Meeting
+                </button>
+                <button className="button" disabled={!supported || busy} onClick={() => trigger('email')}>
+                  <Mail size={15} /> Email
+                </button>
+                <button className="button" disabled={!supported || busy} onClick={() => trigger('slack')}>
+                  <MessageSquare size={15} /> Slack
                 </button>
               </div>
-            )}
-            <div className="demo-triggers">
-              <button className="button" disabled={!supported || busy} onClick={() => trigger('meeting')}>
-                <Calendar size={15} /> Meeting
-              </button>
-              <button className="button" disabled={!supported || busy} onClick={() => trigger('email')}>
-                <Mail size={15} /> Email
-              </button>
-              <button className="button" disabled={!supported || busy} onClick={() => trigger('slack')}>
-                <MessageSquare size={15} /> Slack
-              </button>
-            </div>
-            <form
-              className="demo-goal"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void action(async () => {
-                  await onCreateGoal(goal.trim());
-                  notify('Planning your goal. Independent steps will run together.');
-                });
-              }}
-            >
-              <label htmlFor="demo-goal">Give the team a goal</label>
-              <textarea
-                id="demo-goal"
-                rows={3}
-                value={goal}
-                onChange={(e) => setGoal(e.target.value)}
-                maxLength={500}
-                required
-              />
-              <button
-                className="button primary"
-                disabled={!supported || busy || !goal.trim() || state.roadmap?.status === 'planning'}
+              <form
+                className="demo-goal"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void action(async () => {
+                    await onCreateGoal(goal.trim());
+                    notify('Planning your goal. Independent steps will run together.');
+                  });
+                }}
               >
-                Create roadmap &amp; start
-              </button>
-            </form>
+                <label htmlFor="demo-goal">Give the team a goal</label>
+                <textarea
+                  id="demo-goal"
+                  rows={3}
+                  value={goal}
+                  onChange={(e) => setGoal(e.target.value)}
+                  maxLength={500}
+                  required
+                />
+                <button
+                  className="button primary"
+                  disabled={!supported || busy || !goal.trim() || state.roadmap?.status === 'planning'}
+                >
+                  Create roadmap &amp; start
+                </button>
+              </form>
+            </details>
             {!supported && <p>Open the desktop app to start live work.</p>}
             {(error || pollError) && (
               <p className="demo-error" role="alert">
@@ -233,7 +251,7 @@ export default function DemoPanel({
                   {item.attachments.map((file, index) => (
                     <details key={`${file.name}-${index}`}>
                       <summary>{file.name}</summary>
-                      <pre>{file.content}</pre>
+                      <AttachmentPreview file={file} />
                     </details>
                   ))}
                   <div className="demo-source-actions">
