@@ -2,6 +2,8 @@ import { cp, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Agent, Artifact, BoardPost, Snapshot } from '../src/shared/types';
 
+import { demoDataDirectory } from './evidence';
+
 import { demoEvents, initialCalendar, initialSources } from './story';
 
 const HOUR = 60 * 60 * 1_000;
@@ -54,13 +56,8 @@ export async function writeInitialArtifacts(dataDir: string, snapshot: Snapshot)
   }
 }
 
-export async function createBugFixture(dataDir: string): Promise<string> {
-  const template = path.join(dataDir, 'fixture-template');
-  await mkdir(path.join(template, 'test'), { recursive: true });
-  await writeFile(path.join(template, 'package.json'), JSON.stringify({ name: 'checkout-fixture', private: true, scripts: { test: 'node --test' } }, null, 2));
-  await writeFile(path.join(template, 'checkout.js'), `export function checkoutTotal(subtotal, taxRate, coupon = 0) {\n  const discounted = subtotal - coupon;\n  const tax = discounted * taxRate;\n  return discounted + tax + (coupon > 0 ? tax : 0);\n}\n`);
-  await writeFile(path.join(template, 'test', 'checkout.test.js'), `import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { checkoutTotal } from '../checkout.js';\n\ntest('full-price checkout applies tax once', () => {\n  assert.equal(checkoutTotal(100, 0.08), 108);\n});\n\ntest('coupon checkout taxes the discounted subtotal once', () => {\n  assert.equal(checkoutTotal(100, 0.08, 10), 97.2);\n});\n`);
-  return template;
+export async function createBugFixture(_dataDir: string): Promise<string> {
+  return path.join(demoDataDirectory, 'checkout');
 }
 
 export async function copyBugFixture(template: string, workspace: string): Promise<void> {

@@ -75,7 +75,7 @@ export function sourceEvidence(source: SourceItem): string {
 }
 
 export function relevantSources(query: string, sources: SourceItem[], limit = 32): SourceItem[] {
-  const tokens = (text: string) => new Set(text.toLowerCase().match(/[a-z0-9][a-z0-9-]{3,}/g) || []);
+  const tokens = (text: string) => new Set(text.toLowerCase().match(/\b(?:pin|hbr|lib|bg|map|ns|orc|met|lum|cdr)\b|[a-z0-9][a-z0-9-]{3,}/g) || []);
   const words = tokens(query);
   const candidates = sources.map((item) => ({ item, words: tokens(`${item.title} ${item.content}`) }));
   const weights = new Map([...words].map((word) => [word, Math.log(1 + candidates.length / (1 + candidates.filter((candidate) => candidate.words.has(word)).length))]));
