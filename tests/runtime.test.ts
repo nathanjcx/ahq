@@ -259,3 +259,18 @@ async function waitFor(condition: () => boolean, timeout: number): Promise<void>
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
 }
+
+
+test('demo playback stops at a mode switch and never starts live turns', async () => {
+  const office = await runtime();
+  try {
+    await office.command({ type: 'demo.play' });
+    const live = await office.command({ type: 'settings.update', settings: { mode: 'live' } });
+    assert.equal(live.demo.playing, false);
+    await assert.rejects(office.command({ type: 'demo.play' }), /Switch to demo mode/);
+    await assert.rejects(office.command({ type: 'demo.next' }), /Switch to demo mode/);
+    assert.equal(office.snapshot().work.length, live.work.length);
+  } finally {
+    await office.close();
+  }
+});

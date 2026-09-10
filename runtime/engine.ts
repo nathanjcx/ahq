@@ -259,6 +259,7 @@ class Runtime implements OfficeRuntime {
   }
 
   private playDemo(): void {
+    if (this.state.settings.mode !== 'demo') throw new Error('Switch to demo mode to play the demo.');
     this.state.demo.playing = true;
     this.scheduleDemo();
   }
@@ -270,6 +271,7 @@ class Runtime implements OfficeRuntime {
   }
 
   private advanceDemo(): void {
+    if (this.state.settings.mode !== 'demo') throw new Error('Switch to demo mode to play the demo.');
     const scenario = DEMO_ORDER[this.state.demo.nextIndex];
     if (!scenario) {
       this.pauseDemo();
@@ -688,6 +690,7 @@ class Runtime implements OfficeRuntime {
   private updateSettings(settings: Partial<Snapshot['settings']>): void {
     if (settings.mode && settings.mode !== 'demo' && settings.mode !== 'live') throw new Error('Unknown runtime mode');
     if (typeof settings.model === 'string' && settings.model.length > 120) throw new Error('Model name is too long');
+    if (settings.mode === 'live') this.pauseDemo();
     this.state.settings = { ...this.state.settings, ...settings };
   }
 
@@ -822,7 +825,6 @@ function demoArtifact(scenario: Scenario, goal: string, routine: boolean, calend
     const details = liveArtifactSpec(scenario);
     return { title: 'Routine result (simulated)', kind: details.kind, extension: 'md', content: `SIMULATED DEMO ARTIFACT\n\n# Saved routine\n\n${goal}\n\nThe demo recorded these instructions. Run this routine in live mode to have Codex carry them out.` };
   }
-  const instruction = '';
   const artifacts: Record<Scenario, { title: string; kind: Artifact['kind']; extension: string; content: string }> = {
     report: {
       title: 'Launch leadership readout', kind: 'report', extension: 'md',

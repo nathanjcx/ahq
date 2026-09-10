@@ -25,14 +25,19 @@ if (parent) parent.on('message', (event) => void receive(event.data));
 else process.on('message', (message) => void receive(message as Message));
 runtime.then((engine) => send({ type: 'snapshot', snapshot: engine.snapshot() })).catch((error) => {
   send({ type: 'fatal', error: error instanceof Error ? error.message : 'Runtime failed to start' });
-  process.exitCode = 1;
+  process.exit(1);
 });
 let closing = false;
 async function close() {
   if (closing) return;
   closing = true;
-  await (await runtime).close();
-  process.exit(0);
+  try {
+    await (await runtime).close();
+    process.exit(0);
+  } catch (error) {
+    console.error(error);
+    process.exit(1);
+  }
 }
 process.on('SIGTERM', () => void close());
 process.on('SIGINT', () => void close());

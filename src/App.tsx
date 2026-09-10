@@ -839,10 +839,10 @@ function OfficeView({
 
         <section className="playback">
           <div className="playback__controls">
-            <span className="eyebrow">Demo playback</span>
+            <span className="eyebrow">{snapshot.settings.mode === "demo" ? "Demo playback" : "Switch to Demo for playback"}</span>
             <button
               className="round-control round-control--play"
-              disabled={busy !== null}
+              disabled={busy !== null || snapshot.settings.mode !== "demo"}
               onClick={() =>
                 run({
                   type: snapshot.demo.playing ? "demo.pause" : "demo.play",
@@ -854,7 +854,7 @@ function OfficeView({
             </button>
             <button
               className="round-control"
-              disabled={busy !== null}
+              disabled={busy !== null || snapshot.settings.mode !== "demo"}
               onClick={() => run({ type: "demo.next" })}
               aria-label="Next demo step"
             >
@@ -862,7 +862,7 @@ function OfficeView({
             </button>
             <button
               className="round-control"
-              disabled={busy !== null}
+              disabled={busy !== null || snapshot.settings.mode !== "demo"}
               onClick={() => run({ type: "demo.reset" })}
               aria-label="Reset demo"
             >

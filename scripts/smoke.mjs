@@ -8,7 +8,7 @@ const dataDir = await mkdtemp(path.join(tmpdir(), 'little-office-smoke-'));
 const env = { ...process.env, OFFICE_DATA_DIR: dataDir };
 delete env.ELECTRON_RUN_AS_NODE;
 const errors = [];
-const desktop = await electron.launch({ args: ['.'], env, timeout: 30_000 });
+const desktop = await electron.launch({ ...(process.env.OFFICE_EXECUTABLE ? { executablePath: process.env.OFFICE_EXECUTABLE, args: [] } : { args: ['.'] }), env, timeout: 30_000 });
 try {
   const page = await desktop.firstWindow();
   page.on('pageerror', (error) => errors.push(error.message));
@@ -51,11 +51,13 @@ try {
   state = await command({ type: 'scenario.run', scenario: 'report' });
   const report = state.work.find((work) => work.scenario === 'report' && work.status !== 'completed');
   assert.ok(report, 'Report scenario creates work');
-  await page.waitForFunction(async (id) => {
-    const state = await window.office.command({ type: 'snapshot' });
-    return state.work.find((work) => work.id === id)?.status === 'completed';
-  }, report.id, { timeout: 60_000 });
-  state = await command({ type: 'snapshot' });
+  const deadline = Date.now() + 60_000;
+  do {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    state = await command({ type: 'snapshot' });
+    if (state.work.find((work) => work.id === report.id)?.status === 'completed') break;
+  } while (Date.now() < deadline);
+  assert.equal(state.work.find((work) => work.id === report.id)?.status, 'completed');
   assert.ok(state.artifacts.some((artifact) => artifact.workId === report.id && artifact.content.length > 100));
   assert.ok(state.activity.some((event) => event.workId === report.id));
   const count = state.routines.length;
@@ -68,8 +70,37 @@ try {
   state = await command({ type: 'routine.delete', id: routine.id });
   assert.equal(state.routines.length, count);
   await page.screenshot({ path: 'test-results/office-completed.png', fullPage: true });
+  // Exercise the scene's hit targets, not only its accessible roster.
+  await page.locator('canvas').scrollIntoViewIfNeeded();
+  const canvas = await page.locator('canvas').boundingBox();
+  await page.mouse.click(canvas.x + canvas.width * 210 / 720, canvas.y + canvas.height * 135 / 480);
+  await page.getByRole('dialog').waitFor();
+  await page.keyboard.press('Escape');
+  await page.getByLabel('Leave a note', { exact: true }).fill('Please cross-check the meeting brief.');
+  await page.getByRole('button', { name: 'Post note', exact: true }).click();
+  await page.getByText('Please cross-check the meeting brief.', { exact: true }).waitFor();
+  await page.locator('canvas').scrollIntoViewIfNeeded();
+  const room = await page.locator('canvas').boundingBox();
+  await page.mouse.click(room.x + room.width * 639 / 720, room.y + room.height * 34 / 480);
+  await page.getByRole('heading', { name: 'Calendar', exact: true }).waitFor();
+  for (const scenario of ['bug', 'meeting', 'dinner', 'qa']) {
+    state = await command({ type: 'scenario.run', scenario });
+    const work = state.work.find((item) => item.scenario === scenario && item.status !== 'completed');
+    assert.ok(work);
+    const deadline = Date.now() + 60_000;
+    do {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      state = await command({ type: 'snapshot' });
+      if (state.work.find((item) => item.id === work.id)?.status === 'completed') break;
+    } while (Date.now() < deadline);
+    assert.equal(state.work.find((item) => item.id === work.id)?.status, 'completed', scenario);
+    assert.ok(state.artifacts.some((item) => item.workId === work.id && item.content.length > 100));
+  }
+  assert.ok(state.calendar.some((item) => /dinner/i.test(item.title)));
+  await page.screenshot({ path: 'test-results/calendar.png', fullPage: true });
+
   assert.deepEqual(errors, [], 'Renderer has no uncaught errors');
-  console.log('Electron smoke passed: isolated renderer, inbox filters, agent desktop, routine editing, office canvas, report execution, artifacts.');
+  console.log('Electron smoke passed: isolated renderer, inbox filters, agent desktop, routine editing, scene hit targets, board posts, calendar, all five scenarios, artifacts.');
 } finally {
   await desktop.close();
   await rm(dataDir, { recursive: true, force: true });

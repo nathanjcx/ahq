@@ -76,7 +76,7 @@ const server = createServer(async (request, response) => {
         const artifact = snapshot?.artifacts.find((item) => item.id === id);
         if (!artifact) return json(response, 404, { error: 'Artifact not found' });
         response.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        response.setHeader('X-Artifact-Name', `${artifact.kind}-${artifact.id.replace(/[^a-zA-Z0-9-]/g, '')}.md`);
+        response.setHeader('X-Artifact-Name', `${artifact.kind}-${artifact.id.replace(/[^a-zA-Z0-9-]/g, '')}.${artifact.kind === 'calendar' ? 'json' : artifact.kind === 'patch' ? 'patch' : 'md'}`);
         response.end(artifact.content);
         return;
       }
@@ -101,6 +101,20 @@ const server = createServer(async (request, response) => {
   }
 });
 server.listen(port, '127.0.0.1', () => console.log(`Little Office preview: ${origin}`));
-function close() { for (const response of clients) response.end(); child.kill('SIGTERM'); server.close(() => process.exit(0)); }
+let closing = false;
+async function close() {
+  if (closing) return;
+  closing = true;
+  for (const response of clients) response.end();
+  const stopped = new Promise((resolve) => {
+    if (child.exitCode !== null || child.signalCode !== null) return resolve();
+    child.once('exit', resolve);
+    child.kill('SIGTERM');
+  });
+  const deadline = setTimeout(() => child.kill('SIGKILL'), 4000);
+  await Promise.all([stopped, new Promise((resolve) => server.close(resolve))]);
+  clearTimeout(deadline);
+  process.exit(0);
+}
 process.on('SIGINT', close);
 process.on('SIGTERM', close);
