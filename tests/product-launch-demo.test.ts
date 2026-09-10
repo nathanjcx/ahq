@@ -15,10 +15,11 @@ import {
   productLaunchLandingHTML,
   productLaunchFile,
   productLaunchFilesAt,
+  productLaunchOfficeReviewsAt,
   productLaunchStateAt,
 } from '../src/lib/product-launch-demo';
 
-test('demo snapshots fit the real AppState schema through the entire 28-second launch', () => {
+test('demo snapshots fit the real AppState schema through the entire two-minute launch', () => {
   for (let elapsed = 0; elapsed <= TOUR_DURATION; elapsed += 100) {
     const state = productLaunchStateAt(elapsed);
     assert.equal(StateSchema.safeParse(state).success, true, `Invalid fixture at ${elapsed}ms`);
@@ -59,6 +60,31 @@ test('real employee and goal forms receive the expected roster before and after 
   );
 });
 
+test('longer office passages preserve a stable roster and allow work before the first review', () => {
+  for (const elapsed of [0, 3500, 6999]) {
+    const state = productLaunchStateAt(elapsed);
+    assert.equal(state.employees.length, 3);
+    assert.equal(state.commitments.length, 0);
+    assert.equal(state.approvals.length, 0);
+  }
+  for (const elapsed of [16000, 17500, 19499]) {
+    const state = productLaunchStateAt(elapsed);
+    assert.equal(state.employees.length, 4);
+    assert.equal(state.commitments.length, 0);
+    assert.equal(state.approvals.length, 0);
+  }
+  for (const elapsed of [33000, 39000, 45999]) {
+    const state = productLaunchStateAt(elapsed);
+    assert.ok(state.employees.every((employee) => employee.status === 'working'));
+    assert.equal(state.approvals.length, 0);
+    assert.ok(productLaunchChatAt(elapsed).length >= 4);
+  }
+  const celebration = productLaunchStateAt(112500);
+  assert.ok(celebration.commitments.every((commitment) => commitment.status === 'done'));
+  assert.ok(celebration.approvals.every((approval) => approval.status === 'approved'));
+  assert.equal(productLaunchFilesAt(112500).length, 7);
+});
+
 test('approvals exist while drafts are being shown and resolve only at scripted approval times', () => {
   const approval = (elapsed: number, id: string) =>
     productLaunchStateAt(elapsed).approvals.find((item) => item.id === id);
@@ -90,6 +116,93 @@ test('existing Files page can open each preview during its phase, before final c
   assert.ok(
     productLaunchFilesAt(tourTime(60_000)).every((item) => !item.draft && item.path.startsWith('demo://')),
   );
+});
+
+test('office exclamation marks connect every review to its employee and available work', () => {
+  const expected = [
+    {
+      id: 'email',
+      employeeId: 'assistant',
+      from: 20_000,
+      until: 26_000,
+      approvalId: PRODUCT_LAUNCH_APPROVAL_IDS.email,
+    },
+    { id: 'meeting', employeeId: 'assistant', from: 27_000, until: 30_500, fileId: 'meeting' },
+    {
+      id: 'pr',
+      employeeId: 'software-engineer',
+      from: 32_000,
+      until: 36_000,
+      approvalId: PRODUCT_LAUNCH_APPROVAL_IDS.pr,
+    },
+    { id: 'profits', employeeId: 'finance-bro', from: 37_000, until: 40_500, fileId: 'profits' },
+    { id: 'slogan', employeeId: PRODUCT_LAUNCH_INTERN.id, from: 41_000, until: 44_500, fileId: 'slogan' },
+    { id: 'photo', employeeId: PRODUCT_LAUNCH_INTERN.id, from: 45_000, until: 51_600, fileId: 'photo' },
+    { id: 'app', employeeId: 'software-engineer', from: 52_000, until: 54_800, fileId: 'app' },
+    {
+      id: 'campaign',
+      employeeId: PRODUCT_LAUNCH_INTERN.id,
+      from: 55_000,
+      until: 58_000,
+      approvalId: PRODUCT_LAUNCH_APPROVAL_IDS.campaign,
+    },
+  ];
+  for (const item of expected) {
+    const start = tourTime(item.from);
+    const end = tourTime(item.until);
+    assert.deepEqual(productLaunchOfficeReviewsAt(start - 1), [], `No early ${item.id} cue`);
+    const [review] = productLaunchOfficeReviewsAt(start);
+    assert.equal(review.id, item.id);
+    assert.equal(review.employeeId, item.employeeId);
+    assert.equal(review.approvalId, item.approvalId);
+    assert.equal(review.fileId, item.fileId);
+    assert.ok(review.label.length > 0);
+    assert.equal(productLaunchOfficeReviewsAt(end - 1)[0]?.id, item.id);
+    assert.deepEqual(productLaunchOfficeReviewsAt(end), [], `No stale ${item.id} cue`);
+    const state = productLaunchStateAt(start);
+    assert.ok(state.employees.some((employee) => employee.id === review.employeeId));
+    if (review.fileId) {
+      const file = productLaunchFilesAt(start).find((file) => file.id === review.fileId);
+      assert.ok(file, `The ${item.id} preview must already be available`);
+      assert.equal(file.ownerId, review.employeeId);
+    } else {
+      const approval = state.approvals.find((approval) => approval.id === review.approvalId);
+      assert.ok(approval, `The ${item.id} approval must already be available`);
+      assert.equal(approval.employeeId, review.employeeId);
+      assert.equal(approval.status, 'pending');
+    }
+  }
+  assert.deepEqual(productLaunchOfficeReviewsAt(tourTime(26_000)), []);
+  assert.equal(productLaunchOfficeReviewsAt(tourTime(27_000))[0]?.fileId, 'meeting');
+  assert.deepEqual(productLaunchOfficeReviewsAt(tourTime(51_600)), []);
+  assert.equal(productLaunchOfficeReviewsAt(tourTime(52_000))[0]?.employeeId, 'software-engineer');
+});
+
+test('office review cues clear on reset and completion and cannot be mutated across snapshots', () => {
+  for (const elapsed of [
+    -1,
+    0,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+    TOUR_DURATION,
+    TOUR_DURATION + 1,
+  ]) {
+    assert.deepEqual(productLaunchOfficeReviewsAt(elapsed), []);
+  }
+  const altered = productLaunchOfficeReviewsAt(tourTime(37_000));
+  altered[0].employeeId = 'changed';
+  altered[0].label = 'changed';
+  altered[0].fileId = 'email';
+  altered.length = 0;
+  const fresh = productLaunchOfficeReviewsAt(tourTime(37_000));
+  assert.equal(fresh.length, 1);
+  assert.equal(fresh[0].employeeId, 'finance-bro');
+  assert.equal(fresh[0].fileId, 'profits');
+  assert.match(fresh[0].label, /Blake/);
+  const finished = productLaunchStateAt(TOUR_DURATION);
+  assert.equal(finished.approvals.length, 3);
+  assert.ok(finished.approvals.every((approval) => approval.status === 'approved'));
 });
 
 test('fixture state is isolated from user edits and downloadable content stays explicitly sample', () => {
@@ -154,7 +267,7 @@ test('all four employees discuss their work in staged group chat before the demo
   for (const entry of PRODUCT_LAUNCH_CHAT) {
     assert.ok(!productLaunchChatAt(entry.at - 1).some((message) => message.id === entry.id));
     assert.ok(productLaunchChatAt(entry.at).some((message) => message.id === entry.id));
-    assert.ok(entry.at < TOUR_DURATION && entry.at < 30_000);
+    assert.ok(entry.at >= 0 && entry.at < TOUR_DURATION);
   }
   const final = productLaunchStateAt(TOUR_DURATION);
   const chat = final.messages.filter((message) => message.channel === 'team');

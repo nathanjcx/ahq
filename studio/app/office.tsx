@@ -1429,6 +1429,7 @@ function EmployeeAvatar({
           <button
             type="button"
             className="office-review-marker"
+            data-demo-target={`office-review-${employee.id}`}
             data-motion={motion ? 'on' : 'off'}
             aria-label={`Review work from ${employee.name}`}
             aria-haspopup="dialog"

@@ -1,11 +1,12 @@
 import { OfficeEnvironmentProvider, useOfficeEnvironment } from './lib/office-environment';
 import {
   productLaunchStateAt,
+  productLaunchOfficeReviewsAt,
+  productLaunchFilesAt,
   PRODUCT_LAUNCH_INTERN,
-  PRODUCT_LAUNCH_APPROVAL_IDS,
 } from './lib/product-launch-demo';
 import { ProductLaunchCursor, useProductLaunchPlayback } from './lib/use-product-launch-playback';
-import { TOUR_DURATION, tourTime } from './components/demo-tour-model';
+import { TOUR_DURATION, tourTime, tourFrame, type TourArtifactId } from './components/demo-tour-model';
 import './product-launch-playback.css';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -30,6 +31,8 @@ import {
   Move,
   Plus,
   PartyPopper,
+  Pause,
+  Play,
   Search,
   Settings,
   Sparkles,
@@ -85,6 +88,7 @@ import {
   ConversationsPage,
   EmployeesPage,
   FilesPage,
+  ProductLaunchFileDialog,
   NeedsYouPage,
   SettingsPage,
 } from './components/Pages';
@@ -213,6 +217,9 @@ function WorkspaceApp({
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [selectedApproval, setSelectedApproval] = useState<string | null>(null);
+  const [selectedDemoFile, setSelectedDemoFile] = useState<TourArtifactId | null>(null);
+  const [demoPhoto, setDemoPhoto] = useState(0);
+  const [demoHandedOffPhoto, setDemoHandedOffPhoto] = useState<number | null>(null);
   const [selectedCommitment, setSelectedCommitment] = useState<string | null>(null);
   const [editingCommitment, setEditingCommitment] = useState<Commitment | null>(null);
   const [playing, setPlaying] = useState(true);
@@ -254,7 +261,7 @@ function WorkspaceApp({
   const partyMusic = useRef<PartyMusicStop | null>(null);
   const [slapTarget, setSlapTarget] = useState<{ employeeId: string; token: number } | null>(null);
   const slapReset = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(isDemo ? 1.2 : 1);
   const [officeViewReset, setOfficeViewReset] = useState(0);
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
@@ -279,6 +286,7 @@ function WorkspaceApp({
     notify,
     stop: onExitDemo,
     closeDialogs: () => {
+      setSelectedDemoFile(null);
       setSelectedApproval(null);
       setSelectedEmployee(null);
       setSelectedCommitment(null);
@@ -519,7 +527,9 @@ function WorkspaceApp({
   const commitment = state.commitments.find((c) => c.id === selectedCommitment);
   function navigate(to: Page) {
     setPage(to === 'conversations' ? 'office' : to);
+    setSelectedDemoFile(null);
     setModal(null);
+    setSelectedApproval(null);
     setSelectedEmployee(null);
     setSelectedCommitment(null);
     setStreamSessionId(null);
@@ -680,12 +690,46 @@ function WorkspaceApp({
     setSelectedApproval(a.id);
   }
   const common = { state, update, notify };
+  const demoPhase = tourFrame(demo.elapsed).phase;
+  const demoReviews = isDemo ? productLaunchOfficeReviewsAt(demo.elapsed) : [];
+  const demoReview = demoReviews[0];
+  const demoFile = isDemo
+    ? productLaunchFilesAt(demo.elapsed).find((file) => file.id === selectedDemoFile)
+    : undefined;
+  function reviewEmployeeWork(employee: Employee) {
+    const cue = demoReviews.find((item) => item.employeeId === employee.id);
+    setSelectedEmployee(null);
+    setSelectedApproval(null);
+    setSelectedDemoFile(null);
+    if (cue?.fileId) {
+      setSelectedDemoFile(cue.fileId);
+      return;
+    }
+    const review = cue?.approvalId
+      ? state.approvals.find((item) => item.id === cue.approvalId)
+      : pending.find((item) => item.employeeId === employee.id);
+    if (review) {
+      setSelectedApproval(review.id);
+      return;
+    }
+    if (isDemo && demo.elapsed >= TOUR_DURATION) {
+      const latestWork = productLaunchFilesAt(demo.elapsed).find(
+        (file) => file.ownerId === employee.id && ['app', 'profits', 'meeting', 'photo'].includes(file.id),
+      );
+      if (latestWork) {
+        setSelectedDemoFile(latestWork.id);
+        return;
+      }
+    }
+    setSelectedEmployee(employee.id);
+  }
   return (
     <div
       className={`app-shell ${state.reducedMotion ? 'reduce-motion' : ''}`}
       ref={appSurface}
       data-demo-active={isDemo}
       data-demo-running={demo.running}
+      data-demo-paused={demo.paused}
     >
       <aside className="sidebar">
         <a
@@ -746,6 +790,18 @@ function WorkspaceApp({
               {isDemo && demo.running ? <X size={13} /> : <Sparkles size={13} />}
               {isDemo && demo.running ? 'Stop demo' : 'Start demo'}
             </button>
+            {isDemo && demo.running && (
+              <button
+                type="button"
+                className="topbar-demo-button"
+                data-demo-control="true"
+                aria-label={demo.paused ? 'Resume demo' : 'Pause demo'}
+                onClick={demo.togglePause}
+              >
+                {demo.paused ? <Play size={13} /> : <Pause size={13} />}
+                {demo.paused ? 'Resume' : 'Pause'}
+              </button>
+            )}
             <button
               type="button"
               className="topbar-demo-button demo-reset-button"
@@ -783,6 +839,41 @@ function WorkspaceApp({
             </button>
           </div>
         </header>
+        {isDemo && (
+          <section className="product-launch-guide" aria-label="Demo guide">
+            <div className="product-launch-guide-copy" aria-live="polite" aria-atomic="true">
+              <span className="product-launch-guide-label">
+                {demo.paused
+                  ? 'PAUSED · TAKE YOUR TIME'
+                  : !demoAutoplay
+                    ? 'READY WHEN YOU ARE'
+                    : 'GUIDED DEMO · SAMPLE OFFICE'}
+              </span>
+              <h2>{!demoAutoplay ? 'You’re the CEO. Meet your team.' : demoPhase.title}</h2>
+              <p>
+                {!demoAutoplay
+                  ? 'Start the two-minute walkthrough. Watch the office, follow the team chat, and pause whenever you want to explain a moment.'
+                  : demoPhase.detail}
+              </p>
+            </div>
+            {demoReview && !approval && !demoFile && (
+              <span className="product-launch-review-hint">
+                <span aria-hidden="true">!</span>
+                Click {employeeById(state.employees, demoReview.employeeId)?.name}’s exclamation mark
+              </span>
+            )}
+            <div
+              className="product-launch-guide-progress"
+              role="progressbar"
+              aria-label="Demo progress"
+              aria-valuemin={0}
+              aria-valuemax={TOUR_DURATION / 1000}
+              aria-valuenow={Math.floor(demo.elapsed / 1000)}
+            >
+              <span style={{ width: `${(demo.elapsed / TOUR_DURATION) * 100}%` }} />
+            </div>
+          </section>
+        )}
         <main>
           {page !== 'office' && (
             <div className="page-header">
@@ -848,8 +939,8 @@ function WorkspaceApp({
               }}
             />
           </div>
-          {page === 'office' && (
-            <>
+          {(page === 'office' || isDemo) && (
+            <div className="office-workspace" hidden={page !== 'office'}>
               <div className="office-goal-header">
                 <button
                   className="office-goal-card"
@@ -863,7 +954,11 @@ function WorkspaceApp({
                   </span>
                   <ArrowRight size={18} aria-hidden="true" />
                 </button>
-                <button className="button primary office-hire-button" onClick={() => setModal('employee')}>
+                <button
+                  className="button primary office-hire-button"
+                  data-demo-target="employee-new"
+                  onClick={() => setModal('employee')}
+                >
                   <Plus size={16} />
                   New employee
                 </button>
@@ -920,35 +1015,45 @@ function WorkspaceApp({
                           <OfficeScene
                             requestedCelebrationId={launchCelebrationId}
                             employees={history.display.employees}
-                            reviewEmployeeIds={history.at === null ? pending.map((a) => a.employeeId) : []}
-                            onReview={(e) => {
-                              const review = pending.find((a) => a.employeeId === e.id);
-                              if (review) setSelectedApproval(review.id);
-                            }}
-                            animate={playing && !state.reducedMotion && !systemReducedMotion}
+                            reviewEmployeeIds={
+                              history.at === null
+                                ? isDemo
+                                  ? demoReviews.map((item) => item.employeeId)
+                                  : pending.map((a) => a.employeeId)
+                                : []
+                            }
+                            onReview={reviewEmployeeWork}
+                            animate={
+                              playing &&
+                              page === 'office' &&
+                              !demo.paused &&
+                              !state.reducedMotion &&
+                              !systemReducedMotion
+                            }
                             onSelect={(e) => {
                               if (history.at !== null) {
                                 notify(`${e.name}: ${e.activity}`);
                                 return;
                               }
-                              const review = pending.find((a) => a.employeeId === e.id);
-                              if (review) setSelectedApproval(review.id);
-                              else setSelectedEmployee(e.id);
+                              reviewEmployeeWork(e);
                             }}
                             zoom={zoom}
                             angle={angle}
                             resetKey={officeViewReset}
                             timeSeconds={
-                              history.at !== null
-                                ? (pastFrame?.sceneTime ?? frameTime.current)
-                                : frameTime.current
+                              isDemo
+                                ? demo.elapsed / 1000
+                                : history.at !== null
+                                  ? (pastFrame?.sceneTime ?? frameTime.current)
+                                  : frameTime.current
                             }
-                            live={history.at === null}
+                            live={(!isDemo || !demo.running) && history.at === null}
                             listening={history.at !== null ? !!pastFrame?.listening : listening}
                             microphoneLevel={history.at !== null ? (pastFrame?.level ?? 0) : microphoneLevel}
                             slapMode={history.at === null && slapMode}
                             partyMode={
-                              history.at === null && (partyMode || (isDemo && demo.elapsed >= TOUR_DURATION))
+                              history.at === null &&
+                              (partyMode || (isDemo && demo.elapsed >= tourTime(58400)))
                             }
                             slapTarget={history.at === null ? slapTarget : null}
                             onSlap={(id) => {
@@ -1092,7 +1197,7 @@ function WorkspaceApp({
                   A little help getting started <CircleHelp size={13} />
                 </button>
               </div>
-            </>
+            </div>
           )}
           {page === 'employees' && (
             <EmployeesPage
@@ -1201,6 +1306,19 @@ function WorkspaceApp({
         onChange={(e) => void importBrowserFolder(e.target.files)}
         aria-label="Choose workspace folder"
       />
+      {demoFile && (
+        <ProductLaunchFileDialog
+          file={demoFile}
+          state={state}
+          notify={notify}
+          selectedPhoto={demoPhoto}
+          onSelectPhoto={setDemoPhoto}
+          handedOffPhoto={demoHandedOffPhoto}
+          onPhotoHandoff={setDemoHandedOffPhoto}
+          onClose={() => setSelectedDemoFile(null)}
+          closeLabel="Back to office"
+        />
+      )}
       {modal === 'storage' && (
         <Modal
           title="A home for your office."
@@ -1684,30 +1802,6 @@ function WorkspaceApp({
         <div className="toast" role="status">
           <Check size={17} />
           <span>{toast}</span>
-          {isDemo && demo.elapsed >= tourTime(19000) && demo.elapsed < tourTime(27000) && (
-            <button
-              data-demo-target="review-email"
-              onClick={() => setSelectedApproval(PRODUCT_LAUNCH_APPROVAL_IDS.email)}
-            >
-              Review reply
-            </button>
-          )}
-          {isDemo && demo.elapsed >= tourTime(31000) && demo.elapsed < tourTime(37000) && (
-            <button
-              data-demo-target="review-pr"
-              onClick={() => setSelectedApproval(PRODUCT_LAUNCH_APPROVAL_IDS.pr)}
-            >
-              Review pull request
-            </button>
-          )}
-          {isDemo && demo.elapsed >= tourTime(55000) && demo.elapsed < tourTime(60000) && (
-            <button
-              data-demo-target="review-campaign"
-              onClick={() => setSelectedApproval(PRODUCT_LAUNCH_APPROVAL_IDS.campaign)}
-            >
-              Review launch kit
-            </button>
-          )}
           <button aria-label="Dismiss notification" onClick={() => setToast('')}>
             <X size={15} />
           </button>

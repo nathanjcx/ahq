@@ -1,8 +1,82 @@
 /** Deterministic fixtures for the scripted tour. No native APIs or persisted app state. */
-export const TOUR_DURATION = 28_000;
-/** Convert the original 60-second story schedule to the current playback duration. */
+export const TOUR_DURATION = 120_000;
+/** Legacy story beats mapped to a paced, two-minute walkthrough. */
+const TOUR_TIME_ANCHORS: readonly (readonly [number, number])[] = [
+  [0, 0],
+  [350, 7000],
+  [1000, 8000],
+  [1350, 8500],
+  [2250, 10500],
+  [2450, 11000],
+  [3850, 14000],
+  [4300, 14500],
+  [5200, 15700],
+  [5500, 16000],
+  [6000, 19500],
+  [6500, 20000],
+  [7300, 21000],
+  [10700, 27500],
+  [11500, 28500],
+  [11800, 29000],
+  [12000, 29300],
+  [13000, 30000],
+  [16000, 33000],
+  [19000, 46000],
+  [19600, 47000],
+  [20000, 48000],
+  [22100, 50000],
+  [23500, 54000],
+  [24000, 55000],
+  [25700, 57500],
+  [26000, 58000],
+  [27000, 60000],
+  [27100, 60050],
+  [27600, 60400],
+  [30500, 64000],
+  [30800, 64200],
+  [31000, 68000],
+  [32100, 70000],
+  [34000, 73000],
+  [35700, 74700],
+  [36000, 75000],
+  [37000, 77000],
+  [37100, 77100],
+  [37600, 77500],
+  [40500, 81000],
+  [41000, 84000],
+  [41300, 84300],
+  [44500, 87300],
+  [45000, 90000],
+  [45400, 90400],
+  [46700, 92500],
+  [47200, 93500],
+  [48000, 94500],
+  [48500, 95500],
+  [49300, 96500],
+  [49800, 97500],
+  [51000, 98500],
+  [51600, 99200],
+  [52000, 101000],
+  [52400, 103000],
+  [54800, 106500],
+  [55000, 108000],
+  [55300, 108500],
+  [57700, 111500],
+  [58000, 112000],
+  [58400, 112500],
+  [60000, 120000],
+];
+/** Keep existing story events in order, with longer office and review passages. */
 export function tourTime(storyMilliseconds: number): number {
-  return Math.round((storyMilliseconds * TOUR_DURATION) / 60_000);
+  const story = Math.max(0, Math.min(60_000, Number.isNaN(storyMilliseconds) ? 0 : storyMilliseconds));
+  for (let index = 1; index < TOUR_TIME_ANCHORS.length; index++) {
+    const [nextStory, nextElapsed] = TOUR_TIME_ANCHORS[index];
+    if (story > nextStory) continue;
+    const [previousStory, previousElapsed] = TOUR_TIME_ANCHORS[index - 1];
+    const progress = (story - previousStory) / (nextStory - previousStory);
+    return Math.round(previousElapsed + progress * (nextElapsed - previousElapsed));
+  }
+  return TOUR_DURATION;
 }
 export const TOUR_GOAL = 'Astra HQ Product Launch';
 export const TOUR_GOAL_DESCRIPTION =
@@ -10,94 +84,158 @@ export const TOUR_GOAL_DESCRIPTION =
 export const TOUR_SLOGAN = 'A little office. A very big idea.';
 export const TOUR_PHASES = [
   {
-    id: 'hire',
+    id: 'office-intro',
     at: tourTime(0),
-    title: 'Make room for one more.',
-    detail: 'Hire a Marketing Intern to round out the team.',
+    title: 'Your office. You are the CEO.',
+    detail:
+      'Run a team of AI employees that can work around the clock. Their roles, progress, and conversations live here. You set the direction and approve their work.',
+  },
+  {
+    id: 'hire',
+    at: tourTime(350),
+    title: 'Create an employee.',
+    detail:
+      'Choose a name and role, then generate a working personality. Morgan joins as Marketing Intern alongside Engineering, Finance, and your Assistant.',
+  },
+  {
+    id: 'welcome',
+    at: tourTime(5500),
+    title: 'Meet your newest teammate.',
+    detail:
+      'Morgan now appears in the office with a name and role. Everyone has a place on the team before you give them a shared goal.',
   },
   {
     id: 'goal',
     at: tourTime(6000),
-    title: 'Give everyone a shared goal.',
-    detail: 'One idea. Four people moving it forward.',
+    title: 'Give the team a goal.',
+    detail:
+      'As CEO, describe the outcome you want. For this launch, the team will build the app, forecast profits, coordinate a meeting, and create the campaign.',
   },
   {
     id: 'roadmap',
     at: tourTime(12000),
-    title: 'A plan becomes a roadmap.',
-    detail: 'Clear owners, small milestones, one launch.',
+    title: 'Turn the goal into a plan.',
+    detail:
+      'The roadmap breaks your goal into milestones with clear owners. Connected steps show what can start now and what depends on another teammate.',
   },
   {
     id: 'work',
     at: tourTime(16000),
-    title: 'The whole office gets to work.',
-    detail: 'Engineering, finance, operations, and marketing.',
+    title: 'Watch your team work together.',
+    detail:
+      'Follow everyone’s progress in the office chat. When an employee needs your attention, an ! appears above them. Click it to review their work right here.',
   },
   {
     id: 'email',
     at: tourTime(19000),
-    title: 'Thrive Capital would like to meet.',
-    detail: 'A fictional email arrives. Your Assistant prepares the reply.',
+    title: 'Your Assistant can handle email.',
+    detail:
+      'A fictional Thrive Capital email asks for a meeting. Avery drafts a reply, then raises an ! in the office. Click Avery’s ! to read the draft.',
   },
   {
     id: 'email-approval',
     at: tourTime(24000),
-    title: 'You have the final say.',
-    detail: 'Review the draft before approving the sample reply.',
+    title: 'You approve the reply.',
+    detail:
+      'Avery’s ! opens the reply for your approval while the team keeps working in the office. Read it before deciding; this sample reply sends nothing.',
   },
   {
     id: 'meeting',
     at: tourTime(27000),
-    title: 'A meeting, on the calendar.',
-    detail: 'Avery prepares the sample Thrive Capital walkthrough for Thursday at 10 AM ET.',
+    title: 'They can arrange the meeting.',
+    detail:
+      'Click Avery’s next ! to review the prepared calendar invitation. Check the time, attendees, and agenda, then close the preview to return to your team.',
   },
   {
     id: 'bug',
     at: tourTime(31000),
-    title: 'A bug? Already on it.',
-    detail: 'Your Software Engineer prepares a small, reviewable fix.',
+    title: 'Engineering picks up a bug.',
+    detail:
+      'A sample roadmap bug reaches Alex, your Software Engineer. Alex prepares a fix and raises an ! in the office so you can inspect the proposed change.',
   },
   {
     id: 'pr-approval',
     at: tourTime(34000),
-    title: 'Review. Approve. Keep moving.',
-    detail: 'A sample pull request, ready for your approval.',
+    title: 'Review the proposed code change.',
+    detail:
+      'Clicking Alex’s ! opens the pull request. Review the change and checks, then approve or ask for revisions. Your office stays behind the review.',
   },
   {
     id: 'finance',
     at: tourTime(37000),
-    title: 'Put some numbers behind the idea.',
-    detail: 'Finance Bro builds a three-month profit model.',
+    title: 'Finance builds the forecast.',
+    detail:
+      'Blake’s ! brings the forecast to you. Click it to review pricing, customer counts, costs, and potential profit without leaving the office.',
+  },
+  {
+    id: 'office-finance',
+    at: tourTime(40550),
+    title: 'Progress comes back to the office.',
+    detail:
+      'Finance shares the forecast with the team. Office chat keeps their work connected to the goal while Marketing prepares the next piece.',
   },
   {
     id: 'slogan',
     at: tourTime(41000),
-    title: 'Find the words.',
-    detail: 'Your Marketing Intern writes the launch slogan and HTML.',
+    title: 'Marketing finds the words.',
+    detail:
+      'Morgan raises an ! with the launch slogan and campaign copy. Click Morgan to review the words; the team will reuse them as the product takes shape.',
+  },
+  {
+    id: 'office-marketing',
+    at: tourTime(44550),
+    title: 'One team, one campaign.',
+    detail:
+      'Marketing shares the creative direction in office chat. You can see the plan come together without losing track of the other employees.',
   },
   {
     id: 'photo',
     at: tourTime(45000),
-    title: 'Three directions. Pick your favorite.',
-    detail: 'Swipe through the campaign photos and choose a launch image.',
+    title: 'Choose the campaign image.',
+    detail:
+      'Click Morgan’s ! to compare three campaign photos. Swipe through the options, select a favorite, and hand it to Engineering for the launch page.',
+  },
+  {
+    id: 'office-handoff',
+    at: tourTime(51650),
+    title: 'See the handoff happen.',
+    detail:
+      'Morgan shares the selected photo with Alex in the office. One employee’s output becomes the next employee’s starting point.',
   },
   {
     id: 'handoff',
     at: tourTime(52000),
-    title: 'From marketing to engineering.',
-    detail: 'Morgan hands the selected photo to Alex, who prepares the landing page.',
+    title: 'Engineering builds on Marketing’s work.',
+    detail:
+      'Alex’s ! opens the prepared landing page with Marketing’s chosen image. Review the finished page directly from your employee in the office.',
+  },
+  {
+    id: 'office-review',
+    at: tourTime(54850),
+    title: 'The team brings it back to you.',
+    detail:
+      'The launch pieces are ready for your final judgment. Employees report back in the office so you can review the result together.',
   },
   {
     id: 'campaign-approval',
     at: tourTime(55000),
-    title: 'One last look. Ready to launch.',
-    detail: 'Approve the sample campaign. Every file stays here to explore.',
+    title: 'Keep the final say.',
+    detail:
+      'Click Morgan’s ! for the final launch kit approval. Review the forecast, campaign image, and landing page together. Your approval completes the sample goal; nothing is published or sent.',
+  },
+  {
+    id: 'office-celebration',
+    at: tourTime(58400),
+    title: 'One goal. A whole team of progress.',
+    detail:
+      'Back in the office, everyone celebrates the finished launch. The chat shows each contribution, and all seven sample files remain available to explore.',
   },
   {
     id: 'done',
     at: TOUR_DURATION,
-    title: 'One goal. A whole team of progress.',
-    detail: 'Back in the office. Your 28-second launch demo is complete; the sample files are ready.',
+    title: 'Your office is ready for the next idea.',
+    detail:
+      'The two-minute walkthrough is complete. Explore the sample files, replay the story, or exit the demo to return to your live workspace.',
   },
 ] as const;
 export type TourPhase = (typeof TOUR_PHASES)[number]['id'];
@@ -125,7 +263,8 @@ export const TOUR_ARTIFACTS: { id: TourArtifactId; name: string; owner: string; 
     },
   ];
 const MOVES = [
-  { at: tourTime(0), target: 'employees-nav', click: tourTime(240) },
+  { at: tourTime(0), target: 'nav-office' },
+  { at: tourTime(350), target: 'employees-nav', click: tourTime(500) },
   { at: tourTime(700), target: 'new-employee', click: tourTime(1000) },
   { at: tourTime(1300), target: 'hire-name' },
   { at: tourTime(2700), target: 'hire-role' },

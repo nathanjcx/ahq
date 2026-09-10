@@ -13,7 +13,6 @@ type Controls = {
 // These are the same buttons, forms, and dialogs used by the live workspace.
 const actions = (
   [
-    [350, 'nav-employees'],
     [1000, 'employee-new'],
     [4300, 'employee-personality'],
     [5200, 'employee-create'],
@@ -21,25 +20,27 @@ const actions = (
     [6500, 'goal-open'],
     [11500, 'goal-save'],
     [16000, 'nav-office'],
-    [22100, 'review-email'],
+    [22100, 'office-review-assistant'],
     [25700, 'review-approve'],
-    [27100, 'nav-files'],
-    [27600, 'file-meeting'],
+    [27600, 'office-review-assistant'],
     [30500, 'file-preview-close'],
     [30800, 'nav-office'],
-    [32100, 'review-pr'],
+    [32100, 'office-review-software-engineer'],
     [35700, 'review-approve'],
-    [37100, 'nav-files'],
-    [37600, 'file-profits'],
+    [37600, 'office-review-finance-bro'],
     [40500, 'file-preview-close'],
-    [41300, 'file-slogan'],
+    [40550, 'nav-office'],
+    [41300, 'office-review-demo-marketing-intern'],
     [44500, 'file-preview-close'],
-    [45400, 'file-photo'],
+    [44550, 'nav-office'],
+    [45400, 'office-review-demo-marketing-intern'],
     [51000, 'photo-handoff'],
     [51600, 'file-preview-close'],
-    [52400, 'file-app'],
+    [51650, 'nav-office'],
+    [52400, 'office-review-software-engineer'],
     [54800, 'file-preview-close'],
-    [55300, 'review-campaign'],
+    [54850, 'nav-office'],
+    [55300, 'office-review-demo-marketing-intern'],
     [57700, 'review-approve'],
     [58400, 'nav-office'],
   ] as const
@@ -59,7 +60,13 @@ export function useProductLaunchPlayback(controls: Controls) {
   const current = useRef(controls);
   current.current = controls;
   const [elapsed, setElapsed] = useState(0);
-  const [cursor, setCursor] = useState({ x: 0, y: 0, clicking: false, visible: false });
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
+  const togglePause = () => {
+    pausedRef.current = !pausedRef.current;
+    setPaused(pausedRef.current);
+  };
+  const [cursor, setCursor] = useState({ x: 0, y: 0, clicking: false, visible: false, tracking: false });
   const running = controls.enabled && elapsed < TOUR_DURATION;
   useEffect(() => {
     if (!controls.enabled) return;
@@ -68,10 +75,13 @@ export function useProductLaunchPlayback(controls: Controls) {
     let nextAction = 0;
     let snapshotKey = '';
     let lastTarget = '';
+    let targetApproachedAt = 0;
     let clickedAt = -1000;
     const notices = new Set<number>();
+    const completedTyping = new Set<string>();
     const swipes = swipePlan.map((step) => ({ ...step, started: false, finished: false }));
-    const start = performance.now();
+    let clock = 0;
+    let previousTick = performance.now();
     const find = (name: string) => {
       const items = current.current.surface.current?.querySelectorAll<HTMLElement>(
         `[data-demo-target="${name}"]`,
@@ -83,16 +93,36 @@ export function useProductLaunchPlayback(controls: Controls) {
     const move = (name: string, click = false) => {
       const element = find(name);
       if (!element) return false;
+      const marker = element.classList.contains('office-review-marker');
       if (lastTarget !== name) {
-        element.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+        // The marker belongs to the 3D scene; scrolling it shifts the office camera surface.
+        if (!marker) element.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
         lastTarget = name;
+        targetApproachedAt = performance.now();
       }
       const bounds = element.getBoundingClientRect();
+      const x = bounds.left + Math.min(bounds.width * 0.55, 150);
+      const y = bounds.top + bounds.height * 0.55;
+      if (marker) {
+        const room = element.closest('.office-viewport')?.getBoundingClientRect();
+        const hit = document.elementFromPoint(x, y);
+        if (
+          !room ||
+          x < room.left ||
+          x > room.right ||
+          y < room.top ||
+          y > room.bottom ||
+          !hit ||
+          !element.contains(hit)
+        )
+          return false;
+      }
       setCursor({
-        x: bounds.left + Math.min(bounds.width * 0.55, 150),
-        y: bounds.top + bounds.height * 0.55,
+        x,
+        y,
         clicking: click,
         visible: true,
+        tracking: marker && (click || performance.now() - targetApproachedAt >= 240),
       });
       if (click) {
         element.click();
@@ -108,7 +138,9 @@ export function useProductLaunchPlayback(controls: Controls) {
       }
     };
     const tick = (now: number) => {
-      const next = Math.max(0, Math.min(TOUR_DURATION, now - start));
+      if (!pausedRef.current && document.visibilityState !== 'hidden') clock += now - previousTick;
+      previousTick = now;
+      const next = Math.max(0, Math.min(TOUR_DURATION, clock));
       if (next - lastPaint >= 40 || next === TOUR_DURATION) {
         lastPaint = next;
         setElapsed(next);
@@ -185,34 +217,38 @@ export function useProductLaunchPlayback(controls: Controls) {
             swipe.started = true;
           }
           dispatch('pointermove', clientX);
-          setCursor({ x: clientX, y: clientY, clicking: true, visible: true });
+          setCursor({ x: clientX, y: clientY, clicking: true, visible: true, tracking: true });
           if (progress >= 1) {
             dispatch('pointerup', clientX);
             swipe.finished = true;
           }
         }
-        const activeTyping = typing.find((item) => next >= item.from && next <= item.to + 160);
-        if (activeTyping) {
-          const element = find(activeTyping.target);
-          if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
-            const text = tourTyping(activeTyping.text, next, activeTyping.from, activeTyping.to);
-            if (element.value !== text) {
-              const prototype =
-                element instanceof HTMLTextAreaElement
-                  ? HTMLTextAreaElement.prototype
-                  : HTMLInputElement.prototype;
-              Object.getOwnPropertyDescriptor(prototype, 'value')?.set?.call(element, text);
-              element.dispatchEvent(
-                new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }),
-              );
-            }
-            move(activeTyping.target);
+        let typingNow = false;
+        for (const step of typing) {
+          if (next < step.from || completedTyping.has(step.target)) continue;
+          const element = find(step.target);
+          if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)) continue;
+          const text = tourTyping(step.text, next, step.from, step.to);
+          if (element.value !== text) {
+            const prototype =
+              element instanceof HTMLTextAreaElement
+                ? HTMLTextAreaElement.prototype
+                : HTMLInputElement.prototype;
+            Object.getOwnPropertyDescriptor(prototype, 'value')?.set?.call(element, text);
+            element.dispatchEvent(
+              new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }),
+            );
           }
-        } else if (nextAction < actions.length) {
+          move(step.target);
+          typingNow = true;
+          // A slow frame must still commit the full text before the next action.
+          if (next >= step.to) completedTyping.add(step.target);
+        }
+        if (!typingNow && nextAction < actions.length) {
           const [at, target] = actions[nextAction];
           if (next >= at - 330) move(target);
         }
-        while (nextAction < actions.length && next >= actions[nextAction][0]) {
+        while (!typingNow && nextAction < actions.length && next >= actions[nextAction][0]) {
           const [at, target] = actions[nextAction];
           if (move(target, true) || next > at + 500) nextAction += 1;
           else break;
@@ -228,6 +264,12 @@ export function useProductLaunchPlayback(controls: Controls) {
       if (next < TOUR_DURATION) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
+    // Reset the frame origin on visibility changes so returning from another app
+    // never jumps past a live presentation step.
+    const onVisibilityChange = () => {
+      previousTick = performance.now();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
     const preventInterference = (event: Event) => {
       if (event.isTrusted && event instanceof KeyboardEvent && event.key === 'Escape') {
         event.preventDefault();
@@ -240,7 +282,7 @@ export function useProductLaunchPlayback(controls: Controls) {
         (event.target instanceof Element && event.target.closest('[data-demo-control]'))
       )
         return;
-      if (performance.now() - start >= TOUR_DURATION) return;
+      if (clock >= TOUR_DURATION) return;
       event.preventDefault();
       event.stopImmediatePropagation();
     };
@@ -248,19 +290,21 @@ export function useProductLaunchPlayback(controls: Controls) {
       document.addEventListener(type, preventInterference, true);
     return () => {
       cancelAnimationFrame(raf);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       for (const type of ['click', 'pointerdown', 'keydown'])
         document.removeEventListener(type, preventInterference, true);
     };
   }, [controls.enabled]);
-  return { elapsed, running, cursor };
+  return { elapsed, running, paused, togglePause, cursor };
 }
 
 export function ProductLaunchCursor({ playback }: { playback: ReturnType<typeof useProductLaunchPlayback> }) {
-  if (!playback.running || !playback.cursor.visible) return null;
+  if (!playback.running || playback.paused || !playback.cursor.visible) return null;
   return (
     <div
       className={`product-launch-cursor ${playback.cursor.clicking ? 'clicking' : ''}`}
       aria-hidden="true"
+      data-tracking={playback.cursor.tracking}
       style={{ left: playback.cursor.x, top: playback.cursor.y }}
     >
       <svg width="27" height="32" viewBox="0 0 26 31">

@@ -31,7 +31,9 @@ export default function Modal({
       ].filter((el) => !el.hasAttribute('disabled') && el.getClientRects().length > 0);
     const timer = setTimeout(
       () =>
-        (ref.current?.querySelector<HTMLElement>('[autofocus]') ?? focusable()[1] ?? focusable()[0])?.focus(),
+        (ref.current?.querySelector<HTMLElement>('[autofocus]') ?? focusable()[1] ?? focusable()[0])?.focus({
+          preventScroll: true,
+        }),
       20,
     );
     const keydown = (e: KeyboardEvent) => {

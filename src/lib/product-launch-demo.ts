@@ -300,7 +300,7 @@ export const PRODUCT_LAUNCH_CHAT = [
     at: tourTime(27000),
     id: 'demo-chat-calendar',
     authorId: 'assistant',
-    text: 'Sample calendar invite ready: Thursday, 10 AM ET. It’s in Files.',
+    text: 'Sample calendar invite ready: Thursday, 10 AM ET. Click the ! above me to review it.',
   },
   {
     at: tourTime(31000),
@@ -541,6 +541,89 @@ function fileFixture(id: TourArtifactId): FileFixture {
 }
 function emailContent(body: string) {
   return `# Re: Astra HQ launch walkthrough\n\n**Sample draft — not sent.**\n\nTo: Thrive Capital team <team@thrivecapital.example>\n\n${body}\n\nMeeting prepared: Thursday, October 15 · 10:00–10:30 AM ET.`;
+}
+
+export interface ProductLaunchOfficeReview {
+  id: string;
+  employeeId: string;
+  label: string;
+  approvalId?: string;
+  fileId?: TourArtifactId;
+}
+
+const OFFICE_REVIEW_STEPS: (ProductLaunchOfficeReview & { from: number; until: number })[] = [
+  {
+    id: 'email',
+    employeeId: fileFixture('email').ownerId,
+    label: 'Review Avery’s email reply',
+    approvalId: PRODUCT_LAUNCH_APPROVAL_IDS.email,
+    from: tourTime(20_000),
+    until: tourTime(26_000),
+  },
+  {
+    id: 'meeting',
+    employeeId: fileFixture('meeting').ownerId,
+    label: 'Review Avery’s meeting invitation',
+    fileId: 'meeting',
+    from: tourTime(27_000),
+    until: tourTime(30_500),
+  },
+  {
+    id: 'pr',
+    employeeId: fileFixture('pr').ownerId,
+    label: 'Review Alex’s bug fix',
+    approvalId: PRODUCT_LAUNCH_APPROVAL_IDS.pr,
+    from: tourTime(32_000),
+    until: tourTime(36_000),
+  },
+  {
+    id: 'profits',
+    employeeId: fileFixture('profits').ownerId,
+    label: 'Review Blake’s profit forecast',
+    fileId: 'profits',
+    from: tourTime(37_000),
+    until: tourTime(40_500),
+  },
+  {
+    id: 'slogan',
+    employeeId: fileFixture('slogan').ownerId,
+    label: 'Review Morgan’s launch slogan',
+    fileId: 'slogan',
+    from: tourTime(41_000),
+    until: tourTime(44_500),
+  },
+  {
+    id: 'photo',
+    employeeId: fileFixture('photo').ownerId,
+    label: 'Review Morgan’s campaign images',
+    fileId: 'photo',
+    from: tourTime(45_000),
+    until: tourTime(51_600),
+  },
+  {
+    id: 'app',
+    employeeId: fileFixture('app').ownerId,
+    label: 'Review Alex’s landing page',
+    fileId: 'app',
+    from: tourTime(52_000),
+    until: tourTime(54_800),
+  },
+  {
+    id: 'campaign',
+    employeeId: fileFixture('photo').ownerId,
+    label: 'Approve Morgan’s launch kit',
+    approvalId: PRODUCT_LAUNCH_APPROVAL_IDS.campaign,
+    from: tourTime(55_000),
+    until: tourTime(58_000),
+  },
+];
+
+/** Review cues on the sample office's employees. Returns fresh data and never adds live approvals. */
+export function productLaunchOfficeReviewsAt(milliseconds: number): ProductLaunchOfficeReview[] {
+  const elapsed = tourFrame(milliseconds).elapsed;
+  return OFFICE_REVIEW_STEPS.filter((review) => elapsed >= review.from && elapsed < review.until).map(
+    ({ from: _from, until: _until, ...review }) => ({ ...review }),
+  );
 }
 
 /** Files appear in the real Files page as soon as their scripted preview begins. */

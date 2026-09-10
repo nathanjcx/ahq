@@ -278,44 +278,73 @@ export function FilesPage({
         )}
       </section>
       {preview && (
-        <Modal
-          title={preview.name}
-          subtitle={`Prepared by ${employeeById(state.employees, preview.ownerId)?.name ?? 'your team'} · ${preview.title}`}
+        <ProductLaunchFileDialog
+          file={preview}
+          state={state}
+          notify={notify}
           onClose={() => setPreviewId(null)}
-          wide
-        >
-          <ProductFilePreview
-            file={preview}
-            selectedPhoto={selectedPhoto}
-            handedOffPhoto={handedOffPhoto}
-            onSelectPhoto={setSelectedPhoto}
-            onPhotoHandoff={() => {
-              setHandedOffPhoto(selectedPhoto);
-              notify(
-                `Demo handoff: ${PHOTO_OPTIONS[selectedPhoto].title} is ready for the Software Engineer.`,
-              );
-            }}
-          />
-          <div className="modal-footer">
-            <button className="button secondary" onClick={() => downloadProductLaunchFile(preview.id)}>
-              <Download size={15} />{' '}
-              {preview.id === 'app'
-                ? 'Download HTML'
-                : preview.id === 'meeting'
-                  ? 'Download calendar file'
-                  : 'Download file'}
-            </button>
-            <button
-              className="button primary"
-              data-demo-target="file-preview-close"
-              onClick={() => setPreviewId(null)}
-            >
-              Close preview
-            </button>
-          </div>
-        </Modal>
+          selectedPhoto={selectedPhoto}
+          handedOffPhoto={handedOffPhoto}
+          onSelectPhoto={setSelectedPhoto}
+          onPhotoHandoff={setHandedOffPhoto}
+        />
       )}
     </div>
+  );
+}
+
+export function ProductLaunchFileDialog({
+  file,
+  state,
+  notify,
+  onClose,
+  selectedPhoto,
+  onSelectPhoto,
+  handedOffPhoto,
+  onPhotoHandoff,
+  closeLabel = 'Close preview',
+}: {
+  file: ProductLaunchDemoFile;
+  state: AppState;
+  notify: (message: string) => void;
+  onClose: () => void;
+  selectedPhoto: number;
+  onSelectPhoto: (index: number) => void;
+  handedOffPhoto: number | null;
+  onPhotoHandoff: (index: number) => void;
+  closeLabel?: string;
+}) {
+  return (
+    <Modal
+      title={file.title}
+      subtitle={`Prepared by ${employeeById(state.employees, file.ownerId)?.name ?? 'your team'} · ${file.name}`}
+      onClose={onClose}
+      wide
+    >
+      <ProductFilePreview
+        file={file}
+        selectedPhoto={selectedPhoto}
+        handedOffPhoto={handedOffPhoto}
+        onSelectPhoto={onSelectPhoto}
+        onPhotoHandoff={() => {
+          onPhotoHandoff(selectedPhoto);
+          notify(`Demo handoff: ${PHOTO_OPTIONS[selectedPhoto].title} is ready for the Software Engineer.`);
+        }}
+      />
+      <div className="modal-footer">
+        <button className="button secondary" onClick={() => downloadProductLaunchFile(file.id)}>
+          <Download size={15} />{' '}
+          {file.id === 'app'
+            ? 'Download HTML'
+            : file.id === 'meeting'
+              ? 'Download calendar file'
+              : 'Download file'}
+        </button>
+        <button className="button primary" data-demo-target="file-preview-close" onClick={onClose}>
+          {closeLabel}
+        </button>
+      </div>
+    </Modal>
   );
 }
 
