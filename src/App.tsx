@@ -189,6 +189,22 @@ export default function App() {
   const [microphoneLevel, setMicrophoneLevel] = useState(0);
   const [slapMode, setSlapMode] = useState(false);
   const [partyMode, setPartyMode] = useState(false);
+  const [launchCelebrationId, setLaunchCelebrationId] = useState<string | null>(null);
+  useEffect(() => {
+    const celebrate = (event: Event) => {
+      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
+      if (!id) return;
+      setPage('office');
+      setLaunchCelebrationId(id);
+    };
+    const restore = () => setLaunchCelebrationId(null);
+    window.addEventListener('ahq:celebrate', celebrate);
+    window.addEventListener('ahq:launch-restored', restore);
+    return () => {
+      window.removeEventListener('ahq:celebrate', celebrate);
+      window.removeEventListener('ahq:launch-restored', restore);
+    };
+  }, []);
   const partyMusic = useRef<PartyMusicStop | null>(null);
   const [slapTarget, setSlapTarget] = useState<{ employeeId: string; token: number } | null>(null);
   const slapReset = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -780,6 +796,7 @@ export default function App() {
                           }
                         >
                           <OfficeScene
+                            requestedCelebrationId={launchCelebrationId}
                             employees={history.display.employees}
                             reviewEmployeeIds={history.at === null ? pending.map((a) => a.employeeId) : []}
                             onReview={(e) => {

@@ -1,7 +1,9 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Office from '../../studio/app/office';
 import type { Employee } from '../../shared/types';
 export default function OfficeScene({
   employees,
+  requestedCelebrationId,
   animate,
   onSelect,
   reviewEmployeeIds,
@@ -19,6 +21,7 @@ export default function OfficeScene({
   onSlap,
 }: {
   employees: Employee[];
+  requestedCelebrationId?: string | null;
   animate: boolean;
   onSelect: (e: Employee) => void;
   reviewEmployeeIds: string[];
@@ -35,6 +38,40 @@ export default function OfficeScene({
   slapTarget?: { employeeId: string; token: number } | null;
   onSlap?: (employeeId: string) => void;
 }) {
+  const [celebrationId, setCelebrationId] = useState<string | null>(null);
+  const [reducedMotion, setReducedMotion] = useState(
+    () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
+  const seenCelebrations = useRef(new Set<string>());
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const celebrate = useCallback((id?: string | null) => {
+    if (!id || seenCelebrations.current.has(id)) return;
+    seenCelebrations.current.add(id);
+    setCelebrationId(id);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setCelebrationId(null), 8000);
+  }, []);
+  useEffect(() => {
+    const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReducedMotion(preference.matches);
+    preference.addEventListener('change', update);
+    const onCelebrate = (event: Event) => celebrate((event as CustomEvent<{ id?: string }>).detail?.id);
+    const restore = () => {
+      clearTimeout(timer.current);
+      setCelebrationId(null);
+    };
+    window.addEventListener('ahq:celebrate', onCelebrate);
+    window.addEventListener('ahq:launch-restored', restore);
+    return () => {
+      window.removeEventListener('ahq:celebrate', onCelebrate);
+      window.removeEventListener('ahq:launch-restored', restore);
+      preference.removeEventListener('change', update);
+      clearTimeout(timer.current);
+    };
+  }, [celebrate]);
+  useEffect(() => {
+    celebrate(requestedCelebrationId);
+  }, [celebrate, requestedCelebrationId]);
   return (
     <Office
       team={employees.map((e) => ({
@@ -62,7 +99,8 @@ export default function OfficeScene({
         const employee = employees.find((item) => item.id === id);
         if (employee) onReview(employee);
       }}
-      motion={animate}
+      celebrationId={celebrationId}
+      motion={animate && !reducedMotion}
       timeline={0}
       zoom={zoom * 37}
       angle={angle}
@@ -72,7 +110,7 @@ export default function OfficeScene({
       listening={listening}
       microphoneLevel={microphoneLevel}
       slapMode={slapMode}
-      partyMode={partyMode}
+      partyMode={partyMode || (!!celebrationId && animate && !reducedMotion)}
       slapTarget={slapTarget}
       onSlap={onSlap}
       onRoom={(room) => window.dispatchEvent(new CustomEvent('ahq:room', { detail: room }))}

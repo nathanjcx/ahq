@@ -13,9 +13,15 @@ const activeSession = (session: CloudSession) => ['queued', 'running'].includes(
 const imageTypes = new Set(['image/png', 'image/jpeg']);
 
 function AttachmentPreview({ file }: { file: DemoSnapshot['notifications'][number]['attachments'][number] }) {
-  const isImage = 'encoding' in file && file.encoding === 'base64' && imageTypes.has(file.mediaType);
+  const isImage = file.encoding === 'base64' && imageTypes.has(file.mediaType);
   if (isImage) {
-    return <img className="demo-attachment-image" src={`data:${file.mediaType};base64,${file.content}`} alt={file.name} />;
+    return (
+      <img
+        className="demo-attachment-image"
+        src={`data:${file.mediaType};base64,${file.content}`}
+        alt={file.name}
+      />
+    );
   }
   return <pre>{file.content}</pre>;
 }
@@ -36,7 +42,8 @@ export default function DemoPanel({
   onSelectSession: (id: string | null) => void;
 }) {
   const [snapshot, setSnapshot] = useState<DemoSnapshot>({ notifications: [], sessions: [] });
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+  const [restoreVersion, setRestoreVersion] = useState(0);
   const [goal, setGoal] = useState(suggestedGoal);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -90,7 +97,7 @@ export default function DemoPanel({
       disposed = true;
       clearTimeout(timer);
     };
-  }, [supported]);
+  }, [supported, restoreVersion]);
 
   useEffect(() => {
     setSelected(null);
@@ -141,6 +148,10 @@ export default function DemoPanel({
         notify={notify}
         onWorkUpdate={onWorkUpdate}
         onSelectSession={onSelectSession}
+        onRestore={() => {
+          setSnapshot({ notifications: [], sessions: [] });
+          setRestoreVersion((value) => value + 1);
+        }}
       />
       <aside className="demo-dock" aria-label="Demo controls and live work">
         <button className="demo-heading" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
