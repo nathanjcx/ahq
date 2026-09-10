@@ -35,6 +35,7 @@ export interface CodexTurnResult {
 export interface RunTurnOptions {
   cwd: string;
   model: string;
+  signal?: AbortSignal;
   prompt: string;
   outputSchema?: JsonObject;
   onStarted?(ids: { threadId: string; turnId: string }): void;
@@ -130,9 +131,10 @@ export class CodexAppServer {
   }
 
   async runTurn(options: RunTurnOptions): Promise<CodexTurnResult> {
+    options.signal?.throwIfAborted();
     const threadResult = await this.request('thread/start', {
       cwd: options.cwd,
-      model: options.model,
+      ...(options.model.trim() ? { model: options.model.trim() } : {}),
       approvalPolicy: 'never',
       sandbox: 'workspace-write',
       ephemeral: true,
@@ -142,12 +144,13 @@ export class CodexAppServer {
     const threadId = stringValue(thread?.id);
     if (!threadId) throw new Error('Codex thread/start returned no thread id');
 
+    options.signal?.throwIfAborted();
     const turnResult = await this.request('turn/start', {
       threadId,
       input: [{ type: 'text', text: options.prompt, text_elements: [] }],
       cwd: options.cwd,
       approvalPolicy: 'never',
-      model: options.model,
+      ...(options.model.trim() ? { model: options.model.trim() } : {}),
       sandboxPolicy: {
         type: 'workspaceWrite', writableRoots: [options.cwd], networkAccess: false,
         excludeTmpdirEnvVar: true, excludeSlashTmp: true,

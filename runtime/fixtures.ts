@@ -41,11 +41,22 @@ export function initialSnapshot(now = Date.now()): Snapshot {
   ];
 
   return {
-    revision: 1, sources, agents, work: [], runs: [], activity: [
+    revision: 1, sources, agents, work: [{
+      id: 'work-welcome', title: 'Prepare the office source digest', goal: 'Summarize the fictional office sources and prior checkout QA.',
+      sourceIds: [], agentId: 'agent-maya', status: 'completed', scenario: 'report',
+      createdAt: now - 23 * HOUR, completedAt: now - 20 * HOUR, mode: 'demo',
+    }], runs: [], activity: [
       { id: 'event-1', sequence: 1, timestamp: now - HOUR, kind: 'system', text: 'Demo office loaded. New output is marked as simulated.' },
-    ], artifacts, board, routines: [], calendar: [],
+    ], artifacts, board, routines: [
+      { id: 'routine-1', agentId: 'agent-eli', name: 'Morning launch readout', instructions: 'Summarize the launch evidence and list open decisions.', enabled: false, schedule: 'daily', intervalMinutes: 60, dailyTime: '09:00', nextRunAt: now + 24 * HOUR, notes: 'Keep the readout concise. Enable this routine when ready.' },
+      { id: 'routine-2', agentId: 'agent-lena', name: 'Checkout verification', instructions: 'Run focused checkout QA and report any failures.', enabled: false, schedule: 'daily', intervalMinutes: 60, dailyTime: '10:00', nextRunAt: now + 25 * HOUR, notes: 'Check full-price and coupon totals after a live fix.' },
+    ], calendar: [{
+      id: 'calendar-focus', title: 'Engineering focus block (simulated)',
+      start: nextWeekday(now, 3, 9), end: nextWeekday(now, 3, 11), attendees: ['priya@example.test'],
+      location: 'Office', description: 'SIMULATED DEMO CALENDAR EVENT. Reserved for release work.', sourceIds: ['src-calendar-focus'], simulated: true,
+    }],
     auth: { status: 'checking' },
-    settings: { mode: 'demo', reducedMotion: false, sound: true, model: 'gpt-5.1-codex-mini' },
+    settings: { mode: 'demo', reducedMotion: false, sound: true, model: '' },
     demo: { playing: false, nextIndex: 0, speed: 1 },
   };
 }
@@ -72,4 +83,11 @@ export async function createBugFixture(dataDir: string): Promise<string> {
 export async function copyBugFixture(template: string, workspace: string): Promise<void> {
   await mkdir(workspace, { recursive: true });
   await cp(template, workspace, { recursive: true });
+}
+
+function nextWeekday(now: number, day: number, hour: number): string {
+  const date = new Date(now);
+  date.setDate(date.getDate() + ((day - date.getDay() + 7) % 7 || 7));
+  date.setHours(hour, 0, 0, 0);
+  return date.toISOString();
 }

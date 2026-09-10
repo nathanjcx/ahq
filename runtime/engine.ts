@@ -1,4 +1,6 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { realpathSync } from 'node:fs';
+import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   ActivityKind,
@@ -91,7 +93,7 @@ class Runtime implements OfficeRuntime {
       for (const agent of state.agents) {
         agent.activity = 'idle';
         agent.statusText = 'Ready';
-        delete agent.workId;
+        if (agent.workId && !state.work.some((work) => work.id === agent.workId)) delete agent.workId;
       }
       state.demo.playing = false;
     }
@@ -152,9 +154,13 @@ class Runtime implements OfficeRuntime {
   getArtifactPath(id: string): string | undefined {
     const artifact = this.state.artifacts.find((item) => item.id === id);
     if (!artifact?.filePath) return undefined;
-    const resolved = path.resolve(artifact.filePath);
-    const dataDir = `${path.resolve(this.options.dataDir)}${path.sep}`;
-    return resolved.startsWith(dataDir) ? resolved : undefined;
+    try {
+      const resolved = realpathSync(artifact.filePath);
+      const dataDir = `${realpathSync(this.options.dataDir)}${path.sep}`;
+      return resolved.startsWith(dataDir) ? resolved : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   async close(): Promise<void> {
@@ -168,6 +174,7 @@ class Runtime implements OfficeRuntime {
     this.closed = true;
     await this.codex.close();
     await Promise.allSettled([...this.jobs]);
+    await this.serial;
     await this.store.save(this.state);
     this.store.close();
   }
@@ -178,9 +185,9 @@ class Runtime implements OfficeRuntime {
     return next;
   }
 
-  private async mutate(operation: () => void): Promise<void> {
+  private async mutate(operation: () => void, active?: ActiveJob): Promise<void> {
     await this.exclusive(async () => {
-      if (this.closed) return;
+      if (this.closed || (active && (active.generation !== this.generation || active.abort.signal.aborted))) return;
       operation();
       await this.persistAndEmit();
     });
@@ -222,7 +229,7 @@ class Runtime implements OfficeRuntime {
   }
 
   private async cancelLogin(): Promise<void> {
-    if (this.loginId) await this.codex.cancelLogin(this.loginId).catch(() => undefined);
+    if (this.loginId) await this.codex.cancelLogin(this.loginId);
     this.loginId = undefined;
     this.state.auth = { status: 'signed-out' };
   }
@@ -234,26 +241,21 @@ class Runtime implements OfficeRuntime {
   }
 
   private handleCodexNotification(method: string, params: Record<string, unknown>): void {
-    if (method === 'account/login/completed') {
-      if (params.loginId && params.loginId !== this.loginId) return;
-      if (params.success === true) {
+    if (method !== 'account/login/completed' && method !== 'account/updated') return;
+    void this.exclusive(async () => {
+      if (this.closed) return;
+      // Match after login/start has returned, including notifications that arrive first.
+      if (method === 'account/login/completed') {
+        if (!this.loginId || params.loginId !== this.loginId) return;
         this.loginId = undefined;
-        void this.exclusive(async () => {
-          await this.refreshAuth(true);
-          await this.persistAndEmit();
-        });
+        if (params.success === true) await this.refreshAuth(true);
+        else this.state.auth = { status: 'error', error: typeof params.error === 'string' ? params.error : 'ChatGPT login failed' };
       } else {
-        this.loginId = undefined;
-        void this.mutate(() => {
-          this.state.auth = { status: 'error', error: typeof params.error === 'string' ? params.error : 'ChatGPT login failed' };
-        });
-      }
-    } else if (method === 'account/updated' && this.state.auth.status !== 'signing-in') {
-      void this.exclusive(async () => {
+        if (this.state.auth.status === 'signing-in') return;
         await this.refreshAuth(false);
-        await this.persistAndEmit();
-      });
-    }
+      }
+      await this.persistAndEmit();
+    });
   }
 
   private playDemo(): void {
@@ -309,8 +311,12 @@ class Runtime implements OfficeRuntime {
 
   private async resetDemo(): Promise<void> {
     const revision = this.state.revision;
+    const interruptionErrors: string[] = [];
     this.generation += 1;
-    for (const job of this.active.values()) job.abort.abort();
+    for (const job of this.active.values()) {
+      job.abort.abort();
+      if (job.threadId && job.turnId) await this.codex.interrupt(job.threadId, job.turnId).catch((error) => { interruptionErrors.push(safeError(error)); });
+    }
     this.active.clear();
     const auth = this.state.auth;
     const settings = this.state.settings;
@@ -320,6 +326,7 @@ class Runtime implements OfficeRuntime {
     replacement.revision = revision;
     await writeInitialArtifacts(this.options.dataDir, replacement);
     this.state = replacement;
+    for (const error of interruptionErrors) this.event('error', `Codex interruption failed during reset: ${error}`);
     this.pauseDemo();
   }
 
@@ -369,7 +376,7 @@ class Runtime implements OfficeRuntime {
       const active: ActiveJob = { workId: work.id, abort: new AbortController(), generation: this.generation };
       this.active.set(work.id, active);
       const job = (work.mode === 'live' ? this.runLive(work, active) : this.runDemo(work, active))
-        .catch((error) => active.generation === this.generation ? this.failJob(work.id, error) : undefined)
+        .catch((error) => !active.abort.signal.aborted ? this.failJob(work.id, error, active) : undefined)
         .finally(() => {
           if (this.active.get(work.id) === active) this.active.delete(work.id);
           this.jobs.delete(job);
@@ -379,7 +386,7 @@ class Runtime implements OfficeRuntime {
     }
   }
 
-  private async beginJob(workId: string): Promise<void> {
+  private async beginJob(workId: string, active: ActiveJob): Promise<void> {
     await this.mutate(() => {
       const work = requiredWork(this.state, workId);
       if (work.status !== 'queued') return;
@@ -392,11 +399,12 @@ class Runtime implements OfficeRuntime {
       this.state.runs.push(run);
       this.setAgent(work.agentId, scenarioActivity(work.scenario, 0), `Starting ${work.title}`, work.id);
       this.event('status', `${agentName(this.state, work.agentId)} started ${work.title}.`, work.id, work.agentId);
-    });
+    }, active);
   }
 
   private async runDemo(work: WorkItem, active: ActiveJob): Promise<void> {
-    await this.beginJob(work.id);
+    await this.beginJob(work.id, active);
+    active.abort.signal.throwIfAborted();
     const stages = work.routineId ? routineStages(work) : demoStages(work.scenario);
     for (let index = 0; index < stages.length; index += 1) {
       await abortableDelay(visibleDelay([1_600, 2_000, 1_800][index], this.state.demo.speed), active.abort.signal);
@@ -407,16 +415,21 @@ class Runtime implements OfficeRuntime {
         this.setAgent(current.agentId, scenarioActivity(current.scenario, index + 1), text, current.id);
         this.event(index === 1 ? 'tool' : 'status', text, current.id, current.agentId);
         if (index === 1) this.addBoard(current.agentId, current.id, 'handoff', text);
-      });
+      }, active);
     }
-    const calendar = work.scenario === 'dinner' ? demoDinnerCalendar(work.sourceIds, this.state.calendar) : undefined;
+    active.abort.signal.throwIfAborted();
+    const calendar = work.scenario === 'dinner' ? demoDinnerCalendar(work.sourceIds, this.state.calendar, work.routineId ? work.goal : undefined) : undefined;
     const artifact = await this.createDemoArtifact(work, calendar);
-    await this.completeJob(work.id, artifact, calendar);
+    await this.completeJob(work.id, artifact, active, calendar);
   }
 
   private async createDemoArtifact(work: WorkItem, calendar?: CalendarEvent): Promise<Artifact> {
-    const id = `artifact-${work.scenario}-${nextNumber(this.state.artifacts.map((item) => item.id))}`;
+    const id = `artifact-${work.scenario}-${randomUUID()}`;
     const spec = demoArtifact(work.scenario, work.goal, Boolean(work.routineId), calendar);
+    if (work.scenario === 'meeting' && !work.routineId) {
+      const related = this.state.work.filter((item) => item.scenario === 'report' || item.scenario === 'bug');
+      spec.content += `\n\n## Current office work\n\n${related.map((item) => `- ${item.title}: ${item.status}`).join('\n')}`;
+    }
     const directory = path.join(this.options.dataDir, 'artifacts');
     await mkdir(directory, { recursive: true });
     const filePath = path.join(directory, `${id}.${spec.extension}`);
@@ -424,7 +437,7 @@ class Runtime implements OfficeRuntime {
     return { id, workId: work.id, title: spec.title, kind: spec.kind, content: spec.content, createdAt: Date.now(), filePath, simulated: true };
   }
 
-  private async completeJob(workId: string, artifact: Artifact, calendar?: CalendarEvent): Promise<void> {
+  private async completeJob(workId: string, artifact: Artifact, active: ActiveJob, calendar?: CalendarEvent): Promise<void> {
     await this.mutate(() => {
       const work = requiredWork(this.state, workId);
       if (work.status !== 'running') return;
@@ -443,21 +456,19 @@ class Runtime implements OfficeRuntime {
       this.addBoard(work.agentId, work.id, 'complete', `${artifact.title} is ready${artifact.simulated ? ' in the simulated demo' : ''}.`, artifact.id);
       const routine = work.routineId ? this.state.routines.find((item) => item.id === work.routineId) : undefined;
       if (routine) routine.lastRunAt = work.completedAt;
-    });
-    const generation = this.generation;
+    }, active);
     const timer = setTimeout(() => void this.mutate(() => {
-      if (generation !== this.generation) return;
       const work = this.state.work.find((item) => item.id === workId);
       const agent = work && this.state.agents.find((item) => item.id === work.agentId);
       if (work && agent?.workId === workId && !this.active.has(workId)) {
         agent.activity = 'idle';
         agent.statusText = `${work.title} complete`;
       }
-    }), 2_000);
+    }, active), 2_000);
     timer.unref();
   }
 
-  private async failJob(workId: string, error: unknown): Promise<void> {
+  private async failJob(workId: string, error: unknown, active: ActiveJob): Promise<void> {
     await this.mutate(() => {
       const work = this.state.work.find((item) => item.id === workId);
       if (!work || work.status === 'cancelled') return;
@@ -468,43 +479,59 @@ class Runtime implements OfficeRuntime {
       if (run) { run.status = 'failed'; run.completedAt = work.completedAt; }
       this.setAgent(work.agentId, 'idle', `${work.title} needs attention`);
       this.event('error', `${work.title} failed: ${work.error}`, work.id, work.agentId);
-    });
+    }, active);
   }
 
   private async runLive(work: WorkItem, active: ActiveJob): Promise<void> {
     if (this.state.auth.status !== 'signed-in') throw new Error('Sign in with a ChatGPT subscription before running live work');
-    await this.beginJob(work.id);
+    await this.beginJob(work.id, active);
+    active.abort.signal.throwIfAborted();
     const run = latestRun(this.state, work.id);
     if (!run) throw new Error('Live run record is missing');
-    const workspace = path.join(this.options.dataDir, 'workspaces', run.id);
-    if (work.scenario === 'bug' || work.scenario === 'qa') await copyBugFixture(this.bugTemplate, workspace);
-    else await mkdir(workspace, { recursive: true });
+    const workspace = path.join(this.options.dataDir, 'workspaces', `${run.id}-${randomUUID()}`);
+    if (work.scenario === 'bug' || work.scenario === 'qa') {
+      const fixedWork = [...this.state.work].reverse().find((item) => item.scenario === 'bug' && item.mode === 'live' && item.status === 'completed');
+      const fixedWorkspace = fixedWork && latestRun(this.state, fixedWork.id)?.workspace;
+      await copyBugFixture(work.scenario === 'qa' && fixedWorkspace ? fixedWorkspace : this.bugTemplate, workspace);
+    } else await mkdir(workspace, { recursive: true });
     await writeLiveEvidence(work.scenario, workspace, this.state);
     await this.mutate(() => {
       const currentRun = latestRun(this.state, work.id);
       if (currentRun) currentRun.workspace = workspace;
       this.event('tool', `Prepared an isolated workspace for ${work.title}.`, work.id, work.agentId);
-    });
+    }, active);
+    active.abort.signal.throwIfAborted();
 
     const result = await this.codex.runTurn({
       cwd: workspace,
+      signal: active.abort.signal,
       model: this.state.settings.model,
       prompt: livePrompt(work),
       outputSchema: work.scenario === 'dinner' ? calendarSchema() : undefined,
       onStarted: ({ threadId, turnId }) => {
         active.threadId = threadId;
         active.turnId = turnId;
+        if (active.abort.signal.aborted) {
+          void this.codex.interrupt(threadId, turnId).catch((error) => {
+            return this.exclusive(async () => {
+              if (this.closed || active.generation !== this.generation) return;
+              this.event('error', `Codex cancellation failed: ${safeError(error)}`);
+              await this.persistAndEmit();
+            });
+          });
+          return;
+        }
         void this.mutate(() => {
           const currentRun = latestRun(this.state, work.id);
           if (currentRun) { currentRun.threadId = threadId; currentRun.turnId = turnId; }
           this.event('status', `${agentName(this.state, work.agentId)} is working with Codex.`, work.id, work.agentId);
-        });
+        }, active);
       },
       onProgress: (text) => void this.mutate(() => {
         const current = this.state.work.find((item) => item.id === work.id);
         if (current?.status !== 'running') return;
         this.event('tool', compact(text, 180), work.id, work.agentId);
-      }),
+      }, active),
     });
     if (active.abort.signal.aborted) throw new AbortError();
     if (result.status !== 'completed') throw new Error(result.error || `Codex turn ${result.status}`);
@@ -516,7 +543,7 @@ class Runtime implements OfficeRuntime {
       artifact.filePath = path.join(workspace, 'calendar.json');
       artifact.content = JSON.stringify(event, null, 2);
     }
-    await this.completeJob(work.id, artifact, event);
+    await this.completeJob(work.id, artifact, active, event);
   }
 
   private async readLiveArtifact(work: WorkItem, workspace: string, message: string): Promise<Artifact> {
@@ -527,15 +554,16 @@ class Runtime implements OfficeRuntime {
       content = message;
     } else {
       try {
-        content = await readFile(filePath, 'utf8');
+        const resolved = await realpath(filePath);
+        if (!resolved.startsWith(`${await realpath(workspace)}${path.sep}`)) throw new Error('Artifact is outside its workspace');
+        content = await readFile(resolved, 'utf8');
       } catch {
-        content = message;
-        if (!content) throw new Error(`Codex completed without producing ${details.file}`);
-        await writeFile(filePath, content, 'utf8');
+        throw new Error(`Codex completed without producing ${details.file}`);
       }
+      if (!content.trim()) throw new Error(`Codex produced an empty ${details.file}`);
     }
     return {
-      id: `artifact-${work.scenario}-${nextNumber(this.state.artifacts.map((item) => item.id))}`,
+      id: `artifact-${work.scenario}-${randomUUID()}`,
       workId: work.id,
       title: details.title,
       kind: details.kind,
@@ -551,15 +579,18 @@ class Runtime implements OfficeRuntime {
     if (!activeStatus(work.status)) return;
     const active = this.active.get(id);
     active?.abort.abort();
-    if (active?.threadId && active.turnId) {
-      await this.codex.interrupt(active.threadId, active.turnId).catch(() => undefined);
-    }
     work.status = 'cancelled';
     work.completedAt = Date.now();
     const run = latestRun(this.state, id);
     if (run && activeStatus(run.status)) { run.status = 'cancelled'; run.completedAt = work.completedAt; }
     this.setAgent(work.agentId, 'idle', 'Available');
     this.event('status', `${work.title} was cancelled.`, work.id, work.agentId);
+    if (active?.threadId && active.turnId) {
+      await this.codex.interrupt(active.threadId, active.turnId).catch((error) => {
+        work.error = `Codex interruption failed: ${safeError(error)}`;
+        this.event('error', work.error, work.id, work.agentId);
+      });
+    }
   }
 
   private retryWork(id: string): void {
@@ -598,6 +629,7 @@ class Runtime implements OfficeRuntime {
       id,
       name,
       instructions,
+      lastRunAt: existing?.lastRunAt,
       nextRunAt: nextRoutineTime(input.schedule, input.intervalMinutes, input.dailyTime, Date.now()),
     };
     if (existing) this.state.routines.splice(this.state.routines.indexOf(existing), 1, routine);
@@ -786,27 +818,31 @@ function routineStages(work: WorkItem): string[] {
 }
 
 function demoArtifact(scenario: Scenario, goal: string, routine: boolean, calendar?: CalendarEvent): { title: string; kind: Artifact['kind']; extension: string; content: string } {
-  const instruction = routine ? `\n\nSaved routine instructions\n\n${goal}` : '';
+  if (routine && scenario !== 'dinner') {
+    const details = liveArtifactSpec(scenario);
+    return { title: 'Routine result (simulated)', kind: details.kind, extension: 'md', content: `SIMULATED DEMO ARTIFACT\n\n# Saved routine\n\n${goal}\n\nThe demo recorded these instructions. Run this routine in live mode to have Codex carry them out.` };
+  }
+  const instruction = '';
   const artifacts: Record<Scenario, { title: string; kind: Artifact['kind']; extension: string; content: string }> = {
     report: {
-      title: routine ? 'Routine report' : 'Launch leadership readout', kind: 'report', extension: 'md',
-      content: `SIMULATED DEMO ARTIFACT\n\n# Launch leadership readout\n\nAdoption reached 68% of the invited pilot group. Support volume fell from 31 to 18 weekly tickets after the onboarding revision.\n\n## Decisions\n\n- Keep the guided import in the default path.\n- Assign an owner for the seven unresolved enterprise migrations.\n\nThis report is fictional demo output.${instruction}`,
+      title: 'Launch leadership readout', kind: 'report', extension: 'md',
+      content: `SIMULATED DEMO ARTIFACT\n\n# Launch leadership readout\n\nAdoption reached 68% of the invited pilot group. Support volume fell from 31 to 18 weekly tickets after the onboarding revision.\n\n## Decisions\n\n- Keep the guided import in the default path.\n- Assign an owner for the seven unresolved enterprise migrations.\n\nThis report is fictional demo output.`,
     },
     bug: {
-      title: routine ? 'Routine patch note' : 'Checkout tax patch', kind: 'patch', extension: 'patch',
-      content: `SIMULATED DEMO PATCH\n\n--- a/checkout.js\n+++ b/checkout.js\n@@\n-  return discounted + tax + (coupon > 0 ? tax : 0);\n+  return discounted + tax;\n\nSimulated PR action: prepared a local patch for review. No remote PR was opened.${instruction}`,
+      title: 'Checkout tax patch', kind: 'patch', extension: 'patch',
+      content: `SIMULATED DEMO PATCH\n\n--- a/checkout.js\n+++ b/checkout.js\n@@\n-  return discounted + tax + (coupon > 0 ? tax : 0);\n+  return discounted + tax;\n\nSimulated PR action: prepared a local patch for review. No remote PR was opened.`,
     },
     meeting: {
-      title: routine ? 'Routine meeting brief' : 'Friday leadership meeting brief', kind: 'brief', extension: 'md',
-      content: `SIMULATED DEMO ARTIFACT\n\n# Friday leadership meeting brief\n\n## Launch\n\nPilot activation is 68%. Support tickets declined after the onboarding revision. Seven enterprise migrations remain open.\n\n## Checkout fix\n\nThe fictional patch removes the second tax addition on coupon orders. Focused QA covers full-price and discounted totals.\n\n## Decisions and risks\n\nKeep guided import as the default. Assign an owner and target date for the remaining migrations. Treat the checkout status as simulated until a live run verifies it.${instruction}`,
+      title: 'Friday leadership meeting brief', kind: 'brief', extension: 'md',
+      content: `SIMULATED DEMO ARTIFACT\n\n# Friday leadership meeting brief\n\n## Launch\n\nPilot activation is 68%. Support tickets declined after the onboarding revision. Seven enterprise migrations remain open.\n\n## Checkout fix\n\nThe fictional patch removes the second tax addition on coupon orders. Focused QA covers full-price and discounted totals.\n\n## Decisions and risks\n\nKeep guided import as the default. Assign an owner and target date for the remaining migrations. Treat the checkout status as simulated until a live run verifies it.`,
     },
     dinner: {
       title: routine ? 'Routine calendar event' : 'Client dinner calendar event', kind: 'calendar', extension: 'json',
       content: JSON.stringify(calendar || demoDinnerCalendar([], [], goal), null, 2),
     },
     qa: {
-      title: routine ? 'Routine QA record' : 'Checkout QA record', kind: 'qa', extension: 'md',
-      content: `SIMULATED DEMO ARTIFACT\n\n# Checkout QA\n\n- Full price: 100 + 8% tax = 108.00, passed.\n- $10 coupon: 90 + 8% tax = 97.20, passed after the simulated patch.\n- Negative and oversized coupon inputs remain outside this fixture's contract.\n\nNo production system was tested.${instruction}`,
+      title: 'Checkout QA record', kind: 'qa', extension: 'md',
+      content: `SIMULATED DEMO ARTIFACT\n\n# Checkout QA\n\n- Full price: 100 + 8% tax = 108.00, passed.\n- $10 coupon: 90 + 8% tax = 97.20, passed after the simulated patch.\n- Negative and oversized coupon inputs remain outside this fixture's contract.\n\nNo production system was tested.`,
     },
   };
   return artifacts[scenario];
@@ -821,7 +857,7 @@ function demoDinnerCalendar(sourceIds: string[], existing: CalendarEvent[], goal
   }
   const end = new Date(start.getTime() + 2 * 60 * 60_000);
   return {
-    id: `calendar-demo-${start.getTime()}`,
+    id: calendarActionId(sourceIds, existing),
     title: 'Client dinner (simulated)', start: start.toISOString(), end: end.toISOString(),
     attendees: ['avery@example.test', 'five guests'], location: 'Near Union Square, venue undecided',
     description: `SIMULATED DEMO CALENDAR EVENT. Quiet venue, vegetarian options, patio preferred. No external calendar or restaurant was changed.${goal ? ` Routine instructions: ${goal}` : ''}`,
@@ -850,7 +886,7 @@ async function writeLiveEvidence(scenario: Scenario, workspace: string, state: S
     report: '# Local launch evidence\n\nPilot invitations: 250\nActivated accounts: 170\nWeekly support tickets before onboarding revision: 31\nWeekly support tickets after: 18\nOpen enterprise migrations: 7\n',
     bug: '# Reported issue\n\nPercentage coupon checkouts apply tax twice. Fix the supplied fixture and keep full-price behavior intact.\n',
     meeting: `# Local meeting evidence\n\nLaunch: 170 of 250 invited pilot accounts activated. Weekly support tickets fell from 31 to 18. Seven enterprise migrations remain open.\nCheckout: the proposed patch removes a duplicate tax addition on coupon purchases. Focused checks cover full-price and $10 coupon cases.\nPrepare decisions, risks, and direct questions for Friday leadership.\n${meetingContext}`,
-    dinner: '# Local dinner and calendar evidence\n\nSix people, Thursday at 7:30 PM, near Union Square, quiet conversation, vegetarian options, patio preferred. Two-hour event. Busy that day from 6:00 PM to 7:00 PM America/New_York. Do not contact a restaurant or external calendar.\n',
+    dinner: `# Local dinner and calendar evidence\n\nSix people, Thursday at 7:30 PM, near Union Square, quiet conversation, vegetarian options, patio preferred. Two-hour event.\nCurrent date: ${new Date().toISOString()}. Requested local interval: ${demoDinnerCalendar([], []).start} through ${demoDinnerCalendar([], []).end}.\nExisting calendar events: ${JSON.stringify(state.calendar)}\nDo not contact a restaurant or external calendar.\n`,
     qa: '# QA request\n\nRun the supplied Node tests. Report the actual result and the totals covered. Do not alter the implementation.\n',
   };
   await writeFile(path.join(workspace, 'evidence.md'), evidence[scenario], 'utf8');
@@ -865,6 +901,7 @@ function livePrompt(work: WorkItem): string {
     dinner: 'Return only the requested structured local calendar event. Use Thursday at 7:30 PM for two hours and confirm it does not overlap the local busy interval. Do not change any external calendar.',
     qa: 'Run npm test without changing checkout.js. Write qa.md with the commands, actual result, and any failure. Do not claim a pass if a test fails.',
   };
+  if (work.routineId) return `${common}\n\nFollow the saved task instructions above. ${work.scenario === 'dinner' ? 'Return the requested structured local calendar event.' : `Write the result to ${liveArtifactSpec(work.scenario).file}.`} Treat evidence.md as supporting material only when relevant. Do not claim work you did not perform.`;
   return `${common}\n\n${directions[work.scenario]}`;
 }
 
@@ -877,6 +914,11 @@ function calendarSchema(): Record<string, unknown> {
       attendees: { type: 'array', items: { type: 'string' } }, location: { type: 'string' }, description: { type: 'string' },
     },
   };
+}
+
+function calendarActionId(sourceIds: string[], existing: CalendarEvent[]): string {
+  return existing.find((event) => event.sourceIds.some((id) => sourceIds.includes(id)))?.id
+    || `calendar-${[...sourceIds].sort().join('-') || randomUUID()}`;
 }
 
 function validateCalendarResult(text: string, sourceIds: string[], existing: CalendarEvent[]): CalendarEvent {
@@ -896,7 +938,7 @@ function validateCalendarResult(text: string, sourceIds: string[], existing: Cal
   const conflict = existing.some((event) => !event.sourceIds.some((id) => sourceIds.includes(id)) && start < Date.parse(event.end) && end > Date.parse(event.start));
   if (conflict) throw new Error('Dinner calendar result conflicts with an existing office event');
   return {
-    id: `calendar-live-${start}`,
+    id: calendarActionId(sourceIds, existing),
     title: item.title as string, start: new Date(start).toISOString(), end: new Date(end).toISOString(),
     attendees: item.attendees as string[], location: item.location as string,
     description: item.description as string, sourceIds, simulated: false,
@@ -904,6 +946,7 @@ function validateCalendarResult(text: string, sourceIds: string[], existing: Cal
 }
 
 function validateSchedule(schedule: Routine['schedule'], intervalMinutes: number, dailyTime: string): void {
+  if (schedule !== 'daily' && schedule !== 'interval') throw new Error('Unknown routine schedule');
   if (schedule === 'interval' && (!Number.isFinite(intervalMinutes) || intervalMinutes < 1)) throw new Error('Interval routines must run at least one minute apart');
   if (schedule === 'daily' && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(dailyTime)) throw new Error('Daily time must use HH:MM');
 }
