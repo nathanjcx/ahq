@@ -1,0 +1,866 @@
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, systemPreferences } from 'electron';
+import type { IpcMainInvokeEvent } from 'electron';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
+import { EmployeeSchema, FolderSchema, SessionSchema, StateSchema } from '../shared/schemas';
+import { activityExport } from '../shared/activity';
+import { allowedPath, containsSecret } from '../shared/workspace';
+import { atomicWrite, createSnapshot } from './workspace';
+import { checkGateway, gatewayRequest, readSession, validateEndpoint } from './gateway';
+import { SnapshotStore } from '../runtime/store';
+import { createRuntime, type OfficeRuntime } from '../runtime/engine';
+import { HostedEmployees, openAIRequest, type HostedConfig } from './hosted';
+import { applySession, applyDecision } from '../src/lib/workflow';
+import type { Command } from '../src/shared/types';
+import type { AppState, CloudSettings } from '../shared/types';
+let win: BrowserWindow | null = null;
+let connected = false;
+const root = () => app.getPath('userData');
+let dataDir = '';
+let database: SnapshotStore;
+let hosted: HostedEmployees;
+let localRuntime: OfficeRuntime | undefined;
+let pollTimer: ReturnType<typeof setInterval>;
+let snapshotTimer: ReturnType<typeof setInterval>;
+const vaultPath = () => path.join(root(), 'api-keys.json');
+const vaultSchema = z.object({
+  key: z.string().default(''),
+  model: z.string().default('gpt-6-astra'),
+  integrations: z
+    .array(z.object({ id: z.string(), name: z.string(), url: z.string(), key: z.string() }))
+    .default([]),
+});
+async function vault(): Promise<HostedConfig> {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) throw new Error('Secure key storage is unavailable.');
+    return vaultSchema.parse(JSON.parse(safeStorage.decryptString(await fs.readFile(vaultPath()))));
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT')
+      return { key: '', model: 'gpt-6-astra', integrations: [] };
+    throw e;
+  }
+}
+async function saveVault(value: HostedConfig) {
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('Secure key storage is unavailable.');
+  await atomicWrite(vaultPath(), safeStorage.encryptString(JSON.stringify(value)));
+}
+async function hostedConfig() {
+  const v = await vault();
+  if (!v.key) throw new Error('Add your Astra / OpenAI API key in Settings first.');
+  return v;
+}
+async function log(text: string) {
+  await database.log({
+    id: randomUUID(),
+    time: new Date().toISOString(),
+    text,
+    kind: 'system',
+    source: 'local',
+  });
+}
+async function setupDatabase() {
+  try {
+    const config = JSON.parse(await fs.readFile(path.join(root(), 'database-location.json'), 'utf8'));
+    dataDir = z.string().min(1).parse(config.path);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+    dataDir = path.join(root(), 'database');
+  }
+  database = await SnapshotStore.open(dataDir);
+  hosted = new HostedEmployees(database, hostedConfig);
+  if (!database.get<AppState>('workspace')) {
+    try {
+      const old = StateSchema.parse(JSON.parse(await fs.readFile(statePath(), 'utf8')));
+      await database.saveHQ(old, 'Imported AHQ Birth workspace');
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+    }
+  }
+  pollTimer = setInterval(
+    () =>
+      void queued(async () => {
+        let current = await loadState();
+        if (!current) return;
+        for (const employee of current.employees.filter((e) => e.sessionId && e.status !== 'ready')) {
+          if (!hosted.owns(employee.sessionId!)) continue;
+          try {
+            current = applySession(current, employee.id, await hosted.get(employee.sessionId!));
+          } catch {
+            /* Keep the last known state; the renderer displays connection failures. */
+          }
+        }
+        await database.saveHQ(current);
+      }).catch(() => undefined),
+    8000,
+  );
+  snapshotTimer = setInterval(
+    () =>
+      void queued(async () => {
+        const current = await loadState();
+        if (current) await database.saveHQ(current, '5-minute checkpoint', true);
+      }).catch(() => win?.webContents.send('workspace:error', 'Could not save checkpoint')),
+    300_000,
+  );
+}
+
+const statePath = () => path.join(root(), 'workspace.json');
+const settingsPath = () => path.join(root(), 'cloud.json');
+const snapshotsRoot = () => path.join(root(), 'snapshots');
+const operationsPath = () => path.join(root(), 'operations.json');
+const settingsSchema = z.object({ endpoint: z.string(), encryptedToken: z.string() });
+async function savedSettings() {
+  try {
+    return settingsSchema.parse(JSON.parse(await fs.readFile(settingsPath(), 'utf8')));
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw new Error('The saved gateway settings could not be read.');
+  }
+}
+async function credentials() {
+  const value = await savedSettings();
+  if (!value) throw new Error('Connect your Astra cloud gateway in settings first.');
+  if (!safeStorage.isEncryptionAvailable())
+    throw new Error('Secure credential storage is unavailable on this device.');
+  return {
+    endpoint: value.endpoint,
+    token: safeStorage.decryptString(Buffer.from(value.encryptedToken, 'base64')),
+  };
+}
+async function cloudSettings(): Promise<CloudSettings> {
+  const v = await vault();
+  if (v.key)
+    return {
+      provider: 'openai',
+      model: v.model,
+      endpoint: 'https://api.openai.com/v1',
+      configured: true,
+      connected: true,
+    };
+  const value = await savedSettings();
+  return {
+    provider: 'gateway',
+    endpoint: value?.endpoint ?? '',
+    configured: !!value,
+    connected: !!value && connected,
+  };
+}
+async function loadState(): Promise<AppState | null> {
+  const value = database.get<AppState>('workspace');
+  return value ? StateSchema.parse(value) : null;
+}
+
+function assertSender(event: IpcMainInvokeEvent) {
+  if (!win || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame)
+    throw new Error('Untrusted request.');
+}
+function handle(channel: string, fn: (input: unknown) => Promise<unknown>) {
+  ipcMain.handle(channel, async (event, input) => {
+    assertSender(event);
+    return fn(input);
+  });
+}
+// One serialized queue prevents concurrent workspace writes and duplicate session starts.
+let diskQueue = Promise.resolve();
+function queued<T>(action: () => Promise<T>): Promise<T> {
+  const task = diskQueue.then(action);
+  diskQueue = task.then(
+    () => undefined,
+    () => undefined,
+  );
+  return task;
+}
+async function knownSession(id: string) {
+  const state = await loadState();
+  if (!state?.employees.some((e) => e.sessionId === id))
+    throw new Error('That session is not part of this workspace.');
+}
+function registerHandlers() {
+  handle('office:frame', async (input) => {
+    await database.recordFrame(
+      z
+        .object({
+          time: z.number().int().positive(),
+          sceneTime: z.number().positive(),
+          listening: z.boolean(),
+          level: z.number().min(0).max(1),
+          motion: z.boolean(),
+        })
+        .parse(input),
+    );
+  });
+  handle('office:frame-at', async (input) => database.frameAt(z.number().positive().parse(input)));
+  handle('history:list', async () => database.history());
+  handle('history:state', async (input) => database.historyState(z.number().int().positive().parse(input)));
+  handle('history:checkpoint', async () =>
+    queued(async () => {
+      const state = await loadState();
+      if (state) await database.saveHQ(state, 'Manual checkpoint', true);
+      return database.history();
+    }),
+  );
+  handle('history:restore', async (input) =>
+    queued(async () => {
+      const id = z.number().int().positive().parse(input),
+        current = await loadState();
+      if (!current) throw new Error('Open your workspace first.');
+      if (current.employees.some((e) => e.sessionId && ['working', 'review', 'offline'].includes(e.status)))
+        throw new Error('Stop active cloud sessions before restoring a checkpoint.');
+      await database.saveHQ(current, 'Before rollback', true);
+      const previous = StateSchema.parse(database.historyState(id));
+      const restored = {
+        ...previous,
+        employees: previous.employees.map((e) => ({
+          ...e,
+          sessionId: undefined,
+          status: 'ready' as const,
+          activity: 'Restored checkpoint · ready for your direction',
+        })),
+        approvals: previous.approvals.map((a) => ({ ...a, sessionId: undefined })),
+        events: [
+          ...current.events,
+          {
+            id: randomUUID(),
+            time: new Date().toISOString(),
+            text: `Restored checkpoint ${id}. Cloud actions and exported files are unchanged.`,
+            kind: 'system' as const,
+            source: 'local' as const,
+          },
+        ],
+      };
+      await database.saveHQ(restored, 'Restored checkpoint', true);
+      return restored;
+    }),
+  );
+  handle('activity:list', async () => database.activity());
+  handle('activity:export', async (input) => {
+    const format = z.enum(['json', 'csv']).parse(input);
+    const events = database.activity();
+    const content = activityExport(events, format);
+    const result = await dialog.showSaveDialog(win!, {
+      title: 'Export all office activity',
+      defaultPath: `Astra-HQ-activity.${format}`,
+      filters: [{ name: format.toUpperCase(), extensions: [format] }],
+    });
+    if (result.canceled || !result.filePath) return false;
+    await fs.writeFile(result.filePath, content, { mode: 0o600 });
+    await log('Exported office activity.');
+    return true;
+  });
+  handle('storage:needs-setup', async () => {
+    try {
+      await fs.access(path.join(root(), 'database-location.json'));
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  handle('storage:use-default', async () => {
+    await atomicWrite(path.join(root(), 'database-location.json'), JSON.stringify({ path: dataDir }));
+    await log('Chose the application folder for local storage.');
+  });
+  handle('storage:location', async () => database.filePath);
+  handle('storage:choose', async () => {
+    const result = await dialog.showOpenDialog(win!, {
+      title: 'Allow Astra HQ to store its database in a folder',
+      buttonLabel: 'Use this folder',
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    return queued(async () => {
+      const destination = path.join(await fs.realpath(result.filePaths[0]), 'Astra HQ');
+      if (destination === dataDir) return database.filePath;
+      await fs.mkdir(destination, { recursive: true, mode: 0o700 });
+      const file = path.join(destination, 'office.sqlite');
+      await fs.copyFile(database.filePath, file, 1); // Never overwrite another workspace.
+      const next = await SnapshotStore.open(destination);
+      await atomicWrite(path.join(root(), 'database-location.json'), JSON.stringify({ path: destination }));
+      database.close();
+      database = next;
+      dataDir = destination;
+      hosted = new HostedEmployees(database, hostedConfig);
+      await log('Selected a local database folder.');
+      return database.filePath;
+    });
+  });
+  handle('openai:configure', async (input) =>
+    queued(async () => {
+      const fields = z
+        .object({
+          key: z.string().min(1).max(8000),
+          model: z
+            .string()
+            .regex(/^[a-zA-Z0-9._-]+$/)
+            .max(100),
+        })
+        .parse(input);
+      const old = await vault();
+      await openAIRequest({ ...old, ...fields }, `/models/${encodeURIComponent(fields.model)}`);
+      await saveVault({ ...old, ...fields });
+      await log('Updated the Astra / OpenAI connection.');
+      return cloudSettings();
+    }),
+  );
+  const integrationList = async () =>
+    (await vault()).integrations.map(({ key, ...i }) => ({ ...i, configured: !!key }));
+  handle('integrations:list', integrationList);
+  handle('integrations:save', async (input) =>
+    queued(async () => {
+      const fields = z
+        .object({
+          id: z.string().uuid().optional(),
+          name: z.string().trim().min(1).max(60),
+          url: z.string().url(),
+          key: z.string().max(8000),
+        })
+        .parse(input);
+      const url = new URL(fields.url);
+      if (url.protocol !== 'https:' || url.username || url.password)
+        throw new Error('Use a secure HTTPS integration endpoint without embedded credentials.');
+      const old = await vault();
+      if (old.integrations.length >= 20 && !fields.id)
+        throw new Error('Up to 20 integrations are supported.');
+      const previous = old.integrations.find((i) => i.id === fields.id);
+      if (
+        old.integrations.some((i) => i.id !== fields.id && i.name.toLowerCase() === fields.name.toLowerCase())
+      )
+        throw new Error('An integration with that name already exists.');
+      const value = { ...fields, id: fields.id ?? randomUUID(), key: fields.key || previous?.key || '' };
+      await saveVault({
+        ...old,
+        integrations: [...old.integrations.filter((i) => i.id !== value.id), value],
+      });
+      await log(`Configured integration: ${fields.name}.`);
+      return integrationList();
+    }),
+  );
+  handle('integrations:remove', async (input) =>
+    queued(async () => {
+      const id = z.string().uuid().parse(input);
+      const old = await vault();
+      await saveVault({ ...old, integrations: old.integrations.filter((i) => i.id !== id) });
+      await log('Removed an integration.');
+      return integrationList();
+    }),
+  );
+  handle('microphone:permission', async () =>
+    process.platform === 'darwin' ? systemPreferences.askForMediaAccess('microphone') : true,
+  );
+  handle('voice:transcribe', async (input) => {
+    const fields = z
+      .object({
+        audio: z.instanceof(ArrayBuffer),
+        mime: z.enum(['audio/webm', 'audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4']),
+      })
+      .parse(input);
+    if (fields.audio.byteLength < 100 || fields.audio.byteLength > 24_000_000)
+      throw new Error('Record between a short sentence and two minutes of audio.');
+    const body = new FormData();
+    body.set('model', 'gpt-4o-mini-transcribe');
+    body.set(
+      'file',
+      new Blob([fields.audio], { type: fields.mime }),
+      fields.mime.includes('mp4') ? 'announcement.mp4' : 'announcement.webm',
+    );
+    const result = z
+      .object({ text: z.string().max(12000) })
+      .parse(await openAIRequest(await hostedConfig(), '/audio/transcriptions', body));
+    return result.text.trim();
+  });
+  handle('cloud:cancel', async (input) =>
+    queued(async () => {
+      const id = z.string().max(200).parse(input);
+      await knownSession(id);
+      if (!hosted.owns(id)) throw new Error('Stop this session through your Astra gateway before restoring.');
+      const result = await hosted.cancel(id);
+      const state = await loadState();
+      if (state) {
+        const e = state.employees.find((e) => e.sessionId === id)!;
+        await database.saveHQ(applySession(state, e.id, result));
+      }
+      return result;
+    }),
+  );
+  handle('cloud:broadcast', async (input) =>
+    queued(async () => {
+      const text = z.string().trim().min(1).max(12000).parse(input);
+      let state = await loadState();
+      if (!state) throw new Error('Open your workspace first.');
+      await hostedConfig();
+      const message = {
+        id: randomUUID(),
+        authorId: 'you',
+        channel: 'announce',
+        text,
+        time: new Date().toISOString(),
+        acknowledgmentIds: [] as string[],
+      };
+      state = { ...state, messages: [...state.messages, message] };
+      await database.saveHQ(state, 'Announcement');
+      const results = [];
+      for (const employee of state.employees) {
+        try {
+          const result =
+            employee.sessionId && hosted.owns(employee.sessionId)
+              ? await hosted.continue(
+                  employee.sessionId,
+                  `Announcement from your manager: ${text}. Explain what this changes for your work, then act accordingly.`,
+                  true,
+                )
+              : await hosted.start(
+                  employee,
+                  `Announcement from your manager: ${text}. Explain what this means for your role and take the next useful step.`,
+                  state,
+                );
+          state = applySession(state, employee.id, result);
+          state.messages = state.messages.map((m) =>
+            m.id === message.id
+              ? { ...m, acknowledgmentIds: [...(m.acknowledgmentIds ?? []), employee.id] }
+              : m,
+          );
+          await database.saveHQ(state, 'Announcement delivered');
+          results.push({ employeeId: employee.id, session: result });
+        } catch (e) {
+          results.push({
+            employeeId: employee.id,
+            error: e instanceof Error ? e.message : 'Delivery failed',
+          });
+          await log(`Announcement could not reach ${employee.name}.`);
+        }
+      }
+      return results;
+    }),
+  );
+  handle('local:command', async (input) => {
+    // Keep the original main runtime and its validated command dispatcher available.
+    if (!localRuntime)
+      localRuntime = await createRuntime({
+        dataDir: path.join(dataDir, 'local-runtime'),
+        onSnapshot(snapshot) {
+          for (const event of snapshot.activity)
+            void database
+              .log({
+                id: `local-runtime:${event.id}`,
+                time: new Date(event.timestamp).toISOString(),
+                employeeId: event.agentId,
+                text: event.text,
+                kind: event.kind === 'error' ? 'system' : 'work',
+                source: snapshot.settings.mode === 'demo' ? 'example' : 'local',
+              })
+              .catch(() => undefined);
+        },
+      });
+    return localRuntime.command(input as Command);
+  });
+
+  handle('workspace:load', async () => loadState());
+  handle('workspace:save', async (input) => {
+    const state = StateSchema.parse(input);
+    if (JSON.stringify(state).length > 16_000_000) throw new Error('Workspace size limit reached.');
+    await queued(async () => {
+      const previous = await loadState();
+      let merged: AppState = {
+        ...state,
+        employees: state.employees.map((e) => {
+          const saved = previous?.employees.find((p) => p.id === e.id);
+          return !e.sessionId && saved?.sessionId
+            ? { ...e, sessionId: saved.sessionId, status: saved.status, activity: saved.activity }
+            : e;
+        }),
+      };
+      // Cloud results are owned by the backend. A delayed renderer save cannot erase them.
+      if (previous) {
+        const combine = <T extends { id: string }>(older: T[], newer: T[]) => [
+          ...new Map([...older, ...newer].map((item) => [item.id, item])).values(),
+        ];
+        merged.messages = combine(previous.messages, merged.messages);
+        merged.events = combine(previous.events, merged.events);
+        merged.approvals = [
+          ...new Map(
+            [...previous.approvals, ...merged.approvals].map((a) => [
+              a.sessionId ? `${a.sessionId}:${a.version}` : a.id,
+              a,
+            ]),
+          ).values(),
+        ];
+      }
+      for (const employee of merged.employees)
+        if (employee.sessionId && hosted.owns(employee.sessionId))
+          merged = applySession(merged, employee.id, hosted.peek(employee.sessionId));
+      await database.saveHQ(merged);
+    });
+  });
+  handle('folder:select', async () => {
+    const result = await dialog.showOpenDialog(win!, {
+      title: 'Choose a folder for your team',
+      buttonLabel: 'Create local working copy',
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    return createSnapshot(result.filePaths[0], snapshotsRoot());
+  });
+  handle('document:export', async (input) => {
+    const { title, content } = z
+      .object({ title: z.string().max(255), content: z.string().max(300000) })
+      .parse(input);
+    const result = await dialog.showSaveDialog(win!, {
+      title: 'Export reviewed document',
+      defaultPath: `${title.replace(/[^a-z0-9 -]/gi, '').slice(0, 90) || 'workspace-document'}.md`,
+      filters: [{ name: 'Markdown', extensions: ['md'] }],
+    });
+    if (result.canceled || !result.filePath) return false;
+    await fs.writeFile(result.filePath, content, { mode: 0o600 });
+    return true;
+  });
+  handle('cloud:settings', async () => {
+    if ((await vault()).key) return cloudSettings();
+    const value = await savedSettings();
+    if (value) {
+      try {
+        const config = await credentials();
+        await checkGateway(config.endpoint, config.token);
+        connected = true;
+      } catch {
+        connected = false;
+      }
+    }
+    return cloudSettings();
+  });
+  handle('cloud:configure', async (input) => {
+    const fields = z
+      .object({ endpoint: z.string().min(1).max(2000), token: z.string().max(8000) })
+      .parse(input);
+    if ((await vault()).key) throw new Error('Disconnect OpenAI before switching to a separate gateway.');
+    const endpoint = validateEndpoint(fields.endpoint);
+    if (!safeStorage.isEncryptionAvailable())
+      throw new Error('Secure credential storage is unavailable. Your token has not been stored.');
+    const previous = await savedSettings();
+    if (!fields.token && previous?.endpoint !== endpoint)
+      throw new Error('Enter an access token for this gateway.');
+    const token = fields.token || (await credentials()).token;
+    await checkGateway(endpoint, token);
+    await atomicWrite(
+      settingsPath(),
+      JSON.stringify({ endpoint, encryptedToken: safeStorage.encryptString(token).toString('base64') }),
+    );
+    connected = true;
+    return cloudSettings();
+  });
+  handle('cloud:disconnect', async () => {
+    const current = await loadState();
+    if (current?.employees.some((e) => e.sessionId && ['working', 'review', 'offline'].includes(e.status)))
+      throw new Error('Stop employee sessions in Activity before disconnecting.');
+    const v = await vault();
+    await saveVault({ ...v, key: '' });
+    await fs.rm(settingsPath(), { force: true });
+    connected = false;
+    return cloudSettings();
+  });
+  handle('cloud:start', async (input) => {
+    const fields = z
+      .object({
+        employee: EmployeeSchema,
+        assignment: z.string().min(1).max(12000),
+        goal: z.string().max(500),
+        folderIds: z.array(z.string().uuid()).max(10),
+        allowCloudUpload: z.boolean(),
+      })
+      .parse(input);
+    if (fields.folderIds.length && !fields.allowCloudUpload)
+      throw new Error('Explicitly authorize cloud sharing for the selected copies.');
+    return queued(async () => {
+      const useHosted = !!(await vault()).key;
+      const config = useHosted ? { endpoint: '', token: '' } : await credentials();
+      const state = await loadState();
+      const employee = state?.employees.find((e) => e.id === fields.employee.id);
+      if (!employee) throw new Error('Save the employee before starting a cloud session.');
+      if (employee.sessionId && !useHosted) {
+        const previousSession = await readSession(config.endpoint, config.token, employee.sessionId);
+        if (!['completed', 'failed'].includes(previousSession.status))
+          throw new Error('This employee already has an active session. Finish or review that work first.');
+      }
+      const files: { folder: string; path: string; content: string }[] = [];
+      let totalBytes = 0;
+      for (const id of fields.folderIds) {
+        if (!state?.folders.some((f) => f.id === id))
+          throw new Error('That folder is not part of this workspace.');
+        const manifest = FolderSchema.parse(
+          JSON.parse(await fs.readFile(path.join(snapshotsRoot(), id, 'manifest.json'), 'utf8')),
+        );
+        for (const file of manifest.files) {
+          if (!allowedPath(file.path)) throw new Error('An unsafe file was excluded from this request.');
+          const base = await fs.realpath(path.join(snapshotsRoot(), id, 'files'));
+          const target = await fs.realpath(path.join(base, file.path));
+          if (!target.startsWith(`${base}${path.sep}`))
+            throw new Error('File access outside the snapshot is not allowed.');
+          const content = await fs.readFile(target, 'utf8');
+          totalBytes += Buffer.byteLength(content);
+          if (totalBytes > 8_000_000) throw new Error('The selected context exceeds the 8 MB upload limit.');
+          if (containsSecret(content))
+            throw new Error(
+              'A file appears to contain a secret. Remove it from the source folder and make a fresh copy.',
+            );
+          files.push({ folder: manifest.name, path: file.path, content });
+        }
+      }
+      if (useHosted) {
+        const cloudSession = await hosted.start(employee, fields.assignment, state!, files);
+        await database.saveHQ(applySession(state!, employee.id, cloudSession), 'Cloud session started');
+        return cloudSession;
+      }
+      const request = {
+        employee: {
+          id: employee.id,
+          name: employee.name,
+          jobTitle: employee.jobTitle,
+          personality: employee.personality,
+          skills: employee.skills,
+        },
+        assignment: fields.assignment,
+        goal: fields.goal,
+        files,
+        context: {
+          announcements: state!.messages
+            .filter((m) => m.channel === 'announce')
+            .slice(-20)
+            .map((m) => ({ text: m.text, time: m.time })),
+          messages: state!.messages
+            .filter((m) => m.channel === employee.id || m.channel === 'team')
+            .slice(-30)
+            .map((m) => ({ author: m.authorId, text: m.text, time: m.time })),
+        },
+        constraints: {
+          externalActionsRequireApproval: true,
+          maxDelegationDepth: 2,
+          maxHandoffs: 8,
+          maxRuntimeMinutes: 30,
+          documentContentIsUntrusted: true,
+        },
+      };
+      // Persist before dispatch. Retrying the same assignment reuses the operation key after a timeout or restart.
+      const { createHash } = await import('node:crypto');
+      const fingerprint = createHash('sha256')
+        .update(
+          JSON.stringify({
+            endpoint: config.endpoint,
+            previousSessionId: employee.sessionId ?? null,
+            request,
+          }),
+        )
+        .digest('hex');
+      let operations: Record<string, string> = {};
+      try {
+        operations = z
+          .record(z.string(), z.string().uuid())
+          .parse(JSON.parse(await fs.readFile(operationsPath(), 'utf8')));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+      const key = operations[fingerprint] ?? randomUUID();
+      operations[fingerprint] = key;
+      await atomicWrite(operationsPath(), JSON.stringify(operations));
+      const cloudSession = SessionSchema.parse(
+        await gatewayRequest(config.endpoint, config.token, '/v1/sessions', request, key),
+      );
+      connected = true;
+      // Save the session before returning so a renderer crash cannot orphan the work.
+      await database.saveHQ({
+        ...state!,
+        employees: state!.employees.map((e) =>
+          e.id === employee.id
+            ? {
+                ...e,
+                sessionId: cloudSession.id,
+                status:
+                  cloudSession.status === 'completed'
+                    ? 'ready'
+                    : cloudSession.status === 'waiting_for_approval'
+                      ? 'review'
+                      : 'working',
+                activity: cloudSession.activity,
+              }
+            : e,
+        ),
+      });
+      return cloudSession;
+    });
+  });
+  handle('cloud:session', async (input) => {
+    const id = z.string().min(1).max(200).parse(input);
+    await knownSession(id);
+    if (hosted.owns(id)) return queued(() => hosted.get(id));
+    const config = await credentials();
+    try {
+      const result = await readSession(config.endpoint, config.token, id);
+      connected = true;
+      return result;
+    } catch (e) {
+      connected = false;
+      throw e;
+    }
+  });
+  handle('cloud:decide', async (input) => {
+    const decision = z
+      .object({
+        sessionId: z.string().min(1).max(200),
+        version: z.number().int().min(1),
+        decision: z.enum(['approve', 'request_changes']),
+        feedback: z.string().max(4000),
+      })
+      .parse(input);
+    await knownSession(decision.sessionId);
+    if (hosted.owns(decision.sessionId))
+      return queued(async () => {
+        const result = await hosted.decide(
+          decision.sessionId,
+          decision.version,
+          decision.decision,
+          decision.feedback,
+        );
+        const current = await loadState();
+        if (current) {
+          const e = current.employees.find((e) => e.sessionId === decision.sessionId)!;
+          const approval = current.approvals.find(
+            (a) =>
+              a.sessionId === decision.sessionId && a.version === decision.version && a.status === 'pending',
+          );
+          const reviewed = approval
+            ? applyDecision(
+                current,
+                approval.id,
+                decision.version,
+                decision.decision === 'approve' ? 'approved' : 'changes-requested',
+                decision.feedback,
+              )
+            : current;
+          await database.saveHQ(applySession(reviewed, e.id, result));
+        }
+        return result;
+      });
+    const config = await credentials();
+    const latest = await readSession(config.endpoint, config.token, decision.sessionId);
+    const stored = (await loadState())?.approvals.find(
+      (a) => a.sessionId === decision.sessionId && a.version === decision.version && a.status === 'pending',
+    );
+    if (
+      !stored ||
+      stored.content !== latest.output?.content ||
+      stored.recipient !== latest.output?.recipient ||
+      JSON.stringify(stored.sources) !== JSON.stringify(latest.output?.sources)
+    )
+      throw new Error('The reviewed payload has changed. Open the latest draft before deciding.');
+    if (latest.status !== 'waiting_for_approval' || latest.output?.version !== decision.version)
+      throw new Error(
+        'This output changed or was already reviewed. Wait for the latest version before deciding.',
+      );
+    return SessionSchema.parse(
+      await gatewayRequest(
+        config.endpoint,
+        config.token,
+        `/v1/sessions/${encodeURIComponent(decision.sessionId)}/decisions`,
+        decision,
+        `${decision.sessionId}:${decision.version}:${decision.decision}`,
+      ),
+    );
+  });
+}
+function createWindow() {
+  win = new BrowserWindow({
+    width: 1510,
+    height: 1020,
+    minWidth: 780,
+    minHeight: 620,
+    title: 'Astra HQ',
+    backgroundColor: '#f8f9f5',
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 19, y: 22 },
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+    },
+  });
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.webContents.on('will-navigate', (event) => event.preventDefault());
+  const devURL = process.env.AHQ_DEV_URL;
+  if (devURL && !app.isPackaged) {
+    const url = new URL(devURL);
+    if (url.origin !== 'http://127.0.0.1:5173') throw new Error('Unexpected development origin.');
+    void win.loadURL(devURL);
+  } else void win.loadFile(path.join(__dirname, '../dist/index.html'));
+  win.on('closed', () => {
+    win = null;
+  });
+}
+app.setName('Astra HQ');
+if (!app.requestSingleInstanceLock()) app.quit();
+else {
+  app.on('second-instance', () => {
+    win?.show();
+    win?.focus();
+  });
+  void app
+    .whenReady()
+    .then(async () => {
+      await setupDatabase();
+      session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) =>
+        callback(
+          contents === win?.webContents &&
+            permission === 'media' &&
+            'mediaTypes' in details &&
+            details.mediaTypes?.length === 1 &&
+            details.mediaTypes[0] === 'audio',
+        ),
+      );
+      session.defaultSession.setPermissionCheckHandler(
+        (contents, permission, _origin, details) =>
+          contents === win?.webContents &&
+          permission === 'media' &&
+          details.mediaType === 'audio' &&
+          details.isMainFrame,
+      );
+      session.defaultSession.webRequest.onHeadersReceived((details, callback) =>
+        callback({
+          responseHeaders: {
+            ...details.responseHeaders,
+            'Content-Security-Policy': [
+              "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' ws://127.0.0.1:5173; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-src 'none'",
+            ],
+          },
+        }),
+      );
+      registerHandlers();
+      createWindow();
+      app.on('activate', () => {
+        if (!win) createWindow();
+      });
+    })
+    .catch((error) => {
+      dialog.showErrorBox(
+        'Astra HQ could not open its database',
+        String(error instanceof Error ? error.message : error),
+      );
+      app.quit();
+    });
+  let closing = false;
+  app.on('before-quit', (event) => {
+    if (closing) return;
+    event.preventDefault();
+    closing = true;
+    clearInterval(snapshotTimer);
+    clearInterval(pollTimer);
+    void (async () => {
+      await diskQueue;
+      await localRuntime?.close();
+      await database?.drain();
+      database?.close();
+      app.quit();
+    })().catch(() => app.quit());
+  });
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit();
+  });
+}

@@ -105,7 +105,7 @@ test('Codex transport keeps completion notifications that beat turn/start respon
   const executable = path.join(directory, 'mock-codex');
   await writeFile(executable, `#!/usr/bin/env node
 if (process.argv.includes('mcp')) { process.stdout.write('[{"name":"external-server"}]'); process.exit(0); }
-if (!process.argv.includes('mcp_servers={"external-server"={enabled=false}}')) process.exit(9);
+if (!process.argv.includes('mcp_servers={"external-server"={enabled=false,command="false"}}')) process.exit(9);
 const readline = require('node:readline');
 const send = (message) => process.stdout.write(JSON.stringify(message) + '\\n');
 readline.createInterface({ input: process.stdin }).on('line', (line) => {

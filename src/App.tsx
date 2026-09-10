@@ -1,2319 +1,1878 @@
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import {
-  AlertCircle,
-  Archive,
+  ArrowDownLeft,
+  History,
+  ArrowRight,
   Bell,
-  Building2,
-  CalendarDays,
+  BookOpen,
   Check,
-  CheckCircle2,
+  CheckCheck,
   ChevronDown,
   ChevronRight,
-  CircleDot,
-  Clock3,
-  Code2,
-  ExternalLink,
-  FileText,
-  Gauge,
-  History as HistoryIcon,
+  CircleHelp,
+  Coffee,
+  Ellipsis,
+  Flag,
+  Focus,
+  FolderOpen,
+  Home,
   Inbox,
-  LogIn,
-  LogOut,
-  Mail,
+  Leaf,
+  LoaderCircle,
+  Megaphone,
   MessageCircle,
-  MoreHorizontal,
-  Pause,
-  Play,
+  Minus,
   Plus,
-  RefreshCw,
-  Repeat2,
-  RotateCcw,
-  Save,
   Search,
-  Send,
-  Settings as SettingsIcon,
-  ShieldCheck,
-  Slack,
+  Settings,
   Sparkles,
-  StepForward,
-  Trash2,
-  UserCircle,
+  Target,
+  Users,
   Volume2,
-  VolumeX,
   X,
-  Zap,
-} from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type FormEvent,
-  type ReactNode,
-} from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { bridge } from "./client";
-import OfficeCanvas from "./components/OfficeCanvas";
+} from 'lucide-react';
 import type {
-  Agent,
-  Artifact,
-  CalendarEvent,
-  Command,
-  Routine,
-  Scenario,
-  Snapshot,
-  Source,
-  SourceItem,
-  WorkItem,
-} from "./shared/types";
-
-type Tab = "office" | "inbox" | "calendar" | "routines" | "history" | "settings";
-type Toast = { id: number; message: string; tone: "error" | "success" };
-
-const NAV: { id: Tab; label: string; icon: typeof Building2 }[] = [
-  { id: "office", label: "Office", icon: Building2 },
-  { id: "inbox", label: "Inbox", icon: Inbox },
-  { id: "calendar", label: "Calendar", icon: CalendarDays },
-  { id: "routines", label: "Routines", icon: Repeat2 },
-  { id: "history", label: "History", icon: HistoryIcon },
-  { id: "settings", label: "Settings", icon: SettingsIcon },
-];
-
-const SOURCES: {
-  id: Source;
-  label: string;
-  short: string;
-  icon: typeof Mail;
-}[] = [
-  { id: "gmail", label: "Gmail", short: "G", icon: Mail },
-  { id: "calendar", label: "Calendar", short: "C", icon: CalendarDays },
-  { id: "imessage", label: "iMessage", short: "i", icon: MessageCircle },
-  { id: "slack", label: "Slack", short: "S", icon: Slack },
-  { id: "discord", label: "Discord", short: "D", icon: MessageCircle },
-  { id: "linear", label: "Linear", short: "L", icon: CircleDot },
-  { id: "asana", label: "Asana", short: "A", icon: CheckCircle2 },
-];
-
-const SCENARIOS: { id: Scenario; label: string }[] = [
-  { id: "report", label: "Research brief" },
-  { id: "bug", label: "Fix a bug" },
-  { id: "meeting", label: "Prepare for a meeting" },
-  { id: "dinner", label: "Schedule dinner" },
-  { id: "qa", label: "Run QA" },
-];
-
-const SOURCE_META = Object.fromEntries(
-  SOURCES.map((source) => [source.id, source]),
-) as Record<Source, (typeof SOURCES)[number]>;
-
-function formatTime(timestamp?: number) {
-  if (!timestamp) return "Not yet";
-  const date = new Date(timestamp);
-  const now = Date.now();
-  const delta = now - timestamp;
-  if (delta >= 0 && delta < 60_000) return "just now";
-  if (delta >= 0 && delta < 3_600_000)
-    return `${Math.floor(delta / 60_000)}m ago`;
-  if (date.toDateString() === new Date().toDateString())
-    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  return date.toLocaleDateString([], { month: "short", day: "numeric" });
-}
-
-function sentence(value: string) {
-  return value
-    .replace(/(^|[-_ ])\w/g, (part) => part.toUpperCase())
-    .replace(/[-_]/g, " ");
-}
-
-function PixelAvatar({
-  agent,
-  size = "md",
-}: {
-  agent?: Agent;
-  size?: "sm" | "md" | "lg";
-}) {
-  const color = agent?.color || "#d6c9aa";
-  const hair = agent?.hair || "#43362f";
-  const skin = agent?.skin || "#e4ad80";
-  return (
-    <span
-      className={`pixel-avatar pixel-avatar--${size}`}
-      aria-hidden="true"
-      style={
-        { "--shirt": color, "--hair": hair, "--skin": skin } as CSSProperties
-      }
-    >
-      <span className="pixel-avatar__hair" />
-      <span className="pixel-avatar__face" />
-      <span className="pixel-avatar__body" />
-      {agent?.accessory === "glasses" && (
-        <span className="pixel-avatar__glasses" />
-      )}
-      {agent?.accessory === "headphones" && (
-        <span className="pixel-avatar__phones" />
-      )}
-      {agent?.accessory === "cap" && <span className="pixel-avatar__cap" />}
-    </span>
+  AppState,
+  Approval,
+  CloudSettings,
+  Commitment,
+  Employee,
+  Page,
+  WorkspaceFolder,
+} from '../shared/types';
+import {
+  clockTime,
+  dueLabel,
+  employeeById,
+  employeeColors,
+  folderBrief,
+  initialState,
+  isState,
+  profileSuggestion,
+  readLocalState,
+  STORAGE_KEY,
+  timeNow,
+  uid,
+} from './lib/store';
+import { allowedPath, containsSecret, MAX_FILES, MAX_FILE_SIZE, MAX_FOLDER_SIZE } from '../shared/workspace';
+import Avatar from './components/Avatar';
+import { applyDecision, applySession } from './lib/workflow';
+import Modal from './components/Modal';
+import SceneBoundary from './components/SceneBoundary';
+import Markdown from './components/Markdown';
+import {
+  useOfficeHistory,
+  OfficeTimeline,
+  AppearanceEditor,
+  VoiceAnnounce,
+  ConnectionSettings,
+  ActivityPage,
+} from './components/HQFeatures';
+import {
+  AnnouncePage,
+  CommitmentsPage,
+  ConversationsPage,
+  EmployeesPage,
+  NeedsYouPage,
+  SettingsPage,
+} from './components/Pages';
+const OfficeScene = lazy(() => import('./components/OfficeScene'));
+const nav = [
+  { id: 'office', label: 'Office', icon: Home },
+  { id: 'employees', label: 'Employees', icon: Users },
+  { id: 'announce', label: 'Announce', icon: Megaphone },
+  { id: 'commitments', label: 'Commitments', icon: Flag },
+  { id: 'conversations', label: 'Conversations', icon: MessageCircle },
+  { id: 'activity', label: 'Activity', icon: History },
+  { id: 'needs-you', label: 'Needs you', icon: Inbox },
+] as const;
+const pageNames: Record<Page, string> = {
+  office: 'Office',
+  employees: 'Employees',
+  announce: 'Announce',
+  commitments: 'Commitments',
+  conversations: 'Conversations',
+  'needs-you': 'Needs you',
+  activity: 'Activity',
+  settings: 'Workspace settings',
+};
+export type UpdateState = (update: (s: AppState) => AppState) => void;
+export default function App() {
+  const [state, setState] = useState<AppState>(readLocalState);
+  const [ready, setReady] = useState(!window.ahq);
+  const [page, setPage] = useState<Page>('office');
+  const [conversationTarget, setConversationTarget] = useState('team');
+  const [cloud, setCloud] = useState<CloudSettings>({ endpoint: '', configured: false, connected: false });
+  const [toast, setToast] = useState('');
+  const [modal, setModal] = useState<
+    'employee' | 'commitment' | 'goal' | 'search' | 'help' | 'folder' | 'storage' | null
+  >(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [selectedApproval, setSelectedApproval] = useState<string | null>(null);
+  const [selectedCommitment, setSelectedCommitment] = useState<string | null>(null);
+  const [playing, setPlaying] = useState(true);
+  const [systemReducedMotion, setSystemReducedMotion] = useState(
+    () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
   );
-}
-
-function StatusDot({ status }: { status: string }) {
-  return (
-    <span className={`status-dot status-dot--${status}`} aria-hidden="true" />
-  );
-}
-
-function EmptyState({
-  icon,
-  title,
-  body,
-}: {
-  icon: ReactNode;
-  title: string;
-  body: string;
-}) {
-  return (
-    <div className="empty-state">
-      <span className="empty-state__icon">{icon}</span>
-      <h3>{title}</h3>
-      <p>{body}</p>
-    </div>
-  );
-}
-
-function Modal({
-  title,
-  onClose,
-  children,
-  wide = false,
-  closeOnBackdrop = true,
-}: {
-  title: string;
-  onClose: () => void;
-  children: ReactNode;
-  wide?: boolean;
-  closeOnBackdrop?: boolean;
-}) {
-  const panel = useRef<HTMLDivElement>(null);
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
   useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    const node = panel.current;
-    if (node && !node.contains(document.activeElement)) {
-      (node.querySelector<HTMLElement>('button, input, select, textarea, [href]') || node).focus();
-    }
-    const keydown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeRef.current();
-      if (event.key !== "Tab" || !node) return;
-      const focusable = [
-        ...node.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-        ),
-      ].filter((item) => !item.hasAttribute("disabled"));
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && (document.activeElement === first || document.activeElement === node || !node.contains(document.activeElement))) {
-        event.preventDefault();
-        last.focus();
-      }
-      if (!event.shiftKey && (document.activeElement === last || document.activeElement === node || !node.contains(document.activeElement))) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener("keydown", keydown);
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const change = () => setSystemReducedMotion(media.matches);
+    media.addEventListener('change', change);
+    return () => media.removeEventListener('change', change);
+  }, []);
+  const [angle, setAngle] = useState(0);
+  const [listening, setListening] = useState(false);
+  const [microphoneLevel, setMicrophoneLevel] = useState(0);
+  const [zoom, setZoom] = useState(1);
+  const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState('');
+  const folderInput = useRef<HTMLInputElement>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const notify = useCallback((text: string) => setToast(text), []);
+  const update: UpdateState = useCallback((fn) => setState((previous) => fn(previous)), []);
+  const history = useOfficeHistory(state, update, notify);
+  const [pastFrame, setPastFrame] = useState<import('../shared/types').OfficeFrame | null>(null);
+  const lastFrame = useRef(0);
+  const frameTime = useRef(Date.now() / 1000);
+  if (playing && !listening && !state.reducedMotion && !systemReducedMotion)
+    frameTime.current = history.at === null ? history.now / 1000 : history.at / 1000;
+  useEffect(() => {
+    let active = true;
+    if (history.at !== null)
+      void window.ahq?.frameAt(history.at).then((frame) => {
+        if (active) setPastFrame(frame);
+      });
+    else setPastFrame(null);
     return () => {
-      document.removeEventListener("keydown", keydown);
-      previous?.focus();
+      active = false;
     };
-  }, []);
-  return (
-    <div
-      className="modal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => closeOnBackdrop && event.target === event.currentTarget && onClose()}
-    >
-      <div
-        ref={panel}
-        className={`modal ${wide ? "modal--wide" : ""}`}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        tabIndex={-1}
-      >
-        <div className="modal__top">
-          <h2>{title}</h2>
-          <button className="icon-button" onClick={onClose} aria-label="Close">
-            <X size={18} />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function App() {
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>("office");
-  const [busy, setBusy] = useState<string | null>("snapshot");
-  const [fatalError, setFatalError] = useState("");
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const [selectedWorkId, setSelectedWorkId] = useState<string>();
-  const [selectedAgentId, setSelectedAgentId] = useState<string>();
-  const [selectedArtifactId, setSelectedArtifactId] = useState<string>();
-  const [routineOpen, setRoutineOpen] = useState(false);
-  const [editingRoutine, setEditingRoutine] = useState<Routine>();
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [inboxTargetId, setInboxTargetId] = useState<string>();
-  const toastId = useRef(0);
-  const revision = useRef(-1);
-  const snapshotRef = useRef<Snapshot | null>(null);
-  const audioContext = useRef<AudioContext | null>(null);
-  const audioUnlocked = useRef(false);
-
-  const toast = useCallback((message: string, tone: Toast["tone"]) => {
-    const id = ++toastId.current;
-    setToasts((current) => [...current, { id, message, tone }]);
-    window.setTimeout(
-      () => setToasts((current) => current.filter((item) => item.id !== id)),
-      4200,
-    );
-  }, []);
-
-  const playChime = useCallback(() => {
-    const context = audioContext.current;
-    if (!context || !audioUnlocked.current || context.state !== "running")
-      return;
-    const now = context.currentTime;
-    [523.25, 659.25].forEach((frequency, index) => {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.frequency.value = frequency;
-      oscillator.type = "sine";
-      gain.gain.setValueAtTime(0.0001, now + index * 0.09);
-      gain.gain.exponentialRampToValueAtTime(0.055, now + index * 0.09 + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + index * 0.09 + 0.22);
-      oscillator.connect(gain).connect(context.destination);
-      oscillator.start(now + index * 0.09);
-      oscillator.stop(now + index * 0.09 + 0.24);
-    });
-  }, []);
-
-  const acceptSnapshot = useCallback(
-    (next: Snapshot) => {
-      if (next.revision < revision.current) return;
-      const previous = snapshotRef.current;
-      revision.current = next.revision;
-      snapshotRef.current = next;
-      setSnapshot(next);
-      if (
-        previous?.settings.sound &&
-        next.work.some(
-          (work) =>
-            work.status === "completed" &&
-            !previous.work.some(
-              (old) => old.id === work.id && old.status === "completed",
-            ),
-        )
-      )
-        playChime();
-    },
-    [playChime],
-  );
-
+  }, [history.at]);
   useEffect(() => {
-    let alive = true;
-    const unsubscribe = bridge.subscribe(
-      (next) => alive && acceptSnapshot(next),
-    );
-    bridge
-      .command({ type: "snapshot" })
-      .then((next) => {
-        if (alive) {
-          acceptSnapshot(next);
-          setFatalError("");
-        }
+    if (!window.ahq || history.at !== null || !ready) return;
+    const time = Date.now();
+    if (time - lastFrame.current < (listening ? 100 : 5000)) return;
+    lastFrame.current = time;
+    void window.ahq
+      .recordFrame({
+        time,
+        sceneTime: frameTime.current,
+        listening,
+        level: microphoneLevel,
+        motion: !state.reducedMotion && !systemReducedMotion && playing,
       })
-      .catch(
-        (error: unknown) =>
-          alive &&
-          setFatalError(
-            error instanceof Error
-              ? error.message
-              : "Little Office could not connect to its local runtime.",
-          ),
-      )
-      .finally(() => alive && setBusy(null));
-    return () => {
-      alive = false;
-      unsubscribe();
-    };
-  }, [acceptSnapshot]);
-
-  const run = useCallback(
-    async (command: Command, key: string = command.type, success?: string) => {
-      if (!audioContext.current) audioContext.current = new AudioContext();
-      if (audioContext.current.state === "suspended")
-        void audioContext.current.resume();
-      audioUnlocked.current = true;
-      setBusy(key);
-      try {
-        const next = await bridge.command(command);
-        acceptSnapshot(next);
-        if (success) toast(success, "success");
-        return next;
-      } catch (error) {
-        toast(
-          error instanceof Error
-            ? error.message
-            : "That action did not finish.",
-          "error",
-        );
-        return undefined;
-      } finally {
-        setBusy(null);
-      }
-    },
-    [acceptSnapshot, toast],
-  );
-
-  const openWork = useCallback((id: string) => {
-    setSelectedAgentId(undefined);
-    setSelectedArtifactId(undefined);
-    setSelectedWorkId(id);
-  }, []);
-
-  const openArtifact = useCallback(
-    (id: string) => {
-      const artifact = snapshot?.artifacts.find((item) => item.id === id);
-      setSelectedArtifactId(id);
-      setSelectedAgentId(undefined);
-      if (artifact) setSelectedWorkId(artifact.workId);
-    },
-    [snapshot],
-  );
-
-  const openSource = useCallback((id: string) => {
-    setSelectedWorkId(undefined);
-    setSelectedAgentId(undefined);
-    setSelectedArtifactId(undefined);
-    setInboxTargetId(id);
-    setActiveTab("inbox");
-  }, []);
-
-  if (!snapshot) {
-    return (
-      <main className="boot-screen">
-        <div className="boot-mark">
-          <Building2 size={30} />
-        </div>
-        <h1>Little Office</h1>
-        {fatalError ? (
-          <>
-            <p>{fatalError}</p>
-            <button
-              className="button button--primary"
-              onClick={() => window.location.reload()}
-            >
-              <RefreshCw size={15} /> Try again
-            </button>
-          </>
-        ) : (
-          <>
-            <span className="loader" />
-            <p>Opening the office...</p>
-          </>
-        )}
-      </main>
+      .catch(() => undefined);
+  }, [
+    listening,
+    microphoneLevel,
+    history.at,
+    history.now,
+    ready,
+    state.reducedMotion,
+    playing,
+    systemReducedMotion,
+  ]);
+  useEffect(() => {
+    lastFrame.current = 0;
+  }, [listening, state.reducedMotion]);
+  async function broadcast(text: string) {
+    if (!window.ahq) throw new Error('Open the desktop app to announce to your employees.');
+    await saveChain.current;
+    const results = await window.ahq.broadcast(text);
+    const saved = await window.ahq.loadState();
+    if (saved) setState(saved);
+    const failed = results.filter((r) => r.error);
+    notify(
+      failed.length
+        ? `Reached ${results.length - failed.length} employees. ${failed.map((f) => state.employees.find((e) => e.id === f.employeeId)?.name).join(', ')} could not receive the announcement.`
+        : 'Announcement delivered to every employee’s Astra session.',
     );
   }
-
-  const activeWorkers = snapshot.agents.filter(
-    (agent) => agent.activity !== "idle" && agent.activity !== "waiting",
-  ).length;
-  const pendingInbox = snapshot.sources.filter(
-    (item) => !item.disposition || item.disposition === "pending",
-  ).length;
-  const attention = snapshot.work.filter(
-    (work) => work.status === "failed" || work.status === "waiting",
-  ).length;
-  const selectedWork = snapshot.work.find((work) => work.id === selectedWorkId) ||
-    (selectedAgentId ? [...snapshot.work].reverse().find((work) => work.agentId === selectedAgentId) : undefined);
-  const selectedAgent = selectedWork
-    ? snapshot.agents.find((agent) => agent.id === selectedWork.agentId)
-    : snapshot.agents.find((agent) => agent.id === selectedAgentId);
-
-  return (
-    <div
-      className={`app ${snapshot.settings.reducedMotion ? "reduce-motion" : ""}`}
-    >
-      <header className="topbar">
-        <button
-          className="brand"
-          onClick={() => setActiveTab("office")}
-          aria-label="Go to office"
-        >
-          <span className="brand__mark">
-            <Building2 size={18} />
-          </span>
-          <span>Little Office</span>
-        </button>
-        <div className="topbar__status">
-          <span className={`mode-badge mode-badge--${snapshot.settings.mode}`}>
-            {snapshot.settings.mode}
-          </span>
-          <span className="workers">
-            <span className="live-dot" />
-            {activeWorkers} working
-          </span>
-        </div>
-        <div className="topbar__actions">
-          <button
-            className="button button--sunny top-new"
-            onClick={() => setRoutineOpen(true)}
-          >
-            <Plus size={16} /> New routine
-          </button>
-          <button
-            className="icon-button notification-button"
-            onClick={() => setActiveTab(attention ? "history" : "inbox")}
-            aria-label={
-              attention ? `${attention} items need attention` : "Open inbox"
-            }
-          >
-            <Bell size={18} />
-            {(attention || pendingInbox) > 0 && (
-              <span className="notification-count">
-                {attention || pendingInbox}
-              </span>
-            )}
-          </button>
-          <button
-            className="profile-button"
-            onClick={() => setProfileOpen((value) => !value)}
-            aria-expanded={profileOpen}
-          >
-            <UserCircle size={24} />
-            <span>
-              {snapshot.auth.status === "signed-in"
-                ? snapshot.auth.email?.split("@")[0]
-                : "Local desk"}
-            </span>
-            <ChevronDown size={14} />
-          </button>
-          {profileOpen && (
-            <div className="profile-menu">
-              <p className="eyebrow">ChatGPT</p>
-              <strong>
-                {snapshot.auth.status === "signed-in"
-                  ? snapshot.auth.email
-                  : "Not signed in"}
-              </strong>
-              {snapshot.auth.plan && <span>{snapshot.auth.plan} plan</span>}
-              <button
-                onClick={() => {
-                  setActiveTab("settings");
-                  setProfileOpen(false);
-                }}
-              >
-                <SettingsIcon size={15} /> Account settings
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
-
-      <aside className="nav-rail" aria-label="Main navigation">
-        <nav>
-          {NAV.map((item) => {
-            const Icon = item.icon;
-            const count =
-              item.id === "inbox"
-                ? pendingInbox
-                : item.id === "history"
-                  ? attention
-                  : 0;
-            return (
-              <button
-                key={item.id}
-                className={activeTab === item.id ? "active" : ""}
-                onClick={() => setActiveTab(item.id)}
-                aria-current={activeTab === item.id ? "page" : undefined}
-              >
-                <span className="nav-icon">
-                  <Icon size={19} />
-                  {count > 0 && <i>{count}</i>}
-                </span>
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-        <div className="rail-bottom">
-          <button
-            onClick={() =>
-              run({
-                type: "settings.update",
-                settings: { sound: !snapshot.settings.sound },
-              })
-            }
-            aria-label={
-              snapshot.settings.sound ? "Mute sounds" : "Turn sounds on"
-            }
-          >
-            {snapshot.settings.sound ? (
-              <Volume2 size={18} />
-            ) : (
-              <VolumeX size={18} />
-            )}
-            <span>Sound</span>
-          </button>
-          <div className="rail-note">
-            <Sparkles size={14} />
-            <span>V1</span>
-          </div>
-        </div>
-      </aside>
-
-      <div className={`workspace workspace--${activeTab}`}>
-        {activeTab === "office" && (
-          <OfficeView
-            snapshot={snapshot}
-            run={run}
-            busy={busy}
-            selectedAgentId={selectedAgentId}
-            onSelectAgent={(id) => {
-              setSelectedAgentId(id);
-              setSelectedWorkId(
-                snapshot.agents.find((agent) => agent.id === id)?.workId,
-              );
-            }}
-            onOpenWork={openWork}
-            onOpenArtifact={openArtifact}
-            onOpenCalendar={() => setActiveTab("calendar")}
-          />
-        )}
-        {activeTab === "inbox" && (
-          <InboxView
-            snapshot={snapshot}
-            run={run}
-            busy={busy}
-            targetId={inboxTargetId}
-            onOpenWork={openWork}
-            onOpenArtifact={openArtifact}
-          />
-        )}
-        {activeTab === "routines" && (
-          <RoutinesView
-            snapshot={snapshot}
-            run={run}
-            busy={busy}
-            onCreate={() => {
-              setEditingRoutine(undefined);
-              setRoutineOpen(true);
-            }}
-            onEdit={(routine) => {
-              setEditingRoutine(routine);
-              setRoutineOpen(true);
-            }}
-          />
-        )}
-        {activeTab === "calendar" && <CalendarView snapshot={snapshot} onOpenWork={openWork} />}
-        {activeTab === "history" && (
-          <HistoryView snapshot={snapshot} onOpenWork={openWork} />
-        )}
-        {activeTab === "settings" && (
-          <SettingsView snapshot={snapshot} run={run} busy={busy} />
-        )}
-      </div>
-
-      {routineOpen && (
-        <RoutineModal
-          snapshot={snapshot}
-          busy={busy}
-          run={run}
-          routine={editingRoutine}
-          onClose={() => {
-            setRoutineOpen(false);
-            setEditingRoutine(undefined);
-          }}
-        />
-      )}
-      {(selectedWork || selectedAgent) && (
-        <WorkDrawer
-          snapshot={snapshot}
-          work={selectedWork}
-          agent={selectedAgent}
-          initialArtifactId={selectedArtifactId}
-          busy={busy}
-          run={run}
-          onOpenArtifact={openArtifact}
-          onOpenSource={openSource}
-          onError={(message) => toast(message, "error")}
-          onClose={() => {
-            setSelectedWorkId(undefined);
-            setSelectedAgentId(undefined);
-            setSelectedArtifactId(undefined);
-          }}
-        />
-      )}
-
-      <div className="toast-stack" aria-live="polite">
-        {toasts.map((item) => (
-          <div key={item.id} className={`toast toast--${item.tone}`}>
-            {item.tone === "error" ? (
-              <AlertCircle size={17} />
-            ) : (
-              <Check size={17} />
-            )}
-            {item.message}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-type RunCommand = (
-  command: Command,
-  key?: string,
-  success?: string,
-) => Promise<Snapshot | undefined>;
-
-function OfficeView({
-  snapshot,
-  run,
-  busy,
-  selectedAgentId,
-  onSelectAgent,
-  onOpenWork,
-  onOpenArtifact,
-  onOpenCalendar,
-}: {
-  snapshot: Snapshot;
-  run: RunCommand;
-  busy: string | null;
-  selectedAgentId?: string;
-  onSelectAgent: (id: string) => void;
-  onOpenWork: (id: string) => void;
-  onOpenArtifact: (id: string) => void;
-  onOpenCalendar: () => void;
-}) {
-  const [scenario, setScenario] = useState<Scenario>("report");
-  const [boardText, setBoardText] = useState("");
-  const active = snapshot.agents.filter((agent) => agent.activity !== "idle");
-  const resting = snapshot.agents.filter((agent) => agent.activity === "idle");
-  const recent = [...snapshot.activity]
-    .sort((a, b) => b.sequence - a.sequence)
-    .slice(0, 7);
-  const failures = snapshot.work.filter(
-    (item) => item.status === "failed" || item.status === "waiting",
-  );
-  const finished = snapshot.artifacts
-    .slice()
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, 5);
-  const selectStation = (station: string) => {
-    if (station.toLowerCase().includes("calendar")) { onOpenCalendar(); return; }
-    const target = station.toLowerCase().includes("board")
-      ? "office-board"
-      : "finished-shelf";
-    document.getElementById(target)?.scrollIntoView({
-      behavior: snapshot.settings.reducedMotion ? "auto" : "smooth",
-      block: "nearest",
-    });
-  };
-  const postToBoard = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!boardText.trim()) return;
-    const next = await run(
-      { type: "board.post", text: boardText.trim() },
-      "board.post",
-      "Posted to the board.",
-    );
-    if (next) setBoardText("");
-  };
-  return (
-    <div className="office-layout">
-      <main className="office-main">
-        <section className="office-intro">
-          <div>
-            <p className="eyebrow">Your crew, at a glance</p>
-            <h1>A little help. A lot getting done.</h1>
-          </div>
-          <div className="scenario-runner" id="scenario-runner">
-            <label htmlFor="scenario">Start some work</label>
-            <div>
-              <select
-                id="scenario"
-                value={scenario}
-                onChange={(event) =>
-                  setScenario(event.target.value as Scenario)
-                }
-              >
-                {SCENARIOS.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="button button--primary"
-                disabled={
-                  busy !== null ||
-                  (snapshot.settings.mode === "live" &&
-                    snapshot.auth.status !== "signed-in")
-                }
-                onClick={() =>
-                  run(
-                    { type: "scenario.run", scenario },
-                    "scenario.run",
-                    "Work started.",
-                  )
-                }
-              >
-                <Zap size={15} /> Run
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section className="roster" aria-label="Agent roster">
-          <span className="roster__label">In the office</span>
-          <div className="roster__people">
-            {active.map((agent) => (
-              <button
-                key={agent.id}
-                className={selectedAgentId === agent.id ? "selected" : ""}
-                onClick={() => onSelectAgent(agent.id)}
-              >
-                <PixelAvatar agent={agent} size="sm" />
-                <span>
-                  <strong>{agent.name}</strong>
-                  <small>{agent.statusText}</small>
-                </span>
-                <StatusDot status={agent.activity} />
-              </button>
-            ))}
-            {resting.map((agent) => (
-              <button
-                key={agent.id}
-                className="resting"
-                onClick={() => onSelectAgent(agent.id)}
-              >
-                <PixelAvatar agent={agent} size="sm" />
-                <span>
-                  <strong>{agent.name}</strong>
-                  <small>Resting</small>
-                </span>
-              </button>
-            ))}
-            {!snapshot.agents.length && (
-              <span className="muted">The office is quiet.</span>
-            )}
-          </div>
-        </section>
-
-        <section className="canvas-card">
-          <OfficeCanvas
-            agents={snapshot.agents}
-            selectedAgentId={selectedAgentId}
-            reducedMotion={snapshot.settings.reducedMotion}
-            onSelectAgent={onSelectAgent}
-            onSelectStation={selectStation}
-          />
-          <div className="canvas-caption">
-            <span>
-              <i className="live-dot" />
-              Office floor
-            </span>
-            <span>
-              {active.length} active · {resting.length} resting
-            </span>
-          </div>
-        </section>
-
-        <section className="playback">
-          <div className="playback__controls">
-            <span className="eyebrow">{snapshot.settings.mode === "demo" ? "Demo playback" : "Switch to Demo for playback"}</span>
-            <button
-              className="round-control round-control--play"
-              disabled={busy !== null || snapshot.settings.mode !== "demo"}
-              onClick={() =>
-                run({
-                  type: snapshot.demo.playing ? "demo.pause" : "demo.play",
-                })
-              }
-              aria-label={snapshot.demo.playing ? "Pause demo" : "Play demo"}
-            >
-              {snapshot.demo.playing ? <Pause size={17} /> : <Play size={17} />}
-            </button>
-            <button
-              className="round-control"
-              disabled={busy !== null || snapshot.settings.mode !== "demo"}
-              onClick={() => run({ type: "demo.next" })}
-              aria-label="Next demo step"
-            >
-              <StepForward size={16} />
-            </button>
-            <button
-              className="round-control"
-              disabled={busy !== null || snapshot.settings.mode !== "demo"}
-              onClick={() => run({ type: "demo.reset" })}
-              aria-label="Reset demo"
-            >
-              <RotateCcw size={15} />
-            </button>
-            <label className="speed-control">
-              Speed{" "}
-              <select
-                value={snapshot.demo.speed}
-                onChange={(event) =>
-                  run({ type: "demo.speed", speed: Number(event.target.value) })
-                }
-              >
-                <option value="0.5">0.5x</option>
-                <option value="1">1x</option>
-                <option value="2">2x</option>
-                <option value="4">4x</option>
-              </select>
-            </label>
-          </div>
-          <div className="recent-strip">
-            <span className="eyebrow">Recent activity</span>
-            <div>
-              {recent.length ? (
-                recent.slice(0, 3).map((event) => (
-                  <button
-                    key={event.id}
-                    onClick={() => event.workId && onOpenWork(event.workId)}
-                    disabled={!event.workId}
-                  >
-                    <StatusDot status={event.kind} />
-                    <span>{event.text}</span>
-                    <time>{formatTime(event.timestamp)}</time>
-                  </button>
-                ))
-              ) : (
-                <span className="muted">
-                  Activity will appear as work starts.
-                </span>
-              )}
-            </div>
-          </div>
-        </section>
-      </main>
-
-      <aside className="board-panel" id="office-board">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">From the team</p>
-            <h2>Office board</h2>
-          </div>
-          <span className="count-pill">{snapshot.board.length}</span>
-        </div>
-        <div className="board-posts">
-          {[...snapshot.board]
-            .sort((a, b) => b.timestamp - a.timestamp)
-            .slice(0, 8)
-            .map((post) => {
-              const agent = snapshot.agents.find(
-                (item) => item.id === post.agentId,
-              );
-              return (
-                <article className="board-post" key={post.id}>
-                  <PixelAvatar agent={agent} size="sm" />
-                  <div>
-                    <div className="board-post__meta">
-                      <strong>{agent?.name || "Office"}</strong>
-                      <span className={`post-kind post-kind--${post.kind}`}>
-                        {post.kind}
-                      </span>
-                      <time>{formatTime(post.timestamp)}</time>
-                    </div>
-                    <p>{post.text}</p>
-                    {(post.workId || post.artifactId) && (
-                      <button
-                        className="text-link"
-                        onClick={() =>
-                          post.artifactId
-                            ? onOpenArtifact(post.artifactId)
-                            : post.workId && onOpenWork(post.workId)
-                        }
-                      >
-                        {post.artifactId ? "Open artifact" : "Open work"}
-                        <ChevronRight size={14} />
-                      </button>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
-          {!snapshot.board.length && (
-            <EmptyState
-              icon={<MessageCircle size={20} />}
-              title="The board is clear"
-              body="Agent updates will collect here."
-            />
-          )}
-        </div>
-        <form className="board-compose" onSubmit={postToBoard}>
-          <label htmlFor="board-note">Leave a note</label>
-          <div>
-            <input
-              id="board-note"
-              value={boardText}
-              onChange={(event) => setBoardText(event.target.value)}
-              placeholder="A note for the office"
-            />
-            <button
-              className="icon-button icon-button--send"
-              disabled={busy !== null || !boardText.trim()}
-              aria-label="Post note"
-            >
-              <Send size={14} />
-            </button>
-          </div>
-        </form>
-        {finished.length > 0 && (
-          <section className="shelf" id="finished-shelf">
-            <div className="section-title">
-              <span>Finished work</span>
-              <span>{finished.length}</span>
-            </div>
-            {finished.map((artifact) => (
-              <button
-                key={artifact.id}
-                onClick={() => onOpenArtifact(artifact.id)}
-              >
-                <span
-                  className={`artifact-icon artifact-icon--${artifact.kind}`}
-                >
-                  <FileText size={15} />
-                </span>
-                <span>
-                  <strong>{artifact.title}</strong>
-                  <small>
-                    {sentence(artifact.kind)} · {formatTime(artifact.createdAt)}
-                  </small>
-                </span>
-                <ChevronRight size={15} />
-              </button>
-            ))}
-          </section>
-        )}
-        {failures.length > 0 && (
-          <section className="attention-box">
-            <div className="section-title">
-              <span>Needs attention</span>
-              <span>{failures.length}</span>
-            </div>
-            {failures.map((work) => (
-              <button key={work.id} onClick={() => onOpenWork(work.id)}>
-                <AlertCircle size={16} />
-                <span>
-                  <strong>{work.title}</strong>
-                  <small>{work.error || sentence(work.status)}</small>
-                </span>
-                <ChevronRight size={15} />
-              </button>
-            ))}
-          </section>
-        )}
-      </aside>
-    </div>
-  );
-}
-
-function InboxView({
-  snapshot,
-  run,
-  busy,
-  targetId,
-  onOpenWork,
-  onOpenArtifact,
-}: {
-  snapshot: Snapshot;
-  run: RunCommand;
-  busy: string | null;
-  targetId?: string;
-  onOpenWork: (id: string) => void;
-  onOpenArtifact: (id: string) => void;
-}) {
-  const [source, setSource] = useState<Source | "all">("all");
-  const [selectedId, setSelectedId] = useState<string | undefined>(targetId);
-  const [query, setQuery] = useState("");
-  const filtered = snapshot.sources.filter(
-    (item) =>
-      (source === "all" || item.source === source) &&
-      `${item.title} ${item.author} ${item.content}`
-        .toLowerCase()
-        .includes(query.toLowerCase()),
-  );
   useEffect(() => {
-    if (targetId) {
-      setSelectedId(targetId);
-      setSource("all");
-      setQuery("");
+    const room = (event: Event) => {
+      const key = (event as CustomEvent<string>).detail;
+      if (key === 'library') setModal('folder');
+      else if (key === 'meeting') navigate('conversations');
+      else if (key === 'lounge') navigate('employees');
+      else setAngle(0);
+    };
+    window.addEventListener('ahq:room', room);
+    return () => window.removeEventListener('ahq:room', room);
+  }, []);
+  useEffect(() => {
+    if (!window.ahq) return;
+    let cancelled = false;
+    Promise.all([window.ahq.loadState(), window.ahq.getCloudSettings()])
+      .then(([saved, settings]) => {
+        if (!cancelled) {
+          if (isState(saved)) setState(saved);
+          setCloud(settings);
+          setReady(true);
+          void window
+            .ahq!.needsStorageSetup()
+            .then((needs) => {
+              if (needs) setModal('storage');
+            })
+            .catch(() => undefined);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          notify('Your desktop workspace could not be loaded. Using the local cache.');
+          setReady(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [notify]);
+  const saveChain = useRef(Promise.resolve());
+  useEffect(() => {
+    if (!ready) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      notify('Storage is full. Export your documents before closing.');
     }
-  }, [targetId]);
-  const selected =
-    filtered.find((item) => item.id === selectedId) || filtered[0];
-  const linkedWork = selected
-    ? snapshot.work.filter((work) => work.sourceIds.includes(selected.id))
-    : [];
-  const linkedArtifacts = snapshot.artifacts.filter((artifact) =>
-    linkedWork.some((work) => work.id === artifact.workId),
-  );
+    if (window.ahq)
+      saveChain.current = saveChain.current
+        .then(() => window.ahq!.saveState(state))
+        .catch(() => notify('Could not save to disk. Your browser cache is still available.'));
+  }, [state, ready, notify]);
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(''), 5200);
+    return () => clearTimeout(timer);
+  }, [toast]);
+  useEffect(() => {
+    const listener = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setModal('search');
+      }
+    };
+    document.addEventListener('keydown', listener);
+    return () => document.removeEventListener('keydown', listener);
+  }, []);
+  useEffect(() => {
+    if (!window.ahq || !cloud.configured) return;
+    let stopped = false,
+      polling = false;
+    const poll = async () => {
+      if (polling) return;
+      polling = true;
+      try {
+        for (const employee of stateRef.current.employees.filter(
+          (e) => e.sessionId && e.status !== 'ready',
+        )) {
+          try {
+            const session = await window.ahq!.getSession(employee.sessionId!);
+            if (stopped) return;
+            setCloud((c) => ({ ...c, connected: true }));
+            update((s) => applySession(s, employee.id, session));
+          } catch {
+            if (!stopped) {
+              setCloud((c) => ({ ...c, connected: false }));
+              update((s) => ({
+                ...s,
+                employees: s.employees.map((e) =>
+                  e.id === employee.id
+                    ? { ...e, status: 'offline', activity: 'Connection lost · waiting to reconnect' }
+                    : e,
+                ),
+              }));
+            }
+          }
+        }
+      } finally {
+        polling = false;
+      }
+    };
+    void poll();
+    const timer = setInterval(() => void poll(), 8000);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [cloud.configured, update]);
+  const pending = state.approvals.filter((a) => a.status === 'pending');
+  const previousPending = useRef(pending.length);
+  useEffect(() => {
+    if (ready && state.sound && pending.length > previousPending.current) playReviewChime();
+    previousPending.current = pending.length;
+  }, [pending.length, ready, state.sound]);
+  const person = employeeById(state.employees, selectedEmployee ?? undefined);
+  const approval = state.approvals.find((a) => a.id === selectedApproval);
+  const commitment = state.commitments.find((c) => c.id === selectedCommitment);
+  function navigate(to: Page) {
+    setPage(to);
+    setModal(null);
+    setSelectedEmployee(null);
+    setSelectedCommitment(null);
+  }
+  function addEvent(text: string, kind: 'system' | 'review' | 'announcement' = 'system') {
+    return { id: uid(), text, time: timeNow(), kind, source: 'local' as const };
+  }
+  async function decide(a: Approval, decision: 'approved' | 'changes-requested', feedback = '') {
+    if (busy || a.status !== 'pending') return;
+    setBusy(true);
+    try {
+      let response: import('../shared/types').CloudSession | undefined;
+      if (a.sessionId) {
+        if (!window.ahq) throw new Error('Open the desktop app to review a cloud output.');
+        response = await window.ahq.decideSession({
+          sessionId: a.sessionId,
+          version: a.version,
+          decision: decision === 'approved' ? 'approve' : 'request_changes',
+          feedback,
+        });
+      }
+      const latest = stateRef.current.approvals.find((item) => item.id === a.id);
+      if (!latest || latest.status !== 'pending' || latest.version !== a.version)
+        throw new Error('This review changed. Open the latest version.');
+      update((s) => {
+        const current = s.approvals.find((item) => item.id === a.id);
+        if (!current || current.status !== 'pending' || current.version !== a.version) return s;
+        const next = applyDecision(s, a.id, a.version, decision, feedback);
+        return response ? applySession(next, a.employeeId, response) : next;
+      });
+      notify(
+        decision === 'approved'
+          ? 'Review approved. Your decision is saved.'
+          : 'Your feedback is saved with this review.',
+      );
+      setSelectedApproval(null);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not save the decision. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function exportApproval(a: Approval) {
+    if (window.ahq) {
+      try {
+        if (await window.ahq.exportDocument({ title: a.title, content: a.content }))
+          notify('Document exported.');
+      } catch {
+        notify('Could not export the document.');
+      }
+    } else {
+      const url = URL.createObjectURL(new Blob([a.content], { type: 'text/markdown' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${a.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.md`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      notify('Your document is downloading.');
+    }
+  }
+  function registerFolder(folder: WorkspaceFolder) {
+    update((s) => ({
+      ...s,
+      folders: [...s.folders, folder],
+      events: [...s.events, addEvent(`Created a local working copy of “${folder.name}”`)],
+    }));
+    setModal(null);
+    notify(`${folder.files.length} files copied into your local workspace.`);
+  }
+  async function selectFolder() {
+    if (window.ahq) {
+      setBusy(true);
+      try {
+        const result = await window.ahq.selectFolder();
+        if (result) registerFolder(result);
+      } catch (error) {
+        notify(error instanceof Error ? error.message : 'Unable to read that folder.');
+      } finally {
+        setBusy(false);
+      }
+    } else folderInput.current?.click();
+  }
+  async function importBrowserFolder(files: FileList | null) {
+    if (!files?.length) return;
+    setBusy(true);
+    try {
+      const first = files[0].webkitRelativePath.split('/')[0] || 'Selected folder';
+      const folder: WorkspaceFolder = {
+        id: uid(),
+        name: first,
+        files: [],
+        createdAt: timeNow(),
+        excludedCount: 0,
+      };
+      let bytes = 0;
+      for (const file of Array.from(files)) {
+        const path = file.webkitRelativePath.split('/').slice(1).join('/') || file.name;
+        if (
+          !allowedPath(path) ||
+          file.size > MAX_FILE_SIZE ||
+          bytes + file.size > MAX_FOLDER_SIZE ||
+          folder.files.length >= MAX_FILES
+        ) {
+          folder.excludedCount++;
+          continue;
+        }
+        const text = await file.text();
+        if (containsSecret(text)) {
+          folder.excludedCount++;
+          continue;
+        }
+        folder.files.push({ path, size: file.size, excerpt: text.slice(0, 1500) });
+        bytes += file.size;
+      }
+      if (!folder.files.length)
+        throw new Error('No supported text files found. Try a folder with .md, .txt, or .csv files.');
+      registerFolder(folder);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Unable to read that folder.');
+    } finally {
+      setBusy(false);
+      if (folderInput.current) folderInput.current.value = '';
+    }
+  }
+  function createBrief(folder: WorkspaceFolder) {
+    const a: Approval = {
+      id: uid(),
+      title: `${folder.name} · workspace brief`,
+      summary: 'A local source inventory, ready to review.',
+      employeeId: 'you',
+      content: folderBrief(folder),
+      createdAt: timeNow(),
+      status: 'pending',
+      kind: 'document',
+      recipient: 'Your workspace · local only',
+      sources: folder.files.map((f) => f.path),
+      version: 1,
+    };
+    update((s) => ({
+      ...s,
+      approvals: [...s.approvals, a],
+      events: [...s.events, addEvent(`Prepared a local source brief for “${folder.name}”`, 'review')],
+    }));
+    setSelectedApproval(a.id);
+  }
+  const common = { state, update, notify };
   return (
-    <div className="page page--inbox">
-      <PageHeader
-        eyebrow="Connected sources"
-        title="Inbox"
-        description="Review what arrived and decide what deserves a desk."
-      />
-      <div className="source-tabs" role="tablist" aria-label="Inbox sources">
-        <button
-          role="tab"
-          aria-selected={source === "all"}
-          className={source === "all" ? "active" : ""}
-          onClick={() => setSource("all")}
+    <div className={`app-shell ${state.reducedMotion ? 'reduce-motion' : ''}`}>
+      <aside className="sidebar">
+        <a
+          className="brand"
+          href="#office"
+          onClick={(e) => {
+            e.preventDefault();
+            navigate('office');
+          }}
+          aria-label="Astra HQ home"
         >
-          <Archive size={16} />
-          All <span>{snapshot.sources.length}</span>
+          <span className="brand-mark">
+            a<span>✳</span>
+          </span>
+          <span>
+            astra<span className="brand-hq">HQ</span>
+          </span>
+        </a>
+        <button className="workspace-switch" onClick={() => navigate('settings')}>
+          <span className="workspace-icon">
+            <Leaf size={17} />
+          </span>
+          <span>
+            {state.workspaceName}
+            <small>Personal workspace</small>
+          </span>
+          <ChevronDown size={14} />
         </button>
-        {SOURCES.map((item) => {
-          const Icon = item.icon;
-          const count = snapshot.sources.filter(
-            (sourceItem) => sourceItem.source === item.id,
-          ).length;
-          return (
+        <span className="nav-caption">YOUR WORKSPACE</span>
+        <nav aria-label="Main navigation">
+          {nav.map((item) => (
             <button
               key={item.id}
-              role="tab"
-              aria-selected={source === item.id}
-              className={source === item.id ? "active" : ""}
-              onClick={() => setSource(item.id)}
+              className={`nav-item ${page === item.id ? 'active' : ''}`}
+              onClick={() => navigate(item.id)}
+              aria-current={page === item.id ? 'page' : undefined}
             >
-              <Icon size={16} />
-              {item.label}
-              <span>{count}</span>
-            </button>
-          );
-        })}
-      </div>
-      <div className="inbox-grid">
-        <section className="inbox-list">
-          <label className="search-box">
-            <Search size={16} />
-            <span className="sr-only">Search inbox</span>
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search messages"
-            />
-          </label>
-          <div className="message-list">
-            {filtered.map((item) => (
-              <MessageRow
-                key={item.id}
-                item={item}
-                selected={selected?.id === item.id}
-                onClick={() => setSelectedId(item.id)}
-              />
-            ))}
-            {!filtered.length && (
-              <EmptyState
-                icon={<Inbox size={20} />}
-                title="Nothing here"
-                body="Try another source or search."
-              />
-            )}
-          </div>
-        </section>
-        <section className="message-detail">
-          {selected ? (
-            <>
-              <div className="message-detail__head">
-                <span className={`source-logo source-logo--${selected.source}`}>
-                  {SOURCE_META[selected.source].short}
-                </span>
-                <div>
-                  <p className="eyebrow">
-                    {SOURCE_META[selected.source].label}
-                    {selected.channel ? ` · ${selected.channel}` : ""}
-                  </p>
-                  <h2>{selected.title}</h2>
-                  <p>
-                    {selected.author} · {formatTime(selected.timestamp)}
-                  </p>
-                </div>
-                <span
-                  className={`disposition disposition--${selected.disposition || "pending"}`}
-                >
-                  {selected.disposition || "pending"}
-                </span>
-              </div>
-              <div className="message-copy">
-                <p>{selected.content}</p>
-              </div>
-              {selected.reason && (
-                <div className="evaluation-note">
-                  <Sparkles size={16} />
-                  <span>
-                    <strong>Office read</strong>
-                    {selected.reason}
-                  </span>
-                </div>
+              <item.icon size={19} strokeWidth={1.7} />
+              <span>{item.label}</span>
+              {item.id === 'needs-you' && pending.length > 0 && (
+                <span className="nav-count">{pending.length}</span>
               )}
-              <div className="detail-actions">
-                <button
-                  className="button button--primary"
-                  disabled={busy !== null}
-                  onClick={() =>
-                    run(
-                      { type: "source.evaluate", id: selected.id },
-                      `source.evaluate:${selected.id}`,
-                      "Message evaluated.",
-                    )
-                  }
-                >
-                  <Gauge size={15} /> Evaluate
+              {item.id === 'announce' && <span className="tiny-dot" />}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-lower">
+          <div className="workspace-note">
+            <span className="note-icon">
+              <Sparkles size={20} />
+            </span>
+            <strong>Good work starts together.</strong>
+            <p>
+              A little clarity. A little teamwork.
+              <br />A lot more possibility.
+            </p>
+            <button onClick={() => setModal('help')}>
+              Make yourself at home <ArrowRight size={14} />
+            </button>
+          </div>
+          <button
+            className={`nav-item ${page === 'settings' ? 'active' : ''}`}
+            onClick={() => navigate('settings')}
+          >
+            <Settings size={18} strokeWidth={1.7} />
+            <span>Settings & connections</span>
+          </button>
+          <button className="profile" onClick={() => navigate('settings')}>
+            <Avatar size={34} />
+            <span>
+              Your workspace<small>Let’s make good things.</small>
+            </span>
+            <Ellipsis size={18} />
+          </button>
+        </div>
+      </aside>
+      <div className="main-shell">
+        <header className="topbar">
+          <div className="breadcrumbs">
+            <span>{state.workspaceName}</span>
+            <ChevronRight size={13} />
+            <strong>{pageNames[page]}</strong>
+          </div>
+          <div className="topbar-actions">
+            <span className="today">
+              {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+            </span>
+            <span className="topbar-line" />
+            <button
+              className="search-button"
+              aria-label="Search workspace"
+              onClick={() => setModal('search')}
+            >
+              <Search size={17} />
+              <span>Search anything</span>
+              <kbd>⌘ K</kbd>
+            </button>
+            <button
+              className="notification-button icon-button"
+              aria-label={`${pending.length} pending reviews`}
+              onClick={() => navigate('needs-you')}
+            >
+              <Bell size={18} />
+              {pending.length > 0 && <i />}
+            </button>
+            <Avatar size={31} />
+          </div>
+        </header>
+        <main>
+          <div className="page-header">
+            <div>
+              <div className="page-eyebrow">A LITTLE SPACE FOR BIG THINGS</div>
+              <h1>{page === 'office' ? 'Your office, in good company.' : pageNames[page]}</h1>
+              <p>
+                {
+                  {
+                    office: 'The big picture, the little details, and everyone moving things forward.',
+                    employees: 'Good people. Clear roles. A shared direction.',
+                    announce: 'One shared direction. Everyone on the same page.',
+                    commitments: 'Flexibility in the path. Reliability in the promise.',
+                    conversations: 'The thinking, the handoffs, and the conversations in between.',
+                    'needs-you': 'A few thoughtful decisions to keep good things moving.',
+                    activity: 'Your decisions. Their work. Every step recorded.',
+                    settings: 'Make this space work for you.',
+                  }[page]
+                }
+              </p>
+            </div>
+            <div className="page-actions">
+              {page === 'office' && (
+                <span className="mode-badge">
+                  <span className={cloud.connected ? 'status-dot' : 'sample-dot'} />
+                  {cloud.connected ? 'Cloud connected' : 'Sample office'}
+                </span>
+              )}
+              {page === 'office' || page === 'employees' ? (
+                <button className="button primary" onClick={() => setModal('employee')}>
+                  <Plus size={16} />
+                  New employee
+                </button>
+              ) : page === 'commitments' ? (
+                <button className="button primary" onClick={() => setModal('commitment')}>
+                  <Plus size={16} />
+                  New commitment
+                </button>
+              ) : null}
+            </div>
+          </div>
+          {page === 'office' && (
+            <>
+              <div className="goal-banner">
+                <span className="goal-icon">
+                  <Target size={19} />
+                </span>
+                <span className="goal-label">OUR NORTH STAR</span>
+                <p>{history.display.goal}</p>
+                <button className="text-button" onClick={() => setModal('goal')}>
+                  Edit goal <ArrowRight size={14} />
                 </button>
               </div>
-              {linkedWork.length > 0 && (
-                <div className="linked-section">
-                  <h3>Linked work</h3>
-                  {linkedWork.map((work) => (
-                    <button
-                      key={work.id}
-                      className="linked-row"
-                      onClick={() => onOpenWork(work.id)}
-                    >
-                      <StatusDot status={work.status} />
-                      <span>
-                        <strong>{work.title}</strong>
-                        <small>{sentence(work.status)}</small>
+              <div className="office-layout">
+                <section className="office-card">
+                  <div className="office-card-header">
+                    <div>
+                      <span className="room-icon">
+                        <Home size={15} />
                       </span>
-                      <ChevronRight size={15} />
-                    </button>
-                  ))}
-                </div>
-              )}
-              {linkedArtifacts.length > 0 && (
-                <div className="linked-section">
-                  <h3>Artifacts</h3>
-                  {linkedArtifacts.map((artifact) => (
-                    <button
-                      key={artifact.id}
-                      className="linked-row"
-                      onClick={() => onOpenArtifact(artifact.id)}
-                    >
-                      <FileText size={16} />
-                      <span>
-                        <strong>{artifact.title}</strong>
-                        <small>{sentence(artifact.kind)}</small>
+                      <strong>The studio</strong>
+                      <span className="small-separator" />
+                      <span>{state.employees.length} teammates</span>
+                    </div>
+                    <div>
+                      <span className="office-weather">
+                        ☀<span>A little room to grow</span>
                       </span>
-                      <ExternalLink size={14} />
+                      <button
+                        className="icon-button"
+                        aria-label="Rotate office view"
+                        onClick={() => setAngle((v) => (v + 45) % 360)}
+                      >
+                        <Ellipsis size={20} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="office-viewport">
+                    <div className="scene-caption">
+                      <span className="eyebrow">SPACE TO DO YOUR BEST WORK</span>
+                      <span className="scene-script">Better, together.</span>
+                    </div>
+                    <SceneBoundary onTeam={() => navigate('employees')}>
+                      <Suspense
+                        fallback={
+                          <div className="scene-loading">
+                            <LoaderCircle className="spin" size={24} />
+                            <span>Opening the studio…</span>
+                          </div>
+                        }
+                      >
+                        <OfficeScene
+                          employees={history.display.employees}
+                          animate={playing && !state.reducedMotion && !systemReducedMotion}
+                          onSelect={(e) =>
+                            history.at === null
+                              ? setSelectedEmployee(e.id)
+                              : notify(`${e.name}: ${e.activity}`)
+                          }
+                          zoom={zoom}
+                          angle={angle}
+                          timeSeconds={
+                            history.at !== null
+                              ? (pastFrame?.sceneTime ?? frameTime.current)
+                              : frameTime.current
+                          }
+                          live={history.at === null}
+                          listening={history.at !== null ? !!pastFrame?.listening : listening}
+                          microphoneLevel={history.at !== null ? (pastFrame?.level ?? 0) : microphoneLevel}
+                        />
+                      </Suspense>
+                    </SceneBoundary>
+                    <div className="office-hint">
+                      <span className={cloud.connected ? 'status-dot' : 'sample-dot'} />
+                      {cloud.connected
+                        ? `${state.employees.filter((e) => e.sessionId && e.status === 'working').length} cloud sessions active`
+                        : 'A preview of your future team'}
+                      <span>·</span>
+                      <span>Select anyone to say hello</span>
+                    </div>
+                    <div className="scene-controls">
+                      <button
+                        aria-label="Zoom out"
+                        onClick={() => setZoom((z) => Math.max(0.7, z - 0.12))}
+                        disabled={zoom <= 0.7}
+                      >
+                        <Minus size={17} />
+                      </button>
+                      <button
+                        aria-label="Reset office view"
+                        onClick={() => {
+                          setZoom(1);
+                          setPlaying(true);
+                        }}
+                      >
+                        <Focus size={17} />
+                      </button>
+                      <button
+                        aria-label="Zoom in"
+                        onClick={() => setZoom((z) => Math.min(1.5, z + 0.12))}
+                        disabled={zoom >= 1.5}
+                      >
+                        <Plus size={17} />
+                      </button>
+                    </div>
+                    {history.at !== null && (
+                      <div className="replay-badge">
+                        <History size={14} />
+                        Replay · {new Date(history.at).toLocaleTimeString()}
+                      </div>
+                    )}
+                    {listening && (
+                      <div className="replay-badge">
+                        <Volume2 size={14} />
+                        The whole office is listening
+                      </div>
+                    )}
+                  </div>
+                  <div className="office-footer">
+                    <div className="avatar-stack">
+                      {state.employees.slice(0, 6).map((e) => (
+                        <Avatar key={e.id} employee={e} size={26} />
+                      ))}
+                    </div>
+                    <span>{cloud.connected ? 'Your team is here.' : 'Meet your next great team.'}</span>
+                    <button className="text-button" onClick={() => navigate('employees')}>
+                      Meet everyone <ArrowRight size={14} />
                     </button>
-                  ))}
-                </div>
-              )}
+                  </div>
+                </section>
+                <aside className="activity-column">
+                  <section className="team-chat">
+                    <div className="section-heading">
+                      <h2>
+                        <MessageCircle size={17} />
+                        Around the office
+                      </h2>
+                      <span className="subtle-dot" />
+                    </div>
+                    <button className="channel-link" onClick={() => navigate('conversations')}>
+                      # team-lounge <ChevronDown size={12} />
+                      <span>{state.demo ? 'SAMPLE' : 'TEAM'}</span>
+                    </button>
+                    <div className="chat-preview">
+                      {state.messages
+                        .filter((m) => m.channel === 'team')
+                        .slice(-3)
+                        .map((m) => {
+                          const employee = employeeById(state.employees, m.authorId);
+                          return (
+                            <div className="chat-message" key={m.id}>
+                              <Avatar employee={employee} size={31} />
+                              <div>
+                                <div className="message-byline">
+                                  <strong>{employee?.name ?? 'You'}</strong>
+                                  <time>{clockTime(m.time)}</time>
+                                  {m.id.startsWith('m') && <span className="sample-label">EXAMPLE</span>}
+                                </div>
+                                <p>{m.text}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                    <button className="chat-see-all" onClick={() => navigate('conversations')}>
+                      Pull up a chair <ArrowRight size={14} />
+                    </button>
+                  </section>
+                  <section className="needs-preview">
+                    <div className="section-heading">
+                      <h2>
+                        <Inbox size={17} />A moment of your time
+                      </h2>
+                      <span className="count-badge">{pending.length}</span>
+                    </div>
+                    <p className="section-description">Your perspective makes the difference.</p>
+                    {pending.slice(0, 2).map((a, i) => (
+                      <button
+                        className={`review-preview ${i === 0 ? 'featured' : ''}`}
+                        key={a.id}
+                        onClick={() => setSelectedApproval(a.id)}
+                      >
+                        <div className="review-preview-top">
+                          <span className={`approval-symbol ${i === 0 ? 'warm' : ''}`}>
+                            {i === 0 ? <Sparkles size={18} /> : <BookOpen size={18} />}
+                          </span>
+                          <span>
+                            {employeeById(state.employees, a.employeeId)?.name ?? 'Workspace'}
+                            <small>{a.kind === 'decision' ? 'A decision for you' : 'Ready for review'}</small>
+                          </span>
+                          <ArrowDownLeft size={15} />
+                        </div>
+                        <strong>{a.title}</strong>
+                        <p>{a.summary}</p>
+                        <span className="review-link">
+                          Take a look <ArrowRight size={14} />
+                        </span>
+                      </button>
+                    ))}
+                    {pending.length === 0 && (
+                      <div className="caught-up">
+                        <CheckCheck size={28} />
+                        <strong>A little breathing room.</strong>
+                        <p>You’re all caught up.</p>
+                      </div>
+                    )}
+                    <div className="quiet-note">
+                      <Leaf size={14} />
+                      <span>
+                        {cloud.connected
+                          ? 'Other employees can keep working.'
+                          : 'A thoughtful pause, then onward.'}
+                      </span>
+                    </div>
+                  </section>
+                </aside>
+              </div>
+              <VoiceAnnounce
+                onLevel={setMicrophoneLevel}
+                onListening={setListening}
+                onBroadcast={broadcast}
+                notify={notify}
+              />
+              <OfficeTimeline history={history} />
+              <div className="page-bottom">
+                <span>
+                  <span className="status-dot" />
+                  {ready ? 'Your workspace is saved on this device' : 'Loading your workspace'}
+                </span>
+                <button className="text-button" onClick={() => setModal('help')}>
+                  A little help getting started <CircleHelp size={13} />
+                </button>
+              </div>
             </>
-          ) : (
-            <EmptyState
-              icon={<Mail size={22} />}
-              title="Choose a message"
-              body="Its context and connected work will appear here."
+          )}
+          {page === 'employees' && (
+            <EmployeesPage
+              {...common}
+              onCreate={() => setModal('employee')}
+              onSelect={(e) => setSelectedEmployee(e.id)}
             />
           )}
-        </section>
+          {page === 'announce' && (
+            <>
+              <VoiceAnnounce
+                onLevel={setMicrophoneLevel}
+                onListening={setListening}
+                onBroadcast={broadcast}
+                notify={notify}
+              />
+              <AnnouncePage {...common} onBroadcast={broadcast} onEditGoal={() => setModal('goal')} />
+            </>
+          )}
+          {page === 'commitments' && (
+            <CommitmentsPage
+              {...common}
+              onSelect={(c) => setSelectedCommitment(c.id)}
+              onCreate={() => setModal('commitment')}
+            />
+          )}
+          {page === 'conversations' && <ConversationsPage {...common} initialChannel={conversationTarget} />}
+          {page === 'needs-you' && <NeedsYouPage {...common} onReview={(a) => setSelectedApproval(a.id)} />}
+          {page === 'activity' && <ActivityPage {...common} />}
+          {page === 'settings' && (
+            <>
+              <ConnectionSettings cloud={cloud} onCloud={setCloud} notify={notify} />
+              <SettingsPage
+                {...common}
+                cloud={cloud}
+                setCloud={setCloud}
+                onSelectFolder={() => setModal('folder')}
+                onBrief={createBrief}
+                onReset={() => {
+                  update(() => initialState());
+                  notify('Sample workspace restored.');
+                }}
+              />
+            </>
+          )}
+        </main>
       </div>
-    </div>
-  );
-}
-
-function MessageRow({
-  item,
-  selected,
-  onClick,
-}: {
-  item: SourceItem;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className={`message-row ${selected ? "selected" : ""}`}
-      onClick={onClick}
-    >
-      <span className={`source-logo source-logo--${item.source}`}>
-        {SOURCE_META[item.source].short}
-      </span>
-      <span className="message-row__copy">
-        <span>
-          <strong>{item.author}</strong>
-          <time>{formatTime(item.timestamp)}</time>
-        </span>
-        <b>{item.title}</b>
-        <small>{item.content}</small>
-      </span>
-      {(!item.disposition || item.disposition === "pending") && (
-        <i className="unread-dot" />
-      )}
-    </button>
-  );
-}
-
-function PageHeader({
-  eyebrow,
-  title,
-  description,
-  action,
-}: {
-  eyebrow: string;
-  title: string;
-  description: string;
-  action?: ReactNode;
-}) {
-  return (
-    <header className="page-header">
-      <div>
-        <p className="eyebrow">{eyebrow}</p>
-        <h1>{title}</h1>
-        <p>{description}</p>
-      </div>
-      {action}
-    </header>
-  );
-}
-
-function RoutinesView({
-  snapshot,
-  run,
-  busy,
-  onCreate,
-  onEdit,
-}: {
-  snapshot: Snapshot;
-  run: RunCommand;
-  busy: string | null;
-  onCreate: () => void;
-  onEdit: (routine: Routine) => void;
-}) {
-  return (
-    <div className="page">
-      <PageHeader
-        eyebrow="Repeatable help"
-        title="Routines"
-        description="Give useful work a schedule, an owner, and a note for next time."
-        action={
-          <button className="button button--primary" onClick={onCreate}>
-            <Plus size={16} /> New routine
-          </button>
-        }
+      <input
+        ref={folderInput}
+        className="hidden-input"
+        type="file"
+        multiple
+        {...{ webkitdirectory: '' }}
+        onChange={(e) => void importBrowserFolder(e.target.files)}
+        aria-label="Choose workspace folder"
       />
-      <div className="routine-grid">
-        {snapshot.routines.map((routine) => {
-          const agent = snapshot.agents.find(
-            (item) => item.id === routine.agentId,
-          );
-          return (
-            <article
-              className={`routine-card ${!routine.enabled ? "routine-card--paused" : ""}`}
-              key={routine.id}
+      {modal === 'storage' && (
+        <Modal
+          title="A home for your office."
+          subtitle="Choose where Astra HQ may save your local database and history."
+          onClose={() => setModal(null)}
+        >
+          <p>
+            Your team, goals, activity, and five-minute checkpoints are saved on your Mac. Choose a folder you
+            own, or use Astra HQ’s application folder.
+          </p>
+          <div className="modal-footer">
+            <button
+              className="button secondary"
+              onClick={() =>
+                void window
+                  .ahq!.useDefaultStorage()
+                  .then(() => setModal(null))
+                  .catch((e) => notify(String(e)))
+              }
             >
-              <div className="routine-card__top">
-                <PixelAvatar agent={agent} />
-                <div>
-                  <span
-                    className={`state-chip ${routine.enabled ? "state-chip--on" : ""}`}
-                  >
-                    {routine.enabled ? "Active" : "Paused"}
+              Use application folder
+            </button>
+            <button
+              className="button primary"
+              onClick={() =>
+                void window
+                  .ahq!.chooseDatabaseFolder()
+                  .then((path) => {
+                    if (path) {
+                      setModal(null);
+                      notify('Your local database folder is ready.');
+                    }
+                  })
+                  .catch((e) => notify(String(e)))
+              }
+            >
+              Choose a folder
+            </button>
+          </div>
+        </Modal>
+      )}
+      {modal === 'employee' && (
+        <EmployeeForm
+          initial={editingEmployee ?? undefined}
+          onClose={() => {
+            setModal(null);
+            setEditingEmployee(null);
+          }}
+          onCreate={(fields) => {
+            if (editingEmployee) {
+              update((s) => ({
+                ...s,
+                employees: s.employees.map((e) => (e.id === editingEmployee.id ? { ...e, ...fields } : e)),
+              }));
+              setEditingEmployee(null);
+              setModal(null);
+              notify('Profile updated for future assignments.');
+              return;
+            }
+            const employee: Employee = {
+              ...fields,
+              skills: ensureCloudSkill(fields.skills),
+              id: uid(),
+              color: employeeColors[state.employees.length % employeeColors.length],
+              avatar: state.employees.length % 6,
+              status: 'ready',
+              activity: 'Ready for a first assignment',
+              location: 'desk',
+            };
+            update((s) => ({
+              ...s,
+              employees: [...s.employees, employee],
+              events: [...s.events, addEvent(`${employee.name} joined the team`)],
+            }));
+            setModal(null);
+            setSelectedEmployee(employee.id);
+            notify(`${employee.name} has a place at the table.`);
+          }}
+        />
+      )}
+      {modal === 'goal' && (
+        <GoalForm
+          goal={state.goal}
+          onClose={() => setModal(null)}
+          onSave={(goal) => {
+            update((s) => ({
+              ...s,
+              goal,
+              events: [...s.events, addEvent('Updated the team’s north star', 'announcement')],
+            }));
+            setModal(null);
+            notify('Your team’s north star is updated.');
+          }}
+        />
+      )}
+      {modal === 'commitment' && (
+        <CommitmentForm
+          employees={state.employees}
+          onClose={() => setModal(null)}
+          onSave={(c) => {
+            update((s) => ({
+              ...s,
+              commitments: [...s.commitments, c],
+              events: [...s.events, addEvent(`A new promise: ${c.title}`)],
+            }));
+            setModal(null);
+            notify('A new promise, with a clear next step.');
+          }}
+        />
+      )}
+      {person && (
+        <EmployeeDetail
+          onAppearance={(appearance) => {
+            update((s) => ({
+              ...s,
+              employees: s.employees.map((e) => (e.id === person!.id ? { ...e, appearance } : e)),
+              events: [...s.events, addEvent(`Updated ${person!.name}’s appearance`)],
+            }));
+            notify('Appearance saved.');
+          }}
+          onEdit={() => {
+            setEditingEmployee(person);
+            setSelectedEmployee(null);
+            setModal('employee');
+          }}
+          employee={person}
+          state={state}
+          cloud={cloud}
+          onClose={() => setSelectedEmployee(null)}
+          onChat={() => {
+            setConversationTarget(person.id);
+            setSelectedEmployee(null);
+            navigate('conversations');
+          }}
+          onSettings={() => {
+            setSelectedEmployee(null);
+            navigate('settings');
+          }}
+          onStart={async (assignment, folderIds, allowCloudUpload) => {
+            if (!window.ahq) throw new Error('Cloud sessions are available in the desktop app.');
+            await saveChain.current;
+            const session = await window.ahq.startSession({
+              employee: person,
+              assignment,
+              goal: state.goal,
+              folderIds,
+              allowCloudUpload,
+            });
+            update((s) =>
+              applySession(
+                {
+                  ...s,
+                  demo: false,
+                  events: [
+                    ...s.events,
+                    {
+                      id: uid(),
+                      employeeId: person.id,
+                      text: `Started an Astra cloud session: ${assignment}`,
+                      time: timeNow(),
+                      kind: 'work',
+                      source: 'cloud',
+                    },
+                  ],
+                },
+                person.id,
+                session,
+              ),
+            );
+            notify(`${person.name}’s Astra cloud session has started.`);
+          }}
+        />
+      )}
+      {approval && (
+        <ReviewDialog
+          approval={approval}
+          employee={employeeById(state.employees, approval.employeeId)}
+          busy={busy}
+          onClose={() => setSelectedApproval(null)}
+          onDecide={(d, f) => void decide(approval, d, f)}
+          onExport={() => void exportApproval(approval)}
+        />
+      )}
+      {commitment && (
+        <Modal
+          title={commitment.title}
+          subtitle={`${dueLabel(commitment.deadline)} · ${clockTime(commitment.deadline)} · ${commitment.firm ? 'Firm promise' : 'Flexible target'}`}
+          onClose={() => setSelectedCommitment(null)}
+        >
+          <div className="commitment-detail">
+            <p>{commitment.description}</p>
+            <div className="detail-grid">
+              <div>
+                <label>ACCOUNTABLE OWNER</label>
+                <strong>{employeeById(state.employees, commitment.ownerId)?.name ?? 'Unassigned'}</strong>
+              </div>
+              <div>
+                <label>PREPARED FOR</label>
+                <strong>{commitment.recipient}</strong>
+              </div>
+            </div>
+            <label>WHAT DONE LOOKS LIKE</label>
+            <p>{commitment.definitionOfDone}</p>
+            <div className="next-step">
+              <Flag size={18} />
+              <div>
+                <strong>Your next useful step</strong>
+                <p>{commitment.nextStep}</p>
+              </div>
+            </div>
+            {commitment.dependencies.length > 0 && (
+              <p className="muted">
+                Depends on:{' '}
+                {commitment.dependencies
+                  .map((id) => state.commitments.find((c) => c.id === id)?.title ?? id)
+                  .join(', ')}
+              </p>
+            )}
+            <div className="modal-footer">
+              <span className="muted">Source: {commitment.source}</span>
+              <button
+                className="button primary"
+                onClick={() => {
+                  const related = pending.find((a) => a.commitmentId === commitment.id);
+                  if (related) {
+                    setSelectedCommitment(null);
+                    setSelectedApproval(related.id);
+                  } else {
+                    const owner = employeeById(state.employees, commitment.ownerId);
+                    setSelectedCommitment(null);
+                    if (owner) setSelectedEmployee(owner.id);
+                  }
+                }}
+              >
+                {pending.some((a) => a.commitmentId === commitment.id) ? 'Open review' : 'Speak to the owner'}
+                <ArrowRight size={15} />
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {modal === 'folder' && (
+        <Modal
+          title="Give your team a starting point."
+          subtitle="A working copy, with you in control."
+          onClose={() => setModal(null)}
+        >
+          <div className="folder-explainer">
+            <FolderOpen size={38} />
+            <p>
+              Select a project folder to create an isolated local copy of its supported text files. Your
+              original files stay in place.
+            </p>
+            <ul>
+              <li>Up to 100 text files, 512 KB each, 8 MB total.</li>
+              <li>Hidden folders, common secrets, and unsupported files are excluded.</li>
+              <li>Nothing is uploaded until you explicitly share it in a cloud assignment.</li>
+            </ul>
+            {!window.ahq && (
+              <div className="info-note">
+                Browser preview stores short text excerpts locally. Use the desktop app for complete file
+                snapshots and cloud assignments.
+              </div>
+            )}
+          </div>
+          <div className="modal-footer">
+            <span className="muted">Markdown, text, CSV, and code</span>
+            <button className="button primary" onClick={() => void selectFolder()} disabled={busy}>
+              {busy ? <LoaderCircle size={16} className="spin" /> : <FolderOpen size={16} />}Choose a folder
+            </button>
+          </div>
+        </Modal>
+      )}
+      {modal === 'search' && (
+        <Modal
+          title="Find your way around."
+          onClose={() => {
+            setModal(null);
+            setSearch('');
+          }}
+        >
+          <div className="search-field">
+            <Search size={20} />
+            <input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="People, promises, and places…"
+            />
+          </div>
+          <div className="search-results">
+            {nav
+              .filter((n) => n.label.toLowerCase().includes(search.toLowerCase()))
+              .map((n) => (
+                <button key={n.id} onClick={() => navigate(n.id)}>
+                  <n.icon size={18} />
+                  <span>
+                    {n.label}
+                    <small>Workspace</small>
                   </span>
-                  <h2>{routine.name}</h2>
-                  <p>{routine.instructions}</p>
-                </div>
-                <button
-                  className="icon-button"
-                  aria-label={`Edit ${routine.name}`}
-                  onClick={() => onEdit(routine)}
-                >
-                  <MoreHorizontal size={18} />
+                  <ArrowRight size={16} />
                 </button>
-              </div>
-              <div className="routine-card__schedule">
-                <Clock3 size={16} />
-                <span>
-                  {routine.schedule === "daily"
-                    ? `Daily at ${routine.dailyTime}`
-                    : `Every ${routine.intervalMinutes} minutes`}
-                </span>
-                <small>Next {formatTime(routine.nextRunAt)}</small>
-              </div>
-              {routine.notes && (
-                <div className="routine-note">
-                  <FileText size={15} />
-                  <span>{routine.notes}</span>
+              ))}
+            {state.employees
+              .filter((e) => `${e.name} ${e.jobTitle}`.toLowerCase().includes(search.toLowerCase()))
+              .map((e) => (
+                <button
+                  key={e.id}
+                  onClick={() => {
+                    setModal(null);
+                    setSelectedEmployee(e.id);
+                  }}
+                >
+                  <Avatar employee={e} size={30} />
+                  <span>
+                    {e.name}
+                    <small>{e.jobTitle}</small>
+                  </span>
+                  <ArrowRight size={16} />
+                </button>
+              ))}
+            {state.commitments
+              .filter((c) => c.title.toLowerCase().includes(search.toLowerCase()))
+              .map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => {
+                    setModal(null);
+                    setSelectedCommitment(c.id);
+                  }}
+                >
+                  <Flag size={18} />
+                  <span>
+                    {c.title}
+                    <small>Commitment · {dueLabel(c.deadline)}</small>
+                  </span>
+                  <ArrowRight size={16} />
+                </button>
+              ))}
+            {search &&
+              ![
+                ...nav.map((n) => n.label),
+                ...state.employees.map((e) => `${e.name} ${e.jobTitle}`),
+                ...state.commitments.map((c) => c.title),
+              ].some((t) => t.toLowerCase().includes(search.toLowerCase())) && (
+                <div className="empty-state">
+                  <Search size={24} />
+                  <p>No matches yet. Try a name or a promise.</p>
                 </div>
               )}
-              <div className="routine-card__actions">
-                <button
-                  className="button button--quiet"
-                  disabled={busy !== null}
-                  onClick={() =>
-                    run({ type: "routine.toggle", id: routine.id })
-                  }
-                >
-                  {routine.enabled ? <Pause size={14} /> : <Play size={14} />}
-                  {routine.enabled ? "Pause" : "Resume"}
-                </button>
-                <button
-                  className="button button--quiet"
-                  disabled={busy !== null}
-                  onClick={() =>
-                    run(
-                      { type: "routine.run", id: routine.id },
-                      `routine.run:${routine.id}`,
-                      "Routine started.",
-                    )
-                  }
-                >
-                  <Zap size={14} /> Run now
-                </button>
-                <button
-                  className="icon-button icon-button--danger"
-                  disabled={busy !== null}
-                  onClick={() =>
-                    run(
-                      { type: "routine.delete", id: routine.id },
-                      `routine.delete:${routine.id}`,
-                      "Routine deleted.",
-                    )
-                  }
-                  aria-label={`Delete ${routine.name}`}
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </article>
-          );
-        })}
-        {!snapshot.routines.length && (
-          <EmptyState
-            icon={<Repeat2 size={23} />}
-            title="No routines yet"
-            body="Make a repeatable job for your office crew."
-          />
-        )}
-      </div>
+          </div>
+        </Modal>
+      )}
+      {modal === 'help' && (
+        <Modal
+          title="Make yourself at home."
+          subtitle="A few small steps toward a little more possibility."
+          onClose={() => setModal(null)}
+        >
+          <div className="guide-list">
+            {[
+              {
+                icon: Target,
+                title: 'Start with a shared direction',
+                text: 'Set your north star: the outcome you want your team to work toward.',
+                action: () => setModal('goal'),
+              },
+              {
+                icon: Users,
+                title: 'Give someone a place on the team',
+                text: 'A name, a job title, a personality, and skills. That’s the whole profile.',
+                action: () => setModal('employee'),
+              },
+              {
+                icon: FolderOpen,
+                title: 'Bring the context',
+                text: 'Choose a folder, make a local working copy, and review the source brief.',
+                action: () => setModal('folder'),
+              },
+              {
+                icon: Sparkles,
+                title: 'Connect the work',
+                text: 'Add your Astra / OpenAI API key in Settings to run real cloud sessions.',
+                action: () => navigate('settings'),
+              },
+            ].map((item, i) => (
+              <button key={item.title} onClick={item.action}>
+                <span>{i + 1}</span>
+                <div>
+                  <strong>{item.title}</strong>
+                  <p>{item.text}</p>
+                </div>
+                <ArrowRight size={17} />
+              </button>
+            ))}
+          </div>
+          <div className="info-note">
+            You’re exploring a sample workspace. Example conversations and deliverables are labeled. New
+            actions are saved locally; employee work starts only with a connected Astra cloud session.
+          </div>
+        </Modal>
+      )}
+      {toast && (
+        <div className="toast" role="status">
+          <Check size={17} />
+          <span>{toast}</span>
+          <button aria-label="Dismiss notification" onClick={() => setToast('')}>
+            <X size={15} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
-
-function RoutineModal({
-  snapshot,
-  run,
-  busy,
+function playReviewChime() {
+  try {
+    const ctx = new AudioContext();
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.frequency.setValueAtTime(660, ctx.currentTime);
+    gain.gain.setValueAtTime(0.035, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + 0.5);
+    oscillator.onended = () => void ctx.close();
+  } catch {
+    /* Audio is optional. */
+  }
+}
+function ensureCloudSkill(skills: string) {
+  return [
+    'Astra cloud session',
+    ...skills
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s && s.toLowerCase() !== 'astra cloud session'),
+  ].join(', ');
+}
+function CloudIcon() {
+  return <Sparkles size={12} />;
+}
+function EmployeeForm({
+  initial,
   onClose,
-  routine,
+  onCreate,
 }: {
-  snapshot: Snapshot;
-  run: RunCommand;
-  busy: string | null;
+  initial?: Employee;
   onClose: () => void;
-  routine?: Routine;
+  onCreate: (e: Pick<Employee, 'name' | 'jobTitle' | 'personality' | 'skills'>) => void;
 }) {
-  const [form, setForm] = useState({
-    id: routine?.id,
-    name: routine?.name || "",
-    instructions: routine?.instructions || "",
-    agentId: routine?.agentId || snapshot.agents[0]?.id || "",
-    enabled: routine?.enabled ?? true,
-    schedule: routine?.schedule || ("daily" as "interval" | "daily"),
-    intervalMinutes: routine?.intervalMinutes || 60,
-    dailyTime: routine?.dailyTime || "09:00",
-    notes: routine?.notes || "",
-    lastRunAt: routine?.lastRunAt,
+  const [integrations, setIntegrations] = useState<string[]>([]);
+  useEffect(() => {
+    void window.ahq
+      ?.integrations()
+      .then((items) => setIntegrations(items.map((i) => i.name)))
+      .catch(() => undefined);
+  }, []);
+  const [fields, setFields] = useState({
+    name: initial?.name ?? '',
+    jobTitle: initial?.jobTitle ?? '',
+    personality: initial?.personality ?? '',
+    skills: ensureCloudSkill(initial?.skills ?? ''),
   });
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    const next = await run(
-      { type: "routine.save", routine: form },
-      "routine.save",
-      routine ? "Routine saved." : "Routine created.",
-    );
-    if (next) onClose();
-  };
   return (
-    <Modal title={routine ? "Edit routine" : "New routine"} onClose={onClose} closeOnBackdrop={false}>
-      <form className="form-stack" onSubmit={submit}>
-        <label>
-          <span>Name</span>
-          <input
-            required
-            value={form.name}
-            onChange={(event) => setForm({ ...form, name: event.target.value })}
-            placeholder="Morning inbox sweep"
-            autoFocus
-          />
-        </label>
-        <label>
-          <span>Instructions</span>
-          <textarea
-            required
-            rows={4}
-            value={form.instructions}
-            onChange={(event) =>
-              setForm({ ...form, instructions: event.target.value })
-            }
-            placeholder="Check new messages and flag anything that needs a reply."
-          />
-        </label>
-        <div className="form-row">
+    <Modal
+      title={initial ? `A little more about ${initial.name}.` : 'A new face. A little possibility.'}
+      subtitle="Good teammates start with a clear role. You can make it their own."
+      onClose={onClose}
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (Object.values(fields).every((v) => v.trim()))
+            onCreate({
+              name: fields.name.trim(),
+              jobTitle: fields.jobTitle.trim(),
+              personality: fields.personality.trim(),
+              skills: ensureCloudSkill(fields.skills.trim()),
+            });
+        }}
+      >
+        <div className="new-person-preview">
+          <div className="new-person-icon">
+            <Users size={29} />
+          </div>
+          <span>
+            {fields.name || 'Your next great teammate'}
+            <small>{fields.jobTitle || 'A space with their name on it'}</small>
+          </span>
+          <Leaf size={22} />
+        </div>
+        <div className="form-grid">
           <label>
-            <span>Agent</span>
-            <select
+            Name
+            <input
+              autoFocus
               required
-              value={form.agentId}
-              onChange={(event) =>
-                setForm({ ...form, agentId: event.target.value })
-              }
-            >
-              {snapshot.agents.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.name} · {agent.role}
-                </option>
-              ))}
-            </select>
+              maxLength={40}
+              placeholder="e.g. Alex"
+              value={fields.name}
+              onChange={(e) => setFields({ ...fields, name: e.target.value })}
+            />
           </label>
           <label>
-            <span>Schedule</span>
-            <select
-              value={form.schedule}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  schedule: event.target.value as "interval" | "daily",
-                })
-              }
-            >
-              <option value="daily">Daily</option>
-              <option value="interval">Interval</option>
-            </select>
+            Job title
+            <input
+              required
+              maxLength={80}
+              placeholder="e.g. Research Assistant"
+              value={fields.jobTitle}
+              onChange={(e) => setFields({ ...fields, jobTitle: e.target.value })}
+            />
           </label>
         </div>
-        {form.schedule === "daily" ? (
-          <label>
-            <span>Run at</span>
-            <input
-              type="time"
-              required
-              value={form.dailyTime}
-              onChange={(event) =>
-                setForm({ ...form, dailyTime: event.target.value })
-              }
-            />
-          </label>
-        ) : (
-          <label>
-            <span>Repeat every (minutes)</span>
-            <input
-              type="number"
-              required
-              min={5}
-              value={form.intervalMinutes}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  intervalMinutes: Number(event.target.value),
-                })
-              }
-            />
-          </label>
-        )}
-        <label>
-          <span>Notes for next run</span>
-          <textarea
-            rows={2}
-            value={form.notes}
-            onChange={(event) =>
-              setForm({ ...form, notes: event.target.value })
-            }
-            placeholder="Optional context the agent should remember"
-          />
-        </label>
-        <div className="modal-actions">
+        <div className="label-row">
+          <label htmlFor="personality">Personality</label>
           <button
             type="button"
-            className="button button--quiet"
-            onClick={onClose}
+            className="text-button"
+            disabled={!fields.jobTitle.trim()}
+            onClick={() => setFields({ ...fields, ...profileSuggestion(fields.jobTitle) })}
           >
-            Cancel
+            <Sparkles size={13} />
+            Use a suggested profile
           </button>
-          <button
-            className="button button--primary"
-            disabled={busy !== null || !form.agentId}
-          >
-            <Save size={15} /> Save routine
+        </div>
+        <textarea
+          id="personality"
+          required
+          maxLength={2000}
+          placeholder="How do they approach the work and talk to the team?"
+          value={fields.personality}
+          onChange={(e) => setFields({ ...fields, personality: e.target.value })}
+          rows={3}
+        />
+        <label>
+          Skills
+          <textarea
+            required
+            maxLength={2000}
+            placeholder="What should they be good at?"
+            value={fields.skills}
+            onChange={(e) => setFields({ ...fields, skills: e.target.value })}
+            rows={3}
+          />
+        </label>
+        <div className="skill-tags">
+          <span>
+            <CloudIcon /> Astra cloud session · included
+          </span>
+          {['Web search', 'Data analysis', ...integrations].map((skill) => (
+            <button
+              type="button"
+              key={skill}
+              onClick={() =>
+                setFields({
+                  ...fields,
+                  skills: ensureCloudSkill(
+                    [...new Set([...fields.skills.split(',').map((s) => s.trim()), skill])].join(', '),
+                  ),
+                })
+              }
+            >
+              {skill} +
+            </button>
+          ))}
+        </div>
+        <p className="form-hint">
+          Astra cloud session is included for every employee. Add connected integrations and working skills.
+        </p>
+        <div className="modal-footer">
+          <button type="button" className="button secondary" onClick={onClose}>
+            Maybe later
+          </button>
+          <button className="button primary" type="submit">
+            <Plus size={16} />
+            {initial ? 'Save profile' : 'Welcome to the team'}
           </button>
         </div>
       </form>
     </Modal>
   );
 }
-
-function HistoryView({
-  snapshot,
-  onOpenWork,
-}: {
-  snapshot: Snapshot;
-  onOpenWork: (id: string) => void;
-}) {
-  const [filter, setFilter] = useState<
-    "all" | "completed" | "failed" | "cancelled"
-  >("all");
-  const items = snapshot.work
-    .filter(
-      (item) =>
-        ["completed", "failed", "cancelled"].includes(item.status) &&
-        (filter === "all" || item.status === filter),
-    )
-    .sort(
-      (a, b) => (b.completedAt || b.createdAt) - (a.completedAt || a.createdAt),
-    );
-  return (
-    <div className="page">
-      <PageHeader
-        eyebrow="What the office did"
-        title="History"
-        description="Open a past job to review its run, notes, and output."
-      />
-      <div className="segmented">
-        {(["all", "completed", "failed", "cancelled"] as const).map((item) => (
-          <button
-            key={item}
-            className={filter === item ? "active" : ""}
-            onClick={() => setFilter(item)}
-          >
-            {sentence(item)}
-            <span>
-              {
-                snapshot.work.filter(
-                  (work) =>
-                    ["completed", "failed", "cancelled"].includes(
-                      work.status,
-                    ) &&
-                    (item === "all" || work.status === item),
-                ).length
-              }
-            </span>
-          </button>
-        ))}
-      </div>
-      <div className="history-list">
-        {items.map((work) => {
-          const agent = snapshot.agents.find(
-            (item) => item.id === work.agentId,
-          );
-          const artifacts = snapshot.artifacts.filter(
-            (item) => item.workId === work.id,
-          );
-          return (
-            <button
-              key={work.id}
-              className="history-row"
-              onClick={() => onOpenWork(work.id)}
-            >
-              <StatusDot status={work.status} />
-              <span className="history-row__main">
-                <strong>{work.title}</strong>
-                <small>{work.goal}</small>
-              </span>
-              <span className="history-row__agent">
-                <PixelAvatar agent={agent} size="sm" />
-                {agent?.name || "Unassigned"}
-              </span>
-              <span className="history-row__meta">
-                <b className={`status-label status-label--${work.status}`}>
-                  {sentence(work.status)}
-                </b>
-                <small>
-                  {formatTime(work.completedAt || work.createdAt)} ·{" "}
-                  {artifacts.length}{" "}
-                  {artifacts.length === 1 ? "artifact" : "artifacts"}
-                </small>
-              </span>
-              <ChevronRight size={16} />
-            </button>
-          );
-        })}
-        {!items.length && (
-          <EmptyState
-            icon={<HistoryIcon size={22} />}
-            title="No matching work"
-            body="Completed, failed, and cancelled work will stay here."
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-function SettingsView({
-  snapshot,
-  run,
-  busy,
-}: {
-  snapshot: Snapshot;
-  run: RunCommand;
-  busy: string | null;
-}) {
-  const auth = snapshot.auth;
-  const authBusy =
-    busy?.startsWith("auth.") ||
-    ["checking", "signing-in"].includes(auth.status);
-  const [model, setModel] = useState(snapshot.settings.model);
-  const [authLinkError, setAuthLinkError] = useState("");
-  useEffect(() => setModel(snapshot.settings.model), [snapshot.settings.model]);
-  return (
-    <div className="page page--settings">
-      <PageHeader
-        eyebrow="Office preferences"
-        title="Settings"
-        description="Connect ChatGPT and choose how work runs on this computer."
-      />
-      <div className="settings-stack">
-        <section className="settings-card">
-          <div className="settings-card__intro">
-            <span className="settings-icon">
-              <Sparkles size={20} />
-            </span>
-            <div>
-              <h2>ChatGPT account</h2>
-              <p>
-                Live work uses your ChatGPT sign-in. Authentication opens the
-                official flow.
-              </p>
-            </div>
-          </div>
-          <div className="auth-panel">
-            <div>
-              <StatusDot status={auth.status} />
-              <span>
-                <strong>
-                  {auth.status === "signed-in"
-                    ? auth.email
-                    : sentence(auth.status)}
-                </strong>
-                <small>
-                  {auth.plan
-                    ? `${auth.plan} plan${auth.method ? ` · ${auth.method}` : ""}`
-                    : auth.error ||
-                      "Demo mode is available without an account."}
-                </small>
-              </span>
-            </div>
-            <div className="settings-actions">
-              {auth.status === "signed-in" ? (
-                <>
-                  <button
-                    className="button button--quiet"
-                    disabled={authBusy}
-                    onClick={() => run({ type: "auth.refresh" })}
-                  >
-                    <RefreshCw size={15} /> Refresh
-                  </button>
-                  <button
-                    className="button button--quiet"
-                    disabled={authBusy}
-                    onClick={() =>
-                      run({ type: "auth.logout" }, "auth.logout", "Signed out.")
-                    }
-                  >
-                    <LogOut size={15} /> Sign out
-                  </button>
-                </>
-              ) : (
-                <>
-                  {auth.status === "signing-in" && (
-                    <>
-                      {auth.loginUrl && (
-                        <button
-                          className="button button--quiet"
-                          onClick={() => {
-                            setAuthLinkError("");
-                            bridge
-                              .openExternal(auth.loginUrl!)
-                              .catch((error: unknown) =>
-                                setAuthLinkError(
-                                  error instanceof Error
-                                    ? error.message
-                                    : "The sign-in page could not be opened.",
-                                ),
-                              );
-                          }}
-                        >
-                          <ExternalLink size={14} /> Open sign-in page
-                        </button>
-                      )}
-                      <button
-                        className="button button--quiet"
-                        disabled={busy !== null}
-                        onClick={() => run({ type: "auth.cancel" })}
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  )}
-                  <button
-                    className="button button--primary"
-                    disabled={authBusy}
-                    onClick={() => run({ type: "auth.login" })}
-                  >
-                    <LogIn size={15} /> Sign in with ChatGPT
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-          {auth.error && (
-            <p className="field-error">
-              <AlertCircle size={15} />
-              {auth.error}
-            </p>
-          )}
-          {authLinkError && (
-            <p className="field-error">
-              <AlertCircle size={15} />
-              {authLinkError}
-            </p>
-          )}
-        </section>
-        <section className="settings-card">
-          <div className="settings-card__intro">
-            <span className="settings-icon">
-              <Gauge size={20} />
-            </span>
-            <div>
-              <h2>Work mode</h2>
-              <p>
-                Demo replays sample workflows from the runtime. Live mode starts
-                real Codex work.
-              </p>
-            </div>
-          </div>
-          <div className="mode-options">
-            <button
-              className={snapshot.settings.mode === "demo" ? "active" : ""}
-              onClick={() =>
-                run({ type: "settings.update", settings: { mode: "demo" } })
-              }
-            >
-              <span className="mode-radio" />
-              <span>
-                <strong>Demo</strong>
-                <small>
-                  Explore the full office with local simulated work.
-                </small>
-              </span>
-            </button>
-            <button
-              className={snapshot.settings.mode === "live" ? "active" : ""}
-              disabled={auth.status !== "signed-in"}
-              onClick={() =>
-                run({ type: "settings.update", settings: { mode: "live" } })
-              }
-            >
-              <span className="mode-radio" />
-              <span>
-                <strong>Live</strong>
-                <small>
-                  {auth.status === "signed-in"
-                    ? "Run work through your connected account."
-                    : "Sign in with ChatGPT to unlock live work."}
-                </small>
-              </span>
-              <ShieldCheck size={17} />
-            </button>
-          </div>
-        </section>
-        <section className="settings-card">
-          <div className="settings-card__intro">
-            <span className="settings-icon">
-              <Code2 size={20} />
-            </span>
-            <div>
-              <h2>Model and display</h2>
-              <p>
-                Choose the model name sent to the runtime and adjust motion.
-              </p>
-            </div>
-          </div>
-          <div className="setting-row">
-            <label htmlFor="model-name">
-              <span>
-                <strong>Model</strong>
-                <small>The Codex model used for new live work.</small>
-              </span>
-            </label>
-            <div className="inline-save">
-              <input
-                id="model-name"
-                value={model}
-                placeholder="Use the Codex default"
-                onChange={(event) => setModel(event.target.value)}
-              />
-              <button
-                className="button button--quiet"
-                disabled={busy !== null || model === snapshot.settings.model}
-                onClick={() =>
-                  run(
-                    {
-                      type: "settings.update",
-                      settings: { model: model.trim() },
-                    },
-                    "settings.update",
-                    "Model saved.",
-                  )
-                }
-              >
-                <Save size={14} /> Save
-              </button>
-            </div>
-          </div>
-          <div className="setting-row">
-            <span>
-              <strong>Reduced motion</strong>
-              <small>
-                Stops character movement and softens interface animation.
-              </small>
-            </span>
-            <button
-              className={`toggle ${snapshot.settings.reducedMotion ? "active" : ""}`}
-              role="switch"
-              aria-label="Reduced motion"
-              aria-checked={snapshot.settings.reducedMotion}
-              onClick={() =>
-                run({
-                  type: "settings.update",
-                  settings: { reducedMotion: !snapshot.settings.reducedMotion },
-                })
-              }
-            >
-              <span />
-            </button>
-          </div>
-          <div className="setting-row">
-            <span>
-              <strong>Office sound</strong>
-              <small>Plays quiet cues when work changes state.</small>
-            </span>
-            <button
-              className={`toggle ${snapshot.settings.sound ? "active" : ""}`}
-              role="switch"
-              aria-label="Office sound"
-              aria-checked={snapshot.settings.sound}
-              onClick={() =>
-                run({
-                  type: "settings.update",
-                  settings: { sound: !snapshot.settings.sound },
-                })
-              }
-            >
-              <span />
-            </button>
-          </div>
-        </section>
-        <p className="platform-note">
-          Little Office is running on {sentence(bridge.platform)}. Your
-          workspace stays on this computer.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function WorkDrawer({
-  snapshot,
-  work,
-  agent,
-  initialArtifactId,
-  busy,
-  run,
-  onOpenArtifact,
-  onOpenSource,
-  onError,
+function GoalForm({
+  goal,
   onClose,
+  onSave,
 }: {
-  snapshot: Snapshot;
-  work?: WorkItem;
-  agent?: Agent;
-  initialArtifactId?: string;
-  busy: string | null;
-  run: RunCommand;
-  onOpenArtifact: (id: string) => void;
-  onOpenSource: (id: string) => void;
-  onError: (message: string) => void;
+  goal: string;
   onClose: () => void;
+  onSave: (goal: string) => void;
 }) {
-  const [tab, setTab] = useState<"activity" | "artifacts">(
-    initialArtifactId ? "artifacts" : "activity",
-  );
-  const [artifactId, setArtifactId] = useState(initialArtifactId);
-  const [steer, setSteer] = useState("");
-  const artifacts = snapshot.artifacts.filter(
-    (item) => work && item.workId === work.id,
-  );
-  const events = snapshot.activity
-    .filter(
-      (item) =>
-        (work && item.workId === work.id) ||
-        (!work && agent && item.agentId === agent.id),
-    )
-    .sort((a, b) => b.sequence - a.sequence);
-  const runItem = [...snapshot.runs].reverse().find((item) => work && item.workId === work.id);
-  const canSteer = work?.mode === "live" && work.status === "running" && Boolean(runItem?.turnId);
-  const sources = snapshot.sources.filter((item) =>
-    work?.sourceIds.includes(item.id),
-  );
-  const selectedArtifact =
-    snapshot.artifacts.find((item) => item.id === artifactId) || artifacts[0];
-  const sendSteer = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!work || !steer.trim()) return;
-    const next = await run(
-      { type: "work.steer", id: work.id, text: steer.trim() },
-      `work.steer:${work.id}`,
-      "Direction sent.",
-    );
-    if (next) setSteer("");
-  };
+  const [value, setValue] = useState(goal);
   return (
     <Modal
-      title={work?.title || agent?.name || "Work details"}
+      title="What are we working toward?"
+      subtitle="A clear north star gives every small step a little more meaning."
       onClose={onClose}
-      wide
     >
-      <div className="drawer-identity">
-        <PixelAvatar agent={agent} size="lg" />
-        <div>
-          <p className="eyebrow">{agent?.role || "Office agent"}</p>
-          <h3>{agent?.name || "Unassigned"}</h3>
-          <p>{work?.goal || agent?.statusText}</p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (value.trim()) onSave(value.trim());
+        }}
+      >
+        <label>
+          Our overarching goal
+          <textarea
+            autoFocus
+            rows={4}
+            maxLength={500}
+            required
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+          />
+        </label>
+        <div className="info-note">
+          <Target size={18} />
+          This goal becomes context for every new cloud assignment.
         </div>
-        {work && (
-          <span className={`status-label status-label--${work.status}`}>
-            <StatusDot status={work.status} />
-            {sentence(work.status)}
-          </span>
-        )}
-      </div>
-      {work?.error && (
-        <div className="run-error">
-          <AlertCircle size={18} />
-          <div>
-            <strong>The run stopped</strong>
-            <p>{work.error}</p>
-          </div>
+        <div className="modal-footer">
+          <span className="muted">{value.length}/500</span>
+          <button className="button primary" type="submit">
+            Set our direction <ArrowRight size={15} />
+          </button>
         </div>
-      )}
-      <div className="drawer-tabs" role="tablist">
-        <button
-          role="tab"
-          aria-selected={tab === "activity"}
-          className={tab === "activity" ? "active" : ""}
-          onClick={() => setTab("activity")}
-        >
-          Activity <span>{events.length}</span>
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === "artifacts"}
-          className={tab === "artifacts" ? "active" : ""}
-          onClick={() => setTab("artifacts")}
-        >
-          Artifacts <span>{artifacts.length}</span>
-        </button>
-      </div>
-      {tab === "activity" ? (
-        <div className="drawer-body">
-          <div className="run-summary">
-            <div>
-              <span>Source</span>
-              <strong>
-                {sources.length
-                  ? `${sources.length} linked item${sources.length > 1 ? "s" : ""}`
-                  : work
-                    ? "Manual"
-                    : "Agent desk"}
-              </strong>
-            </div>
-            <div>
-              <span>Started</span>
-              <strong>
-                {formatTime(runItem?.startedAt || work?.createdAt)}
-              </strong>
-            </div>
-            <div>
-              <span>Mode</span>
-              <strong>
-                {work?.mode?.toUpperCase() ||
-                  snapshot.settings.mode.toUpperCase()}
-              </strong>
-            </div>
-          </div>
-          {sources.length > 0 && (
-            <div className="drawer-sources">
-              <span className="eyebrow">Linked sources</span>
-              {sources.map((source) => (
-                <button key={source.id} onClick={() => onOpenSource(source.id)}>
-                  <span className={`source-logo source-logo--${source.source}`}>
-                    {SOURCE_META[source.source].short}
-                  </span>
-                  <span>
-                    <strong>{source.title}</strong>
-                    <small>
-                      {SOURCE_META[source.source].label} · {source.author}
-                    </small>
-                  </span>
-                  <ChevronRight size={14} />
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="timeline">
-            {events.map((event) => (
-              <div className="timeline__item" key={event.id}>
-                <span
-                  className={`timeline__mark timeline__mark--${event.kind}`}
-                />{" "}
-                <div>
-                  <p>{event.text}</p>
-                  <time>{formatTime(event.timestamp)}</time>
-                </div>
-              </div>
-            ))}
-            {!events.length && (
-              <EmptyState
-                icon={<Clock3 size={20} />}
-                title="No activity yet"
-                body="Updates from this desk will appear here."
-              />
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="artifact-workspace">
-          <div className="artifact-list">
-            {artifacts.map((artifact) => (
-              <button
-                key={artifact.id}
-                className={selectedArtifact?.id === artifact.id ? "active" : ""}
-                onClick={() => {
-                  setArtifactId(artifact.id);
-                  onOpenArtifact(artifact.id);
-                }}
-              >
-                <ArtifactGlyph artifact={artifact} />
-                <span>
-                  <strong>{artifact.title}</strong>
-                  <small>
-                    {sentence(artifact.kind)} · {formatTime(artifact.createdAt)}
-                  </small>
-                </span>
-              </button>
-            ))}
-            {!artifacts.length && (
-              <p className="muted">No artifacts for this work.</p>
-            )}
-          </div>
-          {selectedArtifact && (
-            <ArtifactPreview
-              artifact={selectedArtifact}
-              snapshot={snapshot}
-              onOpen={() =>
-                bridge
-                  .openArtifact(selectedArtifact.id)
-                  .catch((error: unknown) =>
-                    onError(
-                      error instanceof Error
-                        ? error.message
-                        : "The artifact could not be opened.",
-                    ),
-                  )
-              }
-            />
-          )}
-        </div>
-      )}
-      {work && (
-        <div className="drawer-footer">
-          <form className="steer-form" onSubmit={sendSteer}>
-            <label htmlFor="steer">Add direction</label>
-            <div>
-              <input
-                id="steer"
-                value={steer}
-                onChange={(event) => setSteer(event.target.value)}
-                placeholder={canSteer ? "Ask for a change or add context" : "Direction is available during a live Codex turn"}
-                disabled={!canSteer}
-              />
-              <button
-                className="icon-button icon-button--send"
-                disabled={
-                  busy !== null ||
-                  !steer.trim() ||
-                  !canSteer
-                }
-                aria-label="Send direction"
-              >
-                <Send size={16} />
-              </button>
-            </div>
-          </form>
-          <div className="work-actions">
-            {["running", "queued", "waiting"].includes(work.status) && (
-              <button
-                className="button button--quiet button--danger"
-                disabled={busy !== null}
-                onClick={() =>
-                  run(
-                    { type: "work.cancel", id: work.id },
-                    `work.cancel:${work.id}`,
-                    "Work cancelled.",
-                  )
-                }
-              >
-                <X size={14} /> Cancel run
-              </button>
-            )}
-            {["failed", "cancelled"].includes(work.status) && (
-              <button
-                className="button button--primary"
-                disabled={busy !== null}
-                onClick={() =>
-                  run(
-                    { type: "work.retry", id: work.id },
-                    `work.retry:${work.id}`,
-                    "Work restarted.",
-                  )
-                }
-              >
-                <RefreshCw size={14} /> Retry
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      </form>
     </Modal>
   );
 }
-
-function ArtifactGlyph({ artifact }: { artifact: Artifact }) {
-  if (artifact.kind === "patch")
-    return (
-      <span className="artifact-icon artifact-icon--patch">
-        <Code2 size={16} />
-      </span>
-    );
-  if (artifact.kind === "calendar")
-    return (
-      <span className="artifact-icon artifact-icon--calendar">
-        <CalendarDays size={16} />
-      </span>
-    );
+function CommitmentForm({
+  employees,
+  onClose,
+  onSave,
+}: {
+  employees: Employee[];
+  onClose: () => void;
+  onSave: (c: Commitment) => void;
+}) {
   return (
-    <span className={`artifact-icon artifact-icon--${artifact.kind}`}>
-      <FileText size={16} />
-    </span>
+    <Modal
+      title="Make a little promise."
+      subtitle="An outcome, a person, and a clear definition of done."
+      onClose={onClose}
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          const data = new FormData(e.currentTarget);
+          const title = String(data.get('title')).trim();
+          if (!title) return;
+          onSave({
+            id: uid(),
+            title,
+            description: String(data.get('description')).trim(),
+            ownerId: String(data.get('owner')),
+            recipient: String(data.get('recipient')).trim(),
+            deadline: new Date(String(data.get('deadline'))).toISOString(),
+            firm: data.get('firm') === 'on',
+            status: 'planned',
+            progress: 0,
+            nextStep: String(data.get('nextStep')).trim(),
+            dependencies: [],
+            source: 'Your instruction',
+            definitionOfDone: String(data.get('done')).trim(),
+          });
+        }}
+      >
+        <label>
+          What are we promising?
+          <input
+            autoFocus
+            required
+            name="title"
+            maxLength={120}
+            placeholder="Prepare the weekly client update"
+          />
+        </label>
+        <label>
+          A little context
+          <textarea name="description" rows={2} placeholder="What should the owner know?" maxLength={2000} />
+        </label>
+        <div className="form-grid">
+          <label>
+            Accountable owner
+            <select name="owner" required>
+              {employees.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name} · {e.jobTitle}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Who is it for?
+            <input required name="recipient" placeholder="Client or stakeholder" maxLength={120} />
+          </label>
+        </div>
+        <label>
+          Deadline · your local timezone
+          <input required name="deadline" type="datetime-local" />
+        </label>
+        <label className="checkbox-label">
+          <input name="firm" type="checkbox" defaultChecked />
+          This is a firm promise
+        </label>
+        <label>
+          What does done look like?
+          <textarea
+            required
+            rows={2}
+            name="done"
+            maxLength={1000}
+            placeholder="A reviewed draft with this week’s progress and next milestones"
+          />
+        </label>
+        <label>
+          The first useful step
+          <input required name="nextStep" maxLength={300} placeholder="Collect the project notes" />
+        </label>
+        <div className="modal-footer">
+          <button type="button" className="button secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="button primary">
+            <Flag size={16} />
+            Save commitment
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
-
-function CalendarCard({ event }: { event: CalendarEvent }) {
-  return <div className="calendar-card">
-    <span className="calendar-card__date"><b>{new Date(event.start).toLocaleDateString([], { day: "numeric" })}</b>{new Date(event.start).toLocaleDateString([], { month: "short" })}</span>
-    <div><h4>{event.title}</h4><p>{new Date(event.start).toLocaleString([], { weekday: "long", hour: "numeric", minute: "2-digit" })} to {new Date(event.end).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p><p>{event.location}</p><small>{event.attendees.join(", ")}</small></div>
-  </div>;
-}
-
-function CalendarView({ snapshot, onOpenWork }: { snapshot: Snapshot; onOpenWork: (id: string) => void }) {
-  const events = [...snapshot.calendar].sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
-  return <div className="page page--calendar">
-    <PageHeader eyebrow="Your day, made a little easier" title="Calendar" description="The office's simulated calendar. All times use this computer's time zone." />
-    <div className="calendar-agenda">
-      {events.map((event) => {
-        const linked = snapshot.work.filter((work) => work.sourceIds.some((id) => event.sourceIds.includes(id)));
-        return <article className="calendar-agenda__event" key={event.id}>
-          <div className="calendar-agenda__heading"><span>{new Date(event.start).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span><span className="post-kind">{event.simulated ? "Simulated event" : "Event"}</span></div>
-          <CalendarCard event={event} />
-          <p className="calendar-agenda__description">{event.description}</p>
-          {linked.length > 0 && <div className="calendar-agenda__links">{linked.map((work) => <button className="text-link" key={work.id} onClick={() => onOpenWork(work.id)}><FileText size={14} />{work.title}<ChevronRight size={14} /></button>)}</div>}
-        </article>;
-      })}
-      {!events.length && <EmptyState icon={<CalendarDays size={24} />} title="A little breathing room" body="Run the dinner scenario to let an agent check availability and add an event here." />}
-    </div>
-  </div>;
-}
-
-function ArtifactPreview({
-  artifact,
-  snapshot,
-  onOpen,
+function EmployeeDetail({
+  employee,
+  state,
+  cloud,
+  onClose,
+  onChat,
+  onSettings,
+  onStart,
+  onEdit,
+  onAppearance,
 }: {
-  artifact: Artifact;
-  snapshot: Snapshot;
-  onOpen: () => void;
+  onAppearance: (a: import('../shared/types').Appearance) => void;
+  employee: Employee;
+  state: AppState;
+  cloud: CloudSettings;
+  onClose: () => void;
+  onChat: () => void;
+  onSettings: () => void;
+  onEdit: () => void;
+  onStart: (assignment: string, folderIds: string[], allow: boolean) => Promise<void>;
 }) {
-  const [linkError, setLinkError] = useState("");
-  let calendar: CalendarEvent | undefined;
-  if (artifact.kind === "calendar") {
-    try {
-      const saved = JSON.parse(artifact.content) as { id?: string };
-      calendar = snapshot.calendar.find((item) => item.id === saved.id);
-    } catch { /* Non-JSON artifacts remain readable as text. */ }
-  }
+  const [assignment, setAssignment] = useState('');
+  const [folderIds, setFolderIds] = useState<string[]>([]);
+  const [allow, setAllow] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState('');
   return (
-    <div className="artifact-preview">
-      <header>
+    <Modal title={`A little time with ${employee.name}.`} onClose={onClose}>
+      <div className="employee-detail-profile">
+        <Avatar employee={employee} size={68} />
         <div>
-          <p className="eyebrow">
-            {sentence(artifact.kind)}
-            {artifact.simulated ? " · Simulated" : ""}
-          </p>
-          <h3>{artifact.title}</h3>
+          <h3>{employee.name}</h3>
+          <p>{employee.jobTitle}</p>
+          <button className="text-button edit-profile" onClick={onEdit}>
+            Edit profile
+          </button>
+          <span className={`status-pill ${employee.status}`}>
+            {employee.sessionId
+              ? employee.status === 'working'
+                ? 'Astra cloud session'
+                : employee.status
+              : 'Ready for a cloud assignment'}
+          </span>
         </div>
-        {artifact.filePath && (
-          <button className="button button--quiet" onClick={onOpen}>
-            <ExternalLink size={14} /> Open file
+      </div>
+      <AppearanceEditor employee={employee} onSave={onAppearance} />
+      <div className="detail-section">
+        <label>PERSONALITY</label>
+        <p>{employee.personality}</p>
+        <label>SKILLS</label>
+        <div className="skill-tags">
+          {employee.skills.split(',').map((s) => (
+            <span key={s}>{s.trim()}</span>
+          ))}
+        </div>
+      </div>
+      <div className="next-step">
+        <Coffee size={19} />
+        <div>
+          <strong>{employee.activity}</strong>
+          <p>
+            {employee.sessionId
+              ? `Session ${employee.sessionId}`
+              : 'No cloud session is running for this employee.'}
+          </p>
+        </div>
+      </div>
+      <div className="detail-section">
+        <label>GIVE {employee.name.toUpperCase()} AN ASSIGNMENT</label>
+        <textarea
+          value={assignment}
+          onChange={(e) => setAssignment(e.target.value)}
+          rows={3}
+          maxLength={12000}
+          placeholder="Prepare the client’s weekly update. Bring back a draft, your sources, and anything that needs my input."
+        />
+        {state.folders.length > 0 && (
+          <div className="folder-selection">
+            {state.folders.map((f) => (
+              <label className="checkbox-label" key={f.id}>
+                <input
+                  type="checkbox"
+                  checked={folderIds.includes(f.id)}
+                  onChange={(e) =>
+                    setFolderIds((ids) =>
+                      e.target.checked ? [...ids, f.id] : ids.filter((id) => id !== f.id),
+                    )
+                  }
+                />
+                <FolderOpen size={16} />
+                {f.name}
+                <small>{f.files.length} files</small>
+              </label>
+            ))}
+          </div>
+        )}
+        {folderIds.length > 0 && (
+          <label className="checkbox-label cloud-consent">
+            <input type="checkbox" checked={allow} onChange={(e) => setAllow(e.target.checked)} />
+            Share the selected copies with my configured Astra cloud service for this assignment.
+          </label>
+        )}
+        {!cloud.connected && (
+          <div className="info-note">
+            {window.ahq
+              ? 'Add your Astra / OpenAI API key in Settings to start cloud work.'
+              : 'Open the desktop app and connect Astra cloud to start an employee session.'}
+          </div>
+        )}
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
+      <div className="modal-footer">
+        <button className="button secondary" onClick={onChat}>
+          <MessageCircle size={16} />
+          Conversation
+        </button>
+        {cloud.connected ? (
+          <button
+            className="button primary"
+            disabled={
+              running ||
+              !assignment.trim() ||
+              (folderIds.length > 0 && !allow) ||
+              (!!employee.sessionId && ['working', 'review'].includes(employee.status))
+            }
+            onClick={async () => {
+              setRunning(true);
+              setError('');
+              try {
+                await onStart(assignment.trim(), folderIds, allow);
+                onClose();
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'The session could not start.');
+              } finally {
+                setRunning(false);
+              }
+            }}
+          >
+            {running ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}Start cloud
+            session
+          </button>
+        ) : (
+          <button className="button primary" onClick={onSettings}>
+            Connect Astra <ArrowRight size={15} />
           </button>
         )}
-      </header>
-      {artifact.kind === "patch" ? (
-        <pre>
-          <code>{artifact.content}</code>
-        </pre>
-      ) : calendar ? (
-        <CalendarCard event={calendar} />
-      ) : (
-        <div className="markdown">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-            a: ({ href, children }) => href?.startsWith("https://") ? (
-              <a href={href} onClick={(event) => {
-                event.preventDefault();
-                void bridge.openExternal(href).catch((error: unknown) => setLinkError(error instanceof Error ? error.message : "Could not open this link."));
-              }}>{children}</a>
-            ) : <span title={href}>{children}</span>,
-          }}>{artifact.content}</ReactMarkdown>
-          {linkError && <p className="field-error" role="alert">{linkError}</p>}
-        </div>
-      )}
-    </div>
+      </div>
+    </Modal>
   );
 }
-
-export default App;
+function ReviewDialog({
+  approval,
+  employee,
+  busy,
+  onClose,
+  onDecide,
+  onExport,
+}: {
+  approval: Approval;
+  employee?: Employee;
+  busy: boolean;
+  onClose: () => void;
+  onDecide: (d: 'approved' | 'changes-requested', feedback?: string) => void;
+  onExport: () => void;
+}) {
+  const [changing, setChanging] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  return (
+    <Modal
+      title={approval.title}
+      subtitle={`Prepared by ${employee?.name ?? 'your local workspace'} · Version ${approval.version}`}
+      onClose={onClose}
+      wide
+    >
+      <div className="review-meta">
+        <span>
+          <Avatar employee={employee} size={25} />
+          {employee?.jobTitle ?? 'Local source inventory'}
+        </span>
+        <span className={`status-pill ${approval.status === 'pending' ? 'review' : 'ready'}`}>
+          {approval.status.replaceAll('-', ' ')}
+        </span>
+      </div>
+      <div className="document-preview">
+        <Markdown content={approval.content} />
+      </div>
+      <div className="review-sources">
+        <strong>Sources</strong>
+        {approval.sources.map((source) => (
+          <span key={source}>
+            <BookOpen size={12} />
+            {source}
+          </span>
+        ))}
+      </div>
+      <div className="review-recipient">
+        <Inbox size={15} />
+        <span>{approval.recipient}</span>
+      </div>
+      {changing && (
+        <label className="feedback-field">
+          What would make this better?
+          <textarea
+            autoFocus
+            rows={3}
+            placeholder="Be specific about the change you’d like to see…"
+            value={feedback}
+            maxLength={4000}
+            onChange={(e) => setFeedback(e.target.value)}
+          />
+        </label>
+      )}
+      <div className="modal-footer">
+        <button className="button secondary" onClick={onExport}>
+          Export document
+        </button>
+        <div className="button-group">
+          {approval.status === 'pending' &&
+            (changing ? (
+              <>
+                <button className="text-button" onClick={() => setChanging(false)}>
+                  Cancel
+                </button>
+                <button
+                  disabled={busy || !feedback.trim()}
+                  className="button primary"
+                  onClick={() => onDecide('changes-requested', feedback.trim())}
+                >
+                  Send feedback <ArrowRight size={15} />
+                </button>
+              </>
+            ) : (
+              <>
+                <button disabled={busy} className="button secondary" onClick={() => setChanging(true)}>
+                  Request changes
+                </button>
+                <button disabled={busy} className="button primary" onClick={() => onDecide('approved')}>
+                  {busy ? <LoaderCircle className="spin" size={16} /> : <Check size={16} />}Approve review
+                </button>
+              </>
+            ))}
+        </div>
+      </div>
+    </Modal>
+  );
+}

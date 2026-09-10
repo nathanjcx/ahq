@@ -1,4 +1,5 @@
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 
 type JsonObject = Record<string, unknown>;
@@ -54,19 +55,50 @@ export class CodexAppServer {
 
   async start(): Promise<void> {
     if (this.child) return;
-    const executable = process.env.CODEX_BIN || 'codex';
+    const executable =
+      process.env.CODEX_BIN ||
+      [
+        '/Applications/ChatGPT.app/Contents/Resources/codex',
+        '/Applications/Codex.app/Contents/Resources/codex',
+        '/opt/homebrew/bin/codex',
+        '/usr/local/bin/codex',
+      ].find(existsSync) ||
+      'codex';
     let child: ChildProcessWithoutNullStreams;
     try {
-      const configured = JSON.parse(execFileSync(executable, ['mcp', 'list', '--json'], {
-        encoding: 'utf8', timeout: 5_000, stdio: ['ignore', 'pipe', 'ignore'],
-      })) as Array<{ name?: unknown }>;
+      const configured = JSON.parse(
+        execFileSync(executable, ['mcp', 'list', '--json'], {
+          encoding: 'utf8',
+          timeout: 5_000,
+          stdio: ['ignore', 'pipe', 'ignore'],
+        }),
+      ) as Array<{ name?: unknown }>;
       if (!Array.isArray(configured)) throw new Error('Codex returned an invalid MCP server list');
-      const names = configured.map((entry) => entry.name).filter((name): name is string => typeof name === 'string');
-      const override = `mcp_servers={${names.map((name) => `${JSON.stringify(name)}={enabled=false}`).join(',')}}`;
-      child = spawn(executable, ['app-server', '--stdio', '--disable', 'apps', '--disable', 'plugins', '-c', override, '-c', 'web_search="disabled"'], {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: process.env,
-      });
+      const names = configured
+        .map((entry) => entry.name)
+        .filter((name): name is string => typeof name === 'string');
+      // A disabled server still requires a valid transport in current Codex config.
+      // Use inert child-only commands; never copy credentials or mutate the user's configuration.
+      const override = `mcp_servers={${names.map((name) => `${JSON.stringify(name)}={enabled=false,command="false"}`).join(',')}}`;
+      child = spawn(
+        executable,
+        [
+          'app-server',
+          '--stdio',
+          '--disable',
+          'apps',
+          '--disable',
+          'plugins',
+          '-c',
+          override,
+          '-c',
+          'web_search="disabled"',
+        ],
+        {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          env: process.env,
+        },
+      );
     } catch (error) {
       throw new Error(`Codex could not start with external tools disabled: ${messageOf(error)}`);
     }
@@ -95,7 +127,7 @@ export class CodexAppServer {
   }
 
   async readAccount(refreshToken = false): Promise<CodexAccount> {
-    const result = await this.request('account/read', { refreshToken }) as JsonObject;
+    const result = (await this.request('account/read', { refreshToken })) as JsonObject;
     const account = result.account as JsonObject | null;
     if (!account) return { signedIn: false };
     const type = stringValue(account.type);
@@ -111,12 +143,16 @@ export class CodexAppServer {
   }
 
   async login(): Promise<{ loginId: string; authUrl: string }> {
-    const result = await this.request('account/login/start', {
+    const result = (await this.request('account/login/start', {
       type: 'chatgpt',
       useHostedLoginSuccessPage: true,
       appBrand: 'codex',
-    }) as JsonObject;
-    if (result.type !== 'chatgpt' || typeof result.loginId !== 'string' || typeof result.authUrl !== 'string') {
+    })) as JsonObject;
+    if (
+      result.type !== 'chatgpt' ||
+      typeof result.loginId !== 'string' ||
+      typeof result.authUrl !== 'string'
+    ) {
       throw new Error('Codex did not return a ChatGPT browser login');
     }
     return { loginId: result.loginId, authUrl: result.authUrl };
@@ -132,31 +168,35 @@ export class CodexAppServer {
 
   async runTurn(options: RunTurnOptions): Promise<CodexTurnResult> {
     options.signal?.throwIfAborted();
-    const threadResult = await this.request('thread/start', {
+    const threadResult = (await this.request('thread/start', {
       cwd: options.cwd,
       ...(options.model.trim() ? { model: options.model.trim() } : {}),
       approvalPolicy: 'never',
       sandbox: 'workspace-write',
       ephemeral: true,
-      developerInstructions: 'You are working for Little Office in the provided workspace. Stay inside this workspace. Do not call external apps, services, or MCP tools. Do not read credentials. Complete only the stated task.',
-    }) as JsonObject;
+      developerInstructions:
+        'You are working for Little Office in the provided workspace. Stay inside this workspace. Do not call external apps, services, or MCP tools. Do not read credentials. Complete only the stated task.',
+    })) as JsonObject;
     const thread = threadResult.thread as JsonObject;
     const threadId = stringValue(thread?.id);
     if (!threadId) throw new Error('Codex thread/start returned no thread id');
 
     options.signal?.throwIfAborted();
-    const turnResult = await this.request('turn/start', {
+    const turnResult = (await this.request('turn/start', {
       threadId,
       input: [{ type: 'text', text: options.prompt, text_elements: [] }],
       cwd: options.cwd,
       approvalPolicy: 'never',
       ...(options.model.trim() ? { model: options.model.trim() } : {}),
       sandboxPolicy: {
-        type: 'workspaceWrite', writableRoots: [options.cwd], networkAccess: false,
-        excludeTmpdirEnvVar: true, excludeSlashTmp: true,
+        type: 'workspaceWrite',
+        writableRoots: [options.cwd],
+        networkAccess: false,
+        excludeTmpdirEnvVar: true,
+        excludeSlashTmp: true,
       },
       outputSchema: options.outputSchema,
-    }) as JsonObject;
+    })) as JsonObject;
     const turn = turnResult.turn as JsonObject;
     const turnId = stringValue(turn?.id);
     if (!turnId) throw new Error('Codex turn/start returned no turn id');

@@ -1,115 +1,58 @@
-# Little Office
+# Astra HQ
 
-A desktop office where local agents turn incoming requests into reports, code changes, meeting briefs, and calendar events. The office is an interactive pixel-art scene. Click a worker to inspect its activity and output.
+A desktop office for AI employees. Give the team a direction, let employees do the work in Astra cloud sessions, and provide judgment when they bring results back.
 
-This V1 uses fictional Gmail, Google Calendar, iMessage, Slack, Discord, Linear, and Asana data. It includes deterministic demo execution and live execution through a locally installed Codex CLI signed in with ChatGPT. External calendar changes and PR publication are simulated in both modes.
+This is the combined `main` application: **Ultrabranch’s complete 3D office**, **AHQ-Birth’s light layout and employee flow**, and **main’s SQLite/Codex runtime**. The original studio architecture, furniture, meeting room, lounge, library, articulated avatars, and walking routes are retained in `studio/app/office.tsx` and used directly by the desktop renderer.
 
-## V1 checkpoint
-
-This is a working desktop prototype with five scripted workflows and optional real Codex execution. It is not yet a general autonomous life CRM.
-
-The Electron app, local persistence, animated office, inbox filters, source and artifact links, calendar view, routine editor and scheduler, and bulletin board work. ChatGPT authentication is real. Live report generation and a local checkout fix passed end-to-end checks with Codex. Live meeting preparation, scheduling, and QA are implemented but have not received real-model end-to-end verification.
-
-The current limits are:
-
-- All seven sources are fixtures. No real inboxes or external services are monitored.
-- Triage uses predefined scenario labels. Demo execution uses timed steps and predefined output.
-- Calendar events stay in the app. No remote PRs are published and no messages are sent.
-- Live work uses isolated local files. Web search and external integrations are disabled.
-- Board handoffs are scripted or generated from status updates, not autonomous agent conversations. Meeting work can consume earlier artifacts.
-- Clicking a desk opens activity and artifacts, not a streamed computer desktop. Routines reuse six fixed characters.
-- Schedules run only while the application is open.
-
-The initial dataset contains 14 short source items, two per integration. Eleven actionable items map to the five workflows; three are informational. It also contains six characters, two disabled routines, one completed historical work item, two short historical artifacts, two board posts, and one calendar focus block. A full replay adds five artifacts and one dinner event.
-
-Supporting evidence consists of a few launch metrics, short meeting and dinner instructions, and a small checkout fixture with two tests. There are no substantial conversation histories or attachment collections yet. The main remaining product work is realistic demo depth and autonomous triage.
-
-## Run
-
-Use Node.js 22 or newer and npm. Install the Codex CLI separately for ChatGPT sign-in and live execution. The demo remains available when Codex is missing.
+## Start
 
 ```sh
 npm install
-npm run dev
+npm run dev:desktop
 ```
 
-For a production build:
-
-```sh
-npm run build
-npm start
-```
-
-To create an unpacked desktop distribution:
+Production build and macOS application:
 
 ```sh
 npm run package
 ```
 
-The Linux executable is under `release/linux-unpacked/`. Packaging runs on the current platform. This repository's desktop verification targets Linux.
+Open `release/mac-arm64/Astra HQ.app`. The development build is ad-hoc signed for local use; it is not notarized for public distribution. `npm run dev` opens only the renderer preview, without native storage, microphone transcription, or cloud credentials.
 
-## ChatGPT connection
+## Set up your office
 
-Open Settings and select **Sign in with ChatGPT**. Codex opens its browser authentication flow; Little Office updates when authentication completes. An existing local Codex ChatGPT login is recognized automatically. API-key authentication does not unlock subscription mode.
+1. Choose a local database folder when prompted, or keep the application folder. Existing Birth data is imported without deleting its original JSON file.
+2. Open **Settings & connections**, add your **Astra / OpenAI API key**, and keep `gpt-6-astra` or choose another model available to your API account. API usage has separate billing from ChatGPT subscriptions.
+3. Create an employee with **Name, Job title, Personality, Skills**. Every employee includes **Astra cloud session**. Web search, Data analysis, and connected integrations can be added as skills.
+4. Select an employee and give them an assignment. Optional local file copies are shared only when explicitly selected and authorized. Results come back for review.
 
-Select **Live** in Settings to execute work with Codex. Leave the model field blank to use the configured Codex default, or supply a model available to your account. Model calls use your ChatGPT account's Codex allowance. The runtime and files are local; inference still requires the hosted service and an internet connection.
+An organization-operated gateway remains available under the optional gateway settings. It must implement the contract in `docs/astra-gateway.md`; no gateway is bundled or implied to exist. OpenAI-hosted sessions work directly with a supplied API key.
 
-Codex owns authentication credentials. Signing out uses Codex's logout operation and affects the shared local Codex login.
+## What is included
 
-## Demo
+- **Office:** Ultra’s original cutaway, camera rotation/zoom, walking and articulated poses, with Birth’s light shell and north-star goal banner.
+- **Appearance:** presentation, skin tone, short/long/bald hair, hair color, hats, glasses, and clothing color. Changes persist and appear in the office and portraits. The four-field employee form stays separate.
+- **Timeline:** all workspace changes plus five-minute checkpoints while the desktop process is open; manual checkpoints; scrub and 1×–300× time lapse; durable avatar clock and microphone-level frames. Rollback first saves the current state, restores local workspace data, and keeps the activity journal. Active sessions must be stopped first. Remote actions and exported files cannot be undone or replayed by rollback.
+- **Announce:** hold with a pointer or Space/Enter, speak, then release. Rendered office speakers respond to microphone levels; avatars stop walking and face the camera. Release transcribes through OpenAI and sends guidance to every employee. Active turns are stopped before replacement turns begin. Delivery failures are reported per employee. Audio is not written to disk.
+- **Cloud work:** background Responses API calls, durable remote response IDs, polling/recovery, source links, human review, revisions, and stop controls. The office displays cloud-session badges only for employees with a session. Sample content is labeled separately.
+- **Integrations:** encrypted keys and user-provided HTTPS remote MCP endpoints. Selecting an integration name as an employee skill enables it; remote tool calls require an explicit review of the requested action. Built-in Web search and Data analysis use OpenAI-hosted tools.
+- **Activity:** user actions, employee messages, cloud work, reviews, and the original local runtime in one durable journal, filterable and exportable as CSV or JSON.
+- **Main backend:** the existing local Codex transport, work queue, reports, bug fixes, meeting briefs, local calendar workflows, routines, and fixture tests remain in `runtime/`. The Activity page exposes the local workflow runtime separately from cloud employees. It uses a local Codex installation and its own ChatGPT sign-in; local jobs are never labeled as cloud sessions.
 
-Start in Demo mode. Use Play to introduce the scenarios in sequence, Next to introduce one at a time, or choose an individual scenario. Speed controls demo pacing. Reset restores the fictional office and removes demo-generated work from its active state.
+## Storage and boundaries
 
-The scenarios cover a requested report, a checkout bug, meeting preparation, dinner scheduling, and recurring QA. Source items link to work; work links to activity and finished artifacts. The bulletin board records findings and handoffs. Routines can run manually, on an interval, or daily while the application is open.
+SQLite uses main’s `SnapshotStore`, extended with workspace, checkpoint, activity, session, and office-frame tables. All history is retained. The selected folder holds `Astra HQ/office.sqlite`; encrypted credentials and imported file copies remain in the app’s private data directory. Keys never enter React state after saving, workspace history, or exports. API calls run in the Electron main process through a narrow preload bridge; the renderer has no Node access.
 
-Closing the application stops its runtime. Routines do not run while the computer or application is off. Interrupted work is surfaced for retry on the next launch.
+Cloud session continuity uses stored response IDs and survives app restarts. A network failure before a create-response acknowledgement can leave an uncertain remote run; requests are not automatically retried. Integration connections require valid endpoints and credentials supplied by the user. Direct Gmail, Slack, or calendar OAuth flows are not bundled; compatible remote MCP services provide those connections.
 
-## Local browser preview
+The timeline replays recorded office state and avatar motion, not a remote computer video. No checkpoints are recorded while the application process is quit. Five-minute checkpoints resume on launch. Rollback restores local plans and profiles, never external systems or already completed actions.
 
-The desktop app is the primary deliverable. A loopback-only preview is included for visual QA:
+## Validation
 
 ```sh
-npm run build
-npm run preview
+npm run check
 ```
 
-Open `http://127.0.0.1:4318`. Preview data is separate from desktop data. The preview uses an authenticated local command endpoint and a subscription stream; it is not a hosted service.
+Tests cover the original runtime and file boundaries, plus hosted sessions, credential exclusion, approval continuation, cancellation before announcements, checkpoint persistence, microphone-level replay, and review recovery. Live cloud execution and live transcription require a user-provided API key and are not exercised by the automated tests. See `docs/validation.md` for the desktop verification record.
 
-## Verification
-
-```sh
-npm test
-npm run build
-node scripts/auth-smoke.mjs
-node scripts/smoke.mjs
-```
-
-The Electron smoke check requires a graphical session and writes screenshots to `test-results/`. It covers all five scenarios, scene clicks, inbox filters, routine editing, board posts, and the calendar. Set `OFFICE_EXECUTABLE` to the packaged executable to run the same checks against the distribution.
-
-The authentication check uses an isolated Codex profile to verify the real login URL and cancellation without changing your existing sign-in. It does not start a model turn.
-
-`node scripts/live-smoke.mjs` additionally verifies a real report through an existing ChatGPT login. Use `OFFICE_LIVE_SCENARIO=bug node scripts/live-smoke.mjs` to check a real local patch. It uses subscription allowance and keeps its workspace separate from the application's normal data.
-
-## Structure
-
-| Directory | Responsibility |
-| --- | --- |
-| `electron/` | Window, narrow preload bridge, runtime process host |
-| `runtime/` | SQLite persistence, fixtures, queue, schedules, Codex transport |
-| `src/shared/` | Commands and snapshot contracts |
-| `src/` | React application and PixiJS office |
-| `scripts/` | Development, packaging support, preview, smoke check |
-
-The runtime publishes durable work state and ordered activity. The office derives poses, routes, and workstation animations from that state. Animation timing never controls execution.
-
-Future real integrations should normalize external items into the existing source contract and implement external actions behind the runtime. They should preserve external IDs for deduplication and retain source links on work and artifacts.
-
-## Configuration
-
-| Variable | Purpose |
-| --- | --- |
-| `CODEX_BIN` | Override the Codex executable path |
-| `OFFICE_DATA_DIR` | Override the local runtime data directory |
-| `OFFICE_PORT` | Override the browser-preview port |
-
-Desktop state normally lives in Electron's application data directory. No connector OAuth credentials or real inbox data are required for this demo.
+Implementation references: [OpenAI background mode](https://developers.openai.com/api/docs/guides/background), [file transcription](https://developers.openai.com/api/docs/guides/speech-to-text), [MCP connections and approvals](https://developers.openai.com/api/docs/guides/tools-connectors-mcp), and [GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra).
