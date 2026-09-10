@@ -1,7 +1,7 @@
 import { createRuntime } from '../runtime/engine';
 import type { Command } from '../src/shared/types';
 
-type Message = { id: number; command: Command };
+type Message = { id: number; command: Command; type?: string };
 const parent = (process as NodeJS.Process & {
   parentPort?: { postMessage(value: unknown): void; on(event: string, listener: (event: { data: Message }) => void): void };
 }).parentPort;
@@ -11,6 +11,7 @@ if (!dataDir) throw new Error('OFFICE_DATA_DIR is required');
 const runtime = createRuntime({ dataDir, onSnapshot: (snapshot) => send({ type: 'snapshot', snapshot }) });
 
 async function receive(message: Message) {
+  if (message?.type === 'shutdown') { await close(); return; }
   if (!message || typeof message.id !== 'number') return;
   try {
     const engine = await runtime;

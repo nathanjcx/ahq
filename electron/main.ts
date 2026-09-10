@@ -7,6 +7,7 @@ let window: BrowserWindow | null = null;
 let host: Electron.UtilityProcess | null = null;
 let latest: Snapshot | undefined;
 let sequence = 0;
+let quitting = false;
 const pending = new Map<number, { resolve(value: Snapshot): void; reject(error: Error): void; timer: NodeJS.Timeout }>();
 const devUrl = !app.isPackaged && process.env.OFFICE_DEV === '1' ? 'http://127.0.0.1:5173' : undefined;
 const dataDir = process.env.OFFICE_DATA_DIR || path.join(app.getPath('userData'), 'office');
@@ -99,5 +100,13 @@ else {
     app.on('activate', () => { if (!window) createWindow(); });
   });
   app.on('window-all-closed', () => app.quit());
-  app.on('before-quit', () => { host?.kill(); });
+  app.on('before-quit', (event) => {
+    if (!host || quitting) return;
+    event.preventDefault();
+    quitting = true;
+    const runtime = host;
+    const deadline = setTimeout(() => { runtime.kill(); app.quit(); }, 4000);
+    runtime.once('exit', () => { clearTimeout(deadline); app.quit(); });
+    runtime.postMessage({ type: 'shutdown' });
+  });
 }
