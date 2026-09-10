@@ -1,0 +1,8 @@
+record_id,organization,owner,status,evidence
+MET-M1,Canal Depot,Dante Brooks,confirmed,MET-operations-notes section 1
+MET-M2,Market Station,Asha Das,confirmed,MET-operations-notes section 2
+MET-M3,Elm Junction,Leo Kim,confirmed,MET-operations-notes section 3
+MET-M4,Harbor Gate,Sam Okafor,confirmed,MET-operations-notes section 4
+MET-M5,University Loop,Jonah Brooks,awaiting_confirmation,MET-operations-notes section 5
+MET-M6,Central Plaza,Lena Ortiz,awaiting_confirmation,MET-operations-notes section 6
+MET-M7,Park Entrance,Maya Chen,awaiting_confirmation,MET-operations-notes section 7

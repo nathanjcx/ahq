@@ -1,0 +1,8 @@
+record_id,organization,owner,status,evidence
+NS-M1,Alto Audio,Theo Grant,confirmed,NS-operations-notes section 1
+NS-M2,Cedar Travel,Freya Cole,confirmed,NS-operations-notes section 2
+NS-M3,Drift Apparel,Ben Alvarez,confirmed,NS-operations-notes section 3
+NS-M4,Ember Tea,Sam Okafor,confirmed,NS-operations-notes section 4
+NS-M5,Field Supply,Jonah Brooks,awaiting_confirmation,NS-operations-notes section 5
+NS-M6,Grove Hotels,Lena Ortiz,awaiting_confirmation,NS-operations-notes section 6
+NS-M7,Halo Watches,Maya Chen,awaiting_confirmation,NS-operations-notes section 7

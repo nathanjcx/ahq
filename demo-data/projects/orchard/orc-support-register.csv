@@ -1,0 +1,51 @@
+ticket_id,project,period,organization,status,category
+ORC-S201,ORC,previous_week,Apple Ridge Farm,closed,delivery questions
+ORC-S202,ORC,previous_week,Blue Barn Growers,closed,delivery questions
+ORC-S203,ORC,previous_week,Creekside Produce,closed,delivery questions
+ORC-S204,ORC,previous_week,Dawn Orchards,closed,delivery questions
+ORC-S205,ORC,previous_week,Evergreen Acres,closed,delivery questions
+ORC-S206,ORC,previous_week,Fox Hollow Farm,closed,delivery questions
+ORC-S207,ORC,previous_week,Green Lane,closed,delivery questions
+ORC-S208,ORC,previous_week,Apple Ridge Farm,closed,delivery questions
+ORC-S209,ORC,previous_week,Blue Barn Growers,closed,delivery questions
+ORC-S210,ORC,previous_week,Creekside Produce,closed,delivery questions
+ORC-S211,ORC,previous_week,Dawn Orchards,closed,delivery questions
+ORC-S212,ORC,previous_week,Evergreen Acres,closed,delivery questions
+ORC-S213,ORC,previous_week,Fox Hollow Farm,closed,delivery questions
+ORC-S214,ORC,previous_week,Green Lane,closed,delivery questions
+ORC-S215,ORC,previous_week,Apple Ridge Farm,closed,delivery questions
+ORC-S216,ORC,previous_week,Blue Barn Growers,closed,delivery questions
+ORC-S217,ORC,previous_week,Creekside Produce,closed,delivery questions
+ORC-S218,ORC,previous_week,Dawn Orchards,closed,delivery questions
+ORC-S219,ORC,previous_week,Evergreen Acres,closed,delivery questions
+ORC-S220,ORC,previous_week,Fox Hollow Farm,closed,delivery questions
+ORC-S221,ORC,previous_week,Green Lane,closed,delivery questions
+ORC-S222,ORC,previous_week,Apple Ridge Farm,closed,delivery questions
+ORC-S223,ORC,previous_week,Blue Barn Growers,closed,delivery questions
+ORC-S224,ORC,previous_week,Creekside Produce,closed,delivery questions
+ORC-S225,ORC,previous_week,Dawn Orchards,closed,delivery questions
+ORC-S226,ORC,previous_week,Evergreen Acres,closed,delivery questions
+ORC-S227,ORC,previous_week,Fox Hollow Farm,closed,delivery questions
+ORC-S228,ORC,previous_week,Green Lane,closed,delivery questions
+ORC-S229,ORC,previous_week,Apple Ridge Farm,closed,delivery questions
+ORC-S230,ORC,previous_week,Blue Barn Growers,closed,delivery questions
+ORC-S231,ORC,previous_week,Creekside Produce,closed,delivery questions
+ORC-S232,ORC,previous_week,Dawn Orchards,closed,delivery questions
+ORC-S233,ORC,previous_week,Evergreen Acres,closed,delivery questions
+ORC-S234,ORC,previous_week,Fox Hollow Farm,closed,delivery questions
+ORC-S235,ORC,previous_week,Green Lane,closed,delivery questions
+ORC-S301,ORC,current_week,Apple Ridge Farm,closed,delivery questions
+ORC-S302,ORC,current_week,Blue Barn Growers,closed,delivery questions
+ORC-S303,ORC,current_week,Creekside Produce,closed,delivery questions
+ORC-S304,ORC,current_week,Dawn Orchards,closed,delivery questions
+ORC-S305,ORC,current_week,Evergreen Acres,closed,delivery questions
+ORC-S306,ORC,current_week,Fox Hollow Farm,closed,delivery questions
+ORC-S307,ORC,current_week,Green Lane,closed,delivery questions
+ORC-S308,ORC,current_week,Apple Ridge Farm,closed,delivery questions
+ORC-S309,ORC,current_week,Blue Barn Growers,closed,delivery questions
+ORC-S310,ORC,current_week,Creekside Produce,closed,delivery questions
+ORC-S311,ORC,current_week,Dawn Orchards,open,delivery questions
+ORC-S312,ORC,current_week,Evergreen Acres,open,delivery questions
+ORC-S313,ORC,current_week,Fox Hollow Farm,open,delivery questions
+ORC-S314,ORC,current_week,Green Lane,open,delivery questions
+ORC-S315,ORC,current_week,Apple Ridge Farm,open,delivery questions

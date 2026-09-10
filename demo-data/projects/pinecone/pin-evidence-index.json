@@ -1,0 +1,29 @@
+{
+  "project": "Pinecone Commerce",
+  "projectId": "PIN",
+  "contacts": {
+    "owner": "Nora Feld",
+    "analyst": "Eli Navarro",
+    "engineer": "Mina Park"
+  },
+  "records": [
+    {
+      "file": "pin-weekly-metrics.csv",
+      "purpose": "Counts and reporting baseline"
+    },
+    {
+      "file": "pin-owner-register.csv",
+      "purpose": "Seven organizations and named owners"
+    },
+    {
+      "file": "pin-release-notes.md",
+      "purpose": "Previously closed issue and test scope"
+    }
+  ],
+  "limits": [
+    "Fictional demo evidence",
+    "Do not mix counts between projects",
+    "A previous release check does not prove a new fix"
+  ],
+  "openRisk": "Seven merchant migrations still require named owners to confirm completion."
+}

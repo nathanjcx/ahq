@@ -1,0 +1,8 @@
+venue,released_slots,member_bookings,reserved_step_free_slots,saturday_access_tour,trained_volunteers_required,trained_volunteers_confirmed
+Light Lab,24,18,2,True,2,2
+Archive Room,20,12,2,False,0,0
+Sculpture Hall,24,17,4,True,2,1
+Print Gallery,20,13,2,False,0,0
+East Wing,20,12,2,False,0,0
+Learning Studio,18,11,4,True,2,2
+Roof Garden,14,8,0,False,0,0

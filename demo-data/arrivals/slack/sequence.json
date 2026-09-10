@@ -1,0 +1,115 @@
+[
+  {
+    "id": "slack-deep-01",
+    "label": "Slack evidence 1: PIN-184 reproducible coupon regression",
+    "threadId": "pin-release-172638.004",
+    "author": "Mina Park",
+    "title": "PIN-184 reproducible coupon regression",
+    "content": "Please fix the existing PIN-184 issue in the local checkout workspace. These are captured original failing cases, not a new issue or a verified fix. Save patch and fresh test output.",
+    "attachments": [
+      "pin-184-reproduction.json",
+      "pin-184-patch-boundary.md"
+    ]
+  },
+  {
+    "id": "slack-deep-02",
+    "label": "Slack evidence 2: PIN-184 original source excerpt",
+    "threadId": "pin-release-172638.004",
+    "author": "Mina Park",
+    "title": "PIN-184 original source excerpt",
+    "content": "Add this original source to the same PIN-184 investigation. The coupon branch adds its tax twice. This attachment is the broken baseline; do not overwrite a completed fix with it.",
+    "attachments": [
+      "pin-184-original-checkout.js"
+    ]
+  },
+  {
+    "id": "slack-deep-03",
+    "label": "Slack evidence 3: PIN-184 original receipt lines",
+    "threadId": "pin-release-172638.004",
+    "author": "pixelpilot",
+    "title": "PIN-184 original receipt lines",
+    "content": "Same PIN-184 bug from beta. Add these receipt lines to the existing issue evidence, not another engineering task. They show the original $104.40 charge.",
+    "attachments": [
+      "pin-184-original-receipt.csv"
+    ]
+  },
+  {
+    "id": "slack-deep-04",
+    "label": "Slack evidence 4: PIN-184 captured original test run",
+    "threadId": "pin-release-172638.004",
+    "author": "Mina Park",
+    "title": "PIN-184 captured original test run",
+    "content": "These are actual captured results from the original fixture: three passing tests and two taxed-coupon failures. Use them only as reproduction evidence for the same PIN-184 work; run fresh tests after editing.",
+    "attachments": [
+      "pin-184-original-test-output.txt"
+    ]
+  },
+  {
+    "id": "slack-deep-05",
+    "label": "Slack evidence 5: PIN-184 fixed-dollar acceptance cases",
+    "threadId": "pin-release-172638.004",
+    "author": "Owen Price",
+    "title": "PIN-184 fixed-dollar acceptance cases",
+    "content": "The attached tests express acceptance for the same patch. The $200 case distinguishes a fixed $10 discount from ten percent. Preserve expected values.",
+    "attachments": [
+      "pin-184-acceptance.test.js"
+    ]
+  },
+  {
+    "id": "slack-deep-06",
+    "label": "Slack evidence 6: PIN-184 contract stays fixed",
+    "threadId": "pin-release-172638.004",
+    "author": "Mina Park",
+    "title": "PIN-184 contract stays fixed",
+    "content": "For the existing PIN-184 fix, use this arithmetic contract. Keep the change local and focused. No payment integration or validation redesign is requested.",
+    "attachments": [
+      "pin-184-contract.md"
+    ]
+  },
+  {
+    "id": "slack-deep-07",
+    "label": "Slack evidence 7: PIN-185 waits for the completed patch",
+    "threadId": "pin-qa-172640.055",
+    "author": "Owen Price",
+    "title": "PIN-185 waits for the completed patch",
+    "content": "Create or update the existing PIN-185 QA task for PIN-184. Wait until its patch completes, then test that exact workspace. These QA instructions do not certify the original code.",
+    "attachments": [
+      "pin-185-qa-scope.md"
+    ]
+  },
+  {
+    "id": "slack-deep-08",
+    "label": "Slack evidence 8: PIN-185 handoff evidence checklist",
+    "threadId": "pin-qa-172640.055",
+    "author": "Owen Price",
+    "title": "PIN-185 handoff evidence checklist",
+    "content": "For the same PIN-185 QA task, collect the completed patch workspace and fresh verification evidence described here. If the patch has not completed, keep waiting.",
+    "attachments": [
+      "pin-185-handoff-checklist.md"
+    ]
+  },
+  {
+    "id": "slack-deep-09",
+    "label": "Slack evidence 9: PIN-184 full-price behavior must remain",
+    "threadId": "pin-release-172638.004",
+    "author": "Mina Park",
+    "title": "PIN-184 full-price behavior must remain",
+    "content": "Scope clarification for the same PIN-184 patch: checkoutTotal(100, 0.08) and an explicit zero coupon must both remain $108. Use the attached acceptance tests from this thread. This is not a separate bug."
+  },
+  {
+    "id": "slack-deep-10",
+    "label": "Slack evidence 10: PIN-185 evidence belongs to launch prep",
+    "threadId": "pin-qa-172640.055",
+    "author": "Owen Price",
+    "title": "PIN-185 evidence belongs to launch prep",
+    "content": "For the existing PIN-185 task, link its eventual verified result to the existing Pinecone leadership preparation. Do not substitute this message or the original failure log for completed QA. No new meeting or independent QA task is needed."
+  },
+  {
+    "id": "slack-deep-11",
+    "label": "Slack evidence 11: PIN-184 evidence received",
+    "threadId": "pin-release-172638.004",
+    "author": "Mina Park",
+    "title": "PIN-184 evidence received",
+    "content": "Thanks, the reproduction files opened. No new work or status claim in this message. I will read the patch and QA artifacts when they finish."
+  }
+]

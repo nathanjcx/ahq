@@ -1,0 +1,8 @@
+record_id,organization,owner,status,evidence
+PIN-M1,Birch Books,Nora Feld,awaiting_confirmation,PIN-operations-notes section 1
+PIN-M2,Copper Coffee,Eli Navarro,awaiting_confirmation,PIN-operations-notes section 2
+PIN-M3,Poppy Goods,Mina Park,awaiting_confirmation,PIN-operations-notes section 3
+PIN-M4,Juniper Bikes,Sam Okafor,awaiting_confirmation,PIN-operations-notes section 4
+PIN-M5,Fern Market,Jonah Brooks,awaiting_confirmation,PIN-operations-notes section 5
+PIN-M6,Oak Paper,Lena Ortiz,awaiting_confirmation,PIN-operations-notes section 6
+PIN-M7,Willow Studio,Maya Chen,awaiting_confirmation,PIN-operations-notes section 7

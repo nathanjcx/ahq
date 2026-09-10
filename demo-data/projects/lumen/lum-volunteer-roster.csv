@@ -1,0 +1,7 @@
+volunteer_id,name,venue,shift,access_training,confirmed
+LUM-V01,Hazel Wright,Light Lab,Saturday 10:00-12:00,completed,True
+LUM-V02,Finn Murphy,Light Lab,Saturday 10:00-12:00,completed,True
+LUM-V03,Ada Chen,Sculpture Hall,Saturday 13:00-15:00,completed,True
+LUM-V04,Sam Okafor,Sculpture Hall,Saturday 13:00-15:00,pending,False
+LUM-V05,Jonah Brooks,Learning Studio,Saturday 10:00-12:00,completed,True
+LUM-V06,Lena Ortiz,Learning Studio,Saturday 10:00-12:00,completed,True

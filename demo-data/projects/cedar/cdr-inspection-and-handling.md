@@ -1,0 +1,5 @@
+# Wednesday preparation record
+
+The main oven inspection is booked Wednesday 10:00-12:00 and overlaps both oven batches. Zoe Park confirms when the inspector releases the oven. Until then it stays unavailable. Olivia Hart permits moving oven batches to the small kitchen if inspection runs late. The small oven takes two loads for each oven batch, and the batch CSV already states the total small-oven duration. The hob can cook soup while the oven is in use. The small kitchen is available from 09:00 to 15:00, with packing from 15:00 to 16:30 and pickup from 17:00. A proposed contingency can be calculated from these durations; no switch has been confirmed.
+
+Private allergy notes stay with the kitchen lead in the kitchen roster. This demo does not include individual recipient records. Public volunteer reports can state the handling rule and refer questions to Olivia; they must not invent or disclose allergy details. These fictional timings are planning data for the demo, not food-safety guidance.

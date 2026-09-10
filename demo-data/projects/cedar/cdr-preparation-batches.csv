@@ -1,0 +1,4 @@
+batch_id,menu,reserved_portions,main_oven_minutes,small_oven_minutes,planned_start,planned_end
+CDR-B1,Vegetable tray bake,40,45,90,Wednesday 10:00,Wednesday 10:45
+CDR-B2,Bean casserole,48,60,120,Wednesday 10:45,Wednesday 11:45
+CDR-B3,Lentil soup,40,0,0,Wednesday 11:00,Wednesday 12:00

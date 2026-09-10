@@ -1,0 +1,8 @@
+record_id,organization,owner,status,evidence
+MAP-M1,Robotics,Grace Wilson,confirmed,MAP-operations-notes section 1
+MAP-M2,Ceramics,Isaac Lee,confirmed,MAP-operations-notes section 2
+MAP-M3,Chess,Anika Roy,confirmed,MAP-operations-notes section 3
+MAP-M4,Garden Club,Sam Okafor,confirmed,MAP-operations-notes section 4
+MAP-M5,Choir,Jonah Brooks,awaiting_confirmation,MAP-operations-notes section 5
+MAP-M6,Running Club,Lena Ortiz,awaiting_confirmation,MAP-operations-notes section 6
+MAP-M7,Book Club,Maya Chen,awaiting_confirmation,MAP-operations-notes section 7
