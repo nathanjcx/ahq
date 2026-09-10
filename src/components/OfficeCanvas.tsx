@@ -385,6 +385,8 @@ function drawPerson(g: Graphics, agent: Agent, phase: number, moving: boolean, r
     box(g, -9, -32, 9, 7, skin);
     box(g, 2, -32, 9, 7, skin);
     rect(g, 0, -30, 2, 2, C.ink);
+    rect(g, -6, -30, 2, 2, C.ink);
+    rect(g, 5, -30, 2, 2, C.ink);
   } else if (agent.accessory === 'cap') {
     box(g, -13, -44, 27, 11, color);
     rect(g, -6, -35, 23, 4, C.ink);
@@ -408,6 +410,12 @@ function drawPerson(g: Graphics, agent: Agent, phase: number, moving: boolean, r
     box(g, -8, -16, 19, 16, C.cream);
     rect(g, -6, -14, 15, 3, C.terra);
     rect(g, 12, -29 - hand, 3, 16, C.woodDark);
+  }
+  if (!moving && agent.activity === 'collaborating') {
+    box(g, 16, -48, 26, 16, C.cream);
+    rect(g, 19, -32, 5, 4, C.ink);
+    rect(g, 21, -33, 2, 4, C.cream);
+    for (let i = 0; i < 3; i++) rect(g, 21 + i * 6, -41, 3, 3, reduced || Math.floor(phase * 2) % 3 >= i ? C.ink : C.wallShade);
   }
   if (agent.activity === 'waiting') {
     rect(g, 17, -49, 2, 39, C.woodDark);
