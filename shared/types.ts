@@ -1,3 +1,6 @@
+import type { AgentConfig } from './agent-config';
+export type { AgentConfig, MemoryKind, MemoryScope, ReasoningEffort } from './agent-config';
+
 export type Page =
   | 'office'
   | 'employees'
@@ -30,6 +33,7 @@ export interface Employee {
   location: 'desk' | 'library' | 'meeting' | 'board';
   sessionId?: string;
   appearance?: Appearance;
+  agent?: AgentConfig;
 }
 export interface Commitment {
   id: string;
@@ -113,11 +117,21 @@ export interface CloudSettings {
 export interface CloudSession {
   reviewed?: boolean;
   id: string;
-  status: 'queued' | 'running' | 'waiting_for_approval' | 'completed' | 'failed';
+  status: 'queued' | 'running' | 'waiting_for_approval' | 'completed' | 'failed' | 'cancelled';
   activity: string;
   location: Employee['location'];
   events: { id: string; text: string; time: string }[];
   output?: { title: string; content: string; sources: string[]; recipient: string; version: number };
+  config?: AgentConfig;
+  configRevision?: number;
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    turns: number;
+    toolCalls: number;
+  };
+  toolCalls?: { id: string; name: string; status: 'completed' | 'failed'; summary: string; time: string }[];
 }
 export interface OfficeFrame {
   time: number;
@@ -138,6 +152,33 @@ export interface Integration {
   configured: boolean;
 }
 export interface DesktopAPI {
+  officeRecordingBounds(): Promise<import('./office-events').OfficeRecordingBounds>;
+  officeReplay(at: number): Promise<import('./office-events').OfficeReplayBundle>;
+  exportOfficeAudit(): Promise<{
+    exported: boolean;
+    path?: string;
+    verification: import('./office-events').OfficeAuditVerification;
+  }>;
+  onAgentSession(listener: (update: { employeeId: string; session: CloudSession }) => void): () => void;
+  inspectAgent(employeeId: string): Promise<import('./agent-inspection').AgentInspection>;
+  sendAgentMessage(input: {
+    channel: string;
+    text: string;
+  }): Promise<{ employeeId: string; session?: CloudSession; error?: string }[]>;
+  saveAgentMemory(input: {
+    employeeId: string;
+    id?: string;
+    memory: import('./agent-inspection').MemoryInput;
+  }): Promise<import('./agent-inspection').AgentMemory>;
+  approveAgentMemory(input: {
+    employeeId: string;
+    id: string;
+  }): Promise<import('./agent-inspection').AgentMemory>;
+  forgetAgentMemory(input: { employeeId: string; id: string }): Promise<void>;
+  readAgentArtifact(input: {
+    employeeId: string;
+    id: string;
+  }): Promise<import('./agent-inspection').AgentArtifact>;
   recordFrame(frame: OfficeFrame): Promise<void>;
   frameAt(time: number): Promise<OfficeFrame | null>;
   history(): Promise<HistoryEntry[]>;

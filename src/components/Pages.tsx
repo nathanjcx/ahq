@@ -10,8 +10,6 @@ import {
   Flag,
   FolderOpen,
   Leaf,
-  Link2,
-  LoaderCircle,
   Megaphone,
   MessageCircle,
   MoreHorizontal,
@@ -33,7 +31,7 @@ import type {
   WorkspaceFolder,
 } from '../../shared/types';
 import type { UpdateState } from '../App';
-import { clockTime, dueLabel, employeeById, timeNow, uid } from '../lib/store';
+import { clockTime, dueLabel, employeeById } from '../lib/store';
 import Avatar from './Avatar';
 import Modal from './Modal';
 type Common = { state: AppState; update: UpdateState; notify: (message: string) => void };
@@ -106,8 +104,8 @@ export function EmployeesPage({
         <div>
           <strong>A role gives direction. A connection makes it possible.</strong>
           <p>
-            Each employee runs in their own Astra cloud session when assigned work. Connect your gateway in
-            settings to get started.
+            Each employee runs in their own Astra cloud session when assigned work. Connect Astra in settings
+            to get started.
           </p>
         </div>
       </div>
@@ -384,14 +382,28 @@ export function ConversationsPage({
   const [draft, setDraft] = useState('');
   const person = employeeById(state.employees, channel);
   const messages = state.messages.filter((m) => m.channel === channel);
-  function send() {
-    if (!draft.trim()) return;
-    update((s) => ({
-      ...s,
-      messages: [...s.messages, { id: uid(), authorId: 'you', channel, text: draft.trim(), time: timeNow() }],
-    }));
-    setDraft('');
-    notify('Message saved locally for your team’s context.');
+  const [sending, setSending] = useState(false);
+  async function send() {
+    if (!draft.trim() || sending) return;
+    setSending(true);
+    try {
+      if (!window.ahq) throw new Error('Open Astra HQ desktop to send a message to a real employee session.');
+      await window.ahq.saveState(state);
+      const results = await window.ahq.sendAgentMessage({ channel, text: draft.trim() });
+      const saved = await window.ahq.loadState();
+      if (saved) update(() => saved);
+      const failures = results.filter((item) => item.error);
+      setDraft('');
+      notify(
+        failures.length
+          ? failures.map((item) => item.error).join(' · ')
+          : 'Your message reached the Astra session. Replies appear here.',
+      );
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Your message could not be delivered.');
+    } finally {
+      setSending(false);
+    }
   }
   return (
     <div className="conversation-layout surface">
@@ -430,7 +442,11 @@ export function ConversationsPage({
             </div>
           </div>
           <span className="mode-badge">
-            {person?.sessionId ? 'Cloud assignment context' : 'Local workspace'}
+            {person?.sessionId
+              ? 'Persistent Astra session'
+              : window.ahq
+                ? 'Astra direct messages'
+                : 'Desktop connection required'}
           </span>
         </header>
         <div className="conversation-messages">
@@ -438,7 +454,10 @@ export function ConversationsPage({
             <div className="empty-state">
               <MessageCircle size={32} />
               <h3>Every good thing starts somewhere.</h3>
-              <p>Leave {person?.name ?? 'your team'} a little context for their next assignment.</p>
+              <p>
+                Give {person?.name ?? 'your team'} a direction. Your message starts or continues their Astra
+                session.
+              </p>
             </div>
           )}
           {messages.map((m, i) => (
@@ -491,8 +510,10 @@ export function ConversationsPage({
             }}
           />
           <div>
-            <span>Saved locally · included with new assignments</span>
-            <button type="submit" className="button primary" disabled={!draft.trim()}>
+            <span>
+              {sending ? 'Connecting to Astra…' : 'Persistent conversation · real employee replies'}
+            </span>
+            <button type="submit" className="button primary" disabled={!draft.trim() || sending}>
               <Send size={15} />
               Send
             </button>
@@ -586,7 +607,6 @@ export function SettingsPage({
   update,
   notify,
   cloud,
-  setCloud,
   onSelectFolder,
   onBrief,
   onReset,
@@ -598,26 +618,7 @@ export function SettingsPage({
   onReset: () => void;
 }) {
   const [name, setName] = useState(state.workspaceName);
-  const [endpoint, setEndpoint] = useState(cloud.endpoint);
-  const [token, setToken] = useState('');
-  const [connecting, setConnecting] = useState(false);
-  const [error, setError] = useState('');
   const [reset, setReset] = useState(false);
-  async function connect() {
-    if (!window.ahq) return;
-    setConnecting(true);
-    setError('');
-    try {
-      const settings = await window.ahq.configureCloud({ endpoint, token });
-      setCloud(settings);
-      setToken('');
-      notify('Your Astra cloud gateway is connected.');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not connect to that gateway.');
-    } finally {
-      setConnecting(false);
-    }
-  }
   return (
     <div className="settings-layout">
       <div className="settings-primary">
@@ -724,8 +725,8 @@ export function SettingsPage({
             </span>
           </div>
           <p className="muted">
-            Astra cloud uses your configured provider. The optional gateway below is for organizations running
-            their own service.
+            All employee work uses GPT-6 Astra. Configure your connection above, then choose each employee’s
+            reasoning, tools, memory, and autonomy in their profile.
           </p>
           {!window.ahq && (
             <div className="info-note">
@@ -736,72 +737,6 @@ export function SettingsPage({
               </span>
             </div>
           )}
-          <details>
-            <summary>Use a separate Astra gateway instead</summary>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void connect();
-              }}
-            >
-              <label>
-                Gateway endpoint
-                <input
-                  type="url"
-                  value={endpoint}
-                  onChange={(e) => setEndpoint(e.target.value)}
-                  placeholder="https://your-astra-gateway.example.com"
-                  disabled={!window.ahq || connecting}
-                  required
-                />
-              </label>
-              <label>
-                Access token
-                <input
-                  type="password"
-                  autoComplete="new-password"
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                  placeholder={
-                    cloud.configured ? 'Leave blank to keep the saved token' : 'Your gateway access token'
-                  }
-                  disabled={!window.ahq || connecting}
-                  required={!cloud.configured}
-                />
-              </label>
-              <p className="form-hint">
-                Tokens are encrypted by macOS and never exposed to the office interface.
-              </p>
-              {error && (
-                <p className="form-error" role="alert">
-                  {error}
-                </p>
-              )}
-              <div className="button-group">
-                <button type="submit" className="button primary" disabled={!window.ahq || connecting}>
-                  {connecting ? <LoaderCircle size={15} className="spin" /> : <Link2 size={15} />}
-                  {cloud.configured ? 'Update connection' : 'Connect Astra cloud'}
-                </button>
-                {cloud.configured && (
-                  <button
-                    type="button"
-                    className="button secondary"
-                    onClick={async () => {
-                      try {
-                        const next = await window.ahq!.disconnectCloud();
-                        setCloud(next);
-                        notify('Astra gateway disconnected on this device.');
-                      } catch {
-                        notify('Could not disconnect. Please try again.');
-                      }
-                    }}
-                  >
-                    Disconnect
-                  </button>
-                )}
-              </div>
-            </form>
-          </details>
         </section>
       </div>
       <aside>
@@ -809,8 +744,8 @@ export function SettingsPage({
           <ShieldCheck size={28} />
           <h3>Your space. Your say.</h3>
           <p>
-            Assignments have a clear owner. Documents have a review step. External actions need a specific
-            decision.
+            Assignments have a clear owner. You choose which tools need approval, how memory works, and when
+            employees can act.
           </p>
           <span className="text-button">
             Built around your trust <Leaf size={15} />

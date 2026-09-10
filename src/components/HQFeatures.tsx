@@ -423,8 +423,8 @@ export function VoiceAnnounce({
     <div className={`voice-announce ${recording ? 'recording' : ''}`}>
       <button
         className="button primary"
-        aria-label="Hold to announce to all employees"
-        disabled={busy}
+        aria-label="Voice unavailable in Astra-only mode"
+        disabled={true}
         onPointerDown={(e) => {
           e.preventDefault();
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -446,13 +446,9 @@ export function VoiceAnnounce({
         }}
       >
         <Mic size={17} />
-        {recording ? 'Listening · release to send' : busy ? 'Preparing announcement…' : 'Hold to announce'}
+        Voice unavailable
       </button>
-      <span>
-        {recording
-          ? 'Everyone is listening through the office speakers.'
-          : 'Release to transcribe and send to every employee.'}
-      </span>
+      <span>Astra-only mode · use a typed announcement.</span>
       {transcript && <p className="voice-transcript">“{transcript}”</p>}
     </div>
   );
@@ -468,7 +464,7 @@ export function ConnectionSettings({
   notify: (s: string) => void;
 }) {
   const [key, setKey] = useState(''),
-    [model, setModel] = useState(cloud.model ?? 'gpt-6-astra'),
+    [model] = useState('gpt-6-astra'),
     [location, setLocation] = useState(''),
     [items, setItems] = useState<Integration[]>([]),
     [name, setName] = useState(''),
@@ -502,8 +498,8 @@ export function ConnectionSettings({
           Astra cloud
         </h2>
         <p>
-          Each employee works in a hosted Astra session. Add your OpenAI API key to start work and transcribe
-          announcements.
+          Each employee works in a hosted Astra session. Add your OpenAI API key to start persistent sessions
+          with tools, memory, and team communication.
         </p>
         <form
           onSubmit={(e) => {
@@ -533,7 +529,7 @@ export function ConnectionSettings({
           </label>
           <label>
             Model
-            <input required value={model} onChange={(e) => setModel(e.target.value)} />
+            <input aria-label="Agent model" readOnly value={model} />
           </label>
           <div className="form-hint">
             Keys are encrypted by macOS and stay out of activity exports. API billing is separate from your
@@ -584,8 +580,8 @@ export function ConnectionSettings({
       <section className="surface settings-section">
         <h2>Integration keys</h2>
         <p>
-          Connect a service’s remote MCP endpoint. Add its name to an employee’s Skills to let them use it.
-          You review each requested action.
+          Connect a service’s remote MCP endpoint, then enable it in the employee’s Tools configuration. Each
+          employee has their own tool approval settings.
         </p>
         {items.map((i) => (
           <div className="integration-row" key={i.id}>
@@ -614,7 +610,7 @@ export function ConnectionSettings({
               setName('');
               setUrl('');
               setToken('');
-              notify('Integration saved. Assign it through employee Skills.');
+              notify('Integration saved. Enable it in the employee’s Tools configuration.');
             });
           }}
         >

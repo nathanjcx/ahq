@@ -1,0 +1,240 @@
+.office-atlas {
+  color: #3b4b34;
+}
+.atlas-intro {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  padding: 18px;
+  background: #edf2e5;
+  border: 1px solid #dce5d1;
+  border-radius: 12px;
+  margin-bottom: 18px;
+}
+.atlas-intro > span {
+  display: grid;
+  place-items: center;
+  width: 47px;
+  flex: 0 0 47px;
+  height: 52px;
+  color: #6b8554;
+  border: 1px solid #cbd9bd;
+  border-radius: 8px;
+  background: #e5eddc;
+}
+.atlas-intro strong {
+  font-size: 15px;
+  font-weight: 500;
+}
+.atlas-intro p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #6e7e61;
+  margin: 5px 0 0;
+}
+.atlas-search {
+  display: flex !important;
+  gap: 10px;
+  align-items: center;
+  background: #fffef8;
+  border: 1px solid #dce3d4;
+  border-radius: 9px;
+  padding: 0 13px;
+  color: #8a987d;
+}
+.atlas-search input {
+  border: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  padding: 12px 0 !important;
+  font-size: 12px !important;
+}
+.atlas-stations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 15px 0;
+}
+.atlas-stations button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #dce4d3;
+  background: #fbfcf7;
+  color: #738365;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 10px;
+  cursor: pointer;
+}
+.atlas-stations button[aria-pressed='true'] {
+  background: #39573d;
+  color: #f2f6e9;
+  border-color: #39573d;
+}
+.atlas-count {
+  font-size: 10px;
+  color: #819274;
+  margin: 17px 0;
+}
+.atlas-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.atlas-card {
+  padding: 17px 16px;
+  background: #fffef8;
+  border: 1px solid #e1e6d7;
+  border-radius: 11px;
+  align-self: start;
+}
+.atlas-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #7e916b;
+}
+.atlas-card-top > span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  background: #edf2e5;
+  border-radius: 7px;
+}
+.atlas-card-top small {
+  font-size: 9px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.atlas-card-top b {
+  margin-left: auto;
+  font-weight: 400;
+  font-size: 9px;
+  color: #a18c63;
+}
+.atlas-card h3 {
+  font-family: Georgia, serif;
+  font-size: 19px !important;
+  font-weight: 400;
+  margin: 14px 0 8px !important;
+  color: #405738;
+}
+.atlas-card > p {
+  font-size: 11px;
+  line-height: 1.75;
+  color: #78876b;
+  min-height: 56px;
+}
+.atlas-card details {
+  border-top: 1px solid #e9eddf;
+  margin-top: 12px;
+  padding-top: 11px;
+}
+.atlas-card summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  cursor: pointer;
+  font-size: 10px;
+  color: #5d774c;
+  list-style: none;
+}
+.atlas-card summary::-webkit-details-marker {
+  display: none;
+}
+.atlas-card details[open] summary svg {
+  transform: rotate(90deg);
+}
+.atlas-engine {
+  background: #f3f6ed;
+  border-radius: 7px;
+  padding: 11px;
+  margin-top: 11px;
+}
+.atlas-engine > span {
+  font-size: 8px;
+  font-weight: 650;
+  color: #879578;
+  letter-spacing: 1px;
+}
+.atlas-engine p {
+  font-size: 10px;
+  line-height: 1.7;
+  margin: 4px 0 10px;
+  color: #627653;
+}
+.atlas-engine code {
+  font-size: 9px;
+  overflow-wrap: anywhere;
+  color: #8d997e;
+}
+.atlas-footnote,
+.atlas-empty {
+  font-size: 11px;
+  line-height: 1.8;
+  color: #8a987f;
+  text-align: center;
+  margin: 24px 0 3px;
+}
+.office-guide-launch {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 17px 20px;
+  border: 1px solid #dce5d3;
+  border-radius: 12px;
+  background: #f2f6eb;
+  margin: 18px 0;
+  color: #698154;
+}
+.office-guide-launch > div {
+  flex: 1;
+}
+.office-guide-launch strong {
+  display: block;
+  font-family: Georgia, serif;
+  font-weight: 400;
+  font-size: 18px;
+  color: #425b37;
+}
+.office-guide-launch p {
+  font-size: 11px;
+  color: #819373;
+  margin: 5px 0 0;
+}
+.office-guide-launch button {
+  font-size: 11px;
+}
+.office-atlas button:focus-visible,
+.office-atlas summary:focus-visible {
+  outline: 2px solid #739259;
+  outline-offset: 2px;
+}
+@media (max-width: 560px) {
+  .atlas-grid {
+    grid-template-columns: 1fr;
+  }
+  .atlas-intro {
+    padding: 13px;
+  }
+  .atlas-intro p {
+    font-size: 11px;
+  }
+  .atlas-stations button {
+    padding: 9px;
+    font-size: 10px;
+  }
+  .office-guide-launch {
+    flex-wrap: wrap;
+  }
+  .office-guide-launch button {
+    margin-left: 36px;
+  }
+  .atlas-card > p {
+    min-height: 0;
+  }
+}

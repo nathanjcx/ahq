@@ -6,6 +6,7 @@ import path from 'node:path';
 import { SnapshotStore } from '../runtime/store';
 import { HostedEmployees } from '../desktop/hosted';
 import { initialState } from '../src/lib/store';
+import { defaultAgentConfig } from '../shared/agent-config';
 const config = {
   key: 'test-key-never-saved',
   model: 'gpt-6-astra',
@@ -97,6 +98,10 @@ test('hosted employees use real background responses, persist session IDs, and d
       ...initialState().employees[0],
       skills: 'Astra cloud session, Web search, Tracker',
       sessionId: undefined,
+      agent: {
+        ...defaultAgentConfig(),
+        tools: { ...defaultAgentConfig().tools, webSearch: true, integrationIds: ['abc'] },
+      },
     };
     const engine = new HostedEmployees(f.store, async () => config);
     const started = await engine.start(employee, 'Produce a report', initialState());
@@ -151,7 +156,12 @@ test('integration approval continues only with the reviewed approval ID and fres
     );
   };
   try {
-    const employee = { ...initialState().employees[0], skills: 'Tracker', sessionId: undefined };
+    const employee = {
+      ...initialState().employees[0],
+      skills: 'Tracker',
+      sessionId: undefined,
+      agent: { ...defaultAgentConfig(), tools: { ...defaultAgentConfig().tools, integrationIds: ['abc'] } },
+    };
     const engine = new HostedEmployees(f.store, async () => config);
     const s = await engine.start(employee, 'Draft a task', initialState());
     assert.equal(s.status, 'waiting_for_approval');
@@ -171,17 +181,24 @@ test('integration approval continues only with the reviewed approval ID and fres
     await f.close();
   }
 });
-test('broadcast guidance cancels the old turn before starting a new hosted turn', async () => {
+test('broadcast guidance waits for the active turn and preserves the hosted response chain', async () => {
   const f = await fixture(),
     original = globalThis.fetch;
   const routes: string[] = [];
-  globalThis.fetch = async (url) => {
+  const bodies: Record<string, unknown>[] = [];
+  globalThis.fetch = async (url, init) => {
     routes.push(String(url));
+    bodies.push(JSON.parse(String(init?.body ?? '{}')));
     return new Response(
       JSON.stringify({
-        id: routes.length === 1 ? 'resp_first' : 'resp_second',
-        status: 'in_progress',
-        output: [],
+        id: routes.length <= 2 ? 'resp_first' : 'resp_second',
+        status: String(url).endsWith('/cancel')
+          ? 'cancelled'
+          : routes.length === 2
+            ? 'completed'
+            : 'in_progress',
+        output:
+          routes.length === 2 ? [{ type: 'message', content: [{ text: 'Original turn result.' }] }] : [],
       }),
     );
   };
@@ -189,11 +206,16 @@ test('broadcast guidance cancels the old turn before starting a new hosted turn'
     const engine = new HostedEmployees(f.store, async () => config);
     const s = await engine.start(initialState().employees[0], 'Work on a plan', initialState());
     const next = await engine.continue(s.id, 'New announcement: focus on quality', true);
-    assert.ok(routes[1].endsWith('/responses/resp_first/cancel'));
-    assert.ok(routes[2].endsWith('/responses'));
+    assert.equal(routes.length, 1);
     assert.equal(next.status, 'running');
+    await engine.get(s.id);
+    assert.ok(routes[1].endsWith('/responses/resp_first'));
+    assert.ok(routes[2].endsWith('/responses'));
+    assert.equal(bodies[2].previous_response_id, 'resp_first');
+    assert.match(String(bodies[2].input), /focus on quality/);
+    assert.ok(!routes.some((route) => route.endsWith('/cancel')));
     await engine.cancel(s.id);
-    assert.equal(engine.peek(s.id).status, 'completed');
+    assert.equal(engine.peek(s.id).status, 'cancelled');
   } finally {
     globalThis.fetch = original;
     await f.close();

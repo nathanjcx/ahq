@@ -11,18 +11,22 @@ import {
   useState,
 } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import {
-  Canvas,
-  events as createPointerEvents,
-  useFrame,
-  useThree,
-  type CanvasProps,
-} from '@react-three/fiber';
+import { Canvas, events as createPointerEvents, useThree, type CanvasProps } from '@react-three/fiber';
 import { Html, Line, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Employee } from './data';
+import {
+  deriveOfficePresence,
+  type OfficePresence,
+  type EmployeePresence,
+  type OfficeHandoff,
+} from '../../src/lib/office-presence';
+import type { OfficeStation } from '../../shared/office-tool-atlas';
+import '../../src/styles/office-presence.css';
 
 type OfficeProps = {
+  presence?: OfficePresence;
+  onStation?: (station: OfficeStation) => void;
   live?: boolean;
   timeSeconds?: number;
   listening?: boolean;
@@ -253,7 +257,15 @@ function ArchitecturalDetails() {
   );
 }
 
-function OperationsDisplay() {
+function OperationsDisplay({ presence }: { presence: OfficePresence }) {
+  const workers = Object.values(presence.employees).filter((employee) => employee.observed);
+  const counts = [
+    workers.filter((employee) => employee.status === 'working').length,
+    workers.filter((employee) => employee.status === 'queued').length,
+    workers.filter((employee) => employee.status === 'review').length,
+    workers.filter((employee) => employee.status === 'completed').length,
+  ];
+  const signature = counts.join(':');
   const texture = useMemo(() => {
     const canvas = document.createElement('canvas');
     canvas.width = 1024;
@@ -273,8 +285,8 @@ function OperationsDisplay() {
     ctx.fillText('Good work, together.', 52, 164);
     ctx.fillStyle = '#8ea69a';
     ctx.font = '27px Arial';
-    ctx.fillText('NORTHSTAR  /  LAUNCH 01', 55, 214);
-    const labels = ['RESEARCH', 'CREATE', 'REVIEW', 'SHIP'];
+    ctx.fillText('RECORDED WORK  /  OFFICE STATUS', 55, 214);
+    const labels = ['WORKING', 'QUEUED', 'REVIEW', 'COMPLETE'];
     labels.forEach((label, i) => {
       const x = 58 + i * 244;
       ctx.fillStyle = i === 2 ? '#baa06a' : '#35594a';
@@ -283,7 +295,7 @@ function OperationsDisplay() {
       ctx.font = '600 21px Arial';
       ctx.fillText(label, x + 17, 313);
       ctx.font = '500 49px Arial';
-      ctx.fillText(i === 0 ? '03' : i === 1 ? '02' : i === 2 ? '01' : '—', x + 17, 377);
+      ctx.fillText(String(counts[i]).padStart(2, '0'), x + 17, 377);
       if (i < 3) {
         ctx.fillStyle = '#73896f';
         ctx.fillRect(x + 214, 346, 20, 2);
@@ -298,7 +310,7 @@ function OperationsDisplay() {
     map.colorSpace = THREE.SRGBColorSpace;
     map.anisotropy = 4;
     return map;
-  }, []);
+  }, [signature]);
   useEffect(() => () => texture.dispose(), [texture]);
   return (
     <group position={[-5.68, 2.05, -5.79]}>
@@ -312,127 +324,94 @@ function OperationsDisplay() {
   );
 }
 
-function activityFor(employee: Employee) {
-  const task = (employee.task + ' ' + employee.role).toLowerCase();
-  return employee.status === 'review' || /whiteboard|discuss|collaborat/.test(task)
-    ? 'discussion'
-    : /cabinet|librar|reading|read documents|dependencies|resources/.test(task)
-      ? 'reading'
-      : employee.status === 'ready'
-        ? 'lounge'
-        : 'research';
-}
-
-function employeeAnchor(employee: Employee, index: number): Point {
-  const activity = activityFor(employee);
-  return activity === 'discussion'
-    ? [3.3 + (index % 3) * 0.95, 0.105, -4.94]
-    : activity === 'reading'
-      ? [-1.65 + (index % 2) * 0.75, 0.105, -4.45]
-      : activity === 'lounge'
-        ? [3.65 + (index % 3) * 1.03, 0.105, 4.68]
-        : [desks[index % desks.length][0], 0.105, desks[index % desks.length][2] + 1];
-}
-
 function HandoffRoute({
   start,
   end,
-  color,
-  motion,
-  timeline,
-  delay,
+  handoff,
   highlighted,
 }: {
   start: Point;
   end: Point;
-  color: string;
-  motion: boolean;
-  timeline: number;
-  delay: number;
+  handoff: OfficeHandoff;
   highlighted: boolean;
 }) {
-  const packet = useRef<THREE.Mesh>(null);
-  const halo = useRef<THREE.Mesh>(null);
-  const clock = useRef(delay);
-  const curve = useMemo(() => {
-    const points: Point[] = [start];
-    if (start[0] < 0) {
-      points.push([start[0], 0.105, start[2] + 0.54], [0.15, 0.105, start[2] + 0.54], [0.15, 0.105, -1.36]);
-    }
-    if (end[0] > 1.45 && end[2] < -0.6) points.push([2.16, 0.105, -1.36], [2.16, 0.105, -4.94]);
-    points.push(end);
-    return new THREE.CatmullRomCurve3(
-      points.map((p) => new THREE.Vector3(...p)),
-      false,
-      'catmullrom',
-      0.12,
-    );
-  }, [start[0], start[2], end[0], end[2]]);
-  const points = useMemo(() => curve.getPoints(90), [curve]);
-  const initial = useMemo(() => curve.getPoint(0.35), [curve]);
-  useFrame((_, delta) => {
-    if (!motion) return;
-    clock.current += Math.min(delta, 0.05);
-    const progress = ((clock.current + timeline * 0.19) % 13) / 13;
-    if (packet.current) {
-      packet.current.position.copy(curve.getPoint(progress));
-      packet.current.scale.setScalar(highlighted ? 1.15 : 0.9);
-    }
-    if (halo.current) halo.current.scale.setScalar(1 + Math.sin(clock.current * 2.4) * 0.1);
-  });
+  const curve = useMemo(
+    () =>
+      new THREE.QuadraticBezierCurve3(
+        new THREE.Vector3(start[0], 1.25, start[2]),
+        new THREE.Vector3((start[0] + end[0]) / 2, 3.6, (start[2] + end[2]) / 2),
+        new THREE.Vector3(end[0], 1.25, end[2]),
+      ),
+    [start[0], start[2], end[0], end[2]],
+  );
+  const points = useMemo(() => curve.getPoints(48), [curve]);
+  const packet = curve.getPoint(handoff.progress);
+  const color =
+    handoff.status === 'acknowledged' ? '#a7d8ae' : handoff.status === 'delivered' ? '#d8c691' : '#a6c8d7';
   return (
     <group>
       <Line
         points={points}
         color={color}
-        lineWidth={highlighted ? 1.5 : 0.9}
+        lineWidth={highlighted ? 1.8 : 1.1}
         transparent
-        opacity={highlighted ? 0.44 : 0.2}
-        dashed
-        dashSize={0.11}
-        gapSize={0.12}
+        opacity={handoff.opacity}
+        dashed={handoff.status === 'queued'}
+        dashSize={0.16}
+        gapSize={0.1}
         depthWrite={false}
       />
-      <mesh ref={packet} position={initial}>
-        <sphereGeometry args={[0.085, 12, 8]} />
-        <meshBasicMaterial color={color} toneMapped={false} />
-      </mesh>
-      <mesh ref={halo} position={[end[0], 0.106, end[2]]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.3, 0.33, 40]} />
-        <meshBasicMaterial color={color} transparent opacity={0.5} depthWrite={false} />
+      <group position={packet} scale={handoff.pulse}>
+        <Box s={[0.32, 0.22, 0.04]} color="#f3e7ca" />
+        <Line
+          points={[
+            [-0.16, 0.11, 0.026],
+            [0, -0.02, 0.026],
+            [0.16, 0.11, 0.026],
+          ]}
+          color={C.terra}
+          lineWidth={1}
+        />
+        <mesh position={[0, -0.02, 0.029]}>
+          <circleGeometry args={[0.035, 12]} />
+          <meshBasicMaterial color={color} />
+        </mesh>
+        {highlighted && (
+          <Html center position={[0, 0.35, 0]} zIndexRange={[19, 15]}>
+            <span className="office-receipt" title={handoff.summary}>
+              {handoff.status === 'acknowledged'
+                ? '✓ Acknowledged'
+                : handoff.status === 'delivered'
+                  ? 'Delivered'
+                  : 'Queued'}
+            </span>
+          </Html>
+        )}
+      </group>
+      <mesh position={[end[0], 0.06, end[2]]} rotation={[-Math.PI / 2, 0, 0]} scale={handoff.pulse}>
+        <ringGeometry args={[0.4, 0.44, 36]} />
+        <meshBasicMaterial color={color} transparent opacity={handoff.opacity} depthWrite={false} />
       </mesh>
     </group>
   );
 }
 
-function WorkflowHandoffs({ team, motion, timeline, selected }: OfficeProps) {
-  const reviewer = team.findIndex((person) => activityFor(person) === 'discussion');
-  const researcher = team.findIndex((person) => activityFor(person) === 'research');
-  const creative = team.findIndex((person, i) => i !== reviewer && activityFor(person) === 'discussion');
-  if (reviewer < 0 || researcher < 0) return null;
-  const destination = creative >= 0 ? creative : reviewer;
+function WorkflowHandoffs({ presence, selected }: { presence: OfficePresence; selected: string | null }) {
   return (
     <group>
-      <HandoffRoute
-        start={employeeAnchor(team[researcher], researcher)}
-        end={employeeAnchor(team[destination], destination)}
-        color="#a5d3ad"
-        motion={motion}
-        timeline={timeline}
-        delay={3}
-        highlighted={!selected || selected === team[researcher].id || selected === team[destination].id}
-      />
-      {creative >= 0 && (
-        <HandoffRoute
-          start={employeeAnchor(team[creative], creative)}
-          end={employeeAnchor(team[reviewer], reviewer)}
-          color="#e6c587"
-          motion={motion}
-          timeline={timeline}
-          delay={8}
-          highlighted={selected === team[reviewer].id}
-        />
-      )}
+      {presence.handoffs.map((handoff, index) => {
+        const from = presence.employees[handoff.fromEmployeeId],
+          to = presence.employees[handoff.toEmployeeId];
+        return from && to ? (
+          <HandoffRoute
+            key={handoff.id}
+            start={from.position}
+            end={to.position}
+            handoff={handoff}
+            highlighted={selected ? [from.employeeId, to.employeeId].includes(selected) : index === 0}
+          />
+        ) : null;
+      })}
     </group>
   );
 }
@@ -771,7 +750,7 @@ function Whiteboard() {
   );
 }
 
-function Architecture() {
+function Architecture({ presence }: { presence: OfficePresence }) {
   return (
     <group>
       <Parquet />
@@ -828,7 +807,7 @@ function Architecture() {
         <Box p={[0.25, -0.22, 0.073]} s={[0.86, 0.22, 0.01]} color="#788f80" />
         <Box p={[0.4, 0.1, 0.074]} s={[0.16, 0.66, 0.01]} color="#c7ac72" />
       </group>
-      <OperationsDisplay />
+      <OperationsDisplay presence={presence} />
       <Bookshelf p={[-1.7, 0, -5.47]} />
       <Whiteboard />
       {/* Meeting room perimeter: thin charcoal mullions and genuinely clear glass. */}
@@ -1088,158 +1067,28 @@ function EmployeeAvatar({
   index,
   selected,
   onSelect,
-  motion,
-  timeline,
-  timeSeconds,
-  live,
-  listening,
+  presence,
 }: {
-  live?: boolean;
-  timeSeconds?: number;
-  listening?: boolean;
   employee: Employee;
   index: number;
   selected: boolean;
   onSelect: OfficeProps['onSelect'];
-  motion: boolean;
-  timeline: number;
+  presence: EmployeePresence;
 }) {
-  const group = useRef<THREE.Group>(null);
-  const figure = useRef<THREE.Group>(null);
   const [hovered, setHovered] = useState(false);
-  const [walking, setWalking] = useState(false);
-  const [phase, setPhase] = useState(0);
-  const elapsed = useRef(index * 7.3 + 7);
-  const lastPoseUpdate = useRef(0);
-  const walkingRef = useRef(false);
-  const classification = `${employee.task} ${employee.role}`.toLowerCase();
-  const activity =
-    employee.activityLocation === 'library'
-      ? 'reading'
-      : employee.activityLocation === 'meeting' || employee.activityLocation === 'board'
-        ? 'discussion'
-        : employee.activityLocation === 'desk'
-          ? 'research'
-          : employee.status === 'review' || /whiteboard|discuss|collaborat/.test(classification)
-            ? 'discussion'
-            : /cabinet|librar|reading|read documents|dependencies|resources/.test(classification)
-              ? 'reading'
-              : employee.status === 'ready'
-                ? 'lounge'
-                : 'research';
-  const desk = desks[index % desks.length];
-  // Seat coordinates stay attached to furniture; supplied position is used for
-  // the walking waypoint when it falls in the central circulation corridor.
-  const home: Point =
-    activity === 'discussion'
-      ? [3.3 + (index % 3) * 0.95, 0, index % 6 < 3 ? -4.94 : -1.65]
-      : activity === 'reading'
-        ? [-1.65 + (index % 2) * 0.75, 0, -4.45]
-        : activity === 'lounge'
-          ? [3.65 + (index % 3) * 1.03, 0, 4.68]
-          : [desk[0], 0, desk[2] + 1];
-  const isSeated = !listening && !walking && (activity === 'research' || activity === 'lounge');
-  const idleYaw =
-    activity === 'reading' || activity === 'discussion' || activity === 'research' || activity === 'lounge'
-      ? Math.PI
-      : 0;
-  const route = useMemo<Point[]>(() => {
-    const corridorX =
-      employee.position && employee.position[0] > -0.7 && employee.position[0] < 0.75
-        ? employee.position[0]
-        : 0.25;
-    if (activity === 'discussion')
-      return [home, [2.3, 0, -4.95], [2.3, 0, -1.42], [corridorX, 0, -1.42], [corridorX, 0, 0.6]];
-    if (activity === 'reading') return [home, [-0.45, 0, -4.45], [corridorX, 0, -1.45], [corridorX, 0, 0.6]];
-    if (activity === 'lounge')
-      return [home, [home[0], 0, 4.1], [1.15, 0, 4.1], [corridorX, 0, 3.05], [corridorX, 0, 0.6]];
-    return [home, [home[0], 0, home[2] + 0.52], [corridorX, 0, home[2] + 0.52], [corridorX, 0, -0.9]];
-    // Numeric home coordinates make the route stable across hover updates.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activity, home[0], home[2], employee.position?.[0]]);
-  useEffect(() => {
-    if (group.current) {
-      group.current.position.set(...home);
-      group.current.rotation.y = idleYaw;
-    }
-    walkingRef.current = false;
-    setWalking(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activity, home[0], home[2], timeline, motion]);
-  useEffect(() => {
-    if (!hovered) return;
-    const old = document.body.style.cursor;
-    document.body.style.cursor = 'pointer';
-    return () => {
-      document.body.style.cursor = old;
-    };
-  }, [hovered]);
-  useFrame((_, delta) => {
-    if (!group.current) return;
-    if (listening) {
-      const cameraPosition = _.camera.position;
-      group.current.rotation.y = Math.atan2(
-        cameraPosition.x - group.current.position.x,
-        cameraPosition.z - group.current.position.z,
-      );
-      if (walkingRef.current) {
-        walkingRef.current = false;
-        setWalking(false);
-      }
-      return;
-    }
-    if (!motion && timeSeconds === undefined) return;
-    elapsed.current =
-      timeSeconds === undefined
-        ? elapsed.current + Math.min(delta, 0.05)
-        : (live && motion ? Date.now() / 1000 : timeSeconds) + index * 7.3 + 7;
-    const t = (elapsed.current + timeline * 0.22) % 56;
-    const moving = t > 40;
-    if (moving !== walkingRef.current) {
-      walkingRef.current = moving;
-      setWalking(moving);
-    }
-    if (moving) {
-      const progress = (t - 40) / 16;
-      const outAndBack = progress < 0.5 ? progress * 2 : (1 - progress) * 2;
-      const lengths = route.slice(1).map((p, i) => Math.hypot(p[0] - route[i][0], p[2] - route[i][2]));
-      const distance = lengths.reduce((sum, n) => sum + n, 0) * outAndBack;
-      let consumed = 0;
-      let seg = 0;
-      while (seg < lengths.length - 1 && consumed + lengths[seg] < distance) consumed += lengths[seg++];
-      const start = route[seg];
-      const end = route[seg + 1];
-      const fraction = Math.min(1, Math.max(0, (distance - consumed) / Math.max(0.001, lengths[seg])));
-      group.current.position.set(
-        THREE.MathUtils.lerp(start[0], end[0], fraction),
-        Math.sin(elapsed.current * 9) * 0.022,
-        THREE.MathUtils.lerp(start[2], end[2], fraction),
-      );
-      const direction = progress < 0.5 ? 1 : -1;
-      const targetYaw = Math.atan2((end[0] - start[0]) * direction, (end[2] - start[2]) * direction);
-      group.current.rotation.y = targetYaw;
-      /* Original smooth route heading is replaced by exact replayable heading.
-      group.current.rotation.y +=
-        Math.atan2(
-          Math.sin(targetYaw - group.current.rotation.y),
-          Math.cos(targetYaw - group.current.rotation.y),
-        ) * Math.min(delta * 12, 1); */
-    } else {
-      group.current.position.set(...home);
-      group.current.rotation.y =
-        idleYaw + (activity === 'discussion' ? Math.sin(elapsed.current * 0.8) * 0.18 : 0);
-    }
-    if (figure.current)
-      figure.current.rotation.z =
-        !moving && activity === 'discussion' ? Math.sin(elapsed.current * 1.8) * 0.026 : 0;
-    // Articulated limbs update at 20fps; world travel remains frame-smooth.
-    if (Math.abs(elapsed.current - lastPoseUpdate.current) > 0.05) {
-      lastPoseUpdate.current = elapsed.current;
-      setPhase(elapsed.current * 8);
-    }
-  });
+  const cueColor =
+    presence.cue === 'attention'
+      ? '#e5b768'
+      : presence.cue === 'error'
+        ? '#e88a78'
+        : presence.cue === 'complete'
+          ? '#a9d49d'
+          : presence.cue === 'message'
+            ? '#9bcede'
+            : '#b0ccb6';
+  const bubble = selected || hovered || presence.focused;
   return (
-    <group ref={group} position={home} rotation={[0, idleYaw, 0]}>
+    <group position={presence.position} rotation={[0, presence.yaw, 0]}>
       <group
         onClick={(event) => {
           event.stopPropagation();
@@ -1251,94 +1100,76 @@ function EmployeeAvatar({
         }}
         onPointerOut={() => setHovered(false)}
       >
-        <group ref={figure}>
-          <Figure
-            color={employee.appearance?.clothing || employee.color || C.sage}
-            appearance={employee.appearance}
-            index={index}
-            seated={isSeated}
-            pose={activity}
-            walking={walking}
-            phase={phase}
-          />
-        </group>
-        {(selected || hovered) && (
+        <Figure
+          color={employee.appearance?.clothing || employee.color || C.sage}
+          appearance={employee.appearance}
+          index={index}
+          seated={presence.seated}
+          pose={presence.pose}
+          walking={presence.walking}
+          phase={presence.phase}
+        />
+        {(selected || hovered || presence.cue !== 'none') && (
           <mesh position={[0, 0.052, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[0.43, 0.48, 48]} />
+            <ringGeometry args={[0.43, selected ? 0.5 : 0.475, 48]} />
             <meshBasicMaterial
-              color={employee.color || '#bd795c'}
+              color={cueColor}
               transparent
-              opacity={0.85}
+              opacity={selected || hovered ? 0.9 : presence.cueStrength}
               depthWrite={false}
             />
           </mesh>
         )}
+        {!presence.sample &&
+          (presence.cue === 'attention' || presence.cue === 'error' || presence.cue === 'complete') && (
+            <Html center position={[0, presence.seated ? 1.73 : 2.01, 0]}>
+              <span className={`office-reaction ${presence.cue}`} aria-label={presence.badge}>
+                {presence.cue === 'complete' ? '✓' : '!'}
+              </span>
+            </Html>
+          )}
       </group>
       <Html
         center
-        position={[0, (isSeated ? 1.89 : 2.18) + (activity === 'discussion' ? (index % 2) * 0.28 : 0), 0]}
-        zIndexRange={selected ? [35, 30] : [20, 10]}
+        position={[
+          0,
+          (presence.seated ? 2.02 : 2.3) + (presence.station === 'review' ? (index % 2) * 0.25 : 0),
+          0,
+        ]}
+        zIndexRange={bubble ? [35, 30] : [20, 10]}
       >
         <button
           type="button"
-          className={`person-label${selected ? ' chosen' : ''}`}
+          className={`office-person-label${selected ? ' chosen' : ''}`}
           onClick={() => onSelect(employee.id)}
-          aria-label={`${employee.name}, ${employee.role}. ${employee.task}`}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          aria-label={`${employee.name}, ${employee.role}. ${presence.badge}. ${presence.summary}`}
           aria-pressed={selected}
-          style={
-            {
-              '--person-color': employee.color,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 9px',
-              borderRadius: 7,
-              border: selected ? '1px solid #d8b576' : '1px solid #ffffff30',
-              background: selected ? '#f3e5c9' : '#19342fe8',
-              color: selected ? '#283c31' : '#f0f1df',
-              fontSize: 11,
-              fontWeight: 650,
-              lineHeight: 1,
-              whiteSpace: 'nowrap',
-              boxShadow: '0 3px 12px #07161245',
-              cursor: 'pointer',
-            } as CSSProperties
-          }
+          style={{ '--person-color': employee.color } as CSSProperties}
         >
-          <span
-            className="person-dot"
-            style={{
-              background: employee.color,
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              display: 'inline-block',
-              boxShadow: `0 0 8px ${employee.color}60`,
-            }}
-          />
-          {employee.name.split(' ')[0]}
-          <small style={{ fontSize: 9, opacity: 0.8 }}>
-            {listening ? 'Listening' : employee.sessionId ? '☁ Astra' : 'Preview'}
-          </small>
-          {selected && <span aria-hidden="true"> ↗</span>}
+          <span className="office-person-name">
+            <i />
+            {employee.name.split(' ')[0]}
+            <small>{presence.sample ? 'Sample' : employee.sessionId ? 'Astra' : 'Employee'}</small>
+          </span>
+          {(bubble || (!presence.sample && presence.observed && presence.status !== 'idle')) && (
+            <span className={`office-work-badge ${presence.status}`}>
+              {presence.toolName ? '↳ ' : presence.status === 'working' ? '● ' : ''}
+              {presence.badge}
+            </span>
+          )}
         </button>
-        {selected && (
-          <div
-            className="speech-bubble"
-            role="status"
-            style={{
-              width: 184,
-              padding: '10px 12px',
-              background: '#f4eddb',
-              color: '#293f35',
-              fontSize: 11,
-              lineHeight: 1.5,
-              border: '1px solid #d5c9ad',
-              borderRadius: 8,
-              boxShadow: '0 6px 22px #0a1a1950',
-            }}
-          >
-            {walking ? 'On my way. A fresh perspective helps.' : employee.task}
+        {bubble && (
+          <div className="office-activity-bubble" role="status">
+            <small>
+              {presence.sample
+                ? 'Sample activity'
+                : presence.toolName
+                  ? 'Observed tool activity'
+                  : 'Recorded update'}
+            </small>
+            <p>{presence.summary.length > 230 ? `${presence.summary.slice(0, 227)}…` : presence.summary}</p>
           </div>
         )}
       </Html>
@@ -1413,7 +1244,230 @@ function OfficeSpeakers({ level, listening }: { level: number; listening: boolea
   );
 }
 
-function Scene(props: OfficeProps) {
+function OfficeStations({
+  presence,
+  onStation,
+}: {
+  presence: OfficePresence;
+  onStation?: OfficeProps['onStation'];
+}) {
+  const [hovered, setHovered] = useState<OfficeStation | null>(null);
+  const archive = presence.stations.archive,
+    dispatch = presence.stations.dispatch;
+  const filing = !!archive?.active && /^memory\.(saved|updated|proposed)$/.test(archive.kind);
+  const archivePhase = archive?.phase ?? 0;
+  const filingProgress = Math.min(1, archivePhase / 1.6);
+  const stamping = !!dispatch?.active && dispatch.kind === 'message.acknowledged';
+  const station = (id: OfficeStation, p: Point, label: string, permanent = false) => {
+    const event = presence.stations[id],
+      active = !!event?.active;
+    return (
+      <Html key={id} center position={p} zIndexRange={[9, 5]}>
+        <button
+          type="button"
+          className={`office-station${active ? ' active' : ''}${permanent ? ' permanent' : ''}`}
+          aria-label={`${label}. ${active ? event?.summary : 'Explore this office object'}`}
+          title={active ? event?.summary : label}
+          onClick={() => onStation?.(id)}
+          onMouseEnter={() => setHovered(id)}
+          onMouseLeave={() => setHovered(null)}
+        >
+          <i style={{ opacity: active ? 0.6 + event!.strength * 0.4 : 0.55 }} />
+          {(permanent || active || hovered === id) && <span>{label}</span>}
+        </button>
+      </Html>
+    );
+  };
+  return (
+    <group>
+      {/* Memory is filed in named drawers. The loose sheet only moves for a recorded write. */}
+      <group position={[0.13, 0, -5.19]}>
+        <Box p={[0, 0.89, 0]} s={[1.0, 1.78, 0.73]} color="#657c6d" metalness={0.22} />
+        <Box p={[0, 1.81, 0]} s={[1.08, 0.065, 0.79]} color={C.walnut} />
+        {['Working', 'Journal', 'Facts', 'Playbooks', 'Preferences'].map((label, index) => {
+          const y = 1.55 - index * 0.31;
+          const open =
+            filing &&
+            archive?.kind !== 'memory.proposed' &&
+            index ===
+              ['working', 'episodic', 'semantic', 'procedural', 'preference'].indexOf(
+                archive?.memoryKind ?? 'semantic',
+              )
+              ? Math.sin(filingProgress * Math.PI) * 0.22
+              : 0;
+          return (
+            <group key={label} position={[0, y, open]}>
+              <Box p={[0, 0, 0.38]} s={[0.91, 0.27, 0.065]} color={index % 2 ? '#7d9380' : '#8a9a81'} />
+              <Box p={[0, -0.07, 0.43]} s={[0.24, 0.027, 0.05]} color={C.brass} metalness={0.6} />
+              <Html center position={[0, 0.035, 0.445]} transform distanceFactor={3.5} zIndexRange={[4, 1]}>
+                <span className="office-drawer-label">{label}</span>
+              </Html>
+            </group>
+          );
+        })}
+        <Box p={[0.15, 1.87, 0.02]} s={[0.65, 0.055, 0.48]} color={C.brass} />
+        <Box p={[0.15, 1.91, -0.19]} s={[0.65, 0.12, 0.045]} color={C.brass} />
+        {filing && (
+          <Box
+            p={[
+              0.02,
+              archive?.kind === 'memory.proposed'
+                ? 1.95
+                : 1.55 -
+                  Math.max(
+                    0,
+                    ['working', 'episodic', 'semantic', 'procedural', 'preference'].indexOf(
+                      archive?.memoryKind ?? 'semantic',
+                    ),
+                  ) *
+                    0.31,
+              0.95 - filingProgress * 0.54,
+            ]}
+            s={[0.5, 0.018, 0.35]}
+            color="#fff0c9"
+            rotation={[0, 0.08, 0]}
+          />
+        )}
+        <Box p={[-0.7, 0.33, 0.03]} s={[0.29, 0.66, 0.41]} color="#384e47" />
+        <Box p={[-0.7, 0.67, 0.03]} s={[0.22, 0.025, 0.065]} color="#152e2b" />
+        {archive?.active && archive.kind === 'memory.forgotten' && (
+          <Box p={[-0.7, 0.8, 0.03]} s={[0.16, 0.22, 0.013]} color="#eee7cf" />
+        )}
+      </group>
+      {station(
+        'archive',
+        [0.12, 2.19, -5.1],
+        filing && archive?.kind === 'memory.proposed' ? 'Proposal tray · review' : 'Memory cabinet',
+        true,
+      )}
+      {/* Mail stays in the queue tray until a real delivery; acknowledgement presses the stamp. */}
+      <group position={[0.03, 0, 4.98]}>
+        <Box p={[0, 0.77, 0]} s={[1.12, 0.1, 0.76]} color={C.walnut} />
+        {[-0.43, 0.43].map((x) => (
+          <Box key={x} p={[x, 0.37, 0]} s={[0.08, 0.74, 0.6]} color={C.walnut} />
+        ))}
+        {[-0.29, 0.29].map((x) => (
+          <group key={x}>
+            <Box p={[x, 0.86, 0]} s={[0.43, 0.075, 0.53]} color={x < 0 ? '#789489' : C.brass} />
+            <Box p={[x, 0.94, -0.24]} s={[0.43, 0.2, 0.055]} color={x < 0 ? '#789489' : C.brass} />
+          </group>
+        ))}
+        {dispatch?.active && (
+          <group
+            position={[
+              dispatch.kind === 'message.queued' ? -0.29 : 0.29,
+              0.91 + Math.sin(dispatch.phase * 3) * 0.025,
+              0.02,
+            ]}
+            rotation={[-Math.PI / 2, 0, 0]}
+          >
+            <Box s={[0.32, 0.22, 0.018]} color="#f5e7c8" />
+            <Line
+              points={[
+                [-0.16, 0.11, 0.015],
+                [0, -0.02, 0.015],
+                [0.16, 0.11, 0.015],
+              ]}
+              color={C.terra}
+              lineWidth={1}
+            />
+          </group>
+        )}
+        <group
+          position={[0.39, 1.03 - (stamping ? Math.max(0, Math.sin(dispatch!.phase * 6)) * 0.11 : 0), 0.15]}
+        >
+          <Box s={[0.19, 0.06, 0.16]} color="#263c37" />
+          <Cylinder p={[0, 0.12, 0]} radius={0.045} height={0.2} color={C.terra} />
+        </group>
+      </group>
+      {station('dispatch', [0.03, 1.4, 4.98], stamping ? 'Receipt acknowledged' : 'Inbox · receipts', true)}
+      {/* Tools share the established desks, each with a concrete instrument. */}
+      <group position={[-7.0, 1.1, 0.15]}>
+        <Round s={[0.49, 0.28, 0.4]} color="#d5d7c6" radius={0.035} />
+        <Box p={[0, 0.12, -0.07]} s={[0.34, 0.06, 0.17]} color="#46645a" />
+        <Box p={[0, -0.06, 0.22]} s={[0.35, 0.035, 0.24]} color="#243b34" />
+        {presence.stations.workbench?.active && (
+          <Box
+            p={[0, -0.025, 0.28 + Math.min(0.12, presence.stations.workbench.phase * 0.06)]}
+            s={[0.28, 0.012, 0.23]}
+            color="#f5ebcf"
+          />
+        )}
+      </group>
+      {station('workbench', [-7.0, 1.62, 0.15], 'Drafting bench')}
+      <group position={[-7.03, 1.19, -3.25]}>
+        <Cylinder p={[0, -0.15, 0]} radius={0.14} height={0.06} color={C.brass} />
+        <mesh>
+          <sphereGeometry args={[0.16, 16, 12]} />
+          <meshStandardMaterial color="#779d93" roughness={0.8} />
+        </mesh>
+        <Line
+          points={[
+            [-0.17, 0, 0],
+            [-0.12, 0.14, 0],
+            [0, 0.19, 0],
+            [0.14, 0.1, 0],
+            [0.17, 0, 0],
+          ]}
+          color={C.brass}
+          lineWidth={2}
+        />
+      </group>
+      {station('research', [-7.03, 1.72, -3.25], 'Research terminal')}
+      <group position={[-3.86, 1.09, -3.22]} rotation={[-0.2, 0.1, 0]}>
+        <Box s={[0.34, 0.07, 0.46]} color="#566f63" />
+        <Box p={[0, 0.04, -0.12]} s={[0.27, 0.014, 0.13]} color="#a8b698" />
+        {Array.from({ length: 9 }, (_, i) => (
+          <Box
+            key={i}
+            p={[((i % 3) - 1) * 0.08, 0.045, 0.01 + Math.floor(i / 3) * 0.065]}
+            s={[0.055, 0.018, 0.04]}
+            color="#e9debc"
+          />
+        ))}
+      </group>
+      {station('analysis', [-3.86, 1.58, -3.22], 'Analysis bench')}
+      <group position={[-3.87, 1.1, 0.12]}>
+        <Round s={[0.36, 0.1, 0.36]} color="#354e48" radius={0.035} />
+        <Round p={[0, 0.12, 0]} s={[0.43, 0.11, 0.13]} color={C.terra} radius={0.04} />
+        <Cylinder p={[0, 0.065, 0.09]} radius={0.08} height={0.025} color={C.brass} />
+      </group>
+      {station('connections', [-3.87, 1.65, 0.12], 'Service phone')}
+      <group position={[-1.44, 0.88, -4.94]} rotation={[-0.25, 0, 0]}>
+        <Box s={[0.58, 0.07, 0.44]} color={C.walnut} />
+        <Box p={[0, 0.045, 0]} s={[0.53, 0.025, 0.39]} color="#eee7cd" />
+        <Box p={[0, -0.36, 0]} s={[0.09, 0.71, 0.1]} color={C.walnut} />
+      </group>
+      {station('library', [-1.45, 1.49, -4.94], 'Reading desk')}
+      <group position={[5.55, 1.09, -3.15]}>
+        <Box s={[0.37, 0.045, 0.48]} color="#c7a962" />
+        <Box p={[0, 0.03, 0]} s={[0.3, 0.02, 0.39]} color="#f3e6cb" />
+        <Cylinder p={[0.28, 0.045, 0]} radius={0.07} height={0.1} color={C.terra} />
+      </group>
+      {station('review', [5.55, 1.63, -3.15], 'Manager review')}
+      <group position={[4.92, 0.82, 3.04]}>
+        <Round s={[0.45, 0.32, 0.31]} color="#475e52" radius={0.025} />
+        {[-0.17, 0.17].map((x) => (
+          <mesh
+            key={x}
+            position={[x, 0.26, 0]}
+            rotation={[Math.PI / 2, 0, presence.stations.recorder?.phase ?? 0]}
+          >
+            <cylinderGeometry args={[0.13, 0.13, 0.035, 16]} />
+            <meshStandardMaterial color={C.brass} metalness={0.4} roughness={0.45} />
+          </mesh>
+        ))}
+        <Box p={[0.27, 0, 0]} s={[0.13, 0.15, 0.18]} color="#283f37" />
+        {presence.stations.recorder?.active && (
+          <GlowBar p={[0.35, 0, 0]} s={[0.014, 0.11, 0.13]} color="#f4d8a1" />
+        )}
+      </group>
+      {station('recorder', [4.92, 1.48, 3.04], 'Replay projector')}
+    </group>
+  );
+}
+
+function Scene(props: OfficeProps & { presence: OfficePresence }) {
   const surfaces = useSurfaceTextures();
   return (
     <>
@@ -1439,9 +1493,10 @@ function Scene(props: OfficeProps) {
       />
       <directionalLight position={[10, 9, -2]} intensity={1.1} color="#a9c9cd" />
       <SurfaceContext.Provider value={surfaces}>
-        <Architecture />
+        <Architecture presence={props.presence} />
         <OfficeSpeakers level={props.microphoneLevel ?? 0} listening={!!props.listening} />
-        <WorkflowHandoffs {...props} />
+        <OfficeStations presence={props.presence} onStation={props.onStation} />
+        <WorkflowHandoffs presence={props.presence} selected={props.selected} />
         {props.team.map((employee, index) => (
           <EmployeeAvatar
             key={employee.id}
@@ -1449,11 +1504,7 @@ function Scene(props: OfficeProps) {
             index={index}
             selected={props.selected === employee.id}
             onSelect={props.onSelect}
-            motion={props.motion}
-            timeline={props.timeline}
-            timeSeconds={props.timeSeconds}
-            live={props.live}
-            listening={props.listening}
+            presence={props.presence.employees[employee.id]}
           />
         ))}
       </SurfaceContext.Provider>
@@ -1469,7 +1520,11 @@ function Scene(props: OfficeProps) {
   );
 }
 
-function Fallback({ team, onSelect }: Pick<OfficeProps, 'team' | 'onSelect'>) {
+function Fallback({
+  team,
+  onSelect,
+  presence,
+}: Pick<OfficeProps, 'team' | 'onSelect'> & { presence: OfficePresence }) {
   return (
     <div className="scene-fallback">
       <p>Your team is here. Select someone to see what they’re working on.</p>
@@ -1478,7 +1533,9 @@ function Fallback({ team, onSelect }: Pick<OfficeProps, 'team' | 'onSelect'>) {
           <li key={employee.id}>
             <button type="button" onClick={() => onSelect(employee.id)}>
               <strong>{employee.name}</strong> · {employee.role}
-              <span>{employee.task}</span>
+              <span>
+                {presence.employees[employee.id]?.badge} · {presence.employees[employee.id]?.summary}
+              </span>
             </button>
           </li>
         ))}
@@ -1516,7 +1573,21 @@ export default function Office(props: OfficeProps) {
   const [eventSource, setEventSource] = useState<HTMLDivElement | null>(null);
   // Canvas owns and disposes all geometries, materials, lights, and renderers.
   // No external assets, manually retained GPU resources, or animation timers.
-  const fallback = <Fallback team={props.team} onSelect={props.onSelect} />;
+  const presence =
+    props.presence ??
+    deriveOfficePresence(
+      props.team.map((employee) => ({
+        id: employee.id,
+        status: employee.status,
+        location: employee.activityLocation ?? 'desk',
+        activity: employee.task,
+        sessionId: employee.sessionId,
+      })),
+      [],
+      (props.timeSeconds ?? props.timeline) * 1000,
+      true,
+    );
+  const fallback = <Fallback team={props.team} onSelect={props.onSelect} presence={presence} />;
   return (
     <div
       className="office-canvas"
@@ -1552,7 +1623,7 @@ export default function Office(props: OfficeProps) {
               gl.outputColorSpace = THREE.SRGBColorSpace;
             }}
           >
-            <Scene {...props} />
+            <Scene {...props} presence={presence} />
           </Canvas>
         )}
       </SceneBoundary>

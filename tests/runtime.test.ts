@@ -111,10 +111,10 @@ const send = (message) => process.stdout.write(JSON.stringify(message) + '\\n');
 readline.createInterface({ input: process.stdin }).on('line', (line) => {
   const message = JSON.parse(line);
   if (message.method === 'initialize') send({ id: message.id, result: { userAgent: 'mock', codexHome: '/tmp', platformFamily: 'unix', platformOs: 'linux' } });
-  if (message.method === 'thread/start' && Object.hasOwn(message.params, 'model')) throw new Error('Model should inherit settings');
+  if (message.method === 'thread/start' && message.params.model !== 'gpt-6-astra') throw new Error('Employee threads must use Astra');
   if (message.method === 'thread/start') send({ id: message.id, result: { thread: { id: 'thread-1' } } });
   if (message.method === 'turn/start') {
-    if (Object.hasOwn(message.params, 'model') || message.params.sandboxPolicy.networkAccess !== false) throw new Error('Unsafe turn settings');
+    if (message.params.model !== 'gpt-6-astra' || message.params.sandboxPolicy.networkAccess !== false) throw new Error('Unsafe turn settings');
     const turn = { id: 'turn-1', status: 'completed', error: null, items: [{ type: 'agentMessage', text: 'early result' }] };
     send({ method: 'item/completed', params: { threadId: 'thread-1', turnId: 'turn-1', item: turn.items[0] } });
     send({ method: 'turn/completed', params: { threadId: 'thread-1', turn } });

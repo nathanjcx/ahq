@@ -1,6 +1,20 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DesktopAPI } from '../shared/types';
 const api: DesktopAPI = {
+  officeRecordingBounds: () => ipcRenderer.invoke('office:recording-bounds'),
+  officeReplay: (at) => ipcRenderer.invoke('office:replay', at),
+  exportOfficeAudit: () => ipcRenderer.invoke('office:audit-export'),
+  onAgentSession: (listener) => {
+    const receive = (_event: Electron.IpcRendererEvent, update: Parameters<typeof listener>[0]) => listener(update);
+    ipcRenderer.on('agent:session', receive);
+    return () => ipcRenderer.removeListener('agent:session', receive);
+  },
+  inspectAgent: (employeeId) => ipcRenderer.invoke('agent:inspect', employeeId),
+  sendAgentMessage: (input) => ipcRenderer.invoke('agent:message', input),
+  saveAgentMemory: (input) => ipcRenderer.invoke('agent:memory-save', input),
+  approveAgentMemory: (input) => ipcRenderer.invoke('agent:memory-approve', input),
+  forgetAgentMemory: (input) => ipcRenderer.invoke('agent:memory-forget', input),
+  readAgentArtifact: (input) => ipcRenderer.invoke('agent:artifact', input),
   recordFrame: (frame) => ipcRenderer.invoke('office:frame', frame),
   frameAt: (time) => ipcRenderer.invoke('office:frame-at', time),
   history: () => ipcRenderer.invoke('history:list'),

@@ -1,6 +1,7 @@
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createInterface } from 'node:readline';
+import { ASTRA_MODEL } from '../shared/agent-config';
 
 type JsonObject = Record<string, unknown>;
 type NotificationListener = (method: string, params: JsonObject) => void;
@@ -168,9 +169,11 @@ export class CodexAppServer {
 
   async runTurn(options: RunTurnOptions): Promise<CodexTurnResult> {
     options.signal?.throwIfAborted();
+    const model = options.model.trim() || ASTRA_MODEL;
+    if (model !== ASTRA_MODEL) throw new Error('Employee execution requires gpt-6-astra. Update the local runtime model before continuing.');
     const threadResult = (await this.request('thread/start', {
       cwd: options.cwd,
-      ...(options.model.trim() ? { model: options.model.trim() } : {}),
+      model: ASTRA_MODEL,
       approvalPolicy: 'never',
       sandbox: 'workspace-write',
       ephemeral: true,
@@ -187,7 +190,7 @@ export class CodexAppServer {
       input: [{ type: 'text', text: options.prompt, text_elements: [] }],
       cwd: options.cwd,
       approvalPolicy: 'never',
-      ...(options.model.trim() ? { model: options.model.trim() } : {}),
+      model: ASTRA_MODEL,
       sandboxPolicy: {
         type: 'workspaceWrite',
         writableRoots: [options.cwd],

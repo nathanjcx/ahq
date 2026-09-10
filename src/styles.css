@@ -642,7 +642,9 @@ h1 {
   background: radial-gradient(ellipse at 52% 43%, #f2f0e3 0%, #efece0 45%, #f5f4e9 85%);
 }
 .office-viewport
-  > div:not(.scene-caption):not(.office-hint):not(.scene-controls):not(.time-overlay):not(.scene-loading) {
+  > div:not(.scene-caption):not(.office-hint):not(.scene-controls):not(.time-overlay):not(.scene-loading):not(
+    .replay-badge
+  ) {
   position: absolute !important;
   inset: 0;
 }

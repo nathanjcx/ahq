@@ -4,30 +4,36 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { EmployeeSchema, FolderSchema, SessionSchema, StateSchema } from '../shared/schemas';
+import { EmployeeSchema, FolderSchema, StateSchema } from '../shared/schemas';
 import { activityExport } from '../shared/activity';
 import { allowedPath, containsSecret } from '../shared/workspace';
 import { atomicWrite, createSnapshot } from './workspace';
-import { checkGateway, gatewayRequest, readSession, validateEndpoint } from './gateway';
+import { checkGateway, readSession, validateEndpoint } from './gateway';
 import { SnapshotStore } from '../runtime/store';
 import { createRuntime, type OfficeRuntime } from '../runtime/engine';
 import { HostedEmployees, openAIRequest, type HostedConfig } from './hosted';
 import { applySession, applyDecision } from '../src/lib/workflow';
 import type { Command } from '../src/shared/types';
-import type { AppState, CloudSettings } from '../shared/types';
+import { AstraModelSchema, MEMORY_KINDS, MEMORY_SCOPES } from '../shared/agent-config';
+import { EmployeeTools } from './agent-tools';
+import { AgentOffice } from './agent-office';
+import type { AppState, CloudSession, CloudSettings } from '../shared/types';
 let win: BrowserWindow | null = null;
 let connected = false;
 const root = () => app.getPath('userData');
 let dataDir = '';
 let database: SnapshotStore;
 let hosted: HostedEmployees;
+let employeeTools: EmployeeTools;
+let office: AgentOffice;
+let polling = false;
 let localRuntime: OfficeRuntime | undefined;
 let pollTimer: ReturnType<typeof setInterval>;
 let snapshotTimer: ReturnType<typeof setInterval>;
 const vaultPath = () => path.join(root(), 'api-keys.json');
 const vaultSchema = z.object({
   key: z.string().default(''),
-  model: z.string().default('gpt-6-astra'),
+  model: AstraModelSchema.default('gpt-6-astra'),
   integrations: z
     .array(z.object({ id: z.string(), name: z.string(), url: z.string(), key: z.string() }))
     .default([]),
@@ -69,7 +75,7 @@ async function setupDatabase() {
     dataDir = path.join(root(), 'database');
   }
   database = await SnapshotStore.open(dataDir);
-  hosted = new HostedEmployees(database, hostedConfig);
+  initializeEmployees();
   if (!database.get<AppState>('workspace')) {
     try {
       const old = StateSchema.parse(JSON.parse(await fs.readFile(statePath(), 'utf8')));
@@ -78,23 +84,8 @@ async function setupDatabase() {
       if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
     }
   }
-  pollTimer = setInterval(
-    () =>
-      void queued(async () => {
-        let current = await loadState();
-        if (!current) return;
-        for (const employee of current.employees.filter((e) => e.sessionId && e.status !== 'ready')) {
-          if (!hosted.owns(employee.sessionId!)) continue;
-          try {
-            current = applySession(current, employee.id, await hosted.get(employee.sessionId!));
-          } catch {
-            /* Keep the last known state; the renderer displays connection failures. */
-          }
-        }
-        await database.saveHQ(current);
-      }).catch(() => undefined),
-    8000,
-  );
+  await recoverEmployeeSessions();
+  pollTimer = setInterval(() => void pollEmployees(), 3000);
   snapshotTimer = setInterval(
     () =>
       void queued(async () => {
@@ -108,7 +99,7 @@ async function setupDatabase() {
 const statePath = () => path.join(root(), 'workspace.json');
 const settingsPath = () => path.join(root(), 'cloud.json');
 const snapshotsRoot = () => path.join(root(), 'snapshots');
-const operationsPath = () => path.join(root(), 'operations.json');
+
 const settingsSchema = z.object({ endpoint: z.string(), encryptedToken: z.string() });
 async function savedSettings() {
   try {
@@ -151,6 +142,55 @@ async function loadState(): Promise<AppState | null> {
   return value ? StateSchema.parse(value) : null;
 }
 
+function initializeEmployees() {
+  employeeTools = new EmployeeTools(database, loadState);
+  hosted = new HostedEmployees(database, hostedConfig, employeeTools);
+  office = new AgentOffice(loadState, mutateWorkspace, persistSession, hosted, employeeTools);
+}
+async function mutateWorkspace(change: (state: AppState) => AppState, reason?: string) {
+  await queued(async () => {
+    const latest = await loadState();
+    if (!latest) throw new Error('Open your workspace first.');
+    await database.saveHQ(change(latest), reason);
+  });
+}
+async function persistSession(employeeId: string, result: CloudSession) {
+  if (!hosted.owns(result.id) || hosted.ownerOf(result.id) !== employeeId)
+    throw new Error('Session ownership does not match this employee.');
+  await mutateWorkspace((latest) => applySession(latest, employeeId, result));
+  if (win && !win.isDestroyed()) win.webContents.send('agent:session', { employeeId, session: result });
+}
+async function recoverEmployeeSessions() {
+  const state = await loadState();
+  if (!state) return;
+  for (const employee of state.employees.filter((item) => !item.sessionId)) {
+    const saved = hosted.sessionFor(employee.id);
+    if (saved) await persistSession(employee.id, saved);
+  }
+}
+async function pollEmployees() {
+  if (polling) return;
+  polling = true;
+  try {
+    await recoverEmployeeSessions();
+    const state = await loadState();
+    if (!state) return;
+    await Promise.allSettled(
+      state.employees
+        .filter((employee) => employee.sessionId && employee.status !== 'ready')
+        .map(async (employee) => {
+          if (!hosted.owns(employee.sessionId!) || hosted.ownerOf(employee.sessionId!) !== employee.id)
+            return;
+          await persistSession(employee.id, await hosted.get(employee.sessionId!));
+        }),
+    );
+    await office.deliverPending();
+  } catch {
+    /* Session errors remain visible in each employee workspace. */
+  } finally {
+    polling = false;
+  }
+}
 function assertSender(event: IpcMainInvokeEvent) {
   if (!win || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame)
     throw new Error('Untrusted request.');
@@ -161,7 +201,7 @@ function handle(channel: string, fn: (input: unknown) => Promise<unknown>) {
     return fn(input);
   });
 }
-// One serialized queue prevents concurrent workspace writes and duplicate session starts.
+// Serialize only local workspace writes. Each hosted session owns its own execution lock.
 let diskQueue = Promise.resolve();
 function queued<T>(action: () => Promise<T>): Promise<T> {
   const task = diskQueue.then(action);
@@ -173,10 +213,27 @@ function queued<T>(action: () => Promise<T>): Promise<T> {
 }
 async function knownSession(id: string) {
   const state = await loadState();
-  if (!state?.employees.some((e) => e.sessionId === id))
-    throw new Error('That session is not part of this workspace.');
+  const employee = state?.employees.find((e) => e.sessionId === id);
+  if (!employee || (hosted.owns(id) && hosted.ownerOf(id) !== employee.id))
+    throw new Error('That session is not owned by this employee.');
 }
 function registerHandlers() {
+  handle('office:recording-bounds', async () => database.officeRecordingBounds());
+  handle('office:replay', async (input) =>
+    database.officeReplay(z.number().finite().nonnegative().parse(input)),
+  );
+  handle('office:audit-export', async () => {
+    const packet = database.exportOfficeAudit();
+    const destination = await dialog.showSaveDialog(win!, {
+      title: 'Export the office audit record',
+      defaultPath: 'Astra-HQ-audit.json',
+      filters: [{ name: 'Office audit JSON', extensions: ['json'] }],
+    });
+    if (destination.canceled || !destination.filePath)
+      return { exported: false, verification: packet.verification };
+    await atomicWrite(destination.filePath, JSON.stringify(packet, null, 2));
+    return { exported: true, path: destination.filePath, verification: packet.verification };
+  });
   handle('office:frame', async (input) => {
     await database.recordFrame(
       z
@@ -269,17 +326,33 @@ function registerHandlers() {
     });
     if (result.canceled || !result.filePaths[0]) return null;
     return queued(async () => {
+      const current = await loadState();
+      if (hosted.busy) throw new Error('Wait for current employee operations before moving storage.');
+      if (
+        current?.employees.some(
+          (employee) => employee.sessionId && ['working', 'review'].includes(employee.status),
+        )
+      )
+        throw new Error('Stop active employee sessions before moving the database.');
       const destination = path.join(await fs.realpath(result.filePaths[0]), 'Astra HQ');
       if (destination === dataDir) return database.filePath;
       await fs.mkdir(destination, { recursive: true, mode: 0o700 });
       const file = path.join(destination, 'office.sqlite');
-      await fs.copyFile(database.filePath, file, 1); // Never overwrite another workspace.
-      const next = await SnapshotStore.open(destination);
+      await hosted.close();
+      let next: SnapshotStore;
+      try {
+        await database.drain();
+        await fs.copyFile(database.filePath, file, 1); // Never overwrite another workspace.
+        next = await SnapshotStore.open(destination);
+      } catch (error) {
+        initializeEmployees();
+        throw error;
+      }
       await atomicWrite(path.join(root(), 'database-location.json'), JSON.stringify({ path: destination }));
       database.close();
       database = next;
       dataDir = destination;
-      hosted = new HostedEmployees(database, hostedConfig);
+      initializeEmployees();
       await log('Selected a local database folder.');
       return database.filePath;
     });
@@ -289,10 +362,7 @@ function registerHandlers() {
       const fields = z
         .object({
           key: z.string().min(1).max(8000),
-          model: z
-            .string()
-            .regex(/^[a-zA-Z0-9._-]+$/)
-            .max(100),
+          model: AstraModelSchema,
         })
         .parse(input);
       const old = await vault();
@@ -347,91 +417,83 @@ function registerHandlers() {
   handle('microphone:permission', async () =>
     process.platform === 'darwin' ? systemPreferences.askForMediaAccess('microphone') : true,
   );
-  handle('voice:transcribe', async (input) => {
+  handle('voice:transcribe', async () => {
+    throw new Error('Voice transcription is unavailable in Astra-only mode. Use a typed announcement.');
+  });
+  handle('cloud:cancel', async (input) => {
+    const id = z.string().max(200).parse(input);
+    await knownSession(id);
+    if (!hosted.owns(id)) throw new Error('This legacy session is managed by its gateway.');
+    const result = await hosted.cancel(id);
+    const employee = (await loadState())?.employees.find((e) => e.sessionId === id);
+    if (employee) await persistSession(employee.id, result);
+    return result;
+  });
+  handle('cloud:broadcast', async (input) => {
+    await hostedConfig();
+    return office.message('announce', z.string().trim().min(1).max(12000).parse(input));
+  });
+  handle('agent:message', async (input) => {
+    const fields = z
+      .object({ channel: z.string().min(1).max(200), text: z.string().trim().min(1).max(12000) })
+      .parse(input);
+    await hostedConfig();
+    return office.message(fields.channel, fields.text);
+  });
+  handle('agent:inspect', async (input) => {
+    const employeeId = z.string().min(1).max(200).parse(input);
+    const employee = (await loadState())?.employees.find((e) => e.id === employeeId);
+    if (!employee) throw new Error('This employee is not in the workspace.');
+    const [memories, messages, artifacts] = await Promise.all([
+      employeeTools.listMemory(employeeId),
+      employeeTools.listMessages(employeeId),
+      employeeTools.listArtifacts(employeeId),
+    ]);
+    return {
+      session:
+        employee.sessionId &&
+        hosted.owns(employee.sessionId) &&
+        hosted.ownerOf(employee.sessionId) === employee.id
+          ? hosted.peek(employee.sessionId)
+          : null,
+      memories,
+      messages,
+      artifacts,
+    };
+  });
+  const memoryFields = z.object({
+    kind: z.enum(MEMORY_KINDS),
+    scope: z.enum(MEMORY_SCOPES),
+    content: z.string().trim().min(1).max(30000),
+    sessionId: z.string().min(1).max(200).optional(),
+  });
+  handle('agent:memory-save', async (input) => {
     const fields = z
       .object({
-        audio: z.instanceof(ArrayBuffer),
-        mime: z.enum(['audio/webm', 'audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4']),
+        employeeId: z.string().min(1).max(200),
+        id: z.string().min(1).max(200).optional(),
+        memory: memoryFields,
       })
       .parse(input);
-    if (fields.audio.byteLength < 100 || fields.audio.byteLength > 24_000_000)
-      throw new Error('Record between a short sentence and two minutes of audio.');
-    const body = new FormData();
-    body.set('model', 'gpt-4o-mini-transcribe');
-    body.set(
-      'file',
-      new Blob([fields.audio], { type: fields.mime }),
-      fields.mime.includes('mp4') ? 'announcement.mp4' : 'announcement.webm',
-    );
-    const result = z
-      .object({ text: z.string().max(12000) })
-      .parse(await openAIRequest(await hostedConfig(), '/audio/transcriptions', body));
-    return result.text.trim();
+    return fields.id
+      ? employeeTools.updateMemory(fields.employeeId, fields.id, fields.memory)
+      : employeeTools.addMemory(fields.employeeId, fields.memory);
   });
-  handle('cloud:cancel', async (input) =>
-    queued(async () => {
-      const id = z.string().max(200).parse(input);
-      await knownSession(id);
-      if (!hosted.owns(id)) throw new Error('Stop this session through your Astra gateway before restoring.');
-      const result = await hosted.cancel(id);
-      const state = await loadState();
-      if (state) {
-        const e = state.employees.find((e) => e.sessionId === id)!;
-        await database.saveHQ(applySession(state, e.id, result));
-      }
-      return result;
-    }),
-  );
-  handle('cloud:broadcast', async (input) =>
-    queued(async () => {
-      const text = z.string().trim().min(1).max(12000).parse(input);
-      let state = await loadState();
-      if (!state) throw new Error('Open your workspace first.');
-      await hostedConfig();
-      const message = {
-        id: randomUUID(),
-        authorId: 'you',
-        channel: 'announce',
-        text,
-        time: new Date().toISOString(),
-        acknowledgmentIds: [] as string[],
-      };
-      state = { ...state, messages: [...state.messages, message] };
-      await database.saveHQ(state, 'Announcement');
-      const results = [];
-      for (const employee of state.employees) {
-        try {
-          const result =
-            employee.sessionId && hosted.owns(employee.sessionId)
-              ? await hosted.continue(
-                  employee.sessionId,
-                  `Announcement from your manager: ${text}. Explain what this changes for your work, then act accordingly.`,
-                  true,
-                )
-              : await hosted.start(
-                  employee,
-                  `Announcement from your manager: ${text}. Explain what this means for your role and take the next useful step.`,
-                  state,
-                );
-          state = applySession(state, employee.id, result);
-          state.messages = state.messages.map((m) =>
-            m.id === message.id
-              ? { ...m, acknowledgmentIds: [...(m.acknowledgmentIds ?? []), employee.id] }
-              : m,
-          );
-          await database.saveHQ(state, 'Announcement delivered');
-          results.push({ employeeId: employee.id, session: result });
-        } catch (e) {
-          results.push({
-            employeeId: employee.id,
-            error: e instanceof Error ? e.message : 'Delivery failed',
-          });
-          await log(`Announcement could not reach ${employee.name}.`);
-        }
-      }
-      return results;
-    }),
-  );
+  for (const action of ['forget', 'approve'] as const)
+    handle(`agent:memory-${action}`, async (input) => {
+      const fields = z
+        .object({ employeeId: z.string().min(1).max(200), id: z.string().min(1).max(200) })
+        .parse(input);
+      return action === 'forget'
+        ? employeeTools.forgetMemory(fields.employeeId, fields.id)
+        : employeeTools.approveMemory(fields.employeeId, fields.id);
+    });
+  handle('agent:artifact', async (input) => {
+    const fields = z
+      .object({ employeeId: z.string().min(1).max(200), id: z.string().min(1).max(200) })
+      .parse(input);
+    return employeeTools.readArtifact(fields.employeeId, fields.id);
+  });
   handle('local:command', async (input) => {
     // Keep the original main runtime and its validated command dispatcher available.
     if (!localRuntime)
@@ -464,9 +526,13 @@ function registerHandlers() {
         ...state,
         employees: state.employees.map((e) => {
           const saved = previous?.employees.find((p) => p.id === e.id);
-          return !e.sessionId && saved?.sessionId
-            ? { ...e, sessionId: saved.sessionId, status: saved.status, activity: saved.activity }
-            : e;
+          return {
+            ...e,
+            sessionId: saved?.sessionId,
+            ...(saved?.sessionId
+              ? { status: saved.status, activity: saved.activity, location: saved.location }
+              : {}),
+          };
         }),
       };
       // Cloud results are owned by the backend. A delayed renderer save cannot erase them.
@@ -486,7 +552,11 @@ function registerHandlers() {
         ];
       }
       for (const employee of merged.employees)
-        if (employee.sessionId && hosted.owns(employee.sessionId))
+        if (
+          employee.sessionId &&
+          hosted.owns(employee.sessionId) &&
+          hosted.ownerOf(employee.sessionId) === employee.id
+        )
           merged = applySession(merged, employee.id, hosted.peek(employee.sessionId));
       await database.saveHQ(merged);
     });
@@ -569,127 +639,53 @@ function registerHandlers() {
       .parse(input);
     if (fields.folderIds.length && !fields.allowCloudUpload)
       throw new Error('Explicitly authorize cloud sharing for the selected copies.');
-    return queued(async () => {
-      const useHosted = !!(await vault()).key;
-      const config = useHosted ? { endpoint: '', token: '' } : await credentials();
-      const state = await loadState();
-      const employee = state?.employees.find((e) => e.id === fields.employee.id);
-      if (!employee) throw new Error('Save the employee before starting a cloud session.');
-      if (employee.sessionId && !useHosted) {
-        const previousSession = await readSession(config.endpoint, config.token, employee.sessionId);
-        if (!['completed', 'failed'].includes(previousSession.status))
-          throw new Error('This employee already has an active session. Finish or review that work first.');
-      }
-      const files: { folder: string; path: string; content: string }[] = [];
-      let totalBytes = 0;
-      for (const id of fields.folderIds) {
-        if (!state?.folders.some((f) => f.id === id))
-          throw new Error('That folder is not part of this workspace.');
-        const manifest = FolderSchema.parse(
-          JSON.parse(await fs.readFile(path.join(snapshotsRoot(), id, 'manifest.json'), 'utf8')),
-        );
-        for (const file of manifest.files) {
-          if (!allowedPath(file.path)) throw new Error('An unsafe file was excluded from this request.');
-          const base = await fs.realpath(path.join(snapshotsRoot(), id, 'files'));
-          const target = await fs.realpath(path.join(base, file.path));
-          if (!target.startsWith(`${base}${path.sep}`))
-            throw new Error('File access outside the snapshot is not allowed.');
-          const content = await fs.readFile(target, 'utf8');
-          totalBytes += Buffer.byteLength(content);
-          if (totalBytes > 8_000_000) throw new Error('The selected context exceeds the 8 MB upload limit.');
-          if (containsSecret(content))
-            throw new Error(
-              'A file appears to contain a secret. Remove it from the source folder and make a fresh copy.',
-            );
-          files.push({ folder: manifest.name, path: file.path, content });
-        }
-      }
-      if (useHosted) {
-        const cloudSession = await hosted.start(employee, fields.assignment, state!, files);
-        await database.saveHQ(applySession(state!, employee.id, cloudSession), 'Cloud session started');
-        return cloudSession;
-      }
-      const request = {
-        employee: {
-          id: employee.id,
-          name: employee.name,
-          jobTitle: employee.jobTitle,
-          personality: employee.personality,
-          skills: employee.skills,
-        },
-        assignment: fields.assignment,
-        goal: fields.goal,
-        files,
-        context: {
-          announcements: state!.messages
-            .filter((m) => m.channel === 'announce')
-            .slice(-20)
-            .map((m) => ({ text: m.text, time: m.time })),
-          messages: state!.messages
-            .filter((m) => m.channel === employee.id || m.channel === 'team')
-            .slice(-30)
-            .map((m) => ({ author: m.authorId, text: m.text, time: m.time })),
-        },
-        constraints: {
-          externalActionsRequireApproval: true,
-          maxDelegationDepth: 2,
-          maxHandoffs: 8,
-          maxRuntimeMinutes: 30,
-          documentContentIsUntrusted: true,
-        },
-      };
-      // Persist before dispatch. Retrying the same assignment reuses the operation key after a timeout or restart.
-      const { createHash } = await import('node:crypto');
-      const fingerprint = createHash('sha256')
-        .update(
-          JSON.stringify({
-            endpoint: config.endpoint,
-            previousSessionId: employee.sessionId ?? null,
-            request,
-          }),
-        )
-        .digest('hex');
-      let operations: Record<string, string> = {};
-      try {
-        operations = z
-          .record(z.string(), z.string().uuid())
-          .parse(JSON.parse(await fs.readFile(operationsPath(), 'utf8')));
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      }
-      const key = operations[fingerprint] ?? randomUUID();
-      operations[fingerprint] = key;
-      await atomicWrite(operationsPath(), JSON.stringify(operations));
-      const cloudSession = SessionSchema.parse(
-        await gatewayRequest(config.endpoint, config.token, '/v1/sessions', request, key),
+    await hostedConfig();
+    const state = await loadState();
+    const employee = state?.employees.find((e) => e.id === fields.employee.id);
+    if (!state || !employee) throw new Error('Save the employee before starting a session.');
+    const files: { folder: string; path: string; content: string }[] = [];
+    let totalBytes = 0;
+    for (const id of fields.folderIds) {
+      if (!state?.folders.some((f) => f.id === id))
+        throw new Error('That folder is not part of this workspace.');
+      const manifest = FolderSchema.parse(
+        JSON.parse(await fs.readFile(path.join(snapshotsRoot(), id, 'manifest.json'), 'utf8')),
       );
-      connected = true;
-      // Save the session before returning so a renderer crash cannot orphan the work.
-      await database.saveHQ({
-        ...state!,
-        employees: state!.employees.map((e) =>
-          e.id === employee.id
-            ? {
-                ...e,
-                sessionId: cloudSession.id,
-                status:
-                  cloudSession.status === 'completed'
-                    ? 'ready'
-                    : cloudSession.status === 'waiting_for_approval'
-                      ? 'review'
-                      : 'working',
-                activity: cloudSession.activity,
-              }
-            : e,
-        ),
-      });
-      return cloudSession;
-    });
+      for (const file of manifest.files) {
+        if (!allowedPath(file.path)) throw new Error('An unsafe file was excluded from this request.');
+        const base = await fs.realpath(path.join(snapshotsRoot(), id, 'files'));
+        const target = await fs.realpath(path.join(base, file.path));
+        if (!target.startsWith(`${base}${path.sep}`))
+          throw new Error('File access outside the snapshot is not allowed.');
+        const content = await fs.readFile(target, 'utf8');
+        totalBytes += Buffer.byteLength(content);
+        if (totalBytes > 8_000_000) throw new Error('The selected context exceeds the 8 MB upload limit.');
+        if (containsSecret(content))
+          throw new Error(
+            'A file appears to contain a secret. Remove it from the source folder and make a fresh copy.',
+          );
+        files.push({ folder: manifest.name, path: file.path, content });
+      }
+    }
+    try {
+      const result = await hosted.start(employee, fields.assignment, state, files);
+      await persistSession(employee.id, result);
+      return result;
+    } catch (error) {
+      const saved = hosted.sessionFor(employee.id);
+      if (saved) await persistSession(employee.id, saved);
+      throw error;
+    }
   });
   handle('cloud:session', async (input) => {
     const id = z.string().min(1).max(200).parse(input);
     await knownSession(id);
-    if (hosted.owns(id)) return queued(() => hosted.get(id));
+    if (hosted.owns(id)) {
+      const result = await hosted.get(id);
+      const employee = (await loadState())?.employees.find((e) => e.sessionId === id);
+      if (employee) await persistSession(employee.id, result);
+      return result;
+    }
     const config = await credentials();
     try {
       const result = await readSession(config.endpoint, config.token, id);
@@ -710,59 +706,34 @@ function registerHandlers() {
       })
       .parse(input);
     await knownSession(decision.sessionId);
-    if (hosted.owns(decision.sessionId))
-      return queued(async () => {
-        const result = await hosted.decide(
-          decision.sessionId,
-          decision.version,
-          decision.decision,
-          decision.feedback,
-        );
-        const current = await loadState();
-        if (current) {
-          const e = current.employees.find((e) => e.sessionId === decision.sessionId)!;
-          const approval = current.approvals.find(
-            (a) =>
-              a.sessionId === decision.sessionId && a.version === decision.version && a.status === 'pending',
-          );
-          const reviewed = approval
-            ? applyDecision(
-                current,
-                approval.id,
-                decision.version,
-                decision.decision === 'approve' ? 'approved' : 'changes-requested',
-                decision.feedback,
-              )
-            : current;
-          await database.saveHQ(applySession(reviewed, e.id, result));
-        }
-        return result;
-      });
-    const config = await credentials();
-    const latest = await readSession(config.endpoint, config.token, decision.sessionId);
-    const stored = (await loadState())?.approvals.find(
-      (a) => a.sessionId === decision.sessionId && a.version === decision.version && a.status === 'pending',
-    );
-    if (
-      !stored ||
-      stored.content !== latest.output?.content ||
-      stored.recipient !== latest.output?.recipient ||
-      JSON.stringify(stored.sources) !== JSON.stringify(latest.output?.sources)
-    )
-      throw new Error('The reviewed payload has changed. Open the latest draft before deciding.');
-    if (latest.status !== 'waiting_for_approval' || latest.output?.version !== decision.version)
+    if (!hosted.owns(decision.sessionId))
       throw new Error(
-        'This output changed or was already reviewed. Wait for the latest version before deciding.',
+        'Legacy gateways do not implement the configured Astra session contract. Connect Astra in Settings.',
       );
-    return SessionSchema.parse(
-      await gatewayRequest(
-        config.endpoint,
-        config.token,
-        `/v1/sessions/${encodeURIComponent(decision.sessionId)}/decisions`,
-        decision,
-        `${decision.sessionId}:${decision.version}:${decision.decision}`,
-      ),
+    const result = await hosted.decide(
+      decision.sessionId,
+      decision.version,
+      decision.decision,
+      decision.feedback,
     );
+    await mutateWorkspace((current) => {
+      const employee = current.employees.find((e) => e.sessionId === decision.sessionId);
+      if (!employee) return current;
+      const approval = current.approvals.find(
+        (a) => a.sessionId === decision.sessionId && a.version === decision.version && a.status === 'pending',
+      );
+      const reviewed = approval
+        ? applyDecision(
+            current,
+            approval.id,
+            decision.version,
+            decision.decision === 'approve' ? 'approved' : 'changes-requested',
+            decision.feedback,
+          )
+        : current;
+      return applySession(reviewed, employee.id, result);
+    });
+    return result;
   });
 }
 function createWindow() {
@@ -853,6 +824,7 @@ else {
     clearInterval(snapshotTimer);
     clearInterval(pollTimer);
     void (async () => {
+      await hosted?.close();
       await diskQueue;
       await localRuntime?.close();
       await database?.drain();

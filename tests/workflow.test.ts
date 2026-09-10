@@ -101,3 +101,48 @@ test('duplicate events in one gateway response appear only once', () => {
   });
   assert.equal(result.events.filter((e) => e.id === 'session-1:event-1').length, 1);
 });
+
+test('final employee replies reach the direct conversation once, including automatic completion', () => {
+  const completed: CloudSession = {
+    ...session,
+    status: 'completed',
+    reviewed: true,
+    output: { ...session.output!, recipient: 'You' },
+  };
+  const result = applySession(initialState(), 'maya', completed);
+  assert.equal(result.employees[0].status, 'ready');
+  assert.equal(
+    result.messages.filter(
+      (message) => message.channel === 'maya' && message.text === completed.output!.content,
+    ).length,
+    1,
+  );
+  assert.equal(result.approvals.find((item) => item.sessionId === session.id)?.status, 'approved');
+  assert.deepEqual(applySession(result, 'maya', completed), result);
+});
+
+test('tool permission requests stay distinct from employee replies and cancellation clears a pending review', () => {
+  const permission: CloudSession = {
+    ...session,
+    output: { ...session.output!, recipient: 'Astra HQ workspace' },
+  };
+  const pending = applySession(initialState(), 'maya', permission);
+  assert.equal(
+    pending.messages.some(
+      (message) => message.channel === 'maya' && message.text === permission.output!.content,
+    ),
+    false,
+  );
+  assert.equal(pending.approvals.find((item) => item.sessionId === session.id)?.kind, 'decision');
+  const cancelled = applySession(pending, 'maya', {
+    ...permission,
+    status: 'cancelled',
+    output: undefined,
+    activity: 'Stopped by you',
+  });
+  assert.equal(cancelled.employees[0].status, 'ready');
+  assert.equal(
+    cancelled.approvals.find((item) => item.sessionId === session.id)?.status,
+    'changes-requested',
+  );
+});

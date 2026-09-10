@@ -37,6 +37,7 @@ import type {
   CloudSettings,
   Commitment,
   Employee,
+  Integration,
   Page,
   WorkspaceFolder,
 } from '../shared/types';
@@ -46,28 +47,30 @@ import {
   employeeById,
   employeeColors,
   folderBrief,
+  getLocalStateRecovery,
   initialState,
-  isState,
+  normalizeState,
   profileSuggestion,
   readLocalState,
-  STORAGE_KEY,
+  recoverLocalState,
+  saveLocalState,
   timeNow,
   uid,
 } from './lib/store';
+import { AgentConfigSchema, resolveAgentConfig, type AgentConfig } from '../shared/agent-config';
+import { AgentConfiguration } from './components/AgentConfiguration';
+import { AgentWorkspace } from './components/AgentWorkspace';
 import { allowedPath, containsSecret, MAX_FILES, MAX_FILE_SIZE, MAX_FOLDER_SIZE } from '../shared/workspace';
 import Avatar from './components/Avatar';
 import { applyDecision, applySession } from './lib/workflow';
 import Modal from './components/Modal';
 import SceneBoundary from './components/SceneBoundary';
 import Markdown from './components/Markdown';
-import {
-  useOfficeHistory,
-  OfficeTimeline,
-  AppearanceEditor,
-  VoiceAnnounce,
-  ConnectionSettings,
-  ActivityPage,
-} from './components/HQFeatures';
+import OfficeActivity from './components/OfficeActivity';
+import { useOfficeReplay, OfficeReplayTimeline } from './components/OfficeReplay';
+import { OfficeToolAtlas } from './components/OfficeToolAtlas';
+import type { OfficeStation } from '../shared/office-tool-atlas';
+import { AppearanceEditor, VoiceAnnounce, ConnectionSettings, ActivityPage } from './components/HQFeatures';
 import {
   AnnouncePage,
   CommitmentsPage,
@@ -99,14 +102,16 @@ const pageNames: Record<Page, string> = {
 export type UpdateState = (update: (s: AppState) => AppState) => void;
 export default function App() {
   const [state, setState] = useState<AppState>(readLocalState);
+  const [recovery, setRecovery] = useState(getLocalStateRecovery);
   const [ready, setReady] = useState(!window.ahq);
   const [page, setPage] = useState<Page>('office');
   const [conversationTarget, setConversationTarget] = useState('team');
   const [cloud, setCloud] = useState<CloudSettings>({ endpoint: '', configured: false, connected: false });
   const [toast, setToast] = useState('');
   const [modal, setModal] = useState<
-    'employee' | 'commitment' | 'goal' | 'search' | 'help' | 'folder' | 'storage' | null
+    'employee' | 'commitment' | 'goal' | 'search' | 'help' | 'folder' | 'storage' | 'atlas' | null
   >(null);
+  const [atlasStation, setAtlasStation] = useState<OfficeStation | undefined>(undefined);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [selectedApproval, setSelectedApproval] = useState<string | null>(null);
@@ -132,23 +137,24 @@ export default function App() {
   stateRef.current = state;
   const notify = useCallback((text: string) => setToast(text), []);
   const update: UpdateState = useCallback((fn) => setState((previous) => fn(previous)), []);
-  const history = useOfficeHistory(state, update, notify);
-  const [pastFrame, setPastFrame] = useState<import('../shared/types').OfficeFrame | null>(null);
+  const history = useOfficeReplay(state, update, notify);
+  useEffect(() => {
+    if (!ready) return;
+    return window.ahq?.onAgentSession?.(({ employeeId, session }) => {
+      if (getLocalStateRecovery()) return;
+      update((current) =>
+        current.employees.some((employee) => employee.id === employeeId)
+          ? applySession(current, employeeId, session)
+          : current,
+      );
+    });
+  }, [ready, update]);
+  const pastFrame = history.frame;
+  const officeState = history.display;
   const lastFrame = useRef(0);
   const frameTime = useRef(Date.now() / 1000);
   if (playing && !listening && !state.reducedMotion && !systemReducedMotion)
     frameTime.current = history.at === null ? history.now / 1000 : history.at / 1000;
-  useEffect(() => {
-    let active = true;
-    if (history.at !== null)
-      void window.ahq?.frameAt(history.at).then((frame) => {
-        if (active) setPastFrame(frame);
-      });
-    else setPastFrame(null);
-    return () => {
-      active = false;
-    };
-  }, [history.at]);
   useEffect(() => {
     if (!window.ahq || history.at !== null || !ready) return;
     const time = Date.now();
@@ -177,16 +183,18 @@ export default function App() {
     lastFrame.current = 0;
   }, [listening, state.reducedMotion]);
   async function broadcast(text: string) {
+    if (getLocalStateRecovery()) throw new Error('Recover the saved workspace before starting cloud work.');
     if (!window.ahq) throw new Error('Open the desktop app to announce to your employees.');
     await saveChain.current;
+    await window.ahq.saveState(stateRef.current);
     const results = await window.ahq.broadcast(text);
     const saved = await window.ahq.loadState();
-    if (saved) setState(saved);
+    if (saved) setState(normalizeState(saved));
     const failed = results.filter((r) => r.error);
     notify(
       failed.length
         ? `Reached ${results.length - failed.length} employees. ${failed.map((f) => state.employees.find((e) => e.id === f.employeeId)?.name).join(', ')} could not receive the announcement.`
-        : 'Announcement delivered to every employee’s Astra session.',
+        : 'Announcement submitted to the employee sessions.',
     );
   }
   useEffect(() => {
@@ -206,7 +214,22 @@ export default function App() {
     Promise.all([window.ahq.loadState(), window.ahq.getCloudSettings()])
       .then(([saved, settings]) => {
         if (!cancelled) {
-          if (isState(saved)) setState(saved);
+          if (saved !== null) {
+            const parsed = normalizeState(saved);
+            if (getLocalStateRecovery()) {
+              try {
+                recoverLocalState(parsed);
+              } catch (error) {
+                notify(
+                  error instanceof Error
+                    ? error.message
+                    : 'The original cache is preserved. Saving remains paused.',
+                );
+              }
+              setRecovery(getLocalStateRecovery());
+            }
+            setState(parsed);
+          }
           setCloud(settings);
           setReady(true);
           void window
@@ -229,9 +252,9 @@ export default function App() {
   }, [notify]);
   const saveChain = useRef(Promise.resolve());
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || getLocalStateRecovery()) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      saveLocalState(state);
     } catch {
       notify('Storage is full. Export your documents before closing.');
     }
@@ -490,6 +513,11 @@ export default function App() {
               className={`nav-item ${page === item.id ? 'active' : ''}`}
               onClick={() => navigate(item.id)}
               aria-current={page === item.id ? 'page' : undefined}
+              aria-label={
+                item.id === 'needs-you' && pending.length
+                  ? `${item.label}: ${pending.length} pending reviews`
+                  : item.label
+              }
             >
               <item.icon size={19} strokeWidth={1.7} />
               <span>{item.label}</span>
@@ -517,6 +545,7 @@ export default function App() {
           <button
             className={`nav-item ${page === 'settings' ? 'active' : ''}`}
             onClick={() => navigate('settings')}
+            aria-label="Settings and connections"
           >
             <Settings size={18} strokeWidth={1.7} />
             <span>Settings & connections</span>
@@ -562,6 +591,13 @@ export default function App() {
             <Avatar size={31} />
           </div>
         </header>
+        {recovery && (
+          <div className="agent-config-recovery" role="alert">
+            <strong>Workspace recovery · saving paused</strong>
+            <p>{recovery.message}</p>
+            {recovery.backupKey && <small>Preserved backup: {recovery.backupKey}</small>}
+          </div>
+        )}
         <main>
           <div className="page-header">
             <div>
@@ -590,7 +626,11 @@ export default function App() {
                 </span>
               )}
               {page === 'office' || page === 'employees' ? (
-                <button className="button primary" onClick={() => setModal('employee')}>
+                <button
+                  className="button primary"
+                  disabled={page === 'office' && history.at !== null}
+                  onClick={() => setModal('employee')}
+                >
                   <Plus size={16} />
                   New employee
                 </button>
@@ -604,227 +644,258 @@ export default function App() {
           </div>
           {page === 'office' && (
             <>
-              <div className="goal-banner">
-                <span className="goal-icon">
-                  <Target size={19} />
-                </span>
-                <span className="goal-label">OUR NORTH STAR</span>
-                <p>{history.display.goal}</p>
-                <button className="text-button" onClick={() => setModal('goal')}>
-                  Edit goal <ArrowRight size={14} />
+              {officeState ? (
+                <>
+                  <div className="goal-banner">
+                    <span className="goal-icon">
+                      <Target size={19} />
+                    </span>
+                    <span className="goal-label">OUR NORTH STAR</span>
+                    <p>{officeState.goal}</p>
+                    <button
+                      className="text-button"
+                      disabled={history.at !== null}
+                      onClick={() => setModal('goal')}
+                    >
+                      Edit goal <ArrowRight size={14} />
+                    </button>
+                  </div>
+                  <div className="office-layout">
+                    <section className="office-card">
+                      <div className="office-card-header">
+                        <div>
+                          <span className="room-icon">
+                            <Home size={15} />
+                          </span>
+                          <strong>The studio</strong>
+                          <span className="small-separator" />
+                          <span>{officeState.employees.length} teammates</span>
+                        </div>
+                        <div>
+                          <span className="office-weather">
+                            ☀<span>A little room to grow</span>
+                          </span>
+                          <button
+                            className="icon-button"
+                            aria-label="Rotate office view"
+                            onClick={() => setAngle((v) => (v + 45) % 360)}
+                          >
+                            <Ellipsis size={20} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="office-viewport">
+                        <div className="scene-caption">
+                          <span className="eyebrow">SPACE TO DO YOUR BEST WORK</span>
+                          <span className="scene-script">Better, together.</span>
+                        </div>
+                        <SceneBoundary onTeam={() => navigate('employees')}>
+                          <Suspense
+                            fallback={
+                              <div className="scene-loading">
+                                <LoaderCircle className="spin" size={24} />
+                                <span>Opening the studio…</span>
+                              </div>
+                            }
+                          >
+                            <OfficeScene
+                              employees={officeState.employees}
+                              events={history.events}
+                              eventTimeMs={history.at ?? history.now}
+                              sample={officeState.demo}
+                              selectedEmployeeId={selectedEmployee}
+                              onStation={(station) => {
+                                setAtlasStation(station);
+                                setModal('atlas');
+                              }}
+                              animate={playing && !state.reducedMotion && !systemReducedMotion}
+                              onSelect={(e) =>
+                                history.at === null
+                                  ? setSelectedEmployee(e.id)
+                                  : notify(`${e.name}: ${e.activity}`)
+                              }
+                              zoom={zoom}
+                              angle={angle}
+                              timeSeconds={
+                                history.at !== null
+                                  ? (pastFrame?.sceneTime ?? history.at / 1000)
+                                  : frameTime.current
+                              }
+                              live={history.at === null}
+                              listening={history.at !== null ? !!pastFrame?.listening : listening}
+                              microphoneLevel={
+                                history.at !== null ? (pastFrame?.level ?? 0) : microphoneLevel
+                              }
+                            />
+                          </Suspense>
+                        </SceneBoundary>
+                        <div className="office-hint">
+                          <span className={cloud.connected ? 'status-dot' : 'sample-dot'} />
+                          {history.at !== null
+                            ? 'Recorded office · read only'
+                            : cloud.connected
+                              ? `${officeState.employees.filter((e) => e.sessionId && e.status === 'working').length} cloud sessions active`
+                              : 'A preview of your future team'}
+                          <span>·</span>
+                          <span>
+                            {history.at !== null
+                              ? 'Inspect a recorded moment'
+                              : 'Select a teammate or a physical tool'}
+                          </span>
+                        </div>
+                        <div className="scene-controls">
+                          <button
+                            aria-label="Zoom out"
+                            onClick={() => setZoom((z) => Math.max(0.7, z - 0.12))}
+                            disabled={zoom <= 0.7}
+                          >
+                            <Minus size={17} />
+                          </button>
+                          <button
+                            aria-label="Reset office view"
+                            onClick={() => {
+                              setZoom(1);
+                              setPlaying(true);
+                            }}
+                          >
+                            <Focus size={17} />
+                          </button>
+                          <button
+                            aria-label="Zoom in"
+                            onClick={() => setZoom((z) => Math.min(1.5, z + 0.12))}
+                            disabled={zoom >= 1.5}
+                          >
+                            <Plus size={17} />
+                          </button>
+                        </div>
+                        {history.at !== null && (
+                          <div className="replay-badge">
+                            <History size={14} />
+                            Replay · {new Date(history.at).toLocaleTimeString()}
+                          </div>
+                        )}
+                        {listening && (
+                          <div className="replay-badge">
+                            <Volume2 size={14} />
+                            The whole office is listening
+                          </div>
+                        )}
+                      </div>
+                      <div className="office-footer">
+                        <div className="avatar-stack">
+                          {officeState.employees.slice(0, 6).map((e) => (
+                            <Avatar key={e.id} employee={e} size={26} />
+                          ))}
+                        </div>
+                        <span>{cloud.connected ? 'Your team is here.' : 'Meet your next great team.'}</span>
+                        <button className="text-button" onClick={() => navigate('employees')}>
+                          Meet everyone <ArrowRight size={14} />
+                        </button>
+                      </div>
+                    </section>
+                    <aside className="activity-column">
+                      <OfficeActivity
+                        events={history.events}
+                        employees={officeState.employees}
+                        replay={history.at !== null}
+                        onReplay={(at) => {
+                          history.setPlay(false);
+                          history.setAt(at);
+                        }}
+                      />
+                      <section className="needs-preview">
+                        <div className="section-heading">
+                          <h2>
+                            <Inbox size={17} />A moment of your time
+                          </h2>
+                          <span className="count-badge">
+                            {officeState.approvals.filter((item) => item.status === 'pending').length}
+                          </span>
+                        </div>
+                        <p className="section-description">Your perspective makes the difference.</p>
+                        {officeState.approvals
+                          .filter((item) => item.status === 'pending')
+                          .slice(0, 2)
+                          .map((a, i) => (
+                            <button
+                              className={`review-preview ${i === 0 ? 'featured' : ''}`}
+                              key={a.id}
+                              disabled={history.at !== null}
+                              onClick={() => setSelectedApproval(a.id)}
+                            >
+                              <div className="review-preview-top">
+                                <span className={`approval-symbol ${i === 0 ? 'warm' : ''}`}>
+                                  {i === 0 ? <Sparkles size={18} /> : <BookOpen size={18} />}
+                                </span>
+                                <span>
+                                  {employeeById(officeState.employees, a.employeeId)?.name ?? 'Workspace'}
+                                  <small>
+                                    {a.kind === 'decision' ? 'A decision for you' : 'Ready for review'}
+                                  </small>
+                                </span>
+                                <ArrowDownLeft size={15} />
+                              </div>
+                              <strong>{a.title}</strong>
+                              <p>{a.summary}</p>
+                              <span className="review-link">
+                                Take a look <ArrowRight size={14} />
+                              </span>
+                            </button>
+                          ))}
+                        {officeState.approvals.filter((item) => item.status === 'pending').length === 0 && (
+                          <div className="caught-up">
+                            <CheckCheck size={28} />
+                            <strong>A little breathing room.</strong>
+                            <p>You’re all caught up.</p>
+                          </div>
+                        )}
+                        <div className="quiet-note">
+                          <Leaf size={14} />
+                          <span>
+                            {cloud.connected
+                              ? 'Other employees can keep working.'
+                              : 'A thoughtful pause, then onward.'}
+                          </span>
+                        </div>
+                      </section>
+                    </aside>
+                  </div>
+                  <VoiceAnnounce
+                    onLevel={setMicrophoneLevel}
+                    onListening={setListening}
+                    onBroadcast={broadcast}
+                    notify={notify}
+                  />
+                </>
+              ) : (
+                <div className="surface empty-state">
+                  <History size={32} />
+                  <h3>
+                    {history.loading ? 'Loading the recorded office…' : 'No recorded office at this moment.'}
+                  </h3>
+                  <p>
+                    {history.error ||
+                      'Choose a recorded checkpoint on the timeline. Live state is not substituted for missing history.'}
+                  </p>
+                </div>
+              )}
+              <div className="office-guide-launch">
+                <BookOpen size={23} />
+                <div>
+                  <strong>A place for every kind of work.</strong>
+                  <p>Filing cabinets, inbox trays, research desks. Explore 45 concrete tools.</p>
+                </div>
+                <button
+                  className="button secondary"
+                  onClick={() => {
+                    setAtlasStation(undefined);
+                    setModal('atlas');
+                  }}
+                >
+                  How this office works <ArrowRight size={14} />
                 </button>
               </div>
-              <div className="office-layout">
-                <section className="office-card">
-                  <div className="office-card-header">
-                    <div>
-                      <span className="room-icon">
-                        <Home size={15} />
-                      </span>
-                      <strong>The studio</strong>
-                      <span className="small-separator" />
-                      <span>{state.employees.length} teammates</span>
-                    </div>
-                    <div>
-                      <span className="office-weather">
-                        ☀<span>A little room to grow</span>
-                      </span>
-                      <button
-                        className="icon-button"
-                        aria-label="Rotate office view"
-                        onClick={() => setAngle((v) => (v + 45) % 360)}
-                      >
-                        <Ellipsis size={20} />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="office-viewport">
-                    <div className="scene-caption">
-                      <span className="eyebrow">SPACE TO DO YOUR BEST WORK</span>
-                      <span className="scene-script">Better, together.</span>
-                    </div>
-                    <SceneBoundary onTeam={() => navigate('employees')}>
-                      <Suspense
-                        fallback={
-                          <div className="scene-loading">
-                            <LoaderCircle className="spin" size={24} />
-                            <span>Opening the studio…</span>
-                          </div>
-                        }
-                      >
-                        <OfficeScene
-                          employees={history.display.employees}
-                          animate={playing && !state.reducedMotion && !systemReducedMotion}
-                          onSelect={(e) =>
-                            history.at === null
-                              ? setSelectedEmployee(e.id)
-                              : notify(`${e.name}: ${e.activity}`)
-                          }
-                          zoom={zoom}
-                          angle={angle}
-                          timeSeconds={
-                            history.at !== null
-                              ? (pastFrame?.sceneTime ?? frameTime.current)
-                              : frameTime.current
-                          }
-                          live={history.at === null}
-                          listening={history.at !== null ? !!pastFrame?.listening : listening}
-                          microphoneLevel={history.at !== null ? (pastFrame?.level ?? 0) : microphoneLevel}
-                        />
-                      </Suspense>
-                    </SceneBoundary>
-                    <div className="office-hint">
-                      <span className={cloud.connected ? 'status-dot' : 'sample-dot'} />
-                      {cloud.connected
-                        ? `${state.employees.filter((e) => e.sessionId && e.status === 'working').length} cloud sessions active`
-                        : 'A preview of your future team'}
-                      <span>·</span>
-                      <span>Select anyone to say hello</span>
-                    </div>
-                    <div className="scene-controls">
-                      <button
-                        aria-label="Zoom out"
-                        onClick={() => setZoom((z) => Math.max(0.7, z - 0.12))}
-                        disabled={zoom <= 0.7}
-                      >
-                        <Minus size={17} />
-                      </button>
-                      <button
-                        aria-label="Reset office view"
-                        onClick={() => {
-                          setZoom(1);
-                          setPlaying(true);
-                        }}
-                      >
-                        <Focus size={17} />
-                      </button>
-                      <button
-                        aria-label="Zoom in"
-                        onClick={() => setZoom((z) => Math.min(1.5, z + 0.12))}
-                        disabled={zoom >= 1.5}
-                      >
-                        <Plus size={17} />
-                      </button>
-                    </div>
-                    {history.at !== null && (
-                      <div className="replay-badge">
-                        <History size={14} />
-                        Replay · {new Date(history.at).toLocaleTimeString()}
-                      </div>
-                    )}
-                    {listening && (
-                      <div className="replay-badge">
-                        <Volume2 size={14} />
-                        The whole office is listening
-                      </div>
-                    )}
-                  </div>
-                  <div className="office-footer">
-                    <div className="avatar-stack">
-                      {state.employees.slice(0, 6).map((e) => (
-                        <Avatar key={e.id} employee={e} size={26} />
-                      ))}
-                    </div>
-                    <span>{cloud.connected ? 'Your team is here.' : 'Meet your next great team.'}</span>
-                    <button className="text-button" onClick={() => navigate('employees')}>
-                      Meet everyone <ArrowRight size={14} />
-                    </button>
-                  </div>
-                </section>
-                <aside className="activity-column">
-                  <section className="team-chat">
-                    <div className="section-heading">
-                      <h2>
-                        <MessageCircle size={17} />
-                        Around the office
-                      </h2>
-                      <span className="subtle-dot" />
-                    </div>
-                    <button className="channel-link" onClick={() => navigate('conversations')}>
-                      # team-lounge <ChevronDown size={12} />
-                      <span>{state.demo ? 'SAMPLE' : 'TEAM'}</span>
-                    </button>
-                    <div className="chat-preview">
-                      {state.messages
-                        .filter((m) => m.channel === 'team')
-                        .slice(-3)
-                        .map((m) => {
-                          const employee = employeeById(state.employees, m.authorId);
-                          return (
-                            <div className="chat-message" key={m.id}>
-                              <Avatar employee={employee} size={31} />
-                              <div>
-                                <div className="message-byline">
-                                  <strong>{employee?.name ?? 'You'}</strong>
-                                  <time>{clockTime(m.time)}</time>
-                                  {m.id.startsWith('m') && <span className="sample-label">EXAMPLE</span>}
-                                </div>
-                                <p>{m.text}</p>
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                    <button className="chat-see-all" onClick={() => navigate('conversations')}>
-                      Pull up a chair <ArrowRight size={14} />
-                    </button>
-                  </section>
-                  <section className="needs-preview">
-                    <div className="section-heading">
-                      <h2>
-                        <Inbox size={17} />A moment of your time
-                      </h2>
-                      <span className="count-badge">{pending.length}</span>
-                    </div>
-                    <p className="section-description">Your perspective makes the difference.</p>
-                    {pending.slice(0, 2).map((a, i) => (
-                      <button
-                        className={`review-preview ${i === 0 ? 'featured' : ''}`}
-                        key={a.id}
-                        onClick={() => setSelectedApproval(a.id)}
-                      >
-                        <div className="review-preview-top">
-                          <span className={`approval-symbol ${i === 0 ? 'warm' : ''}`}>
-                            {i === 0 ? <Sparkles size={18} /> : <BookOpen size={18} />}
-                          </span>
-                          <span>
-                            {employeeById(state.employees, a.employeeId)?.name ?? 'Workspace'}
-                            <small>{a.kind === 'decision' ? 'A decision for you' : 'Ready for review'}</small>
-                          </span>
-                          <ArrowDownLeft size={15} />
-                        </div>
-                        <strong>{a.title}</strong>
-                        <p>{a.summary}</p>
-                        <span className="review-link">
-                          Take a look <ArrowRight size={14} />
-                        </span>
-                      </button>
-                    ))}
-                    {pending.length === 0 && (
-                      <div className="caught-up">
-                        <CheckCheck size={28} />
-                        <strong>A little breathing room.</strong>
-                        <p>You’re all caught up.</p>
-                      </div>
-                    )}
-                    <div className="quiet-note">
-                      <Leaf size={14} />
-                      <span>
-                        {cloud.connected
-                          ? 'Other employees can keep working.'
-                          : 'A thoughtful pause, then onward.'}
-                      </span>
-                    </div>
-                  </section>
-                </aside>
-              </div>
-              <VoiceAnnounce
-                onLevel={setMicrophoneLevel}
-                onListening={setListening}
-                onBroadcast={broadcast}
-                notify={notify}
-              />
-              <OfficeTimeline history={history} />
+              <OfficeReplayTimeline history={history} />
               <div className="page-bottom">
                 <span>
                   <span className="status-dot" />
@@ -891,6 +962,7 @@ export default function App() {
         onChange={(e) => void importBrowserFolder(e.target.files)}
         aria-label="Choose workspace folder"
       />
+      {modal === 'atlas' && <OfficeToolAtlas initialStation={atlasStation} onClose={() => setModal(null)} />}
       {modal === 'storage' && (
         <Modal
           title="A home for your office."
@@ -935,6 +1007,7 @@ export default function App() {
       {modal === 'employee' && (
         <EmployeeForm
           initial={editingEmployee ?? undefined}
+          employees={state.employees}
           onClose={() => {
             setModal(null);
             setEditingEmployee(null);
@@ -947,12 +1020,12 @@ export default function App() {
               }));
               setEditingEmployee(null);
               setModal(null);
-              notify('Profile updated for future assignments.');
+              setSelectedEmployee(editingEmployee.id);
+              notify('Employee configuration saved. It applies to the next manager turn or new assignment.');
               return;
             }
             const employee: Employee = {
               ...fields,
-              skills: ensureCloudSkill(fields.skills),
               id: uid(),
               color: employeeColors[state.employees.length % employeeColors.length],
               avatar: state.employees.length % 6,
@@ -1030,8 +1103,11 @@ export default function App() {
             navigate('settings');
           }}
           onStart={async (assignment, folderIds, allowCloudUpload) => {
+            if (getLocalStateRecovery())
+              throw new Error('Recover the saved workspace before starting cloud work.');
             if (!window.ahq) throw new Error('Cloud sessions are available in the desktop app.');
             await saveChain.current;
+            await window.ahq.saveState(stateRef.current);
             const session = await window.ahq.startSession({
               employee: person,
               assignment,
@@ -1261,7 +1337,7 @@ export default function App() {
               {
                 icon: Users,
                 title: 'Give someone a place on the team',
-                text: 'A name, a job title, a personality, and skills. That’s the whole profile.',
+                text: 'Define their role, then choose thinking effort, tools, memory, communication, and autonomy. Every employee uses Astra.',
                 action: () => setModal('employee'),
               },
               {
@@ -1322,56 +1398,73 @@ function playReviewChime() {
     /* Audio is optional. */
   }
 }
-function ensureCloudSkill(skills: string) {
-  return [
-    'Astra cloud session',
-    ...skills
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s && s.toLowerCase() !== 'astra cloud session'),
-  ].join(', ');
-}
-function CloudIcon() {
-  return <Sparkles size={12} />;
-}
 function EmployeeForm({
   initial,
+  employees,
   onClose,
   onCreate,
 }: {
   initial?: Employee;
+  employees: Employee[];
   onClose: () => void;
-  onCreate: (e: Pick<Employee, 'name' | 'jobTitle' | 'personality' | 'skills'>) => void;
+  onCreate: (
+    e: Pick<Employee, 'name' | 'jobTitle' | 'personality' | 'skills'> & { agent: AgentConfig },
+  ) => void;
 }) {
-  const [integrations, setIntegrations] = useState<string[]>([]);
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [integrationError, setIntegrationError] = useState('');
+  const [agent, setAgent] = useState(() => resolveAgentConfig(initial?.agent));
+  const [formError, setFormError] = useState('');
   useEffect(() => {
     void window.ahq
       ?.integrations()
-      .then((items) => setIntegrations(items.map((i) => i.name)))
-      .catch(() => undefined);
+      .then(setIntegrations)
+      .catch(() =>
+        setIntegrationError(
+          'Connections could not be loaded. Existing selections are preserved; reconnect in Settings before using them.',
+        ),
+      );
   }, []);
   const [fields, setFields] = useState({
     name: initial?.name ?? '',
     jobTitle: initial?.jobTitle ?? '',
     personality: initial?.personality ?? '',
-    skills: ensureCloudSkill(initial?.skills ?? ''),
+    skills: initial?.skills ?? '',
   });
   return (
     <Modal
-      title={initial ? `A little more about ${initial.name}.` : 'A new face. A little possibility.'}
-      subtitle="Good teammates start with a clear role. You can make it their own."
+      title={initial ? `Configure ${initial.name}.` : 'Welcome a new employee.'}
+      subtitle="Define their role and review how they will work. You choose every setting; Astra is included."
       onClose={onClose}
+      wide
     >
       <form
+        onInvalidCapture={(event) => {
+          const details = (event.target as HTMLElement).closest('details');
+          if (details) details.open = true;
+        }}
         onSubmit={(e) => {
           e.preventDefault();
-          if (Object.values(fields).every((v) => v.trim()))
+          const parsed = AgentConfigSchema.safeParse({
+            ...agent,
+            revision: initial?.agent ? initial.agent.revision + 1 : 1,
+            reviewedAt: timeNow(),
+          });
+          if (!parsed.success) {
+            setFormError(
+              parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join(' '),
+            );
+            return;
+          }
+          if (Object.values(fields).every((v) => v.trim())) {
             onCreate({
               name: fields.name.trim(),
               jobTitle: fields.jobTitle.trim(),
               personality: fields.personality.trim(),
-              skills: ensureCloudSkill(fields.skills.trim()),
+              skills: fields.skills.trim(),
+              agent: parsed.data,
             });
+          } else setFormError('Complete the name, job title, personality, and skills.');
         }}
       >
         <div className="new-person-preview">
@@ -1439,37 +1532,42 @@ function EmployeeForm({
             rows={3}
           />
         </label>
-        <div className="skill-tags">
-          <span>
-            <CloudIcon /> Astra cloud session · included
-          </span>
-          {['Web search', 'Data analysis', ...integrations].map((skill) => (
-            <button
-              type="button"
-              key={skill}
-              onClick={() =>
-                setFields({
-                  ...fields,
-                  skills: ensureCloudSkill(
-                    [...new Set([...fields.skills.split(',').map((s) => s.trim()), skill])].join(', '),
-                  ),
-                })
-              }
-            >
-              {skill} +
-            </button>
-          ))}
-        </div>
         <p className="form-hint">
-          Astra cloud session is included for every employee. Add connected integrations and working skills.
+          Skills describe expertise. Select actual tools and connections in the configuration below.
         </p>
+        {integrationError && (
+          <p className="agent-config-error" role="status">
+            {integrationError}
+          </p>
+        )}
+        <AgentConfiguration
+          value={agent}
+          onChange={(next) => {
+            setAgent(next);
+            setFormError('');
+          }}
+          integrations={integrations}
+          employees={employees}
+          employeeId={initial?.id}
+        />
+        {initial?.sessionId && (
+          <p className="form-hint">
+            The active request keeps its current settings. Saved changes apply to the next manager turn or new
+            assignment.
+          </p>
+        )}
+        {formError && (
+          <p className="form-error" role="alert">
+            {formError}
+          </p>
+        )}
         <div className="modal-footer">
           <button type="button" className="button secondary" onClick={onClose}>
-            Maybe later
+            Cancel
           </button>
           <button className="button primary" type="submit">
             <Plus size={16} />
-            {initial ? 'Save profile' : 'Welcome to the team'}
+            {initial ? 'Save configuration' : 'Create employee'}
           </button>
         </div>
       </form>
@@ -1652,15 +1750,16 @@ function EmployeeDetail({
   const [allow, setAllow] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState('');
+  const config = resolveAgentConfig(employee.agent);
   return (
-    <Modal title={`A little time with ${employee.name}.`} onClose={onClose}>
+    <Modal title={`A little time with ${employee.name}.`} onClose={onClose} wide>
       <div className="employee-detail-profile">
         <Avatar employee={employee} size={68} />
         <div>
           <h3>{employee.name}</h3>
           <p>{employee.jobTitle}</p>
           <button className="text-button edit-profile" onClick={onEdit}>
-            Edit profile
+            Configure employee
           </button>
           <span className={`status-pill ${employee.status}`}>
             {employee.sessionId
@@ -1693,8 +1792,45 @@ function EmployeeDetail({
           </p>
         </div>
       </div>
+      {!getLocalStateRecovery() && <AgentWorkspace employee={employee} employees={state.employees} />}
       <div className="detail-section">
         <label>GIVE {employee.name.toUpperCase()} AN ASSIGNMENT</label>
+        <div className="agent-config-run-summary">
+          <div>
+            <strong>
+              Astra ·{' '}
+              {config.reasoning === 'xhigh'
+                ? 'Extra high'
+                : config.reasoning.charAt(0).toUpperCase() + config.reasoning.slice(1)}{' '}
+              reasoning
+            </strong>
+            <button type="button" className="text-button" onClick={onEdit}>
+              Review settings
+            </button>
+          </div>
+          <p>
+            {config.limits.maxTurns} turns · {config.limits.maxToolCalls} tool calls ·{' '}
+            {config.limits.maxRuntimeMinutes} minutes · {config.limits.maxRunTokens.toLocaleString()} total
+            tokens
+          </p>
+          <p>
+            {[
+              config.tools.webSearch && 'Web search',
+              config.tools.dataAnalysis && 'Data analysis',
+              config.tools.workspaceRead && 'Workspace reading',
+              config.tools.artifactWrite && 'Artifacts',
+              config.tools.integrationIds.length > 0 && `${config.tools.integrationIds.length} integrations`,
+            ]
+              .filter(Boolean)
+              .join(' · ') || 'No tools selected'}
+          </p>
+          <p>
+            {config.memory.enabled
+              ? `Memory: ${config.memory.scopes.join(', ') || 'no scopes'} · ${config.memory.write} writes`
+              : 'Memory off'}{' '}
+            · {config.autonomy.completionReview ? 'Review finished work' : 'Finish without review'}
+          </p>
+        </div>
         <textarea
           value={assignment}
           onChange={(e) => setAssignment(e.target.value)}
@@ -1702,7 +1838,7 @@ function EmployeeDetail({
           maxLength={12000}
           placeholder="Prepare the client’s weekly update. Bring back a draft, your sources, and anything that needs my input."
         />
-        {state.folders.length > 0 && (
+        {state.folders.length > 0 && config.tools.workspaceRead && (
           <div className="folder-selection">
             {state.folders.map((f) => (
               <label className="checkbox-label" key={f.id}>
@@ -1751,6 +1887,7 @@ function EmployeeDetail({
             className="button primary"
             disabled={
               running ||
+              !!getLocalStateRecovery() ||
               !assignment.trim() ||
               (folderIds.length > 0 && !allow) ||
               (!!employee.sessionId && ['working', 'review'].includes(employee.status))

@@ -1,6 +1,61 @@
 import { StateSchema } from '../../shared/schemas';
 import type { AppState, Employee, WorkspaceFolder } from '../../shared/types';
 export const STORAGE_KEY = 'astra-hq:v1';
+export interface LocalStateRecovery {
+  message: string;
+  backupKey?: string;
+}
+let localStateRecovery: LocalStateRecovery | null = null;
+let recoverySource: string | undefined;
+
+export function getLocalStateRecovery(): LocalStateRecovery | null {
+  return localStateRecovery ? { ...localStateRecovery } : null;
+}
+
+function preserveInvalidCache(raw: string): LocalStateRecovery {
+  if (recoverySource === raw && localStateRecovery?.backupKey) {
+    try {
+      if (localStorage.getItem(localStateRecovery.backupKey) === raw) return localStateRecovery;
+    } catch {
+      // Try a fresh backup below; never replace the original on failure.
+    }
+  }
+  recoverySource = raw;
+  const recovery: LocalStateRecovery = {
+    message:
+      'The saved browser workspace could not be loaded. Its original cache is preserved and saving is paused. A sample workspace is shown until a valid desktop workspace can be recovered.',
+  };
+  try {
+    const backupKey = `${STORAGE_KEY}:recovery:${Date.now()}:${crypto.randomUUID()}`;
+    localStorage.setItem(backupKey, raw);
+    if (localStorage.getItem(backupKey) === raw) recovery.backupKey = backupKey;
+  } catch {
+    // The original key remains untouched even when storage cannot accommodate a backup.
+  }
+  localStateRecovery = recovery;
+  return recovery;
+}
+
+export function saveLocalState(state: AppState): void {
+  if (localStateRecovery) throw new Error(localStateRecovery.message);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeState(state)));
+}
+
+// Only a validated replacement (for example, the desktop database) resumes saving.
+// Preserve the current cache before replacing it, including changes from another window.
+export function recoverLocalState(state: AppState): AppState {
+  const parsed = normalizeState(state);
+  const current = localStorage.getItem(STORAGE_KEY);
+  if (localStateRecovery && current !== null) {
+    const preserved = preserveInvalidCache(current);
+    if (!preserved.backupKey || localStorage.getItem(preserved.backupKey) !== current)
+      throw new Error('The original cache could not be backed up. Saving remains paused to preserve it.');
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+  localStateRecovery = null;
+  recoverySource = undefined;
+  return parsed;
+}
 export const uid = () => crypto.randomUUID();
 export const timeNow = () => new Date().toISOString();
 export const employeeColors = ['#c49871', '#667e6b', '#718da1', '#c8a465', '#a0889b', '#82958a'];
@@ -16,7 +71,7 @@ const deadline = (days: number, hour = 17) => {
   return date.toISOString();
 };
 export function initialState(): AppState {
-  return {
+  return StateSchema.parse({
     schemaVersion: 1,
     workspaceName: 'My headquarters',
     goal: 'Make room for the big picture. Keep every client promise.',
@@ -251,18 +306,41 @@ export function initialState(): AppState {
       },
     ],
     folders: [],
-  };
+  });
 }
 export function isState(value: unknown): value is AppState {
   return StateSchema.safeParse(value).success;
 }
+export function normalizeState(value: unknown): AppState {
+  return StateSchema.parse(value);
+}
 export function readLocalState(): AppState {
+  let raw: string | null;
   try {
-    const value: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-    if (isState(value)) return value;
+    raw = localStorage.getItem(STORAGE_KEY);
   } catch {
-    /* Recover a fresh workspace if local cache is damaged. */
+    localStateRecovery = {
+      message: 'Browser storage could not be read. Saving is paused to protect the existing workspace.',
+    };
+    return initialState();
   }
+  if (raw === null) {
+    localStateRecovery = null;
+    recoverySource = undefined;
+    return initialState();
+  }
+  try {
+    const value: unknown = JSON.parse(raw);
+    const parsed = StateSchema.safeParse(value);
+    if (parsed.success) {
+      localStateRecovery = null;
+      recoverySource = undefined;
+      return parsed.data;
+    }
+  } catch {
+    // Invalid JSON and invalid settings both preserve their source for recovery.
+  }
+  preserveInvalidCache(raw);
   return initialState();
 }
 export function profileSuggestion(title: string) {

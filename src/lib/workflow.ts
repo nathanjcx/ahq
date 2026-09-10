@@ -77,11 +77,13 @@ export function applySession(state: AppState, employeeId: string, session: Cloud
       ? 'review'
       : session.status === 'failed'
         ? 'offline'
-        : session.status === 'completed'
+        : session.status === 'completed' || session.status === 'cancelled'
           ? 'ready'
           : 'working';
   const existing = state.employees.find((e) => e.id === employeeId);
   const output = session.output;
+  const replyId = output ? `${session.id}:reply:${output.version}` : '';
+  const needsReply = output?.recipient === 'You' && !state.messages.some((message) => message.id === replyId);
   const newOutput =
     output && !state.approvals.some((a) => a.sessionId === session.id && a.version >= output.version);
   if (
@@ -90,6 +92,7 @@ export function applySession(state: AppState, employeeId: string, session: Cloud
     existing.location === session.location &&
     !freshEvents.length &&
     !newOutput &&
+    !needsReply &&
     !(session.reviewed && state.approvals.some((a) => a.sessionId === session.id && a.status === 'pending'))
   )
     return state;
@@ -118,6 +121,9 @@ export function applySession(state: AppState, employeeId: string, session: Cloud
     ],
     messages: [
       ...state.messages,
+      ...(needsReply && output
+        ? [{ id: replyId, authorId: employeeId, channel: employeeId, text: output.content, time: timeNow() }]
+        : []),
       ...freshEvents.map((event) => ({
         id: `${session.id}:${event.id}`,
         authorId: employeeId,
@@ -126,40 +132,41 @@ export function applySession(state: AppState, employeeId: string, session: Cloud
         time: event.time,
       })),
     ],
-    approvals: session.reviewed
-      ? state.approvals.map((a) =>
-          a.sessionId === session.id && a.version === output?.version
-            ? { ...a, status: 'approved' as const }
-            : a,
-        )
-      : newOutput
-        ? [
-            ...state.approvals.map((a) =>
-              a.sessionId === session.id && a.status === 'pending'
-                ? { ...a, status: 'changes-requested' as const }
-                : a,
-            ),
-            {
-              id: uid(),
-              employeeId,
-              title: output.title,
-              summary: 'Astra cloud output is ready for review.',
-              content: output.content,
-              createdAt: timeNow(),
-              status: 'pending',
-              kind: 'document',
-              recipient: output.recipient,
-              sources: output.sources,
-              version: output.version,
-              sessionId: session.id,
-            },
-          ]
-        : !session.output && session.status !== 'waiting_for_approval'
-          ? state.approvals.map((a) =>
-              a.sessionId === session.id && a.status === 'pending'
-                ? { ...a, status: 'changes-requested' as const }
-                : a,
-            )
-          : state.approvals,
+    approvals:
+      session.reviewed && !newOutput
+        ? state.approvals.map((a) =>
+            a.sessionId === session.id && a.version === output?.version
+              ? { ...a, status: 'approved' as const }
+              : a,
+          )
+        : newOutput
+          ? [
+              ...state.approvals.map((a) =>
+                a.sessionId === session.id && a.status === 'pending'
+                  ? { ...a, status: 'changes-requested' as const }
+                  : a,
+              ),
+              {
+                id: uid(),
+                employeeId,
+                title: output.title,
+                summary: 'Astra cloud output is ready for review.',
+                content: output.content,
+                createdAt: timeNow(),
+                status: session.reviewed ? 'approved' : 'pending',
+                kind: output.recipient === 'You' ? 'document' : 'decision',
+                recipient: output.recipient,
+                sources: output.sources,
+                version: output.version,
+                sessionId: session.id,
+              },
+            ]
+          : !session.output && session.status !== 'waiting_for_approval'
+            ? state.approvals.map((a) =>
+                a.sessionId === session.id && a.status === 'pending'
+                  ? { ...a, status: 'changes-requested' as const }
+                  : a,
+              )
+            : state.approvals,
   };
 }

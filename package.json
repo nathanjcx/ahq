@@ -17,7 +17,8 @@
     "dist:mac": "npm run build && electron-builder --mac dmg",
     "format": "prettier --write src shared desktop tests *.json *.ts *.html README.md docs",
     "check": "npm test && npm run build",
-    "install:desktop": "node node_modules/electron/install.js"
+    "install:desktop": "node node_modules/electron/install.js",
+    "audit:verify": "tsx scripts/verify-office-audit.ts"
   },
   "build": {
     "appId": "com.astra.hq",
