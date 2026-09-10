@@ -66,6 +66,16 @@ function freshSnapshot(): LaunchSnapshot {
   };
 }
 
+function launchTasks(state: AppState, launchId: string) {
+  return state.commitments
+    .filter((task) => task.launchId === launchId)
+    .map((task) => ({
+      ...task,
+      sessionId:
+        task.sessionId ?? state.roadmap?.assignments.find((item) => item.commitmentId === task.id)?.sessionId,
+    }));
+}
+
 export class LaunchCoordinator {
   constructor(private deps: LaunchDependencies) {}
 
@@ -163,9 +173,9 @@ export class LaunchCoordinator {
       const notifications = demo.notifications.filter((item) => record.notificationIds?.includes(item.id));
       const sessions = await this.sessions([
         ...record.snapshot.scenes.flatMap((scene) => scene.sessionIds),
-        ...current.commitments
-          .filter((item) => item.launchId === record.snapshot.id)
-          .flatMap((item) => (item.sessionId ? [item.sessionId] : [])),
+        ...launchTasks(current, record.snapshot.id).flatMap((item) =>
+          item.sessionId ? [item.sessionId] : [],
+        ),
         ...notifications.flatMap((item) =>
           [item.triageSessionId, item.sessionId].filter((id): id is string => !!id),
         ),
@@ -256,10 +266,8 @@ export class LaunchCoordinator {
   private async reconcileLaunch(record: LaunchRecord, scene: LaunchScene): Promise<void> {
     const state = await this.deps.load();
     if (state.roadmap?.launchId !== record.snapshot.id) return;
-    const tasks = state.commitments.filter(
-      (item) =>
-        item.launchId === record.snapshot.id &&
-        ['product', 'marketing', 'forecast'].includes(item.launchStep ?? ''),
+    const tasks = launchTasks(state, record.snapshot.id).filter((item) =>
+      ['product', 'marketing', 'forecast'].includes(item.launchStep ?? ''),
     );
     if (state.roadmap?.status === 'failed')
       return this.fail(scene, state.roadmap.message || 'Launch planning failed.');
@@ -313,9 +321,7 @@ export class LaunchCoordinator {
 
   private async sessionFor(record: LaunchRecord, step: LaunchStep): Promise<CloudSession> {
     const state = await this.deps.load();
-    const task = state.commitments.find(
-      (item) => item.launchId === record.snapshot.id && item.launchStep === step,
-    );
+    const task = launchTasks(state, record.snapshot.id).find((item) => item.launchStep === step);
     if (!task?.sessionId) throw new Error(`The ${step} launch session is missing.`);
     const session = await this.deps.getSession(task.sessionId);
     if (!(await this.verified(session))) throw new Error(`The ${step} launch artifact is not verified.`);
@@ -449,8 +455,8 @@ export class LaunchCoordinator {
     if (state.roadmap?.launchId !== record.snapshot.id || state.roadmap.status !== 'complete')
       throw new Error('The launch roadmap is not complete.');
     const required: LaunchStep[] = ['product', 'marketing', 'forecast', 'revision', 'bug', 'reporter'];
-    const tasks = state.commitments.filter(
-      (item) => item.launchId === record.snapshot.id && required.includes(item.launchStep!),
+    const tasks = launchTasks(state, record.snapshot.id).filter((item) =>
+      required.includes(item.launchStep!),
     );
     if (
       required.some(
