@@ -517,11 +517,24 @@ class Runtime implements OfficeRuntime {
         parent = next;
       }
       work = ['waiting', 'queued'].includes(parent.status) ? parent : undefined;
-      if (!work) work = this.createTriggeredWork({
-        ...decision, title: decision.title || `Update ${parent.title}`, goal: decision.goal || parent.goal,
-        scenario: parent.scenario, sourceIds: [...new Set([...parent.sourceIds, ...decision.sourceIds])],
-        dependsOnWorkIds: [...new Set([parent.id, ...decision.dependsOnWorkIds])],
-      }, source.id, parent.id);
+      if (!work) {
+        const dependencies = new Set([parent.id, ...decision.dependsOnWorkIds]);
+        if (parent.scenario === 'meeting') {
+          for (const id of parent.dependsOnWorkIds || []) dependencies.add(id);
+          for (const id of decision.dependsOnWorkIds) {
+            let replacement = requiredWork(this.state, id);
+            while (replacement.followUpOf) {
+              if (replacement.followUpOf !== parent.id) dependencies.delete(replacement.followUpOf);
+              replacement = requiredWork(this.state, replacement.followUpOf);
+            }
+          }
+        }
+        work = this.createTriggeredWork({
+          ...decision, title: decision.title || `Update ${parent.title}`, goal: decision.goal || parent.goal,
+          scenario: parent.scenario, sourceIds: [...new Set([...parent.sourceIds, ...decision.sourceIds])],
+          dependsOnWorkIds: [...dependencies],
+        }, source.id, parent.id);
+      }
     }
     if (!work) work = this.createTriggeredWork(decision, source.id);
     else {
