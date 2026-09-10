@@ -1,0 +1,26 @@
+ticket_id,project,period,organization,status,category
+BG-S201,BG,previous_week,Beacon Tower,closed,facilities questions
+BG-S202,BG,previous_week,Canal House,closed,facilities questions
+BG-S203,BG,previous_week,Foundry Hall,closed,facilities questions
+BG-S204,BG,previous_week,Station Annex,closed,facilities questions
+BG-S205,BG,previous_week,Stone Yard,closed,facilities questions
+BG-S206,BG,previous_week,Waterfront Hub,closed,facilities questions
+BG-S207,BG,previous_week,Park Offices,closed,facilities questions
+BG-S208,BG,previous_week,Beacon Tower,closed,facilities questions
+BG-S209,BG,previous_week,Canal House,closed,facilities questions
+BG-S210,BG,previous_week,Foundry Hall,closed,facilities questions
+BG-S211,BG,previous_week,Station Annex,closed,facilities questions
+BG-S212,BG,previous_week,Stone Yard,closed,facilities questions
+BG-S213,BG,previous_week,Waterfront Hub,closed,facilities questions
+BG-S214,BG,previous_week,Park Offices,closed,facilities questions
+BG-S215,BG,previous_week,Beacon Tower,closed,facilities questions
+BG-S216,BG,previous_week,Canal House,closed,facilities questions
+BG-S301,BG,current_week,Beacon Tower,closed,facilities questions
+BG-S302,BG,current_week,Canal House,closed,facilities questions
+BG-S303,BG,current_week,Foundry Hall,closed,facilities questions
+BG-S304,BG,current_week,Station Annex,closed,facilities questions
+BG-S305,BG,current_week,Stone Yard,open,facilities questions
+BG-S306,BG,current_week,Waterfront Hub,open,facilities questions
+BG-S307,BG,current_week,Park Offices,open,facilities questions
+BG-S308,BG,current_week,Beacon Tower,open,facilities questions
+BG-S309,BG,current_week,Canal House,open,facilities questions

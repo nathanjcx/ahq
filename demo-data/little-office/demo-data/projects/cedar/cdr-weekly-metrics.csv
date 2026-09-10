@@ -1,0 +1,8 @@
+period,measure,value,source,owner
+previous_week,reserved meals,109,operations_export,Noah Stone
+current_week,reserved meals,128,operations_export,Noah Stone
+current_week,meal capacity,180,eligibility_register,Olivia Hart
+previous_week,pickup questions,32,support_queue,Noah Stone
+current_week,pickup questions,14,support_queue,Noah Stone
+current_week,budget_usd,24000,approved_budget,Olivia Hart
+current_week,spent_usd,16800,invoice_register,Olivia Hart

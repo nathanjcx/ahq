@@ -1,0 +1,8 @@
+period,measure,value,source,owner
+previous_week,healthy stations,33,operations_export,Asha Das
+current_week,healthy stations,52,operations_export,Asha Das
+current_week,tracked stations,75,eligibility_register,Dante Brooks
+previous_week,maintenance tickets,26,support_queue,Asha Das
+current_week,maintenance tickets,13,support_queue,Asha Das
+current_week,budget_usd,62000,approved_budget,Dante Brooks
+current_week,spent_usd,40800,invoice_register,Dante Brooks

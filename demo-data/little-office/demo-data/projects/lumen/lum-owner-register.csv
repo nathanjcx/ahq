@@ -1,0 +1,8 @@
+record_id,organization,owner,status,evidence
+LUM-M1,Light Lab,Hazel Wright,confirmed,LUM-operations-notes section 1
+LUM-M2,Archive Room,Finn Murphy,confirmed,LUM-operations-notes section 2
+LUM-M3,Sculpture Hall,Ada Chen,confirmed,LUM-operations-notes section 3
+LUM-M4,Print Gallery,Sam Okafor,confirmed,LUM-operations-notes section 4
+LUM-M5,East Wing,Jonah Brooks,awaiting_confirmation,LUM-operations-notes section 5
+LUM-M6,Learning Studio,Lena Ortiz,awaiting_confirmation,LUM-operations-notes section 6
+LUM-M7,Roof Garden,Maya Chen,awaiting_confirmation,LUM-operations-notes section 7

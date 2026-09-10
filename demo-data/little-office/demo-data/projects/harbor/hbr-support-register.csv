@@ -1,0 +1,36 @@
+ticket_id,project,period,organization,status,category
+HBR-S201,HBR,previous_week,East Quay Clinic,closed,front desk questions
+HBR-S202,HBR,previous_week,Pier Family Practice,closed,front desk questions
+HBR-S203,HBR,previous_week,Bay Walk Clinic,closed,front desk questions
+HBR-S204,HBR,previous_week,Mariner Pediatrics,closed,front desk questions
+HBR-S205,HBR,previous_week,Anchor Community Care,closed,front desk questions
+HBR-S206,HBR,previous_week,Tide Street Clinic,closed,front desk questions
+HBR-S207,HBR,previous_week,Seaport Practice,closed,front desk questions
+HBR-S208,HBR,previous_week,East Quay Clinic,closed,front desk questions
+HBR-S209,HBR,previous_week,Pier Family Practice,closed,front desk questions
+HBR-S210,HBR,previous_week,Bay Walk Clinic,closed,front desk questions
+HBR-S211,HBR,previous_week,Mariner Pediatrics,closed,front desk questions
+HBR-S212,HBR,previous_week,Anchor Community Care,closed,front desk questions
+HBR-S213,HBR,previous_week,Tide Street Clinic,closed,front desk questions
+HBR-S214,HBR,previous_week,Seaport Practice,closed,front desk questions
+HBR-S215,HBR,previous_week,East Quay Clinic,closed,front desk questions
+HBR-S216,HBR,previous_week,Pier Family Practice,closed,front desk questions
+HBR-S217,HBR,previous_week,Bay Walk Clinic,closed,front desk questions
+HBR-S218,HBR,previous_week,Mariner Pediatrics,closed,front desk questions
+HBR-S219,HBR,previous_week,Anchor Community Care,closed,front desk questions
+HBR-S220,HBR,previous_week,Tide Street Clinic,closed,front desk questions
+HBR-S221,HBR,previous_week,Seaport Practice,closed,front desk questions
+HBR-S222,HBR,previous_week,East Quay Clinic,closed,front desk questions
+HBR-S223,HBR,previous_week,Pier Family Practice,closed,front desk questions
+HBR-S224,HBR,previous_week,Bay Walk Clinic,closed,front desk questions
+HBR-S301,HBR,current_week,East Quay Clinic,closed,front desk questions
+HBR-S302,HBR,current_week,Pier Family Practice,closed,front desk questions
+HBR-S303,HBR,current_week,Bay Walk Clinic,closed,front desk questions
+HBR-S304,HBR,current_week,Mariner Pediatrics,closed,front desk questions
+HBR-S305,HBR,current_week,Anchor Community Care,closed,front desk questions
+HBR-S306,HBR,current_week,Tide Street Clinic,closed,front desk questions
+HBR-S307,HBR,current_week,Seaport Practice,open,front desk questions
+HBR-S308,HBR,current_week,East Quay Clinic,open,front desk questions
+HBR-S309,HBR,current_week,Pier Family Practice,open,front desk questions
+HBR-S310,HBR,current_week,Bay Walk Clinic,open,front desk questions
+HBR-S311,HBR,current_week,Mariner Pediatrics,open,front desk questions

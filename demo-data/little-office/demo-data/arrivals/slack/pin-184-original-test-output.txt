@@ -1,0 +1,82 @@
+TAP version 13
+# Subtest: full-price checkout applies tax once
+ok 1 - full-price checkout applies tax once
+  ---
+  duration_ms: 1.220417
+  type: 'test'
+  ...
+# Subtest: coupon checkout taxes the discounted subtotal once
+not ok 2 - coupon checkout taxes the discounted subtotal once
+  ---
+  duration_ms: 1.171149
+  type: 'test'
+  location: '/home/peraspera/software/little-office-evidence/demo-data/checkout/test/checkout.test.js:9:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    104.4 !== 97.2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 97.2
+  actual: 104.4
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peraspera/software/little-office-evidence/demo-data/checkout/test/checkout.test.js:10:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: explicit zero coupon preserves full price
+ok 3 - explicit zero coupon preserves full price
+  ---
+  duration_ms: 0.170637
+  type: 'test'
+  ...
+# Subtest: fixed coupon subtracts an amount rather than a percentage
+not ok 4 - fixed coupon subtracts an amount rather than a percentage
+  ---
+  duration_ms: 0.38513
+  type: 'test'
+  location: '/home/peraspera/software/little-office-evidence/demo-data/checkout/test/checkout.test.js:17:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 220.39999999999998
+    - 205.2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 205.2
+  actual: 220.39999999999998
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peraspera/software/little-office-evidence/demo-data/checkout/test/checkout.test.js:18:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: zero tax leaves the discounted subtotal
+ok 5 - zero tax leaves the discounted subtotal
+  ---
+  duration_ms: 1.598105
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 3
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 93.584888

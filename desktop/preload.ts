@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DesktopAPI } from '../shared/types';
 const api: DesktopAPI = {
+  launchSnapshot: () => ipcRenderer.invoke('launch:snapshot'),
+  launchAction: (input) => ipcRenderer.invoke('launch:action', input),
   generatePersonality: (input) => ipcRenderer.invoke('employee:personality', input),
   createRoadmap: (goal, options) =>
     ipcRenderer.invoke('roadmap:create', options ? { goal, ...options } : goal),

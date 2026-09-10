@@ -1,0 +1,29 @@
+{
+  "project": "Beacon Grid",
+  "projectId": "BG",
+  "contacts": {
+    "owner": "Amir Khan",
+    "analyst": "Sofia Reed",
+    "engineer": "Chen Wu"
+  },
+  "records": [
+    {
+      "file": "bg-weekly-metrics.csv",
+      "purpose": "Counts and reporting baseline"
+    },
+    {
+      "file": "bg-owner-register.csv",
+      "purpose": "Seven organizations and named owners"
+    },
+    {
+      "file": "bg-release-notes.md",
+      "purpose": "Previously closed issue and test scope"
+    }
+  ],
+  "limits": [
+    "Fictional demo evidence",
+    "Do not mix counts between projects",
+    "A previous release check does not prove a new fix"
+  ],
+  "openRisk": "Meter feeds from two buildings arrive a day late."
+}

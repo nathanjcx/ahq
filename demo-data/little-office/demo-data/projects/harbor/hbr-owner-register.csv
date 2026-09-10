@@ -1,0 +1,8 @@
+record_id,organization,owner,status,evidence
+HBR-M1,East Quay Clinic,Dr. Leah Moss,confirmed,HBR-operations-notes section 1
+HBR-M2,Pier Family Practice,Tessa Ng,confirmed,HBR-operations-notes section 2
+HBR-M3,Bay Walk Clinic,Ravi Patel,confirmed,HBR-operations-notes section 3
+HBR-M4,Mariner Pediatrics,Sam Okafor,confirmed,HBR-operations-notes section 4
+HBR-M5,Anchor Community Care,Jonah Brooks,awaiting_confirmation,HBR-operations-notes section 5
+HBR-M6,Tide Street Clinic,Lena Ortiz,awaiting_confirmation,HBR-operations-notes section 6
+HBR-M7,Seaport Practice,Maya Chen,awaiting_confirmation,HBR-operations-notes section 7

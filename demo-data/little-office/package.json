@@ -1,0 +1,60 @@
+{
+  "name": "little-office",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A living office for your personal agents",
+  "main": "dist-electron/main.cjs",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "tsc --noEmit && vite build && node scripts/build-electron.mjs",
+    "start": "node scripts/start.mjs",
+    "preview": "node scripts/preview.mjs",
+    "test": "tsx --test tests/*.test.ts",
+    "package": "npm run build && electron-builder --dir"
+  },
+  "dependencies": {
+    "lucide-react": "^0.577.0",
+    "pdfkit": "^0.20.2",
+    "pixi.js": "8.20.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "sql.js": "^1.14.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "@types/pdfkit": "^0.17.6",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/sql.js": "^1.4.9",
+    "@vitejs/plugin-react": "^5.1.4",
+    "electron": "44.3.0",
+    "electron-builder": "^26.8.1",
+    "esbuild": "^0.27.3",
+    "playwright": "^1.58.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
+  },
+  "build": {
+    "appId": "studio.littleoffice.desktop",
+    "productName": "Little Office",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "demo-data/**/*",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        "dir"
+      ],
+      "category": "Office",
+      "icon": "public/icon.png"
+    }
+  }
+}

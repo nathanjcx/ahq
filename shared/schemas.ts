@@ -51,6 +51,7 @@ export const FolderSchema = z.object({
     .max(100),
 });
 export const StateSchema = z.object({
+  launchRestoreId: z.string().optional(),
   schemaVersion: z.literal(1),
   workspaceName: z.string().min(1).max(40),
   goal: z.string().min(1).max(500),
@@ -60,6 +61,7 @@ export const StateSchema = z.object({
       goal: z.string().min(1).max(500),
       status: z.enum(['planning', 'active', 'paused', 'failed', 'complete']),
       automatic: z.boolean().optional(),
+      launchId: z.string().optional(),
       message: z.string().max(4000),
       createdAt: dateTime,
       generatedAt: dateTime.optional(),
@@ -85,7 +87,9 @@ export const StateSchema = z.object({
         description: z.string().max(2000),
         sessionId: z.string().max(200).optional(),
         assignment: z.string().max(12000).optional(),
-        taskKind: z.enum(['report', 'meeting', 'bug', 'qa']).optional(),
+        taskKind: z.enum(['report', 'meeting', 'bug', 'qa', 'product']).optional(),
+        launchId: z.string().optional(),
+        launchStep: z.enum(['product', 'marketing', 'forecast', 'revision', 'bug', 'reporter']).optional(),
         ownerId: z.string().max(100),
         recipient: z.string().max(120),
         deadline: dateTime.or(z.literal('')),

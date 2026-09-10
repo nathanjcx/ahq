@@ -1,0 +1,5 @@
+resource,capacity_portions_per_batch,available_from,available_until,constraint
+main_oven,48,Wednesday 09:00,Wednesday 15:00,inspection blocks 10:00-12:00; do not use until released
+small_oven,24,Wednesday 09:00,Wednesday 15:00,one batch at a time
+small_kitchen_hob,40,Wednesday 09:00,Wednesday 15:00,soup takes 60 minutes
+packing_team,128,Wednesday 15:00,Wednesday 16:30,cooked meals required before packing

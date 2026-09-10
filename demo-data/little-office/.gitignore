@@ -1,0 +1,8 @@
+node_modules/
+dist/
+dist-electron/
+release/
+.local-data/
+test-results/
+*.log
+.claude/

@@ -3,6 +3,7 @@ import type { AppState } from './types';
 // The renderer owns profile edits; the desktop owns generated plans and session progress.
 export function mergeWorkspace(previous: AppState | null, incoming: AppState): AppState {
   if (!previous) return { ...incoming, roadmap: undefined };
+  if (previous.launchRestoreId !== incoming.launchRestoreId) return previous;
   const combine = <T extends { id: string }>(a: T[], b: T[]) => [
     ...new Map([...a, ...b].map((item) => [item.id, item])).values(),
   ];
@@ -49,7 +50,13 @@ export function mergeWorkspace(previous: AppState | null, incoming: AppState): A
       previous.commitments.map((saved) => {
         let edited = incomingCommitments.get(saved.id);
         if (!edited || (roadmap?.id !== incoming.roadmap?.id && planned.has(saved.id))) return saved;
-        if (roadmap?.automatic && planned.has(saved.id)) edited = { ...edited, taskKind: saved.taskKind };
+        if (roadmap?.automatic && planned.has(saved.id))
+          edited = {
+            ...edited,
+            taskKind: saved.taskKind,
+            launchStep: saved.launchStep,
+            launchId: saved.launchId,
+          };
         // Once dispatched, completion is driven by review of its actual session output.
         return assigned.has(saved.id)
           ? {

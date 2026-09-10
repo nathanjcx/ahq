@@ -6,11 +6,14 @@ import path from 'node:path';
 try {
   const args = process.argv.slice(2);
   const command = args.shift();
-  if (!['meeting', 'email', 'slack', 'state', 'retry'].includes(command))
+  if (!['meeting', 'email', 'slack', 'state', 'retry', 'launch'].includes(command))
     throw new Error(
-      'Usage: node scripts/demo-trigger.mjs meeting|email|slack|state|retry [notification-id] [--connection path] [--user-data directory] [--key idempotency-key]',
+      'Usage: node scripts/demo-trigger.mjs meeting|email|slack|state|retry|launch [notification-id or launch action] [--connection path] [--user-data directory] [--key idempotency-key]',
     );
   const id = command === 'retry' ? args.shift() : undefined;
+  const launchAction = command === 'launch' ? (args.shift() || 'state') : undefined;
+  const launchTarget = command === 'launch' && ['advance','retry','restore'].includes(launchAction) ? args.shift() : undefined;
+  if (command === 'launch' && !['state','start','advance','retry','restore'].includes(launchAction)) throw new Error('Launch actions: state, start, advance <scene>, retry <scene>, restore <checkpoint-id>.');
   const options = {};
   while (args.length) {
     const flag = args.shift();
@@ -39,11 +42,12 @@ try {
   if (command === 'retry' && (!id || !/^[a-zA-Z0-9-]+$/.test(id)))
     throw new Error('Retry requires a notification ID.');
   const route =
-    command === 'state' ? '/state' : command === 'retry' ? `/notifications/${id}/retry` : '/notifications';
+    command === 'launch' ? '/launch' : command === 'state' ? '/state' : command === 'retry' ? `/notifications/${id}/retry` : '/notifications';
   const response = await fetch(`http://127.0.0.1:${port}${route}`, {
-    method: command === 'state' ? 'GET' : 'POST',
+    method: command === 'state' || launchAction === 'state' ? 'GET' : 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    ...(command !== 'state' && command !== 'retry'
+    ...(command === 'launch' && launchAction !== 'state' ? { body: JSON.stringify({ action: launchAction, ...(launchAction === 'restore' ? { checkpointId: launchTarget } : launchTarget ? { scene: launchTarget } : {}) }) } : {}),
+    ...(command !== 'launch' && command !== 'state' && command !== 'retry'
       ? { body: JSON.stringify({ kind: command, idempotencyKey: options['--key'] }) }
       : {}),
     signal: AbortSignal.timeout(60_000),

@@ -1,3 +1,4 @@
+import type { LaunchAction, LaunchSnapshot, LaunchStep } from './launch';
 import type {
   DemoTrigger,
   DemoNotification,
@@ -43,6 +44,8 @@ export interface Employee {
   appearance?: Appearance;
 }
 export interface Commitment {
+  launchStep?: LaunchStep;
+  launchId?: string;
   taskKind?: Exclude<LocalTaskKind, 'triage'>;
   sessionId?: string;
   assignment?: string;
@@ -114,6 +117,7 @@ export interface LocalFileEntry {
   modifiedAt: number;
 }
 export interface AppState {
+  launchRestoreId?: string;
   schemaVersion: 1;
   workspaceName: string;
   goal: string;
@@ -129,6 +133,7 @@ export interface AppState {
   demo: boolean;
 }
 export interface RoadmapRun {
+  launchId?: string;
   automatic?: boolean;
   id: string;
   goal: string;
@@ -201,6 +206,8 @@ export interface Integration {
   configured: boolean;
 }
 export interface DesktopAPI {
+  launchSnapshot(): Promise<LaunchSnapshot>;
+  launchAction(action: LaunchAction): Promise<LaunchSnapshot>;
   generatePersonality(input: { name: string; jobTitle: string }): Promise<string>;
   createRoadmap(goal: string, options?: { automatic?: boolean }): Promise<AppState>;
   triggerDemo(input: DemoTrigger): Promise<DemoNotification>;

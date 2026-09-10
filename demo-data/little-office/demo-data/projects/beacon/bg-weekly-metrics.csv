@@ -1,0 +1,8 @@
+period,measure,value,source,owner
+previous_week,connected meters,20,operations_export,Sofia Reed
+current_week,connected meters,39,operations_export,Sofia Reed
+current_week,planned meters,60,eligibility_register,Amir Khan
+previous_week,facilities questions,16,support_queue,Sofia Reed
+current_week,facilities questions,9,support_queue,Sofia Reed
+current_week,budget_usd,75000,approved_budget,Amir Khan
+current_week,spent_usd,46200,invoice_register,Amir Khan

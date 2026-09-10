@@ -1,0 +1,29 @@
+{
+  "project": "Cedar Kitchen",
+  "projectId": "CDR",
+  "contacts": {
+    "owner": "Olivia Hart",
+    "analyst": "Noah Stone",
+    "engineer": "Zoe Park"
+  },
+  "records": [
+    {
+      "file": "cdr-weekly-metrics.csv",
+      "purpose": "Counts and reporting baseline"
+    },
+    {
+      "file": "cdr-owner-register.csv",
+      "purpose": "Seven organizations and named owners"
+    },
+    {
+      "file": "cdr-release-notes.md",
+      "purpose": "Previously closed issue and test scope"
+    }
+  ],
+  "limits": [
+    "Fictional demo evidence",
+    "Do not mix counts between projects",
+    "A previous release check does not prove a new fix"
+  ],
+  "openRisk": "The oven inspection overlaps the Wednesday batch preparation."
+}

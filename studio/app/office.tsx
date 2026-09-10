@@ -25,6 +25,7 @@ import { useOfficePan } from './office-pan';
 import './office-review.css';
 
 type OfficeProps = {
+  celebrationId?: string | null;
   live?: boolean;
   timeSeconds?: number;
   listening?: boolean;
@@ -1985,6 +1986,7 @@ export default function Office(props: OfficeProps) {
       ref={setEventSource}
       role="region"
       aria-label="Interactive 3D team office"
+      data-celebrating={props.celebrationId ? 'true' : 'false'}
       aria-description="Drag to pan. Use the arrow keys when the office is focused."
       tabIndex={0}
       style={{
@@ -1995,6 +1997,26 @@ export default function Office(props: OfficeProps) {
         touchAction: 'none',
       }}
     >
+      {props.celebrationId && (
+        <div
+          role="status"
+          style={{
+            position: 'absolute',
+            top: 76,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 40,
+            padding: '12px 20px',
+            borderRadius: 12,
+            background: '#fff7dc',
+            color: '#344c39',
+            fontWeight: 700,
+            pointerEvents: 'none',
+          }}
+        >
+          Little Office is live. We did it!
+        </div>
+      )}
       <SceneBoundary fallback={fallback}>
         {eventSource && (
           <Canvas

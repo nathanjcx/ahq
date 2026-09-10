@@ -18,7 +18,7 @@ export class GoalCoordinator {
     this.closed = true;
   }
 
-  async create(goal: string, options?: { automatic?: boolean }): Promise<AppState> {
+  async create(goal: string, options?: { automatic?: boolean; launchId?: string }): Promise<AppState> {
     const state = await this.deps.queue(async () => {
       const current = await this.deps.load();
       if (!current) throw new Error('Open your office first.');
@@ -33,6 +33,7 @@ export class GoalCoordinator {
         roadmap: {
           id: randomUUID(),
           automatic: options?.automatic === true,
+          launchId: options?.launchId,
           goal,
           status: 'planning',
           createdAt: now,

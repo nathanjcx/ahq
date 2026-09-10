@@ -1,23 +1,28 @@
+import type { LaunchStep } from './launch';
 import type { CloudSession } from './types';
 
 export interface DemoAttachment {
   name: string;
   content: string;
   mediaType: string;
+  encoding?: 'base64';
 }
-export type LocalTaskKind = 'report' | 'meeting' | 'bug' | 'qa' | 'triage';
+export type LocalTaskKind = 'report' | 'meeting' | 'bug' | 'qa' | 'triage' | 'product';
 export interface LocalTaskInput {
   kind: LocalTaskKind;
   title: string;
   files: DemoAttachment[];
   sourceId?: string;
+  project?: 'little-office';
+  launchStep?: LaunchStep;
+  launchId?: string;
   parentWorkspace?: string;
   parentSessionId?: string;
 }
 export interface LocalArtifact {
   id: string;
   title: string;
-  kind: 'report' | 'brief' | 'patch' | 'qa';
+  kind: 'report' | 'brief' | 'patch' | 'qa' | 'product';
   filePath: string;
   content: string;
   simulated: boolean;
