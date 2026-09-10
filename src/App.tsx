@@ -92,9 +92,7 @@ const SOURCES: {
 }[] = [
   { id: "gmail", label: "Gmail", short: "G", icon: Mail },
   { id: "calendar", label: "Calendar", short: "C", icon: CalendarDays },
-  { id: "imessage", label: "iMessage", short: "i", icon: MessageCircle },
   { id: "slack", label: "Slack", short: "S", icon: Slack },
-  { id: "discord", label: "Discord", short: "D", icon: MessageCircle },
   { id: "linear", label: "Linear", short: "L", icon: CircleDot },
   { id: "asana", label: "Asana", short: "A", icon: CheckCircle2 },
 ];

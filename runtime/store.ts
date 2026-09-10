@@ -33,7 +33,16 @@ export class SnapshotStore {
     const result = this.db.exec('SELECT snapshot FROM state WHERE id = 1');
     const value = result[0]?.values[0]?.[0];
     if (typeof value !== 'string') return undefined;
-    return JSON.parse(value) as Snapshot;
+    const snapshot = JSON.parse(value) as Snapshot;
+    // Keep saved work and attachment links when retiring demo channels.
+    for (const item of snapshot.sources) {
+      const source = item.source as string;
+      if (source !== 'discord' && source !== 'imessage') continue;
+      item.source = source === 'discord' ? 'slack' : 'gmail';
+      item.externalId = item.externalId.replace(`${source}-`, `${item.source}-`);
+      item.threadId = item.threadId.replace(`${source}:`, `${item.source}:`);
+    }
+    return snapshot;
   }
 
   async save(snapshot: Snapshot): Promise<void> {

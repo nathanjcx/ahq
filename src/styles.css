@@ -1135,14 +1135,8 @@ select {
 .source-logo--calendar {
   background: #3f6fa2;
 }
-.source-logo--imessage {
-  background: #4c9b63;
-}
 .source-logo--slack {
   background: #8d4e78;
-}
-.source-logo--discord {
-  background: #5669a4;
 }
 .source-logo--linear {
   background: #575468;

@@ -377,7 +377,7 @@ test('suggested arrivals expose editable previews without leaking future evidenc
 test('every channel carries an uploaded attachment into its completed task workspace', async () => {
   const app = await setup();
   try {
-    for (const channel of ['gmail', 'calendar', 'imessage', 'slack', 'discord', 'linear', 'asana'] as const) {
+    for (const channel of ['gmail', 'calendar', 'slack', 'linear', 'asana'] as const) {
       const incoming = { ...source(`uploaded-${channel}`), source: channel };
       await app.office.command({ type: 'source.ingest', item: incoming });
       await settled(app.office, incoming.id);

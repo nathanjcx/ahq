@@ -1,5 +1,5 @@
 import type { NewsCollection } from './news';
-export type Source = 'gmail' | 'calendar' | 'imessage' | 'slack' | 'discord' | 'linear' | 'asana';
+export type Source = 'gmail' | 'calendar' | 'slack' | 'linear' | 'asana';
 export type ActivityKind = 'idle' | 'walking' | 'reading' | 'researching' | 'drafting' | 'coding' | 'scheduling' | 'collaborating' | 'waiting' | 'celebrating';
 export type WorkStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'waiting';
 export type Scenario = 'report' | 'bug' | 'meeting' | 'dinner' | 'qa';

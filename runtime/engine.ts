@@ -450,7 +450,7 @@ class Runtime implements OfficeRuntime {
 
   private ingestSource(input: Omit<SourceItem, 'scenario' | 'disposition' | 'reason'>): void {
     this.requireTriageAuth();
-    if (!['gmail', 'calendar', 'imessage', 'slack', 'discord', 'linear', 'asana'].includes(input.source)
+    if (!['gmail', 'calendar', 'slack', 'linear', 'asana'].includes(input.source)
       || ['id', 'externalId', 'threadId', 'author', 'title', 'content'].some((key) => typeof input[key as keyof typeof input] !== 'string')
       || !input.externalId.trim() || !input.title.trim() || !input.content.trim()
       || !input.id.trim() || !Number.isFinite(new Date(input.timestamp).getTime()) || input.content.length > 60_000

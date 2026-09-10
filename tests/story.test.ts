@@ -15,7 +15,7 @@ test('the expanded office contains 82 distinct messages and a duplicate delivery
   assert.equal(new Set(history.map(identity)).size, history.length);
   assert.equal(new Set(deliveries.map((event) => event.id)).size, deliveries.length);
   assert.ok(deliveries.length > new Set(deliveries.map((event) => identity(event.item))).size);
-  assert.equal(new Set([...unique.values()].map((item) => item.source)).size, 7);
+  assert.deepEqual([...new Set([...unique.values()].map((item) => item.source))].sort(), ['asana', 'calendar', 'gmail', 'linear', 'slack']);
   for (const item of unique.values()) {
     assert.ok(item.id && item.externalId && item.threadId && item.author && item.title);
     assert.ok(item.content.trim().length >= 40, `${item.id} should contain usable message context`);
