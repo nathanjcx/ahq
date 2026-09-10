@@ -256,7 +256,7 @@ function buildRoom(stage: Container, props: React.RefObject<Props>) {
     }
     rect(shelf.g, 2, 4 + row * 29, 37, 4, C.woodLight);
   }
-  label(shelf.container, 'LIBRARY', 0, -39, 7, C.darkGreen);
+  label(shelf.container, 'LIBRARY', -35, -39, 7, C.darkGreen);
   clickTarget(shelf.container, new Rectangle(0, -25, 41, 99), () => props.current.onSelectStation?.('artifacts'));
   plant(stage, 683, 306);
 
@@ -522,6 +522,9 @@ export default function OfficeCanvas(props: Props) {
             person.root.position.set(Math.round(person.position.x), Math.round(person.position.y));
             person.root.zIndex = person.position.y + 1;
             person.body.y = bob;
+            const showName = !moving || hovered === agent.id || selectedAgentId === agent.id;
+            person.name.visible = showName;
+            person.badge.visible = showName;
             person.name.text = agent.name;
             const width = Math.max(46, Math.ceil(person.name.width) + 20);
             person.badge.clear();
