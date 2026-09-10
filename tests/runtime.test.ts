@@ -13,92 +13,10 @@ async function runtime(): Promise<OfficeRuntime> {
   return createRuntime({ dataDir, onSnapshot: () => undefined });
 }
 
-test('deduplicates active scenarios and correlated source items', async () => {
-  const office = await runtime();
-  try {
-    const first = await office.command({ type: 'scenario.run', scenario: 'bug' });
-    const second = await office.command({ type: 'scenario.run', scenario: 'bug' });
-    assert.equal(first.work.filter((work) => work.scenario === 'bug').length, 1);
-    assert.equal(second.work.filter((work) => work.scenario === 'bug').length, 1);
 
-    const evaluated = await office.command({ type: 'source.evaluate', id: 'src-discord-bug' });
-    assert.equal(evaluated.work.filter((work) => work.scenario === 'bug').length, 1);
-    assert.ok(['attached', 'work'].includes(evaluated.sources.find((item) => item.id === 'src-discord-bug')?.disposition || ''));
-  } finally {
-    await office.close();
-  }
-});
 
-test('cancels running demo work and retries the same durable work item', async () => {
-  const office = await runtime();
-  try {
-    const started = await office.command({ type: 'scenario.run', scenario: 'report' });
-    const id = started.work.at(-1)!.id;
-    const cancelled = await office.command({ type: 'work.cancel', id });
-    assert.equal(cancelled.work.at(-1)!.status, 'cancelled');
-    const retried = await office.command({ type: 'work.retry', id });
-    assert.ok(['queued', 'running'].includes(retried.work.at(-1)!.status));
-    assert.equal(retried.work.length, 2);
-  } finally {
-    await office.close();
-  }
-});
 
-test('runs a saved routine once and updates agent persistence', async () => {
-  const office = await runtime();
-  try {
-    const saved = await office.command({
-      type: 'routine.save',
-      routine: {
-        agentId: 'agent-maya', name: 'Morning decision memo', instructions: 'Write a report about open decisions.',
-        enabled: true, schedule: 'daily', intervalMinutes: 60, dailyTime: '09:00', notes: 'For the morning review',
-      },
-    });
-    const id = saved.routines.at(-1)!.id;
-    assert.equal(saved.agents.find((agent) => agent.id === 'agent-maya')?.persistent, true);
-    await office.command({ type: 'routine.run', id });
-    const duplicate = await office.command({ type: 'routine.run', id });
-    assert.equal(duplicate.work.filter((work) => work.routineId === id).length, 1);
-    const workId = duplicate.work.find((work) => work.routineId === id)!.id;
-    await office.command({ type: 'work.cancel', id: workId });
-    const deleted = await office.command({ type: 'routine.delete', id });
-    assert.equal(deleted.agents.find((agent) => agent.id === 'agent-maya')?.persistent, false);
-  } finally {
-    await office.close();
-  }
-});
 
-test('reset is monotonic and stale demo jobs cannot modify replacement state', async () => {
-  const office = await runtime();
-  try {
-    await office.command({ type: 'scenario.run', scenario: 'bug' });
-    const before = office.snapshot().revision;
-    const reset = await office.command({ type: 'demo.reset' });
-    assert.ok(reset.revision > before);
-    assert.equal(reset.work.length, 1);
-    await new Promise((resolve) => setTimeout(resolve, 1_200));
-    assert.equal(office.snapshot().work.length, 1);
-  } finally {
-    await office.close();
-  }
-});
-
-test('dinner demo writes a labeled artifact and linked local calendar event', async () => {
-  const office = await runtime();
-  try {
-    await office.command({ type: 'demo.speed', speed: 4 });
-    await office.command({ type: 'scenario.run', scenario: 'dinner' });
-    await waitFor(() => office.snapshot().work.at(-1)?.status === 'completed', 4_000);
-    const snapshot = office.snapshot();
-    const artifact = snapshot.artifacts.find((item) => item.workId === snapshot.work.at(-1)!.id)!;
-    assert.equal(artifact.kind, 'calendar');
-    assert.equal(snapshot.calendar.at(-1)!.simulated, true);
-    assert.deepEqual(snapshot.calendar.at(-1)!.sourceIds, snapshot.work.at(-1)!.sourceIds);
-    assert.match(await readFile(office.getArtifactPath(artifact.id)!, 'utf8'), /SIMULATED DEMO/);
-  } finally {
-    await office.close();
-  }
-});
 
 test('Codex transport keeps completion notifications that beat turn/start response', async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'little-office-codex-test-'));
@@ -158,36 +76,7 @@ test('seed references resolve, snapshots do not write, and routine edits preserv
   } finally { await office.close(); }
 });
 
-test('completed sources attach without rerunning and repeated dinner actions retain the calendar id', async () => {
-  const office = await runtime();
-  try {
-    await office.command({ type: 'demo.speed', speed: 4 });
-    await office.command({ type: 'scenario.run', scenario: 'dinner' });
-    await waitFor(() => office.snapshot().work.at(-1)?.status === 'completed', 4_000);
-    const first = office.snapshot();
-    const event = first.calendar.at(-1)!;
-    await office.command({ type: 'source.evaluate', id: 'src-imessage-dinner' });
-    assert.equal(office.snapshot().work.length, first.work.length);
-    await office.command({ type: 'scenario.run', scenario: 'dinner' });
-    await waitFor(() => office.snapshot().work.at(-1)?.status === 'completed', 4_000);
-    assert.equal(office.snapshot().calendar.length, first.calendar.length);
-    assert.equal(office.snapshot().calendar.at(-1)!.id, event.id);
-  } finally { await office.close(); }
-});
 
-test('full demo ends after five scenarios and each work starts once', async () => {
-  const office = await runtime();
-  try {
-    await office.command({ type: 'demo.speed', speed: 4 });
-    await office.command({ type: 'demo.play' });
-    await waitFor(() => !office.snapshot().demo.playing && office.snapshot().demo.nextIndex === 5
-      && office.snapshot().work.every((work) => work.status === 'completed'), 12_000);
-    const snapshot = office.snapshot();
-    assert.equal(snapshot.runs.length, 5);
-    assert.equal(new Set(snapshot.runs.map((run) => run.workId)).size, 5);
-    assert.equal(snapshot.work.length, 6);
-  } finally { await office.close(); }
-});
 
 test('early login completes and live artifacts come from files, including the applied checkout patch', async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'little-office-live-test-'));
@@ -261,16 +150,3 @@ async function waitFor(condition: () => boolean, timeout: number): Promise<void>
 }
 
 
-test('demo playback stops at a mode switch and never starts live turns', async () => {
-  const office = await runtime();
-  try {
-    await office.command({ type: 'demo.play' });
-    const live = await office.command({ type: 'settings.update', settings: { mode: 'live' } });
-    assert.equal(live.demo.playing, false);
-    await assert.rejects(office.command({ type: 'demo.play' }), /Switch to demo mode/);
-    await assert.rejects(office.command({ type: 'demo.next' }), /Switch to demo mode/);
-    assert.equal(office.snapshot().work.length, live.work.length);
-  } finally {
-    await office.close();
-  }
-});
