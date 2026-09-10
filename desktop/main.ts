@@ -34,7 +34,7 @@ import { generatePersonality, generateRoadmap } from './planning';
 import { advanceRoadmap } from './roadmap';
 import { mergeWorkspace } from '../shared/workspaceMerge';
 import { assertCanAssignTask, recordAssignedTask } from '../src/lib/assignedTasks';
-import { freshWorkspaceState } from '../src/lib/store';
+import { freshWorkspaceState, isDefaultRoster } from '../src/lib/store';
 import { applySession, applyDecision } from '../src/lib/workflow';
 import type { Command } from '../src/shared/types';
 import type { AppState, CloudSession, CloudSettings, LocalFileEntry } from '../shared/types';
@@ -132,6 +132,7 @@ async function setupDatabase() {
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
       await database.saveHQ(freshWorkspaceState(), 'Created default team', true);
+      await database.put('default-roster-v2', true);
     }
   }
   goals = new GoalCoordinator({
@@ -296,7 +297,11 @@ async function loadState(): Promise<AppState | null> {
   const value = database.get<AppState>('workspace');
   if (!value) return null;
   const state = StateSchema.parse(value);
-  if (database.get<boolean>('default-roster-v1') === true) return state;
+  if (database.get<boolean>('default-roster-v2') === true) return state;
+  if (!isDefaultRoster(state.employees)) {
+    await database.put('default-roster-v2', true);
+    return state;
+  }
   const migrated: AppState = {
     ...state,
     employees: freshWorkspaceState().employees,
