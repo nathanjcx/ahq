@@ -1,4 +1,5 @@
 import type { CalendarEvent, Scenario, Snapshot, SourceItem, WorkItem } from '../src/shared/types';
+import { projectEvidenceInventory } from './evidence';
 
 export interface TriageDecision {
   action: 'ignore' | 'create' | 'attach' | 'wait';
@@ -94,5 +95,6 @@ Current local time: ${new Date().toString()}\nNEW MESSAGE:\n${sourceEvidence(sou
 EXISTING TASKS:\n${JSON.stringify(state.work.map((work) => ({ id: work.id, title: work.title, goal: work.goal, scenario: work.scenario, status: work.status, sourceIds: work.sourceIds, dependsOnWorkIds: work.dependsOnWorkIds || [], needsInformation: Boolean(work.needsInformation), blockedReason: work.blockedReason, followUpOf: work.followUpOf })))}\n
 AVAILABLE ARTIFACTS:\n${JSON.stringify(state.artifacts.map((artifact) => ({ id: artifact.id, workId: artifact.workId, title: artifact.title })))}\n
 LOCAL CALENDAR:\n${JSON.stringify(state.calendar)}\n
+LOCAL PROJECT FILES AVAILABLE TO THE EXECUTOR:\nThe runtime copies these checked-in project files into every task workspace. The executor can read them even when their contents are absent from the excerpts below. Do not wait merely because a listed file has no excerpt. Reports and meeting briefs can document unresolved project risks, pending approvals, and unknowns without waiting for those risks to close, unless the request explicitly requires their resolution first. This inventory contains archived project evidence; delivered corrections take precedence.\n${projectEvidenceInventory().join('\n')}\n
 RELEVANT SOURCE HISTORY:\n${related.map(sourceEvidence).join('\n\n')}`;
 }

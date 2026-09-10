@@ -1,10 +1,18 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { copyFile, lstat, mkdir, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import type { SourceAttachment } from '../src/shared/types';
 
 // Both runtime/ sources and the packaged dist-electron/ bundles sit beside demo-data/.
 export const demoDataDirectory = path.resolve(__dirname, '../demo-data');
+
+export function projectEvidenceInventory(): string[] {
+  const directory = path.join(demoDataDirectory, 'projects');
+  return readdirSync(directory, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => path.join('data', 'projects', path.relative(directory, path.join(entry.parentPath, entry.name))))
+    .sort();
+}
 
 export function readProjectEvidence(project: string, file: string): string {
   if (!/^[a-z]+$/.test(project) || !/^[a-z0-9-]+\.(csv|md|json)$/.test(file)) {
