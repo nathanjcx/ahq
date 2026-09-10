@@ -11,6 +11,7 @@ type Props = {
   onSelectStation?: (station: string) => void;
 };
 type Point = { x: number; y: number };
+type FloorAgent = Agent & { waitingSlot?: number };
 type Obstacle = Point & { w: number; h: number };
 const WIDTH = 720;
 const HEIGHT = 480;
@@ -29,6 +30,18 @@ const home = (agent: Agent): Point => {
   const desk = DESKS[homeIndex(agent)];
   return { x: desk.x + 51, y: desk.y + 69 };
 };
+function floorAgents(agents: Agent[]): FloorAgent[] {
+  const visible = agents.filter(agent => !agent.retiredAt && (agent.temporary || agent.persistent || agent.id === 'agent-maya' || agent.activity !== 'idle'));
+  const residents = visible.filter(agent => !agent.temporary);
+  const occupied = new Set(residents.map(homeIndex));
+  let waitingSlot = 0;
+  return [...residents, ...visible.filter(agent => agent.temporary).map(agent => {
+    const free = DESKS.findIndex((_, index) => !occupied.has(index));
+    if (agent.activity === 'waiting' || agent.activity === 'idle' || free < 0) return { ...agent, waitingSlot: waitingSlot++ };
+    occupied.add(free);
+    return { ...agent, home: free };
+  })];
+}
 function rect(g: Graphics, x: number, y: number, w: number, h: number, color: number, alpha = 1) {
   g.rect(x, y, w, h).fill({ color, alpha });
 }
@@ -288,7 +301,7 @@ function buildRoom(stage: Container, props: React.RefObject<Props>) {
     rect(pot.g, -7, -14, 7, 5, C.leaf);
     rect(pot.g, 1, -19, 6, 8, C.leafLight);
     clickTarget(container, new Rectangle(0, -20, 109, 74), () => {
-      const agent = props.current.agents.find(item => homeIndex(item) === index);
+      const agent = floorAgents(props.current.agents).find(item => item.waitingSlot === undefined && homeIndex(item) === index);
       if (agent) props.current.onSelectAgent(agent.id);
     });
   });
@@ -310,6 +323,10 @@ function buildRoom(stage: Container, props: React.RefObject<Props>) {
 
 // The office is small enough for a fixed ten-pixel walking grid.
 function route(from: Point, to: Point, obstacles: Obstacle[]): Point[] {
+  const door = { x: 359, y: 440 };
+  if (from.y > 440 && to.y > 440) return [{ x: from.x, y: to.y }, to];
+  if (from.y > 440) return [{ x: 359, y: from.y }, door, ...route(door, to, obstacles)];
+  if (to.y > 440) return [...route(from, door, obstacles), { x: 359, y: to.y }, to];
   const cell = (p: Point) => ({ x: Math.round(p.x / 10), y: Math.round(p.y / 10) });
   const start = cell(from), end = cell(to);
   const key = (p: Point) => p.y * 73 + p.x;
@@ -336,7 +353,8 @@ function route(from: Point, to: Point, obstacles: Obstacle[]): Point[] {
   }
   return [];
 }
-function destination(agent: Agent): Point {
+function destination(agent: FloorAgent): Point {
+  if (agent.waitingSlot !== undefined) return { x: 62 + agent.waitingSlot % 6 * 119, y: 569 + Math.floor(agent.waitingSlot / 6) * 96 };
   const i = homeIndex(agent);
   switch (agent.activity) {
     case 'reading': case 'researching': return [{ x: 636, y: 302 }, { x: 610, y: 308 }, { x: 586, y: 311 }, { x: 560, y: 310 }, { x: 636, y: 431 }, { x: 610, y: 431 }][i];
@@ -349,7 +367,7 @@ function destination(agent: Agent): Point {
 }
 type Person = {
   root: Container; body: Graphics; shadow: Graphics; badge: Graphics; name: Text;
-  position: Point; path: Point[]; activity: ActivityKind; elapsed: number;
+  position: Point; target: Point; path: Point[]; activity: ActivityKind; elapsed: number;
 };
 function drawPerson(g: Graphics, agent: Agent, phase: number, moving: boolean, reduced: boolean, elapsed: number) {
   g.clear();
@@ -436,6 +454,7 @@ export default function OfficeCanvas(props: Props) {
   const latest = useRef(props);
   latest.current = props;
   const [error, setError] = useState(false);
+  const waitingRows = Math.ceil(floorAgents(props.agents).filter(agent => agent.waitingSlot !== undefined).length / 6);
   useEffect(() => {
     const element = host.current;
     if (!element) return;
@@ -459,6 +478,10 @@ export default function OfficeCanvas(props: Props) {
         world.sortableChildren = true;
         app.stage.addChild(world);
         const obstacles = buildRoom(world, latest);
+        const annex = layer(world, 0, HEIGHT, -90);
+        const annexTitle = label(annex.container, 'ARRIVALS & WAITING ROOM', 18, 12, 9);
+        let roomHeight = HEIGHT;
+        let lastRows = -1;
         const tooltip = layer(world, 0, 0, 1000);
         const tooltipText = label(tooltip.container, '', 7, 5, 8, C.cream);
         tooltip.container.visible = false;
@@ -466,9 +489,9 @@ export default function OfficeCanvas(props: Props) {
           const width = element.clientWidth || WIDTH;
           const height = element.clientHeight || HEIGHT;
           app.renderer.resize(width, height);
-          const scale = Math.min(width / WIDTH, height / HEIGHT);
+          const scale = Math.min(width / WIDTH, height / roomHeight);
           world.scale.set(scale);
-          world.position.set(Math.round((width - WIDTH * scale) / 2), Math.round((height - HEIGHT * scale) / 2));
+          world.position.set(Math.round((width - WIDTH * scale) / 2), Math.round((height - roomHeight * scale) / 2));
         };
         observer = new ResizeObserver(resize);
         observer.observe(element);
@@ -477,7 +500,25 @@ export default function OfficeCanvas(props: Props) {
         tick = ticker => {
           const dt = Math.min(ticker.deltaMS / 1000, 0.05);
           time += dt;
-          const { agents, selectedAgentId, reducedMotion } = latest.current;
+          const { selectedAgentId, reducedMotion } = latest.current;
+          const agents = floorAgents(latest.current.agents);
+          const rows = Math.ceil(agents.filter(agent => agent.waitingSlot !== undefined).length / 6);
+          if (rows !== lastRows) {
+            lastRows = rows;
+            roomHeight = HEIGHT + rows * 96 + (rows ? 24 : 0);
+            annex.container.visible = rows > 0;
+            annex.g.clear();
+            if (rows) {
+              box(annex.g, 0, 0, WIDTH, roomHeight - HEIGHT, C.wallShade);
+              for (let row = 0; row < rows; row++) for (let col = 0; col < 6; col++) {
+                box(annex.g, 24 + col * 119, 82 + row * 96, 79, 10, C.wood);
+                rect(annex.g, 29 + col * 119, 92 + row * 96, 5, 8, C.woodDark);
+                rect(annex.g, 93 + col * 119, 92 + row * 96, 5, 8, C.woodDark);
+              }
+            }
+            annexTitle.visible = rows > 0;
+            resize();
+          }
           const ids = new Set(agents.map(a => a.id));
           for (const [id, person] of people) if (!ids.has(id)) {
             person.root.destroy({ children: true });
@@ -494,15 +535,17 @@ export default function OfficeCanvas(props: Props) {
               root.addChild(shadow, body, badge);
               const name = label(root, agent.name, 0, -59, 8);
               name.anchor.set(0.5, 0);
-              person = { root, shadow, body, badge, name, position: home(agent), path: [], activity: 'idle', elapsed: 0 };
+              person = { root, shadow, body, badge, name, position: agent.temporary ? { x: 359, y: 473 } : home(agent), target: destination(agent), path: [], activity: 'idle', elapsed: 0 };
               clickTarget(root, new Rectangle(-28, -66, 56, 73), () => latest.current.onSelectAgent(agent.id));
               root.on('pointerover', () => { hovered = agent.id; });
               root.on('pointerout', () => { if (hovered === agent.id) hovered = undefined; });
               world.addChild(root);
               people.set(agent.id, person);
-              if (agent.activity !== 'idle') person.path = route(person.position, destination(agent), obstacles);
+              if (agent.temporary || agent.activity !== 'idle') person.path = route(person.position, destination(agent), obstacles);
             }
-            if (agent.activity !== person.activity) {
+            const target = destination(agent);
+            if (agent.activity !== person.activity || target.x !== person.target.x || target.y !== person.target.y) {
+              person.target = target;
               person.activity = agent.activity;
               person.elapsed = 0;
               person.path = route(person.position, destination(agent), obstacles);
@@ -525,7 +568,7 @@ export default function OfficeCanvas(props: Props) {
             const showName = !moving || hovered === agent.id || selectedAgentId === agent.id;
             person.name.visible = showName;
             person.badge.visible = showName;
-            person.name.text = agent.name;
+            person.name.text = agent.waitingSlot !== undefined ? agent.name.split(' ')[0].slice(0, 12) : agent.name;
             const width = Math.max(46, Math.ceil(person.name.width) + 20);
             person.badge.clear();
             box(person.badge, -width / 2, -63, width, 17, selectedAgentId === agent.id ? 0xf3dfab : C.cream, selectedAgentId === agent.id ? C.woodDark : C.ink);
@@ -567,7 +610,7 @@ export default function OfficeCanvas(props: Props) {
       }
     };
   }, []);
-  return <div ref={host} style={{ width: '100%', height: '100%', minHeight: 380, overflow: 'hidden' }}>
+  return <div ref={host} style={{ width: '100%', height: '100%', minHeight: 380 + waitingRows * 80, overflow: 'hidden' }}>
     {error && <p role="status" style={{ padding: 24, color: '#fff5d8' }}>The office view could not start. Your agents are available in the roster.</p>}
   </div>;
 }

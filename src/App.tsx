@@ -61,19 +61,19 @@ import type {
   CalendarEvent,
   Command,
   Routine,
-  Scenario,
   Snapshot,
   Source,
   SourceItem,
   WorkItem,
 } from "./shared/types";
 
-type Tab = "office" | "inbox" | "calendar" | "routines" | "history" | "settings";
+type Tab = "office" | "tasks" | "inbox" | "calendar" | "routines" | "history" | "settings";
 type Toast = { id: number; message: string; tone: "error" | "success" };
 
 const NAV: { id: Tab; label: string; icon: typeof Building2 }[] = [
   { id: "office", label: "Office", icon: Building2 },
   { id: "inbox", label: "Inbox", icon: Inbox },
+  { id: "tasks", label: "Tasks", icon: CheckCircle2 },
   { id: "calendar", label: "Calendar", icon: CalendarDays },
   { id: "routines", label: "Routines", icon: Repeat2 },
   { id: "history", label: "History", icon: HistoryIcon },
@@ -93,14 +93,6 @@ const SOURCES: {
   { id: "discord", label: "Discord", short: "D", icon: MessageCircle },
   { id: "linear", label: "Linear", short: "L", icon: CircleDot },
   { id: "asana", label: "Asana", short: "A", icon: CheckCircle2 },
-];
-
-const SCENARIOS: { id: Scenario; label: string }[] = [
-  { id: "report", label: "Research brief" },
-  { id: "bug", label: "Fix a bug" },
-  { id: "meeting", label: "Prepare for a meeting" },
-  { id: "dinner", label: "Schedule dinner" },
-  { id: "qa", label: "Run QA" },
 ];
 
 const SOURCE_META = Object.fromEntries(
@@ -433,7 +425,7 @@ function App() {
   }
 
   const activeWorkers = snapshot.agents.filter(
-    (agent) => agent.activity !== "idle" && agent.activity !== "waiting",
+    (agent) => !agent.retiredAt && agent.activity !== "idle" && agent.activity !== "waiting",
   ).length;
   const pendingInbox = snapshot.sources.filter(
     (item) => !item.disposition || item.disposition === "pending",
@@ -622,6 +614,7 @@ function App() {
             }}
           />
         )}
+        {activeTab === "tasks" && <TasksView snapshot={snapshot} onOpenWork={openWork} onOpenSource={openSource} onOpenArtifact={openArtifact} />}
         {activeTab === "calendar" && <CalendarView snapshot={snapshot} onOpenWork={openWork} />}
         {activeTab === "history" && (
           <HistoryView snapshot={snapshot} onOpenWork={openWork} />
@@ -644,7 +637,7 @@ function App() {
         />
       )}
       {(selectedWork || selectedAgent) && (
-        <WorkDrawer
+        <WorkDrawer key={selectedWork?.id || selectedAgent?.id}
           snapshot={snapshot}
           work={selectedWork}
           agent={selectedAgent}
@@ -653,6 +646,7 @@ function App() {
           run={run}
           onOpenArtifact={openArtifact}
           onOpenSource={openSource}
+          onOpenWork={openWork}
           onError={(message) => toast(message, "error")}
           onClose={() => {
             setSelectedWorkId(undefined);
@@ -703,10 +697,14 @@ function OfficeView({
   onOpenArtifact: (id: string) => void;
   onOpenCalendar: () => void;
 }) {
-  const [scenario, setScenario] = useState<Scenario>("report");
+  const [eventId, setEventId] = useState("");
+  const replayEvents = snapshot.demo.events || [];
+  const nextEvent = replayEvents.find((event) => event.id === eventId && !event.delivered) || replayEvents.find((event) => !event.delivered);
+  const signedIn = snapshot.auth.status === "signed-in";
+  const visibleAgents = snapshot.agents.filter((agent) => !agent.retiredAt);
   const [boardText, setBoardText] = useState("");
-  const active = snapshot.agents.filter((agent) => agent.activity !== "idle");
-  const resting = snapshot.agents.filter((agent) => agent.activity === "idle");
+  const active = visibleAgents.filter((agent) => agent.activity !== "idle");
+  const resting = visibleAgents.filter((agent) => agent.activity === "idle");
   const recent = [...snapshot.activity]
     .sort((a, b) => b.sequence - a.sequence)
     .slice(0, 7);
@@ -746,42 +744,19 @@ function OfficeView({
             <h1>A little help. A lot getting done.</h1>
           </div>
           <div className="scenario-runner" id="scenario-runner">
-            <label htmlFor="scenario">Start some work</label>
+            <label htmlFor="incoming-event">Deliver an incoming event</label>
             <div>
-              <select
-                id="scenario"
-                value={scenario}
-                onChange={(event) =>
-                  setScenario(event.target.value as Scenario)
-                }
-              >
-                {SCENARIOS.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
+              <select id="incoming-event" value={nextEvent?.id || ""} onChange={(event) => setEventId(event.target.value)}>
+                {!nextEvent && <option value="">All events delivered</option>}
+                {replayEvents.filter((event) => !event.delivered).map((event) => <option key={event.id} value={event.id}>{SOURCE_META[event.source].label} · {event.label}</option>)}
               </select>
-              <button
-                className="button button--primary"
-                disabled={
-                  busy !== null ||
-                  (snapshot.settings.mode === "live" &&
-                    snapshot.auth.status !== "signed-in")
-                }
-                onClick={() =>
-                  run(
-                    { type: "scenario.run", scenario },
-                    "scenario.run",
-                    "Work started.",
-                  )
-                }
-              >
-                <Zap size={15} /> Run
-              </button>
+              <button className="button button--primary" disabled={busy !== null || !signedIn || !nextEvent} onClick={() => nextEvent && run({ type: "demo.deliver", id: nextEvent.id })}><Zap size={15} /> Deliver</button>
             </div>
           </div>
         </section>
 
+        <div className="triage-mode"><Sparkles size={15} /><span>Codex triage · {snapshot.settings.mode === "demo" ? "simulated execution" : "real Codex execution"}</span><small>{signedIn ? `${replayEvents.filter((event) => event.delivered).length} / ${replayEvents.length} events delivered` : "Sign in with ChatGPT in Settings to triage incoming events."}</small></div>
+        <TriageQueue snapshot={snapshot} onOpenWork={onOpenWork} />
         <section className="roster" aria-label="Agent roster">
           <span className="roster__label">In the office</span>
           <div className="roster__people">
@@ -794,7 +769,7 @@ function OfficeView({
                 <PixelAvatar agent={agent} size="sm" />
                 <span>
                   <strong>{agent.name}</strong>
-                  <small>{agent.statusText}</small>
+                  <small>{agent.temporary ? "Task worker · " : agent.persistent ? "Recurring · " : ""}{agent.statusText}</small>
                 </span>
                 <StatusDot status={agent.activity} />
               </button>
@@ -820,7 +795,7 @@ function OfficeView({
 
         <section className="canvas-card">
           <OfficeCanvas
-            agents={snapshot.agents}
+            agents={visibleAgents}
             selectedAgentId={selectedAgentId}
             reducedMotion={snapshot.settings.reducedMotion}
             onSelectAgent={onSelectAgent}
@@ -832,7 +807,7 @@ function OfficeView({
               Office floor
             </span>
             <span>
-              {active.length} active · {resting.length} resting
+              {active.filter((agent) => agent.activity !== "waiting").length} active · {active.filter((agent) => agent.activity === "waiting").length} waiting
             </span>
           </div>
         </section>
@@ -842,7 +817,7 @@ function OfficeView({
             <span className="eyebrow">{snapshot.settings.mode === "demo" ? "Demo playback" : "Switch to Demo for playback"}</span>
             <button
               className="round-control round-control--play"
-              disabled={busy !== null || snapshot.settings.mode !== "demo"}
+              disabled={busy !== null || !signedIn || snapshot.settings.mode !== "demo"}
               onClick={() =>
                 run({
                   type: snapshot.demo.playing ? "demo.pause" : "demo.play",
@@ -854,9 +829,9 @@ function OfficeView({
             </button>
             <button
               className="round-control"
-              disabled={busy !== null || snapshot.settings.mode !== "demo"}
+              disabled={busy !== null || !signedIn || snapshot.settings.mode !== "demo"}
               onClick={() => run({ type: "demo.next" })}
-              aria-label="Next demo step"
+              aria-label="Deliver next event"
             >
               <StepForward size={16} />
             </button>
@@ -1047,13 +1022,14 @@ function InboxView({
   const [source, setSource] = useState<Source | "all">("all");
   const [selectedId, setSelectedId] = useState<string | undefined>(targetId);
   const [query, setQuery] = useState("");
+  const [composing, setComposing] = useState(false);
   const filtered = snapshot.sources.filter(
     (item) =>
       (source === "all" || item.source === source) &&
       `${item.title} ${item.author} ${item.content}`
         .toLowerCase()
         .includes(query.toLowerCase()),
-  );
+  ).sort((a, b) => b.timestamp - a.timestamp);
   useEffect(() => {
     if (targetId) {
       setSelectedId(targetId);
@@ -1074,8 +1050,10 @@ function InboxView({
       <PageHeader
         eyebrow="Connected sources"
         title="Inbox"
-        description="Review what arrived and decide what deserves a desk."
+        description="Incoming messages, Codex decisions, and the work they started."
+        action={<button className="button button--primary" onClick={() => setComposing(true)}><Plus size={15} /> New incoming message</button>}
       />
+      {composing && <IncomingMessageModal run={run} busy={busy} signedIn={snapshot.auth.status === "signed-in"} onClose={() => setComposing(false)} onCreated={(id) => { setSelectedId(id); setSource("all"); setQuery(""); setComposing(false); }} />}
       <div className="source-tabs" role="tablist" aria-label="Inbox sources">
         <button
           role="tab"
@@ -1158,14 +1136,18 @@ function InboxView({
                   {selected.disposition || "pending"}
                 </span>
               </div>
+              <p className="thread-id">Thread ID <code>{selected.threadId}</code></p>
               <div className="message-copy">
                 <p>{selected.content}</p>
               </div>
-              {selected.reason && (
+              {!!selected.attachments?.length && <div className="attachment-list"><h3>Attachments · {selected.attachments.length}</h3>{selected.attachments.map((file) => <details key={file.id}><summary><FileText size={15} /> {file.name}<small>{file.mediaType}</small></summary><pre>{file.content}</pre></details>)}</div>}
+              <SourceTriage snapshot={snapshot} sourceId={selected.id} onOpenWork={onOpenWork} />
+              {snapshot.sources.filter((item) => item.source === selected.source && item.threadId === selected.threadId && item.id !== selected.id).length > 0 && <details className="thread-context"><summary>Other messages in this thread</summary>{snapshot.sources.filter((item) => item.source === selected.source && item.threadId === selected.threadId && item.id !== selected.id).sort((a, b) => a.timestamp - b.timestamp).map((item) => <button key={item.id} onClick={() => { setSelectedId(item.id); setQuery(""); setSource("all"); }}><strong>{item.author} · {formatTime(item.timestamp)}</strong><span>{item.title}</span><small>{item.content.slice(0, 180)}</small></button>)}</details>}
+              {selected.reason && !snapshot.triage.some((record) => record.sourceId === selected.id) && (
                 <div className="evaluation-note">
                   <Sparkles size={16} />
                   <span>
-                    <strong>Office read</strong>
+                    <strong>Decision</strong>
                     {selected.reason}
                   </span>
                 </div>
@@ -1173,16 +1155,16 @@ function InboxView({
               <div className="detail-actions">
                 <button
                   className="button button--primary"
-                  disabled={busy !== null}
+                  disabled={busy !== null || snapshot.auth.status !== "signed-in" || selected.disposition === "triaging"}
                   onClick={() =>
                     run(
                       { type: "source.evaluate", id: selected.id },
                       `source.evaluate:${selected.id}`,
-                      "Message evaluated.",
+                      "Queued for Codex triage.",
                     )
                   }
                 >
-                  <Gauge size={15} /> Evaluate
+                  <Gauge size={15} /> {selected.disposition === "error" ? "Retry triage" : "Triage with Codex"}
                 </button>
               </div>
               {linkedWork.length > 0 && (
@@ -1235,6 +1217,65 @@ function InboxView({
       </div>
     </div>
   );
+}
+
+function IncomingMessageModal({ run, busy, signedIn, onClose, onCreated }: { run: RunCommand; busy: string | null; signedIn: boolean; onClose: () => void; onCreated: (id: string) => void }) {
+  const [form, setForm] = useState({ source: "gmail" as Source, author: "", title: "", content: "", threadId: "" });
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    const id = crypto.randomUUID();
+    const next = await run({ type: "source.ingest", item: { ...form, author: form.author.trim(), title: form.title.trim(), content: form.content.trim(), id, externalId: id, threadId: form.threadId.trim() || id, timestamp: Date.now() } });
+    if (next) onCreated(id);
+  };
+  return <Modal title="New incoming message" onClose={onClose} closeOnBackdrop={false}><form className="form-stack" onSubmit={submit}>
+    <p className="muted">Simulate a message arriving from a connection. Codex reads its content and decides whether to create work, attach context, wait, or ignore it.</p>
+    <label><span>Source</span><select value={form.source} onChange={(event) => setForm({ ...form, source: event.target.value as Source })}>{SOURCES.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}</select></label>
+    <label><span>Author</span><input required maxLength={200} autoFocus value={form.author} onChange={(event) => setForm({ ...form, author: event.target.value })} placeholder="Alex Morgan" /></label>
+    <label><span>Subject</span><input required maxLength={300} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Could you prepare a launch summary?" /></label>
+    <label><span>Message</span><textarea required rows={6} maxLength={20000} value={form.content} onChange={(event) => setForm({ ...form, content: event.target.value })} placeholder="Include the context an agent would need to do the work." /></label>
+    <label><span>Thread ID <small>Optional, reuse an existing ID for a follow-up</small></span><input value={form.threadId} maxLength={200} onChange={(event) => setForm({ ...form, threadId: event.target.value })} /></label>
+    {!signedIn && <p className="field-error">Sign in with ChatGPT in Settings before delivering messages for triage.</p>}
+    <div className="form-actions"><button type="button" className="button button--quiet" onClick={onClose}>Cancel</button><button className="button button--primary" disabled={busy !== null || !signedIn || !form.author.trim() || !form.title.trim() || !form.content.trim()}><Send size={15} /> Deliver message</button></div>
+  </form></Modal>;
+}
+
+function SourceTriage({ snapshot, sourceId, onOpenWork }: { snapshot: Snapshot; sourceId: string; onOpenWork: (id: string) => void }) {
+  const record = [...snapshot.triage].reverse().find((item) => item.sourceId === sourceId);
+  if (!record) return null;
+  const work = snapshot.work.find((item) => item.id === record.workId);
+  return <div className={`triage-record triage-record--${record.status}`} role="status"><div><Sparkles size={16} /><strong>Codex triage</strong><span className="post-kind">{record.action || record.status}</span></div><p>{record.error || record.reason || (record.status === "running" ? "Reading the message and checking existing work…" : "Waiting for Codex to review this message.")}</p>{work && <button className="text-link" onClick={() => onOpenWork(work.id)}>{work.title}<ChevronRight size={14} /></button>}</div>;
+}
+
+function TriageQueue({ snapshot, onOpenWork }: { snapshot: Snapshot; onOpenWork: (id: string) => void }) {
+  const recent = [...snapshot.triage].sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
+  if (!recent.length) return null;
+  return <section className="triage-feed" aria-label="Triage decisions"><h2><Sparkles size={15} /> At the intake desk</h2>{recent.map((record) => <div key={record.id}><span className={`status-label status-label--${record.status}`}><StatusDot status={record.status} />{record.action || record.status}</span><span><strong>{snapshot.sources.find((source) => source.id === record.sourceId)?.title || "Incoming message"}</strong><small>{record.error || record.reason || "Codex is reviewing this trigger."}</small></span>{record.workId && <button className="button button--quiet" onClick={() => onOpenWork(record.workId!)}>Task <ChevronRight size={14} /></button>}</div>)}</section>;
+}
+
+function WorkContext({ snapshot, work, onOpenWork, onOpenSource, onOpenArtifact }: { snapshot: Snapshot; work: WorkItem; onOpenWork: (id: string) => void; onOpenSource: (id: string) => void; onOpenArtifact: (id: string) => void }) {
+  const decision = snapshot.triage.find((record) => record.workId === work.id && (record.action === "create" || record.action === "wait"));
+  const related = Array.from(new Set([work.parentWorkId, work.followUpOf, ...(work.dependsOnWorkIds || [])].filter((id): id is string => Boolean(id))));
+  const inputs = snapshot.artifacts.filter((artifact) => work.inputArtifactIds?.includes(artifact.id));
+  const source = snapshot.sources.find((item) => item.id === work.triggerSourceId);
+  const followUps = snapshot.work.filter((item) => item.parentWorkId === work.id || item.followUpOf === work.id);
+  if (!decision && !related.length && !inputs.length && !source && !work.blockedReason && !followUps.length) return null;
+  return <section className="work-context"><h3>Why this task exists</h3>{decision?.reason && <p>{decision.reason}</p>}{source && <button className="text-link" onClick={() => onOpenSource(source.id)}>{SOURCE_META[source.source].label} · {source.title}<ChevronRight size={14} /></button>}
+    {work.blockedReason && <p className="waiting-note"><Clock3 size={15} />{work.blockedReason}</p>}
+    {work.needsInformation && <p className="muted">Waiting for more information. Deliver a reply in the original thread to continue.</p>}
+    {!!related.length && <div><h4>Earlier work and dependencies</h4>{related.map((id) => { const item = snapshot.work.find((candidate) => candidate.id === id); return item && <button className="context-link" key={id} onClick={() => onOpenWork(id)}><StatusDot status={item.status} /><span>{item.title}</span><small>{item.status}</small><ChevronRight size={14} /></button>; })}</div>}
+    {!!inputs.length && <div><h4>Input artifacts</h4>{inputs.map((artifact) => <button className="context-link" key={artifact.id} onClick={() => onOpenArtifact(artifact.id)}><FileText size={15} /><span>{artifact.title}</span><ChevronRight size={14} /></button>)}</div>}
+    {!!followUps.length && <div><h4>Follow-up tasks</h4>{followUps.map((item) => <button className="context-link" key={item.id} onClick={() => onOpenWork(item.id)}><StatusDot status={item.status} /><span>{item.title}</span><ChevronRight size={14} /></button>)}</div>}
+  </section>;
+}
+
+function TasksView({ snapshot, onOpenWork, onOpenSource, onOpenArtifact }: { snapshot: Snapshot; onOpenWork: (id: string) => void; onOpenSource: (id: string) => void; onOpenArtifact: (id: string) => void }) {
+  const [filter, setFilter] = useState("all");
+  const tasks = [...snapshot.work].filter((work) => filter === "all" || work.status === filter).sort((a, b) => b.createdAt - a.createdAt);
+  return <div className="page page--tasks"><PageHeader eyebrow="From trigger to finished work" title="Tasks" description="See why work started, who picked it up, and what it produced." /><div className="task-filters" aria-label="Task status">{["all", "queued", "running", "waiting", "completed", "failed", "cancelled"].map((status) => <button key={status} className={filter === status ? "active" : ""} aria-pressed={filter === status} onClick={() => setFilter(status)}>{sentence(status)}<span>{snapshot.work.filter((work) => status === "all" || work.status === status).length}</span></button>)}</div><div className="task-cards">{tasks.map((work) => {
+    const agent = snapshot.agents.find((item) => item.id === work.agentId);
+    const artifacts = snapshot.artifacts.filter((item) => item.workId === work.id);
+    return <article key={work.id} className="task-card"><div className="task-card__head"><button onClick={() => onOpenWork(work.id)}><PixelAvatar agent={agent} size="sm" /><span><strong>{work.title}</strong><small>{agent?.name || "Unassigned"} · {agent?.temporary ? "Temporary worker" : "Recurring agent"}{agent?.retiredAt ? " · Retired" : ""}</small></span><ChevronRight size={17} /></button><span className={`status-label status-label--${work.status}`}><StatusDot status={work.status} />{work.status}</span></div><p>{work.goal}</p><WorkContext snapshot={snapshot} work={work} onOpenWork={onOpenWork} onOpenSource={onOpenSource} onOpenArtifact={onOpenArtifact} /><div className="task-card__foot"><span>{formatTime(work.createdAt)} · {work.mode === "demo" ? "Simulated execution" : "Codex execution"}</span>{artifacts.map((artifact) => <button key={artifact.id} className="text-link" onClick={() => onOpenArtifact(artifact.id)}><FileText size={14} />{artifact.title}</button>)}</div></article>;
+  })}{!tasks.length && <EmptyState icon={<CheckCircle2 size={22} />} title="No tasks here yet" body="Deliver an incoming message. Codex will decide whether it needs a task." />}</div></div>;
 }
 
 function MessageRow({
@@ -1432,7 +1473,7 @@ function RoutineModal({
     id: routine?.id,
     name: routine?.name || "",
     instructions: routine?.instructions || "",
-    agentId: routine?.agentId || snapshot.agents[0]?.id || "",
+    agentId: routine?.agentId || snapshot.agents.find((agent) => !agent.temporary)?.id || "",
     enabled: routine?.enabled ?? true,
     schedule: routine?.schedule || ("daily" as "interval" | "daily"),
     intervalMinutes: routine?.intervalMinutes || 60,
@@ -1484,7 +1525,7 @@ function RoutineModal({
                 setForm({ ...form, agentId: event.target.value })
               }
             >
-              {snapshot.agents.map((agent) => (
+              {snapshot.agents.filter((agent) => !agent.temporary).map((agent) => (
                 <option key={agent.id} value={agent.id}>
                   {agent.name} · {agent.role}
                 </option>
@@ -1696,7 +1737,7 @@ function SettingsView({
             <div>
               <h2>ChatGPT account</h2>
               <p>
-                Live work uses your ChatGPT sign-in. Authentication opens the
+                Triage in both modes uses your ChatGPT sign-in. Authentication opens the
                 official flow.
               </p>
             </div>
@@ -1714,7 +1755,7 @@ function SettingsView({
                   {auth.plan
                     ? `${auth.plan} plan${auth.method ? ` · ${auth.method}` : ""}`
                     : auth.error ||
-                      "Demo mode is available without an account."}
+                      "Sign in to triage messages in either mode."}
                 </small>
               </span>
             </div>
@@ -1802,8 +1843,7 @@ function SettingsView({
             <div>
               <h2>Work mode</h2>
               <p>
-                Demo replays sample workflows from the runtime. Live mode starts
-                real Codex work.
+                Both modes use Codex to decide what needs work. Demo simulates task execution; Live executes tasks through Codex.
               </p>
             </div>
           </div>
@@ -1818,7 +1858,7 @@ function SettingsView({
               <span>
                 <strong>Demo</strong>
                 <small>
-                  Explore the full office with local simulated work.
+                  Codex triage with local simulated task execution.
                 </small>
               </span>
             </button>
@@ -1947,6 +1987,7 @@ function WorkDrawer({
   run,
   onOpenArtifact,
   onOpenSource,
+  onOpenWork,
   onError,
   onClose,
 }: {
@@ -1958,6 +1999,7 @@ function WorkDrawer({
   run: RunCommand;
   onOpenArtifact: (id: string) => void;
   onOpenSource: (id: string) => void;
+  onOpenWork: (id: string) => void;
   onError: (message: string) => void;
   onClose: () => void;
 }) {
@@ -2013,6 +2055,7 @@ function WorkDrawer({
           </span>
         )}
       </div>
+      {work && <WorkContext snapshot={snapshot} work={work} onOpenWork={onOpenWork} onOpenSource={onOpenSource} onOpenArtifact={onOpenArtifact} />}
       {work?.error && (
         <div className="run-error">
           <AlertCircle size={18} />
