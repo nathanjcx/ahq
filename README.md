@@ -2,31 +2,23 @@
 
 A desktop office where local agents turn incoming requests into reports, code changes, meeting briefs, and calendar events. The office is an interactive pixel-art scene. Click a worker to inspect its activity and output.
 
-This V1 uses fictional Gmail, Google Calendar, iMessage, Slack, Discord, Linear, and Asana data. It includes deterministic demo execution and live execution through a locally installed Codex CLI signed in with ChatGPT. External calendar changes and PR publication are simulated in both modes.
+The sources and incoming streams are fictional. Triage and task execution use real Codex through a ChatGPT login. Agents read and write actual local files. Calendar actions affect only the application's local demo calendar; no remote PRs are published or messages sent.
 
-## V1 checkpoint
+## Incoming-work demo
 
-This is a working desktop prototype with five scripted workflows and optional real Codex execution. It is not yet a general autonomous life CRM.
+The office contains 450 historical messages across ten projects, with 30 distinct new messages available for delivery and one deliberate duplicate delivery. The full dataset has 480 unique messages and 84 readable CSV, Markdown, and JSON attachments. Historical messages provide context without automatically starting work.
 
-The Electron app, local persistence, animated office, inbox filters, source and artifact links, calendar view, routine editor and scheduler, and bulletin board work. ChatGPT authentication is real. Live report generation and a local checkout fix passed end-to-end checks with Codex. Live meeting preparation, scheduling, and QA are implemented but have not received real-model end-to-end verification.
+Deliver an event from the office picker, advance playback, or write a message in the Inbox's incoming-message form. Codex decides whether to ignore it, create a task, attach it to existing work, or wait for missing information or another task. Decisions and reasons appear in the Inbox and Tasks view. New tasks receive temporary worker characters; recurring agents retain their identity. Idle residents welcome new workers at the door, take coffee breaks, and tend plants. Work animations reflect reading, drafting, coding, QA, and scheduling. Reduced motion skips social movement.
 
-The current limits are:
+Tasks run through Codex against a workspace containing source messages, attachment files, and the exact prerequisite artifacts. Bug fixes use a small local checkout project with Node tests. QA uses a verified copy of its parent fix's workspace, with a file-hash manifest linking the two. Corrections can create linked revisions, completed work can release waiting tasks, and meeting briefs can be refreshed after their inputs change. Source content is evidence rather than privileged agent instructions.
 
-- All seven sources are fixtures. No real inboxes or external services are monitored.
-- Triage uses predefined scenario labels. Demo execution uses timed steps and predefined output.
-- Calendar events stay in the app. No remote PRs are published and no messages are sent.
-- Live work uses isolated local files. Web search and external integrations are disabled.
-- Board handoffs are scripted or generated from status updates, not autonomous agent conversations. Meeting work can consume earlier artifacts.
-- Clicking a desk opens activity and artifacts, not a streamed computer desktop. Routines reuse six fixed characters.
-- Schedules run only while the application is open.
+The curated arrivals cover a launch report, cross-provider corroboration, an acknowledgement, QA requested before its fix, a duplicate delivery, meeting preparation, a dinner request with missing details and a calendar conflict, a corrected support count, and an unrelated report request. Additional arrivals exercise nine other projects and informational messages.
 
-The initial dataset contains 14 short source items, two per integration. Eleven actionable items map to the five workflows; three are informational. It also contains six characters, two disabled routines, one completed historical work item, two short historical artifacts, two board posts, and one calendar focus block. A full replay adds five artifacts and one dinner event.
-
-Supporting evidence consists of a few launch metrics, short meeting and dinner instructions, and a small checkout fixture with two tests. There are no substantial conversation histories or attachment collections yet. The main remaining product work is realistic demo depth and autonomous triage.
+This requires internet access and Codex subscription allowance for both intake and execution. There is no canned-output or offline execution mode. The supported work types are document reports, local checkout fixes and QA, meeting briefs, and local calendar events. Web search and external integrations are disabled. Schedules run only while the app is open. Clicking a worker opens its activity and artifacts, not a streamed computer desktop. The board records findings and task handoffs; it is not an autonomous group chat.
 
 ## Run
 
-Use Node.js 22 or newer and npm. Install the Codex CLI separately for ChatGPT sign-in and live execution. The demo remains available when Codex is missing.
+Use Node.js 22 or newer and npm. Install the Codex CLI separately for ChatGPT sign-in and live execution. Browsing the fictional office remains available without Codex, but triage and work require it. The packaged app includes its Node runtime and dependencies; Codex CLI is currently a separate installation. No API key or .env file is required.
 
 ```sh
 npm install
@@ -52,17 +44,19 @@ The Linux executable is under `release/linux-unpacked/`. Packaging runs on the c
 
 Open Settings and select **Sign in with ChatGPT**. Codex opens its browser authentication flow; Little Office updates when authentication completes. An existing local Codex ChatGPT login is recognized automatically. API-key authentication does not unlock subscription mode.
 
-Select **Live** in Settings to execute work with Codex. Leave the model field blank to use the configured Codex default, or supply a model available to your account. Model calls use your ChatGPT account's Codex allowance. The runtime and files are local; inference still requires the hosted service and an internet connection.
+All new work executes with Codex. Leave the model field blank to use the configured Codex default, or supply a model available to your account. Model calls use your ChatGPT account's Codex allowance. The runtime and files are local; inference still requires the hosted service and an internet connection.
 
 Codex owns authentication credentials. Signing out uses Codex's logout operation and affects the shared local Codex login.
 
-## Demo
+## Demo controls
 
-Start in Demo mode. Use Play to introduce the scenarios in sequence, Next to introduce one at a time, or choose an individual scenario. Speed controls demo pacing. Reset restores the fictional office and removes demo-generated work from its active state.
+Use **Deliver** to send the selected fictional arrival, **Deliver next event** to advance once, or Play to deliver the sequence. These controls simulate the incoming stream; the resulting model calls are real. In Inbox, **New incoming message** lets you type a new request without assigning it a task type. The local calendar form creates a demo event and sends it through intake for preparation.
 
-The scenarios cover a requested report, a checkout bug, meeting preparation, dinner scheduling, and recurring QA. Source items link to work; work links to activity and finished artifacts. The bulletin board records findings and handoffs. Routines can run manually, on an interval, or daily while the application is open.
+Use Tasks to inspect the intake reason, worker, dependencies, missing details, input artifacts, and finished output. Supply a clarifying message when a task needs information. Reuse its project or issue reference so intake can associate the reply correctly, including across providers.
 
-Closing the application stops its runtime. Routines do not run while the computer or application is off. Interrupted work is surfaced for retry on the next launch.
+Reset restores the current fixture set and clears active office history. Existing installations retain their saved state until reset; use reset to load the expanded dataset after updating from V1. Generated files from earlier runs remain on disk.
+
+Closing the application stops its runtime. Routines do not run while the computer or application is off. Interrupted execution is surfaced for retry on the next launch; dependency waits remain waiting.
 
 ## Local browser preview
 
@@ -84,11 +78,15 @@ node scripts/auth-smoke.mjs
 node scripts/smoke.mjs
 ```
 
-The Electron smoke check requires a graphical session and writes screenshots to `test-results/`. It covers all five scenarios, scene clicks, inbox filters, routine editing, board posts, and the calendar. Set `OFFICE_EXECUTABLE` to the packaged executable to run the same checks against the distribution.
+The Electron smoke check requires a graphical session and writes screenshots to `test-results/`. It checks scene clicks, inbox filters, attachment previews, the incoming-message composer, routine editing, board posts, and the calendar without starting model work. Set `OFFICE_EXECUTABLE` to the packaged executable to run the same checks against the distribution.
 
 The authentication check uses an isolated Codex profile to verify the real login URL and cancellation without changing your existing sign-in. It does not start a model turn.
 
 `node scripts/live-smoke.mjs` additionally verifies a real report through an existing ChatGPT login. Use `OFFICE_LIVE_SCENARIO=bug node scripts/live-smoke.mjs` to check a real local patch. It uses subscription allowance and keeps its workspace separate from the application's normal data.
+
+`node scripts/triage-smoke.mjs` delivers the first 16 curated events through real Codex triage and execution. It writes decisions, task state, artifacts, and screenshots under `test-results/`. Set `OFFICE_TRIAGE_LIMIT` to change the number of deliveries, or `OFFICE_TRIAGE_EVENTS` to a comma-separated list of event IDs for a focused check. This uses the existing ChatGPT login and subscription allowance in an isolated temporary office.
+
+`node scripts/calendar-smoke.mjs` checks the local event form, real intake, and generated meeting brief. It also uses Codex allowance.
 
 ## Structure
 

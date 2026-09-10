@@ -2482,7 +2482,7 @@ select {
 .context-link span { flex:1; }
 .context-link small { color:var(--ink-soft); }
 .waiting-note { display:flex; align-items:center; gap:8px; color:#876321; }
-.roster__people { flex-wrap:wrap; max-height:200px; overflow:auto; }
+.roster__people { flex-wrap:nowrap; overflow:auto; }
 .canvas-card { flex-shrink:0; }
 @media (max-width: 850px) { .task-card__head { align-items:flex-start; flex-direction:column; } .triage-mode small { margin-left:0; } }
 
@@ -2499,12 +2499,11 @@ select {
 .calendar-timezone { margin:0; color:var(--ink-soft); font-size:11px; }
 .calendar-conflict { margin:0; padding:11px 12px; background:var(--sun-pale); color:#705921; border-radius:8px; font-size:12px; line-height:1.5; }
 @media (min-width: 851px) and (max-width: 1180px) {
-  .office-intro { align-items:flex-start; flex-direction:column; gap:12px; }
-  .scenario-runner { width:100%; }
-  .scenario-runner > div { display:flex; }
-  .scenario-runner select { flex:1; width:0; }
-  .roster { align-items:flex-start; flex-direction:column; }
-  .roster__people { width:100%; }
+  .office-intro { gap:14px; }
+  .office-intro h1 { font-size:22px; }
+  .scenario-runner { min-width:0; flex:1; max-width:360px; }
+  .scenario-runner select { min-width:0; flex:1; width:0; }
+  .roster__label { font-size:8px; }
   .topbar .brand { width:180px; }
   .topbar__status { gap:6px; }
 }
@@ -2515,3 +2514,23 @@ select {
 .task-card__head strong { font-weight:650; line-height:1.4; }
 .button { transition:background-color .15s, border-color .15s, box-shadow .15s; }
 .button--primary:hover:not(:disabled) { box-shadow:0 3px 9px rgba(23,59,54,.14); }
+
+/* Keep the office in view while intake activity grows beside it. */
+@media (min-width: 851px) {
+  .office-main { padding-top:17px; }
+  .office-intro { margin-bottom:12px; }
+  .triage-mode { padding:7px 11px; font-size:11px; }
+  .office-main > .triage-mode { margin-bottom:10px; }
+  .roster { min-height:48px; padding:4px 9px; gap:9px; margin-bottom:10px; }
+  .roster__people button { padding:3px 6px; }
+}
+.board-panel > .triage-feed { margin:14px 0; padding:10px; }
+.board-panel .triage-feed > div { flex-wrap:wrap; gap:6px; border-top:1px solid var(--line); }
+.board-panel .triage-feed > div > span:nth-child(2) { flex-basis:100%; font-size:11px; }
+.board-panel .triage-feed .button { padding:3px 7px; min-height:24px; font-size:10px; }
+@media (min-width: 851px) and (max-width: 980px) {
+  .office-intro { align-items:stretch; flex-direction:column; gap:8px; }
+  .scenario-runner { max-width:none; }
+  .office-intro .eyebrow { display:none; }
+  .roster__label { display:none; }
+}

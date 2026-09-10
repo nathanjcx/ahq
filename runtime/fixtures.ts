@@ -39,7 +39,7 @@ export function initialSnapshot(now = Date.now()): Snapshot {
       { id: 'routine-2', agentId: 'agent-lena', name: 'Checkout verification', instructions: 'Run focused checkout QA and report any failures.', enabled: false, schedule: 'daily', intervalMinutes: 60, dailyTime: '10:00', nextRunAt: now + 25 * HOUR, notes: 'Check full-price and coupon totals after a live fix.' },
     ], calendar: initialCalendar(now),
     auth: { status: 'checking' },
-    settings: { mode: 'demo', reducedMotion: false, sound: true, model: '' },
+    settings: { mode: 'live', reducedMotion: false, sound: true, model: '' },
     demo: { playing: false, nextIndex: 0, speed: 1, events: demoEvents(now).map(event => ({ id: event.id, label: event.label, source: event.item.source, delivered: false })) },
   };
 }

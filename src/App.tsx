@@ -754,7 +754,6 @@ function OfficeView({
         </section>
 
         <div className="triage-mode"><Sparkles size={15} /><span>Demo data · Codex triage and execution</span><small>{signedIn ? `${replayEvents.filter((event) => event.delivered).length} / ${replayEvents.length} events delivered` : "Sign in with ChatGPT in Settings to triage incoming events."}</small></div>
-        <TriageQueue snapshot={snapshot} onOpenWork={onOpenWork} />
         <section className="roster" aria-label="Agent roster">
           <span className="roster__label">In the office</span>
           <div className="roster__people">
@@ -889,6 +888,7 @@ function OfficeView({
           </div>
           <span className="count-pill">{snapshot.board.length}</span>
         </div>
+        <TriageQueue snapshot={snapshot} onOpenWork={onOpenWork} />
         <div className="board-posts">
           {[...snapshot.board]
             .sort((a, b) => b.timestamp - a.timestamp)
@@ -2285,7 +2285,7 @@ function CalendarEventModal({ snapshot, run, busy, onClose }: { snapshot: Snapsh
   return <Modal title="New calendar event" onClose={onClose} closeOnBackdrop={false}>
     <form className="form-stack" onSubmit={submit}>
       <p className="calendar-form-note">Add an event to the local demo calendar. Codex will receive the invitation, find relevant context, and decide what preparation it needs.</p>
-      <label><span>Event title</span><input autoFocus required maxLength={300} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Atlas launch review" /></label>
+      <label><span>Event title</span><input autoFocus required maxLength={200} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Atlas launch review" /></label>
       <div className="form-row calendar-time-row">
         <label><span>Starts</span><input type="datetime-local" required value={form.start} onChange={(event) => changeStart(event.target.value)} /></label>
         <label><span>Ends</span><input type="datetime-local" required value={form.end} min={form.start} onChange={(event) => setForm({ ...form, end: event.target.value })} /></label>

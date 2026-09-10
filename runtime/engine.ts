@@ -319,7 +319,7 @@ class Runtime implements OfficeRuntime {
   }
 
   private requireTriageAuth(): void {
-    if (this.state.auth.status !== 'signed-in') throw new Error('Sign in with ChatGPT to review incoming messages. Triage uses Codex in both demo and live modes.');
+    if (this.state.auth.status !== 'signed-in') throw new Error('Sign in with ChatGPT to review incoming messages. Triage and task execution use Codex.');
   }
 
   private scheduleDemo(): void {

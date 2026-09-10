@@ -25,9 +25,23 @@ try {
   await page.locator('.nav-rail').getByRole('button', { name: 'Inbox' }).click();
   await page.getByRole('tab', { name: /Slack/ }).click();
   assert.ok((await page.locator('.message-row').count()) > 0);
-  assert.match(await page.locator('.message-detail').innerText(), /Checkout|QA/);
+  assert.ok((await page.locator('.message-row').count()) >= 60);
   await page.getByRole('tab', { name: /Gmail/ }).click();
-  assert.match(await page.locator('.message-detail').innerText(), /leadership|Dinner/i);
+  assert.ok((await page.locator('.message-row').count()) >= 60);
+  const evidence = state.sources.find((source) => source.source === 'gmail' && source.attachments?.length);
+  assert.ok(evidence);
+  await page.getByRole('textbox', { name: 'Search inbox' }).fill(evidence.title);
+  await page.locator('.message-row').first().click();
+  await page.locator('.attachment-list summary').first().click();
+  assert.ok((await page.locator('.attachment-list pre').first().innerText()).length > 80);
+  await page.getByRole('button', { name: 'New incoming message', exact: true }).click();
+  await page.getByRole('dialog').getByLabel('Author', { exact: true }).fill('Demo visitor');
+  await page.getByRole('dialog').getByLabel('Subject', { exact: true }).fill('A new trigger');
+  await page.getByRole('dialog').getByLabel('Message', { exact: true }).fill('Thanks for the notes. Nothing else is needed.');
+  await page.screenshot({ path: 'test-results/incoming-composer.png', fullPage: true });
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.locator('.nav-rail').getByRole('button', { name: 'Tasks', exact: true }).click();
+  await page.getByRole('heading', { name: 'Tasks', exact: true }).waitFor();
   await page.locator('.nav-rail').getByRole('button', { name: 'Routines' }).click();
   await page.locator('.workspace').getByRole('button', { name: 'New routine' }).click();
   await page.getByRole('dialog').getByLabel('Name', { exact: true }).fill('UI-created routine');
@@ -47,19 +61,6 @@ try {
   assert.ok(await page.getByRole('dialog').isVisible());
   await page.keyboard.press('Escape');
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
-  await command({ type: 'demo.speed', speed: 4 });
-  state = await command({ type: 'scenario.run', scenario: 'report' });
-  const report = state.work.find((work) => work.scenario === 'report' && work.status !== 'completed');
-  assert.ok(report, 'Report scenario creates work');
-  const deadline = Date.now() + 60_000;
-  do {
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    state = await command({ type: 'snapshot' });
-    if (state.work.find((work) => work.id === report.id)?.status === 'completed') break;
-  } while (Date.now() < deadline);
-  assert.equal(state.work.find((work) => work.id === report.id)?.status, 'completed');
-  assert.ok(state.artifacts.some((artifact) => artifact.workId === report.id && artifact.content.length > 100));
-  assert.ok(state.activity.some((event) => event.workId === report.id));
   const count = state.routines.length;
   state = await command({ type: 'routine.save', routine: {
     agentId: state.agents[5].id, name: 'Smoke-test research', instructions: 'Review the supplied project notes.',
@@ -83,24 +84,11 @@ try {
   const room = await page.locator('canvas').boundingBox();
   await page.mouse.click(room.x + room.width * 639 / 720, room.y + room.height * 34 / 480);
   await page.getByRole('heading', { name: 'Calendar', exact: true }).waitFor();
-  for (const scenario of ['bug', 'meeting', 'dinner', 'qa']) {
-    state = await command({ type: 'scenario.run', scenario });
-    const work = state.work.find((item) => item.scenario === scenario && item.status !== 'completed');
-    assert.ok(work);
-    const deadline = Date.now() + 60_000;
-    do {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      state = await command({ type: 'snapshot' });
-      if (state.work.find((item) => item.id === work.id)?.status === 'completed') break;
-    } while (Date.now() < deadline);
-    assert.equal(state.work.find((item) => item.id === work.id)?.status, 'completed', scenario);
-    assert.ok(state.artifacts.some((item) => item.workId === work.id && item.content.length > 100));
-  }
-  assert.ok(state.calendar.some((item) => /dinner/i.test(item.title)));
+  assert.ok(state.calendar.length >= 3);
   await page.screenshot({ path: 'test-results/calendar.png', fullPage: true });
 
   assert.deepEqual(errors, [], 'Renderer has no uncaught errors');
-  console.log('Electron smoke passed: isolated renderer, inbox filters, agent desktop, routine editing, scene hit targets, board posts, calendar, all five scenarios, artifacts.');
+  console.log('Electron smoke passed: isolated renderer, inbox filters, agent desktop, routine editing, scene hit targets, board posts, calendar, incoming composer, attachment previews.');
 } finally {
   await desktop.close();
   await rm(dataDir, { recursive: true, force: true });
