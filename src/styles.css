@@ -2532,3 +2532,48 @@ select {
 @media (max-width: 750px) { .calendar-preparation { align-items: stretch; flex-direction: column; } }
 
 .calendar-agenda-details > summary { padding: 0 22px 18px; font-size: 13px; font-weight: 650; cursor: pointer; }
+
+.active-work { padding: 14px 28px; border-bottom: 1px solid var(--line); background: #fbfaf6; }
+.active-work > strong { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 10px; }
+.active-work > strong > span:last-child { color: var(--ink-soft); font-weight: 400; }
+.active-work > div { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 3px; }
+.active-work button { display: flex; align-items: center; gap: 10px; flex: 0 0 300px; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); background: white; border-radius: 8px; text-align: left; }
+.active-work button > span:nth-child(2) { min-width: 0; flex: 1; }
+.active-work b, .active-work small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.active-work b { font-size: 12px; margin-bottom: 3px; }
+.active-work small, .active-work__status { color: var(--ink-soft); font-size: 11px; }
+.goal-composer, .goal-card { border: 1px solid var(--line); border-radius: 12px; padding: 22px; background: white; }
+.goal-composer { margin-bottom: 26px; background: #fbfaf6; }
+.goal-composer label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+.goal-composer textarea { width: 100%; resize: vertical; min-height: 96px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: white; line-height: 1.6; }
+.goal-composer__actions { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-top: 12px; }
+.goal-composer > p { font-size: 12px; margin: 12px 0 0; }
+.goal-list { display: grid; gap: 20px; }
+.goal-card > header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+.goal-card > header > div { min-width: 0; }
+.goal-card h2 { font-size: 20px; margin: 6px 0 8px; }
+.goal-card > header p:not(.eyebrow) { color: var(--ink-soft); font-size: 13px; line-height: 1.7; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.goal-card > header > button { flex-shrink: 0; }
+.goal-progress { height: 5px; background: #eeeee8; border-radius: 8px; overflow: hidden; margin-top: 20px; }
+.goal-progress > span { display: block; background: #608169; height: 100%; }
+.roadmap-key, .goal-planning-note { color: var(--ink-soft); font-size: 12px; line-height: 1.6; margin: 16px 0; }
+.roadmap { list-style: none; margin: 0; padding: 0; }
+.roadmap-step { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; padding: 16px 0; border-top: 1px solid var(--line); }
+.roadmap-step__number { display: flex; justify-content: center; align-items: center; width: 28px; height: 28px; border-radius: 50%; background: #f0f1e9; color: #53725a; font-size: 12px; }
+.roadmap-step__title { display: flex; align-items: center; gap: 8px; text-align: left; padding: 4px 0; font-size: 14px; }
+.roadmap-step__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 8px; color: var(--ink-soft); font-size: 12px; }
+.roadmap-step__meta > button { text-align: left; text-decoration: underline; text-underline-offset: 3px; }
+.roadmap-artifacts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.roadmap-artifacts > button { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; text-align: left; font-size: 12px; }
+.roadmap-artifacts small { display: block; color: var(--ink-soft); margin-top: 3px; }
+.triage-outcome { border-top: 1px solid var(--line); padding-top: 16px; font-size: 13px; line-height: 1.7; }
+@media (max-width: 760px) {
+  .active-work { padding: 12px 18px; }
+  .goal-card > header, .goal-composer__actions { flex-direction: column; }
+  .goal-composer, .goal-card { padding: 16px; }
+}
+
+@media (max-width: 850px) {
+  .nav-rail nav { width: 100%; }
+  .nav-rail nav > button { flex: 1; min-width: 0; width: 0; font-size: 10px; }
+}

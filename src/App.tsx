@@ -37,6 +37,7 @@ import {
   Slack,
   Sparkles,
   Trash2,
+  Target,
   UserCircle,
   Volume2,
   VolumeX,
@@ -70,13 +71,14 @@ import type {
   WorkItem,
 } from "./shared/types";
 
-type Tab = "office" | "tasks" | "inbox" | "calendar" | "routines" | "history" | "settings";
+type Tab = "goals" | "office" | "tasks" | "inbox" | "calendar" | "routines" | "history" | "settings";
 type Composer = { kind: "simulation" | "calendar" } | { kind: "message"; templateId?: string };
 type Toast = { id: number; message: string; tone: "error" | "success" };
 
 const NAV: { id: Tab; label: string; icon: typeof Building2 }[] = [
   { id: "office", label: "Office", icon: Building2 },
   { id: "inbox", label: "Inbox", icon: Inbox },
+  { id: "goals", label: "Goals", icon: Target },
   { id: "tasks", label: "Tasks", icon: CheckCircle2 },
   { id: "calendar", label: "Calendar", icon: CalendarDays },
   { id: "routines", label: "Routines", icon: Repeat2 },
@@ -257,6 +259,7 @@ function App() {
   const [fatalError, setFatalError] = useState("");
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [selectedWorkId, setSelectedWorkId] = useState<string>();
+  const [selectedTriageId, setSelectedTriageId] = useState<string>();
   const [selectedAgentId, setSelectedAgentId] = useState<string>();
   const [selectedArtifactId, setSelectedArtifactId] = useState<string>();
   const [routineOpen, setRoutineOpen] = useState(false);
@@ -377,6 +380,7 @@ function App() {
   );
 
   const openWork = useCallback((id: string) => {
+    setSelectedTriageId(snapshotRef.current?.triage.some(record => record.id === id) ? id : undefined);
     setSelectedAgentId(undefined);
     setSelectedArtifactId(undefined);
     setSelectedWorkId(id);
@@ -385,6 +389,7 @@ function App() {
   const openArtifact = useCallback(
     (id: string) => {
       const artifact = snapshot?.artifacts.find((item) => item.id === id);
+      setSelectedTriageId(undefined);
       setSelectedArtifactId(id);
       setSelectedAgentId(undefined);
       if (artifact) setSelectedWorkId(artifact.workId);
@@ -393,6 +398,7 @@ function App() {
   );
 
   const openSource = useCallback((id: string) => {
+    setSelectedTriageId(undefined);
     setSelectedWorkId(undefined);
     setSelectedAgentId(undefined);
     setSelectedArtifactId(undefined);
@@ -436,6 +442,7 @@ function App() {
   const attention = snapshot.work.filter(
     (work) => work.status === "failed" || work.status === "waiting",
   ).length;
+  const selectedTriage = snapshot.triage.find(record => record.id === selectedTriageId);
   const selectedWork = snapshot.work.find((work) => work.id === selectedWorkId) ||
     (selectedAgentId ? [...snapshot.work].reverse().find((work) => work.agentId === selectedAgentId) : undefined);
   const selectedAgent = selectedWork
@@ -574,6 +581,8 @@ function App() {
       </aside>
 
       <div className={`workspace workspace--${activeTab}`}>
+        <ActiveWork snapshot={snapshot} onOpenWork={openWork} />
+        {activeTab === "goals" && <GoalsView snapshot={snapshot} run={run} busy={busy} onOpenWork={openWork} onOpenArtifact={openArtifact} />}
         {activeTab === "office" && (
           <OfficeView
             snapshot={snapshot}
@@ -581,6 +590,9 @@ function App() {
             busy={busy}
             selectedAgentId={selectedAgentId}
             onSelectAgent={(id) => {
+              const triage = id === "agent-maya" ? [...snapshot.triage].sort((a, b) => Number(b.status === "running") - Number(a.status === "running") || b.createdAt - a.createdAt)[0] : undefined;
+              if (triage) { openWork(triage.id); return; }
+              setSelectedTriageId(undefined);
               setSelectedAgentId(id);
               setSelectedWorkId(
                 snapshot.agents.find((agent) => agent.id === id)?.workId,
@@ -645,7 +657,17 @@ function App() {
           }}
         />
       )}
-      {(selectedWork || selectedAgent) && (
+      {selectedTriage && <Modal title="Maya · Intake review" onClose={() => setSelectedTriageId(undefined)} wide>
+        <div className="agent-messages">
+          <h3>{snapshot.sources.find(source => source.id === selectedTriage.sourceId)?.title || "Incoming message"}</h3>
+          <p className="muted">{sentence(selectedTriage.status)} · {formatTime(selectedTriage.createdAt)}</p>
+          {selectedTriage.messages?.map(message => <article className="agent-message" key={message.id}><header><strong>Maya</strong><time>{formatTime(message.timestamp)}</time><span>{!message.complete ? selectedTriage.status === "running" ? "Writing…" : "Interrupted" : ""}</span></header><div className="markdown"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ({ children }) => <span>{children}</span> }}>{message.text}</ReactMarkdown></div></article>)}
+          {!selectedTriage.messages?.length && <p className="muted">{selectedTriage.status === "running" || selectedTriage.status === "queued" ? "Waiting for Maya's first message…" : "No agent messages were saved for this review."}</p>}
+          {(selectedTriage.error || selectedTriage.reason) && <p className={selectedTriage.error ? "field-error" : "triage-outcome"}>{selectedTriage.error || selectedTriage.reason}</p>}
+          {selectedTriage.workId && <button className="button button--primary" onClick={() => openWork(selectedTriage.workId!)}>Open linked task <ChevronRight size={15} /></button>}
+        </div>
+      </Modal>}
+      {!selectedTriage && (selectedWork || selectedAgent) && (
         <WorkDrawer key={selectedWork?.id || selectedAgent?.id}
           snapshot={snapshot}
           work={selectedWork}
@@ -686,6 +708,61 @@ type RunCommand = (
   key?: string,
   success?: string,
 ) => Promise<Snapshot | undefined>;
+
+function ActiveWork({ snapshot, onOpenWork }: { snapshot: Snapshot; onOpenWork: (id: string) => void }) {
+  const triage = snapshot.triage.filter(record => record.status === "running" || record.status === "queued");
+  const work = snapshot.work.filter(item => ["running", "queued", "waiting"].includes(item.status));
+  if (!triage.length && !work.length) return null;
+  return <section className="active-work" aria-label="Active AI work">
+    <strong><span className="live-dot" /> Active work <span>{triage.length + work.length}</span></strong>
+    <div>{triage.map(record => <button key={record.id} onClick={() => onOpenWork(record.id)}><StatusDot status={record.status} /><span><b>Maya · Intake</b><small>{snapshot.sources.find(source => source.id === record.sourceId)?.title || "Incoming message"}</small></span><span className="active-work__status">{record.status}</span><ChevronRight size={14} /></button>)}
+    {work.map(item => <button key={item.id} onClick={() => onOpenWork(item.id)}><StatusDot status={item.status} /><span><b>{snapshot.agents.find(agent => agent.id === item.agentId)?.name || "Unassigned"} · {item.scenario === "plan" ? "Planning" : item.routineId ? "Routine" : "Task"}</b><small>{item.title}</small></span><span className="active-work__status">{item.status}</span><ChevronRight size={14} /></button>)}</div>
+  </section>;
+}
+
+const STARTER_GOAL = "Create a Q3 business review from the bundled sales, campaign, and support CSVs. Analyze revenue and margins, campaign performance, and support trends in parallel. Then combine the findings into a PDF report with evidence, priorities, and a recommended action plan.";
+
+function GoalsView({ snapshot, run, busy, onOpenWork, onOpenArtifact }: { snapshot: Snapshot; run: RunCommand; busy: string | null; onOpenWork: (id: string) => void; onOpenArtifact: (id: string) => void }) {
+  const [goal, setGoal] = useState("");
+  const signedIn = snapshot.auth.status === "signed-in";
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!goal.trim() || !signedIn || busy) return;
+    const result = await run({ type: "goal.create", goal: goal.trim() }, "goal.create", "Goal added. The planner will build its roadmap.");
+    if (result) setGoal("");
+  };
+  return <div className="page page--goals">
+    <PageHeader eyebrow="Give the office a goal" title="Goals" description="A planner breaks your goal into tasks, assigns workers, and connects the steps that depend on each other." />
+    <form className="goal-composer" onSubmit={submit}>
+      <label htmlFor="new-goal">What do you want to accomplish?</label>
+      <textarea id="new-goal" rows={3} required maxLength={20000} value={goal} onChange={event => setGoal(event.target.value)} placeholder="Describe the outcome and what a useful result should include." />
+      <div className="goal-composer__actions"><button type="button" className="button button--quiet" onClick={() => setGoal(STARTER_GOAL)}>Use Q3 business review example</button><button className="button button--primary" disabled={busy !== null || !signedIn || !goal.trim()}><Target size={15} />{busy === "goal.create" ? "Adding goal…" : "Build roadmap"}</button></div>
+      <p className="muted">Includes the bundled sales, campaign, and support CSVs. Planning and tasks use your ChatGPT allowance.</p>
+      {!signedIn && <p className="field-error">Sign in with ChatGPT in Settings to start a goal.</p>}
+    </form>
+    <div className="goal-list">{[...(snapshot.goals || [])].reverse().map(item => {
+      const planner = snapshot.work.find(work => work.id === item.plannerWorkId);
+      const steps = snapshot.work.filter(work => work.goalId === item.id && work.scenario !== "plan");
+      const complete = steps.filter(work => work.status === "completed").length;
+      return <article className="goal-card" key={item.id}>
+        <header><div><p className="eyebrow">{steps.length ? `${complete} of ${steps.length} steps complete` : "Planning roadmap"}</p><h2>{item.title}</h2><p>{item.goal}</p></div>{planner && <button className="button button--quiet" onClick={() => onOpenWork(planner.id)}><Sparkles size={15} />Planner · {planner.status}<ChevronRight size={14} /></button>}</header>
+        {steps.length > 0 ? <><div className="goal-progress" role="progressbar" aria-label={`${item.title} progress`} aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={complete}><span style={{ width: `${complete / steps.length * 100}%` }} /></div><p className="roadmap-key">Independent steps can run in parallel. Dependent steps wait for their prerequisites.</p><ol className="roadmap">{steps.map((step, index) => {
+          const dependencies = (step.dependsOnWorkIds || []).map(id => snapshot.work.find(work => work.id === id)).filter((work): work is WorkItem => Boolean(work));
+          const artifacts = snapshot.artifacts.filter(artifact => artifact.workId === step.id);
+          const agent = snapshot.agents.find(agent => agent.id === step.agentId);
+          return <li className="roadmap-step" key={step.id}>
+            <span className="roadmap-step__number">{step.status === "completed" ? <Check size={16} /> : index + 1}</span>
+            <div><button className="roadmap-step__title" onClick={() => onOpenWork(step.id)}><strong>{step.title}</strong><ChevronRight size={15} /></button>
+            <div className="roadmap-step__meta"><span className={`status-label status-label--${step.status}`}><StatusDot status={step.status} />{sentence(step.status)}</span><span>{agent?.name || "Awaiting worker"}</span><span>{dependencies.length ? "After" : "Independent · Can run in parallel"}</span>{dependencies.map(dependency => <button key={dependency.id} onClick={() => onOpenWork(dependency.id)}>{dependency.title}</button>)}</div>
+            {artifacts.length > 0 && <div className="roadmap-artifacts">{artifacts.map(artifact => <button key={artifact.id} onClick={() => onOpenArtifact(artifact.id)}><ArtifactGlyph artifact={artifact} /><span>{artifact.title}{artifact.kind === "patch" && artifact.simulated && <small>Simulated PR</small>}</span><ChevronRight size={14} /></button>)}</div>}
+            </div>
+          </li>;
+        })}</ol></> : <p className="goal-planning-note">{planner?.status === "failed" ? "Planning failed. Open the planner to inspect its messages and retry." : planner?.status === "cancelled" ? "Planning was cancelled. Open the planner to retry." : "The roadmap will appear after the planner saves its tasks. Open the planner to follow its messages."}</p>}
+      </article>;
+    })}</div>
+    {!snapshot.goals?.length && <EmptyState icon={<Target size={24} />} title="One goal, a team of workers" body="Try the Q3 review example to see parallel analysis followed by a combined report." />}
+  </div>;
+}
 
 function OfficeView({
   snapshot,
@@ -1204,6 +1281,7 @@ function SimulationModal({ snapshot, run, busy, onClose, onMessage, onCalendar, 
       <div className="simulation-create">
         <button aria-label="New incoming message" onClick={onMessage}><span className="simulation-create__icon"><Mail size={20} /></span><span><strong>New incoming message</strong><small>Write an email, chat message, or issue.</small></span><Plus size={17} /></button>
         <button aria-label="New calendar event" onClick={onCalendar}><span className="simulation-create__icon"><CalendarDays size={20} /></span><span><strong>New calendar event</strong><small>Add a meeting and let the office prepare.</small></span><Plus size={17} /></button>
+        {entries.some(entry => entry.id === "arrival-checkout-regression") && <button aria-label="Slack bug to simulated PR" disabled={entries.find(entry => entry.id === "arrival-checkout-regression")?.delivered} onClick={() => onTemplate("arrival-checkout-regression")}><span className="simulation-create__icon"><Code2 size={20} /></span><span><strong>Slack bug → simulated PR</strong><small>Fix real checkout code and review the local diff.</small></span><ChevronRight size={17} /></button>}
       </div>
       <label className="simulation-connection"><span>Connection</span><select aria-label="Arrival connection" value={connection} onChange={event => setConnection(event.target.value as Source | "all")}><option value="all">All connections · {entries.length}</option>{SOURCES.map(source => <option key={source.id} value={source.id}>{source.label} · {entries.filter(entry => entry.source === source.id).length}</option>)}</select></label>
       <div className="simulation-tabs" role="tablist" aria-label="Arrival templates">
@@ -1289,14 +1367,14 @@ function SourceTriage({ snapshot, sourceId, onOpenWork }: { snapshot: Snapshot; 
   const record = [...snapshot.triage].reverse().find((item) => item.sourceId === sourceId);
   if (!record) return null;
   const work = snapshot.work.find((item) => item.id === record.workId);
-  return <div className={`triage-record triage-record--${record.status}`} role="status"><div><Sparkles size={16} /><strong>Codex triage</strong><span className="post-kind">{record.action || record.status}</span></div><p>{record.error || record.reason || (record.status === "running" ? "Reading the message and checking existing work…" : "Waiting for Codex to review this message.")}</p>{work && <button className="text-link" onClick={() => onOpenWork(work.id)}>{work.title}<ChevronRight size={14} /></button>}</div>;
+  return <div className={`triage-record triage-record--${record.status}`} role="status"><div><Sparkles size={16} /><strong>Codex triage</strong><span className="post-kind">{record.action || record.status}</span></div><p>{record.error || record.reason || (record.status === "running" ? "Reading the message and checking existing work…" : "Waiting for Codex to review this message.")}</p><button className="text-link" onClick={() => onOpenWork(record.id)}>View agent messages<ChevronRight size={14} /></button>{work && <button className="text-link" onClick={() => onOpenWork(work.id)}>{work.title}<ChevronRight size={14} /></button>}</div>;
 }
 
 function TriageQueue({ snapshot, onOpenWork }: { snapshot: Snapshot; onOpenWork: (id: string) => void }) {
   const pending = snapshot.triage.filter((record) => record.status === "queued" || record.status === "running").length;
   const recent = [...snapshot.triage].sort((a, b) => Number(b.status === "running") - Number(a.status === "running") || b.createdAt - a.createdAt).slice(0, 3);
   if (!recent.length) return null;
-  return <section className="triage-feed" aria-label="Triage decisions"><h2><Sparkles size={15} /> At the intake desk{pending > 0 && <span className="muted"> · {pending} in review</span>}</h2>{recent.map((record) => <div key={record.id}><span className={`status-label status-label--${record.status}`}><StatusDot status={record.status} />{record.action || record.status}</span><span><strong>{snapshot.sources.find((source) => source.id === record.sourceId)?.title || "Incoming message"}</strong><small>{record.error || record.reason || "Codex is reviewing this trigger."}</small></span>{record.workId && <button className="button button--quiet" onClick={() => onOpenWork(record.workId!)}>Task <ChevronRight size={14} /></button>}</div>)}</section>;
+  return <section className="triage-feed" aria-label="Triage decisions"><h2><Sparkles size={15} /> At the intake desk{pending > 0 && <span className="muted"> · {pending} in review</span>}</h2>{recent.map((record) => <div key={record.id}><span className={`status-label status-label--${record.status}`}><StatusDot status={record.status} />{record.action || record.status}</span><span><strong>{snapshot.sources.find((source) => source.id === record.sourceId)?.title || "Incoming message"}</strong><small>{record.error || record.reason || "Codex is reviewing this trigger."}</small></span><button className="button button--quiet" onClick={() => onOpenWork(record.id)}>Messages <ChevronRight size={14} /></button></div>)}</section>;
 }
 
 function WorkContext({ snapshot, work, onOpenWork, onOpenSource, onOpenArtifact }: { snapshot: Snapshot; work: WorkItem; onOpenWork: (id: string) => void; onOpenSource: (id: string) => void; onOpenArtifact: (id: string) => void }) {
@@ -2466,7 +2544,7 @@ function ArtifactPreview({
         <div>
           <p className="eyebrow">
             {sentence(artifact.kind)}
-            {artifact.simulated ? " · Simulated" : ""}
+            {artifact.simulated ? artifact.kind === "patch" && snapshot.work.some(work => work.id === artifact.workId && work.mode === "live") ? " · Real code · Simulated PR" : " · Simulated" : ""}
           </p>
           <h3>{artifact.title}</h3>
         </div>
@@ -2476,7 +2554,7 @@ function ArtifactPreview({
           </button>
         )}
       </header>
-      {artifact.kind === "patch" ? (
+      {artifact.kind === "patch" && !artifact.title.startsWith("Simulated PR:") ? (
         <pre>
           <code>{artifact.content}</code>
         </pre>
