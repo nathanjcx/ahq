@@ -2,7 +2,7 @@ import type { NewsCollection } from './news';
 export type Source = 'gmail' | 'calendar' | 'slack' | 'linear' | 'asana';
 export type ActivityKind = 'idle' | 'walking' | 'reading' | 'researching' | 'drafting' | 'coding' | 'scheduling' | 'collaborating' | 'waiting' | 'celebrating';
 export type WorkStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'waiting';
-export type Scenario = 'report' | 'bug' | 'meeting' | 'dinner' | 'qa';
+export type Scenario = 'report' | 'bug' | 'meeting' | 'dinner' | 'qa' | 'plan';
 export interface SourceAttachment { id: string; name: string; mediaType: string; content: string }
 export interface SourceItem {
   id: string; source: Source; externalId: string; threadId: string; author: string;
@@ -13,7 +13,7 @@ export interface SourceItem {
 export interface TriageRecord {
   id: string; sourceId: string; status: 'queued' | 'running' | 'completed' | 'failed';
   createdAt: number; completedAt?: number; action?: 'ignore' | 'create' | 'attach' | 'wait';
-  reason?: string; workId?: string; error?: string; threadId?: string; turnId?: string;
+  reason?: string; workId?: string; error?: string; threadId?: string; turnId?: string; messages?: AgentMessage[];
 }
 export interface ReplayEntry { id: string; label: string; source: Source; delivered: boolean; item?: SourceItem }
 export interface Agent {
@@ -28,7 +28,7 @@ export interface WorkItem {
   mode: 'demo' | 'live'; error?: string; routineId?: string;
   triggerSourceId?: string; parentWorkId?: string; dependsOnWorkIds?: string[];
   inputArtifactIds?: string[]; blockedReason?: string; needsInformation?: boolean; followUpOf?: string;
-  calendarDraft?: CalendarEvent;
+  calendarDraft?: CalendarEvent; goalId?: string;
 }
 export interface AgentMessage { id: string; text: string; complete: boolean; timestamp: number }
 export interface Run {
@@ -65,7 +65,11 @@ export interface AuthState {
   status: 'checking' | 'unavailable' | 'signed-out' | 'signing-in' | 'signed-in' | 'error';
   email?: string; plan?: string; method?: string; error?: string; loginUrl?: string;
 }
+export interface Goal {
+  id: string; title: string; goal: string; plannerWorkId: string; createdAt: number; attachments?: SourceAttachment[];
+}
 export interface Snapshot {
+  goals?: Goal[];
   revision: number; sources: SourceItem[]; agents: Agent[]; work: WorkItem[]; runs: Run[];
   activity: ActivityEvent[]; artifacts: Artifact[]; board: BoardPost[]; routines: Routine[];
   calendar: CalendarEvent[]; auth: AuthState; triage: TriageRecord[];
@@ -74,6 +78,7 @@ export interface Snapshot {
 }
 export type Command =
   | { type: 'snapshot' }
+  | { type: 'goal.create'; goal: string; attachments?: SourceAttachment[] }
   | { type: 'auth.refresh' | 'auth.login' | 'auth.cancel' | 'auth.logout' }
   | { type: 'demo.play' | 'demo.pause' | 'demo.next' | 'demo.reset' }
   | { type: 'demo.speed'; speed: number }

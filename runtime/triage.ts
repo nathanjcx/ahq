@@ -44,7 +44,7 @@ export function parseTriageDecision(message: string, state: Snapshot, sourceId: 
   if (!['ignore', 'create', 'attach', 'wait'].includes(String(item.action))
     || stringFields.some((key) => typeof item[key] !== 'string' || (item[key] as string).length > 8_000)
     || !String(item.reason).trim()
-    || (item.scenario !== null && !scenarios.includes(item.scenario as Scenario))
+    || (item.scenario !== null && !scenarios.some(scenario => scenario === item.scenario))
     || (item.workId !== null && typeof item.workId !== 'string')
     || typeof item.needsInformation !== 'boolean' || typeof item.requiresFollowUp !== 'boolean'
     || !Array.isArray(item.sourceIds) || !Array.isArray(item.dependsOnWorkIds)) throw new Error('Triage returned an invalid decision');

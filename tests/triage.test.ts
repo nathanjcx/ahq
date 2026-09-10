@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { parseRoadmap } from '../runtime/goals';
+import { SnapshotStore } from '../runtime/store';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -58,6 +60,12 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', (l
       config.needsInformation = !bug; config.dependsOnWorkIds = bug ? [bug.id] : [];
     }
     output = config.invalid ? 'not json' : JSON.stringify(config);
+  } else if (message.params.outputSchema?.properties?.steps) {
+    output = JSON.stringify({ steps: [
+      { id: 'sales', title: 'Sales analysis', goal: 'slow-work: analyze sales.csv', scenario: 'report', dependsOn: [] },
+      { id: 'campaigns', title: 'Campaign analysis', goal: 'slow-work: analyze campaigns.csv', scenario: 'report', dependsOn: [] },
+      { id: 'summary', title: 'Combined review', goal: 'Synthesize the completed analyses', scenario: 'meeting', dependsOn: ['sales', 'campaigns'] },
+    ] });
   } else {
     const cwd = message.params.cwd;
     if (prompt.includes('patch.md')) {
@@ -416,4 +424,42 @@ test('calendar preparation carries its CSV and completed report, and repeated cl
     assert.ok(state.calendar.find(event => event.id === 'calendar-review-sales')!.sourceIds.includes(id));
     await assert.rejects(app.office.command({ type: 'calendar.prepare', id: 'calendar-focus' }), /not a meeting/);
   } finally { await app.close(); }
+});
+
+
+test('goal planning runs independent steps together and passes their artifacts into synthesis', async () => {
+  const app = await setup();
+  try {
+    await app.office.command({ type: 'goal.create', goal: 'Prepare a business review from sales and campaign data.' });
+    await waitFor(() => app.office.snapshot().work.filter(work => work.goalId && work.scenario === 'report' && work.status === 'running').length === 2);
+    const running = app.office.snapshot();
+    const goal = running.goals![0];
+    const summary = running.work.find(work => work.goalId === goal.id && work.scenario === 'meeting')!;
+    assert.equal(summary.status, 'waiting');
+    assert.equal(summary.dependsOnWorkIds?.length, 2);
+    await waitFor(() => app.office.snapshot().work.find(work => work.id === summary.id)?.status === 'completed');
+    const state = app.office.snapshot();
+    const work = state.work.find(work => work.id === summary.id)!;
+    assert.equal(work.inputArtifactIds?.length, 2);
+    const evidence = await readFile(path.join(state.runs.find(run => run.workId === work.id)!.workspace!, 'evidence.md'), 'utf8');
+    assert.match(evidence, /Sales analysis/);
+    assert.match(evidence, /Campaign analysis/);
+    assert.match(evidence, /sales.csv/);
+    const plannerRun = state.runs.find(run => run.workId === goal.plannerWorkId)!;
+    assert.ok(plannerRun.messages?.some(message => message.complete && message.text.includes('steps')));
+    assert.equal(new Set(state.work.filter(work => work.goalId).map(work => work.agentId)).size, 4);
+    const store = await SnapshotStore.open(app.dataDir);
+    assert.deepEqual(store.load()?.goals, state.goals);
+    store.close();
+  } finally { await app.close(); }
+});
+
+test('roadmaps reject unknown dependencies, cycles, duplicate IDs and QA without a fix', () => {
+  const step = { id: 'a', title: 'A', goal: 'Analyze data', scenario: 'report', dependsOn: [] };
+  const parse = (steps: unknown[]) => parseRoadmap(JSON.stringify({ steps }));
+  assert.throws(() => parse([{ ...step, dependsOn: ['missing'] }]), /unknown dependency/);
+  assert.throws(() => parse([{ ...step, dependsOn: ['b'] }, { ...step, id: 'b', dependsOn: ['a'] }]), /cycle/);
+  assert.throws(() => parse([step, step]), /unique/);
+  assert.throws(() => parse([{ ...step, scenario: 'qa' }]), /must depend/);
+  assert.throws(() => parse(Array.from({ length: 7 }, (_, i) => ({ ...step, id: String(i) }))), /one to six/);
 });
