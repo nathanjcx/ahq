@@ -1,0 +1,73 @@
+{
+  "name": "astra-hq",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A little space for big things. Your AI workforce, together.",
+  "type": "module",
+  "main": "dist-desktop/main.cjs",
+  "author": "Astra HQ",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build:desktop": "node desktop/build.mjs",
+    "dev:desktop": "npm run build:desktop && concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env AHQ_DEV_URL=http://127.0.0.1:5173 electron .\"",
+    "build": "tsc -b && vite build && npm run build:desktop",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "tsx --test tests/*.test.ts",
+    "package": "npm run build && electron-builder --dir",
+    "dist:mac": "npm run build && electron-builder --mac dmg",
+    "format": "prettier --write src shared desktop tests *.json *.ts *.html README.md docs",
+    "check": "npm test && npm run build",
+    "install:desktop": "node node_modules/electron/install.js"
+  },
+  "build": {
+    "appId": "com.astra.hq",
+    "productName": "Astra HQ",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-desktop/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg"
+      ],
+      "icon": "assets/app.icns",
+      "identity": "-",
+      "notarize": false
+    },
+    "npmRebuild": false
+  },
+  "dependencies": {
+    "@fontsource/dm-sans": "^5.3.0",
+    "@fontsource/dm-serif-display": "^5.3.0",
+    "@react-three/drei": "^10.7.8",
+    "@react-three/fiber": "^9.7.0",
+    "lucide-react": "^1.44.0",
+    "react": "~19.2.0",
+    "react-dom": "~19.2.0",
+    "three": "^0.186.0",
+    "zod": "^4.6.1"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/node": "^24.13.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.185.4",
+    "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^10.0.5",
+    "cross-env": "^10.1.0",
+    "electron": "^44.3.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "prettier": "^3.9.6",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "wait-on": "^9.1.0"
+  }
+}
