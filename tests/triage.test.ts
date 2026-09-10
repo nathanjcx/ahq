@@ -72,7 +72,8 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', (l
     if (message.params.outputSchema?.properties?.start) output = fs.readFileSync(path.join(cwd, 'evidence.md'), 'utf8').split('Validated calendar proposal: ')[1].split('\\n')[0];
   }
   reply({ turn: { id: turnId } });
-  setTimeout(() => send({ method: 'turn/completed', params: { threadId: message.params.threadId, turn: { id: turnId, status: 'completed', items: [{ type: 'agentMessage', text: output }] } } }), delay);
+  const failed = !prompt.startsWith('You are Maya') && prompt.includes('fail-work');
+  setTimeout(() => send({ method: 'turn/completed', params: { threadId: message.params.threadId, turn: { id: turnId, status: failed ? 'failed' : 'completed', error: failed ? { message: 'Fixture execution failed' } : null, items: [{ type: 'agentMessage', text: output }] } } }), delay);
 });
 `, { mode: 0o700 });
   process.env.CODEX_BIN = executable;
@@ -173,6 +174,11 @@ test('a corrected running task gets one follow-up and a completed meeting refres
     assert.ok(refreshed.dependsOnWorkIds?.includes(corrected.id));
     assert.ok(state.artifacts.find((artifact) => artifact.workId === refreshed.id)?.supersedesArtifactId);
     assert.equal(state.work.filter((work) => work.followUpOf === report.id).length, 1);
+    await app.office.command({ type: 'source.ingest', item: source('second-correction', { action: 'attach', workId: report.id, requiresFollowUp: true, title: 'Apply the final customer correction' }) });
+    await waitFor(() => app.office.snapshot().work.some((work) => work.followUpOf === refreshed.id && work.status === 'completed'));
+    const revisedAgain = app.office.snapshot().work.find((work) => work.followUpOf === corrected.id)!;
+    const meetingAgain = app.office.snapshot().work.find((work) => work.followUpOf === refreshed.id)!;
+    assert.ok(meetingAgain.dependsOnWorkIds?.includes(revisedAgain.id));
   } finally { await app.close(); }
 });
 
@@ -263,5 +269,32 @@ test('automatic playback waits for intake and calendar creation triggers actual 
     assert.match(evidence, /sources\//);
     assert.match(evidence, /attachments\//);
     assert.match(app.office.snapshot().artifacts.find((artifact) => artifact.workId === work.id)!.content, /Customer review/);
+  } finally { await app.close(); }
+});
+
+test('failed prerequisites stay blocked across restart and interrupted triage remains retryable', async () => {
+  const app = await setup();
+  try {
+    await app.office.command({ type: 'source.ingest', item: source('failed-parent', { goal: 'fail-work report' }) });
+    await waitFor(() => app.office.snapshot().work.find((work) => work.triggerSourceId === 'failed-parent')?.status === 'failed');
+    const parent = app.office.snapshot().work.find((work) => work.triggerSourceId === 'failed-parent')!;
+    await app.office.command({ type: 'source.ingest', item: source('blocked-meeting', { scenario: 'meeting', dependsOnWorkIds: [parent.id] }) });
+    await settled(app.office, 'blocked-meeting');
+    const child = app.office.snapshot().work.find((work) => work.triggerSourceId === 'blocked-meeting')!;
+    assert.equal(child.status, 'waiting');
+    assert.match(child.blockedReason!, /failed/);
+    await app.office.command({ type: 'source.ingest', item: source('interrupted-intake', {}, { delay: 1_000 }) });
+    await waitFor(() => app.office.snapshot().triage.some((record) => record.sourceId === 'interrupted-intake' && record.status === 'running'));
+    await app.office.close();
+    const reopened = await createRuntime({ dataDir: app.dataDir, onSnapshot: () => undefined });
+    try {
+      const state = reopened.snapshot();
+      assert.equal(state.work.find((work) => work.id === child.id)!.status, 'waiting');
+      assert.equal(state.runs.filter((run) => run.workId === child.id).length, 0);
+      assert.ok(state.agents.find((agent) => agent.id === parent.agentId)!.retiredAt);
+      assert.equal(state.agents.find((agent) => agent.id === child.agentId)!.activity, 'waiting');
+      assert.equal(state.triage.find((record) => record.sourceId === 'interrupted-intake')!.status, 'failed');
+      assert.equal(state.sources.find((item) => item.id === 'interrupted-intake')!.disposition, 'error');
+    } finally { await reopened.close(); }
   } finally { await app.close(); }
 });

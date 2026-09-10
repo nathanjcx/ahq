@@ -111,7 +111,9 @@ class Runtime implements OfficeRuntime {
       for (const agent of state.agents) {
         agent.activity = 'idle';
         agent.statusText = 'Ready';
-        if (agent.workId && !state.work.some((work) => work.id === agent.workId)) delete agent.workId;
+        const work = state.work.find((work) => work.id === agent.workId);
+        if (agent.workId && !work) delete agent.workId;
+        if (agent.temporary && work && !activeStatus(work.status)) { agent.retiredAt ??= now; agent.statusText = `${work.title}: ${work.status}`; }
       }
       state.demo.playing = false;
     }
@@ -126,6 +128,7 @@ class Runtime implements OfficeRuntime {
       runtime.state.auth = { status: 'unavailable', error: safeError(error) };
     }
     runtime.refreshDependencies();
+    for (const work of runtime.state.work) runtime.syncSourceStatus(work);
     await runtime.persistAndEmit();
     runtime.routineTimer = setInterval(() => void runtime.checkRoutines(), 1_000);
     runtime.routineTimer.unref();
@@ -504,9 +507,14 @@ class Runtime implements OfficeRuntime {
       return;
     }
     let work = decision.workId ? requiredWork(this.state, decision.workId) : undefined;
-    if (work && decision.requiresFollowUp && ['running', 'completed'].includes(work.status)) {
-      const parent = work;
-      work = this.state.work.find((item) => item.followUpOf === parent.id && ['waiting', 'queued'].includes(item.status));
+    if (work && (decision.requiresFollowUp || decision.action === 'wait') && ['running', 'completed'].includes(work.status)) {
+      let parent = work;
+      for (;;) {
+        const next = [...this.state.work].reverse().find((item) => item.followUpOf === parent.id && !['failed', 'cancelled'].includes(item.status));
+        if (!next) break;
+        parent = next;
+      }
+      work = ['waiting', 'queued'].includes(parent.status) ? parent : undefined;
       if (!work) work = this.createTriggeredWork({
         ...decision, title: decision.title || `Update ${parent.title}`, goal: decision.goal || parent.goal,
         scenario: parent.scenario, sourceIds: [...new Set([...parent.sourceIds, ...decision.sourceIds])],
@@ -580,11 +588,11 @@ class Runtime implements OfficeRuntime {
   private refreshMeetingBriefs(changed: WorkItem): void {
     if (!changed.followUpOf || !['report', 'bug', 'qa'].includes(changed.scenario)) return;
     for (const meeting of [...this.state.work]) {
-      if (meeting.scenario !== 'meeting' || meeting.status !== 'completed' || meeting.followUpOf || !meeting.triggerSourceId
+      if (meeting.scenario !== 'meeting' || meeting.status !== 'completed' || !meeting.triggerSourceId
         || !meeting.dependsOnWorkIds?.includes(changed.followUpOf)) continue;
       if (this.state.work.some((item) => item.followUpOf === meeting.id && item.dependsOnWorkIds?.includes(changed.id))) continue;
       this.createTriggeredWork({ action: 'create', reason: 'A prerequisite result changed after this meeting brief was written.', scenario: 'meeting',
-        title: `Refresh ${meeting.title}`, goal: `${meeting.goal} Update the brief using the revised prerequisite results.`, workId: null,
+        title: `Refresh ${meeting.title.replace(/^Refresh /, '')}`, goal: `${meeting.goal} Update the brief using the revised prerequisite results.`, workId: null,
         sourceIds: [...meeting.sourceIds], dependsOnWorkIds: meeting.dependsOnWorkIds.map((id) => id === changed.followUpOf ? changed.id : id),
         needsInformation: false, requiresFollowUp: false, calendarDraft: null,
       }, meeting.triggerSourceId, meeting.id);
@@ -739,7 +747,7 @@ class Runtime implements OfficeRuntime {
         : work.triggerSourceId ? undefined : [...this.state.work].reverse().find((item) => item.scenario === 'bug' && item.mode === 'live' && item.status === 'completed');
       const fixedWorkspace = fixedWork && latestRun(this.state, fixedWork.id)?.workspace;
       if (work.scenario === 'qa' && work.parentWorkId && !fixedWorkspace) throw new Error('The prerequisite fix has no executable workspace. Run its fix in live mode before live QA.');
-      await copyBugFixture(work.scenario === 'qa' && fixedWorkspace ? fixedWorkspace : this.bugTemplate, workspace);
+      await copyBugFixture(fixedWorkspace && (work.scenario === 'qa' || work.followUpOf) ? fixedWorkspace : this.bugTemplate, workspace);
     } else await mkdir(workspace, { recursive: true });
     await writeLiveEvidence(work, workspace, this.state);
     await this.mutate(() => {
