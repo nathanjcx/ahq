@@ -1499,7 +1499,15 @@ function EmployeeAvatar({
               boxShadow: `0 0 8px ${employee.color}60`,
             }}
           />
-          {employee.name.split(' ')[0]}
+          <span
+            className="person-identity"
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}
+          >
+            <span>{employee.name.split(' ')[0]}</span>
+            <span className="person-role" style={{ fontSize: 10, fontWeight: 400, opacity: 0.85 }}>
+              {employee.role}
+            </span>
+          </span>
           {(listening || employee.status === 'working') && (
             <span
               className="pixel-work-indicator"

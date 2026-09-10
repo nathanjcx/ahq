@@ -1,7 +1,7 @@
 .office-review-marker {
   position: relative;
-  /* Keep a clear gap above the name label at every office zoom level. */
-  top: -46px;
+  /* Keep a clear gap above the two-line name and role label at every office zoom level. */
+  top: -54px;
   display: grid;
   width: 38px;
   height: 42px;
