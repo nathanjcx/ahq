@@ -56,4 +56,33 @@ node scripts/demo-trigger.mjs launch retry investor --connection "$AHQ_DEMO_CONN
 
 Restore only after active work has finished or stopped. It retains prior session history and files. Advancing after restore creates a fresh arrival and consumes Codex allowance again; restoring alone does not. For a 60-second recording, rehearse the complete flow once, then use checkpoints to capture individual scenes and trim the waits.
 
-See [recording-demo.md](docs/recording-demo.md) for custom email/Slack/calendar triggers and attachment formats. Implementation checks cover the story with injected model responses and the real product build/fix in Electron; a complete live Codex rehearsal has not yet been performed.
+See [recording-demo.md](docs/recording-demo.md) for custom email/Slack/calendar triggers and attachment formats. A complete live Codex rehearsal passed on September 10, 2026; results are below.
+
+
+## Verified live rehearsal
+
+The packaged Linux Electron app completed all five scenes using the signed-in ChatGPT account and real Codex sessions. The run took about ten minutes, including a product retry after fixing packaging. The 60-second shot list still requires cutting generation waits.
+
+- Launch: real planner, three independent workers, marketing brief, baseline CSV/PDF, and a built preview of the pinned 2D app.
+- Investor: real triage and a new finance worker; six-month revenue changed from $11,388 to $9,360. The original CSV stayed byte-identical. Both three-page PDFs were visually inspected.
+- Slack: real triage, screenshot input, actual CSS change, and simulated PR. Electron verified the fixed action at 960 × 720 and clicked it to open the composer.
+- Reporter: real triage and meeting brief containing the revised figures, tested-fix details, reporter questions, and slogans from the marketing kit.
+- Celebration: all scenes completed, the actual UI celebration event fired, confetti appeared, and no agents remained active. Worker messages and artifacts stayed available afterward.
+
+The rehearsal found and fixed two packaging failures: copying source/dependencies out of ASAR and spawning esbuild from inside ASAR. Setup failures now produce visible failed sessions; paused launch dispatches no longer look indefinitely running. Verification also passed 45 targeted tests and the native build/fix test against the packaged archive.
+
+On the rehearsal machine, reopen the completed run with:
+
+```bash
+env -u ELECTRON_RUN_AS_NODE ./release/little-office-launch/astra-hq \
+  --user-data-dir="$HOME/.local/share/ahq-launch-rehearsal"
+```
+
+Use that directory's `demo-connection.json` for CLI triggers. Select **Restore a checkpoint** for retakes; restoring does not start Codex, but advancing an earlier scene does. The completed run has no background generation running.
+
+To repeat the packaged native check after packaging:
+
+```bash
+AHQ_PACKAGED_APP="$PWD/release/linux-unpacked/resources/app.asar" \
+  npx tsx --test tests/little-office.test.ts
+```
