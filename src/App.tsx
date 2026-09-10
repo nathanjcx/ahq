@@ -1152,6 +1152,7 @@ function InboxView({
                   </span>
                 </div>
               )}
+              {snapshot.auth.status !== "signed-in" && <p className="field-error">Sign in with ChatGPT in Settings to triage this message.</p>}
               <div className="detail-actions">
                 <button
                   className="button button--primary"
@@ -1247,9 +1248,10 @@ function SourceTriage({ snapshot, sourceId, onOpenWork }: { snapshot: Snapshot; 
 }
 
 function TriageQueue({ snapshot, onOpenWork }: { snapshot: Snapshot; onOpenWork: (id: string) => void }) {
-  const recent = [...snapshot.triage].sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
+  const pending = snapshot.triage.filter((record) => record.status === "queued" || record.status === "running").length;
+  const recent = [...snapshot.triage].sort((a, b) => Number(b.status === "running") - Number(a.status === "running") || b.createdAt - a.createdAt).slice(0, 3);
   if (!recent.length) return null;
-  return <section className="triage-feed" aria-label="Triage decisions"><h2><Sparkles size={15} /> At the intake desk</h2>{recent.map((record) => <div key={record.id}><span className={`status-label status-label--${record.status}`}><StatusDot status={record.status} />{record.action || record.status}</span><span><strong>{snapshot.sources.find((source) => source.id === record.sourceId)?.title || "Incoming message"}</strong><small>{record.error || record.reason || "Codex is reviewing this trigger."}</small></span>{record.workId && <button className="button button--quiet" onClick={() => onOpenWork(record.workId!)}>Task <ChevronRight size={14} /></button>}</div>)}</section>;
+  return <section className="triage-feed" aria-label="Triage decisions"><h2><Sparkles size={15} /> At the intake desk{pending > 0 && <span className="muted"> · {pending} in review</span>}</h2>{recent.map((record) => <div key={record.id}><span className={`status-label status-label--${record.status}`}><StatusDot status={record.status} />{record.action || record.status}</span><span><strong>{snapshot.sources.find((source) => source.id === record.sourceId)?.title || "Incoming message"}</strong><small>{record.error || record.reason || "Codex is reviewing this trigger."}</small></span>{record.workId && <button className="button button--quiet" onClick={() => onOpenWork(record.workId!)}>Task <ChevronRight size={14} /></button>}</div>)}</section>;
 }
 
 function WorkContext({ snapshot, work, onOpenWork, onOpenSource, onOpenArtifact }: { snapshot: Snapshot; work: WorkItem; onOpenWork: (id: string) => void; onOpenSource: (id: string) => void; onOpenArtifact: (id: string) => void }) {
@@ -2298,7 +2300,7 @@ function CalendarView({ snapshot, onOpenWork }: { snapshot: Snapshot; onOpenWork
           {linked.length > 0 && <div className="calendar-agenda__links">{linked.map((work) => <button className="text-link" key={work.id} onClick={() => onOpenWork(work.id)}><FileText size={14} />{work.title}<ChevronRight size={14} /></button>)}</div>}
         </article>;
       })}
-      {!events.length && <EmptyState icon={<CalendarDays size={24} />} title="A little breathing room" body="Run the dinner scenario to let an agent check availability and add an event here." />}
+      {!events.length && <EmptyState icon={<CalendarDays size={24} />} title="A little breathing room" body="Deliver a scheduling request from the Office or Inbox to let an agent check availability and prepare an event." />}
     </div>
   </div>;
 }
