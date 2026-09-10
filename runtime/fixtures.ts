@@ -41,7 +41,7 @@ export function initialSnapshot(now = Date.now()): Snapshot {
   ];
 
   return {
-    revision: 1, sources, agents, work: [{
+    revision: 1, sources, agents, triage: [], work: [{
       id: 'work-welcome', title: 'Prepare the office source digest', goal: 'Summarize the fictional office sources and prior checkout QA.',
       sourceIds: [], agentId: 'agent-maya', status: 'completed', scenario: 'report',
       createdAt: now - 23 * HOUR, completedAt: now - 20 * HOUR, mode: 'demo',
