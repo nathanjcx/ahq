@@ -48,7 +48,7 @@
     "asarUnpack": [
       "dist-desktop/transcribe",
       "node_modules/@esbuild/**/*",
-      "node_modules/esbuild/bin/**/*"
+      "node_modules/esbuild/**/*"
     ]
   },
   "dependencies": {

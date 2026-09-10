@@ -5,7 +5,6 @@ import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { build } from 'esbuild';
 import type { LocalTaskInput } from '../shared/demo';
 import { copyPackagedDirectory } from './copy-packaged-directory';
 
@@ -113,6 +112,9 @@ async function copyDependencies(workspace: string): Promise<string> {
 
 async function buildPreview(workspace: string): Promise<string> {
   const modules = await copyDependencies(workspace);
+  // Native subprocesses cannot execute inside Electron's ASAR archive.
+  const esbuildPath = require.resolve('esbuild').replace(/\.asar([\\/])/, '.asar.unpacked$1');
+  const { build } = require(esbuildPath) as typeof import('esbuild');
   const result = await build({
     entryPoints: [path.join(workspace, 'src/main.tsx')],
     bundle: true,
