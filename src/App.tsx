@@ -738,8 +738,8 @@ function OfficeView({
       <main className="office-main">
         <section className="office-intro">
           <div>
-            <p className="eyebrow">Your crew, at a glance</p>
-            <h1>A little help. A lot getting done.</h1>
+            <p className="eyebrow">Live office</p>
+            <h1>Your team at work</h1>
           </div>
           <div className="scenario-runner" id="scenario-runner">
             <label htmlFor="incoming-event">Deliver an incoming event</label>

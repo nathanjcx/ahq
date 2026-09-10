@@ -1,13 +1,8 @@
 :root {
   color: #183a35;
   background: #f7f5ec;
-  font-family:
-    Inter,
-    ui-sans-serif,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-ui);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   --paper: #f7f5ec;
@@ -76,7 +71,7 @@ p {
 h1,
 h2,
 h3 {
-  letter-spacing: -0.035em;
+  letter-spacing: -0.025em;
 }
 .sr-only {
   position: absolute;
@@ -94,10 +89,10 @@ h3 {
 }
 .eyebrow {
   color: #77908a;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-ui);
   font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.13em;
+  font-weight: 650;
+  letter-spacing: 0.08em;
   line-height: 1.4;
   text-transform: uppercase;
 }
@@ -117,7 +112,7 @@ h3 {
 }
 .boot-screen h1 {
   margin: 15px 0 5px;
-  font-family: Georgia, serif;
+  font-family: var(--font-ui);
   font-size: 30px;
 }
 .boot-screen p {
@@ -176,7 +171,7 @@ h3 {
   padding: 0;
   color: inherit;
   background: transparent;
-  font-family: Georgia, Cambria, serif;
+  font-family: var(--font-ui);
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -480,8 +475,8 @@ h3 {
 }
 .office-intro h1 {
   margin-top: 4px;
-  font-family: Georgia, Cambria, serif;
-  font-size: clamp(25px, 2.2vw, 35px);
+  font-family: var(--font-ui);
+  font-size: clamp(23px, 2vw, 29px);
   font-weight: 600;
   line-height: 1.05;
 }
@@ -849,8 +844,8 @@ select {
 }
 .panel-heading h2 {
   margin-top: 3px;
-  font-family: Georgia, serif;
-  font-size: 23px;
+  font-family: var(--font-ui);
+  font-size: 21px;
 }
 .count-pill {
   display: grid;
@@ -919,9 +914,9 @@ select {
 .board-post p {
   margin-top: 6px;
   color: #405d58;
-  font-family: Georgia, serif;
-  font-size: 13px;
-  line-height: 1.45;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.55;
 }
 .post-kind {
   padding: 2px 4px;
@@ -1051,9 +1046,9 @@ select {
 }
 .page-header h1 {
   margin: 3px 0 5px;
-  font-family: Georgia, serif;
-  font-size: 36px;
-  font-weight: 600;
+  font-family: var(--font-ui);
+  font-size: 30px;
+  font-weight: 650;
 }
 .page-header > div > p:last-child {
   color: var(--ink-soft);
@@ -1245,8 +1240,8 @@ select {
 }
 .message-detail__head h2 {
   margin: 4px 0 5px;
-  font-family: Georgia, serif;
-  font-size: 23px;
+  font-family: var(--font-ui);
+  font-size: 21px;
 }
 .message-detail__head > div > p:last-child {
   color: var(--ink-soft);
@@ -1297,9 +1292,9 @@ select {
 .message-copy {
   padding: 24px 3px;
   color: #354f4a;
-  font-family: Georgia, serif;
-  font-size: 15px;
-  line-height: 1.72;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.65;
   white-space: pre-wrap;
 }
 .evaluation-note {
@@ -1386,7 +1381,7 @@ select {
 }
 .routine-card__top h2 {
   margin: 6px 0 4px;
-  font-family: Georgia, serif;
+  font-family: var(--font-ui);
   font-size: 19px;
 }
 .routine-card__top p {
@@ -1421,7 +1416,7 @@ select {
   align-items: start;
   margin-top: 10px;
   color: #647672;
-  font-family: Georgia, serif;
+  font-family: var(--font-ui);
   font-size: 11px;
   line-height: 1.4;
 }
@@ -1544,7 +1539,7 @@ select {
 }
 .settings-card__intro h2 {
   margin-bottom: 3px;
-  font-family: Georgia, serif;
+  font-family: var(--font-ui);
   font-size: 19px;
 }
 .settings-card__intro p {
@@ -1684,7 +1679,7 @@ select {
 }
 .empty-state h3 {
   color: var(--ink);
-  font-family: Georgia, serif;
+  font-family: var(--font-ui);
   font-size: 17px;
 }
 .empty-state p {
@@ -1729,7 +1724,7 @@ select {
   backdrop-filter: blur(8px);
 }
 .modal__top h2 {
-  font-family: Georgia, serif;
+  font-family: var(--font-ui);
   font-size: 19px;
 }
 .form-stack {
@@ -1782,7 +1777,7 @@ select {
 }
 .drawer-identity h3 {
   margin: 3px 0;
-  font-family: Georgia, serif;
+  font-family: var(--font-ui);
   font-size: 21px;
 }
 .drawer-identity p:last-child {
@@ -2008,7 +2003,7 @@ select {
 }
 .artifact-preview h3 {
   margin-top: 3px;
-  font-family: Georgia, serif;
+  font-family: var(--font-ui);
   font-size: 19px;
 }
 .artifact-preview pre {
@@ -2027,7 +2022,7 @@ select {
 .markdown {
   padding: 6px 3px;
   color: #39534e;
-  font-family: Georgia, serif;
+  font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.62;
 }
@@ -2036,7 +2031,7 @@ select {
 .markdown h3 {
   margin: 17px 0 7px;
   color: var(--ink);
-  font-family: Georgia, serif;
+  font-family: var(--font-ui);
 }
 .markdown h1 {
   font-size: 22px;
@@ -2100,7 +2095,7 @@ select {
 }
 .calendar-card h4 {
   margin: 0 0 5px;
-  font-family: Georgia, serif;
+  font-family: var(--font-ui);
   font-size: 16px;
 }
 .calendar-card p {
@@ -2514,3 +2509,9 @@ select {
   .topbar__status { gap:6px; }
 }
 @media (max-width: 600px) { .calendar-time-row { flex-direction:column; } }
+
+.page-header h1, .office-intro h1, .panel-heading h2 { font-weight:650; }
+.message-detail__head h2, .settings-card h2, .modal-header h2 { font-weight:650; line-height:1.3; }
+.task-card__head strong { font-weight:650; line-height:1.4; }
+.button { transition:background-color .15s, border-color .15s, box-shadow .15s; }
+.button--primary:hover:not(:disabled) { box-shadow:0 3px 9px rgba(23,59,54,.14); }
