@@ -31,7 +31,6 @@ import {
   Search,
   Send,
   Settings as SettingsIcon,
-  ShieldCheck,
   Slack,
   Sparkles,
   StepForward,
@@ -455,9 +454,8 @@ function App() {
           <span>Little Office</span>
         </button>
         <div className="topbar__status">
-          <span className={`mode-badge mode-badge--${snapshot.settings.mode}`}>
-            {snapshot.settings.mode}
-          </span>
+          <span className="mode-badge">Demo data</span>
+          <span className="mode-badge mode-badge--live">Codex execution</span>
           <span className="workers">
             <span className="live-dot" />
             {activeWorkers} working
@@ -615,7 +613,7 @@ function App() {
           />
         )}
         {activeTab === "tasks" && <TasksView snapshot={snapshot} onOpenWork={openWork} onOpenSource={openSource} onOpenArtifact={openArtifact} />}
-        {activeTab === "calendar" && <CalendarView snapshot={snapshot} onOpenWork={openWork} />}
+        {activeTab === "calendar" && <CalendarView snapshot={snapshot} onOpenWork={openWork} run={run} busy={busy} />}
         {activeTab === "history" && (
           <HistoryView snapshot={snapshot} onOpenWork={openWork} />
         )}
@@ -701,7 +699,7 @@ function OfficeView({
   const replayEvents = snapshot.demo.events || [];
   const nextEvent = replayEvents.find((event) => event.id === eventId && !event.delivered) || replayEvents.find((event) => !event.delivered);
   const signedIn = snapshot.auth.status === "signed-in";
-  const visibleAgents = snapshot.agents.filter((agent) => !agent.retiredAt);
+  const visibleAgents = snapshot.agents.filter((agent) => !agent.retiredAt && (agent.temporary || agent.persistent || agent.id === "agent-maya" || agent.activity !== "idle"));
   const [boardText, setBoardText] = useState("");
   const active = visibleAgents.filter((agent) => agent.activity !== "idle");
   const resting = visibleAgents.filter((agent) => agent.activity === "idle");
@@ -755,7 +753,7 @@ function OfficeView({
           </div>
         </section>
 
-        <div className="triage-mode"><Sparkles size={15} /><span>Codex triage · {snapshot.settings.mode === "demo" ? "simulated execution" : "real Codex execution"}</span><small>{signedIn ? `${replayEvents.filter((event) => event.delivered).length} / ${replayEvents.length} events delivered` : "Sign in with ChatGPT in Settings to triage incoming events."}</small></div>
+        <div className="triage-mode"><Sparkles size={15} /><span>Demo data · Codex triage and execution</span><small>{signedIn ? `${replayEvents.filter((event) => event.delivered).length} / ${replayEvents.length} events delivered` : "Sign in with ChatGPT in Settings to triage incoming events."}</small></div>
         <TriageQueue snapshot={snapshot} onOpenWork={onOpenWork} />
         <section className="roster" aria-label="Agent roster">
           <span className="roster__label">In the office</span>
@@ -814,22 +812,22 @@ function OfficeView({
 
         <section className="playback">
           <div className="playback__controls">
-            <span className="eyebrow">{snapshot.settings.mode === "demo" ? "Demo playback" : "Switch to Demo for playback"}</span>
+            <span className="eyebrow">Incoming event replay</span>
             <button
               className="round-control round-control--play"
-              disabled={busy !== null || !signedIn || snapshot.settings.mode !== "demo"}
+              disabled={busy !== null || (!signedIn && !snapshot.demo.playing)}
               onClick={() =>
                 run({
                   type: snapshot.demo.playing ? "demo.pause" : "demo.play",
                 })
               }
-              aria-label={snapshot.demo.playing ? "Pause demo" : "Play demo"}
+              aria-label={snapshot.demo.playing ? "Pause replay" : "Play replay"}
             >
               {snapshot.demo.playing ? <Pause size={17} /> : <Play size={17} />}
             </button>
             <button
               className="round-control"
-              disabled={busy !== null || !signedIn || snapshot.settings.mode !== "demo"}
+              disabled={busy !== null || !signedIn}
               onClick={() => run({ type: "demo.next" })}
               aria-label="Deliver next event"
             >
@@ -837,14 +835,14 @@ function OfficeView({
             </button>
             <button
               className="round-control"
-              disabled={busy !== null || snapshot.settings.mode !== "demo"}
+              disabled={busy !== null}
               onClick={() => run({ type: "demo.reset" })}
-              aria-label="Reset demo"
+              aria-label="Reset demo data"
             >
               <RotateCcw size={15} />
             </button>
             <label className="speed-control">
-              Speed{" "}
+              Arrival speed{" "}
               <select
                 value={snapshot.demo.speed}
                 onChange={(event) =>
@@ -1276,7 +1274,7 @@ function TasksView({ snapshot, onOpenWork, onOpenSource, onOpenArtifact }: { sna
   return <div className="page page--tasks"><PageHeader eyebrow="From trigger to finished work" title="Tasks" description="See why work started, who picked it up, and what it produced." /><div className="task-filters" aria-label="Task status">{["all", "queued", "running", "waiting", "completed", "failed", "cancelled"].map((status) => <button key={status} className={filter === status ? "active" : ""} aria-pressed={filter === status} onClick={() => setFilter(status)}>{sentence(status)}<span>{snapshot.work.filter((work) => status === "all" || work.status === status).length}</span></button>)}</div><div className="task-cards">{tasks.map((work) => {
     const agent = snapshot.agents.find((item) => item.id === work.agentId);
     const artifacts = snapshot.artifacts.filter((item) => item.workId === work.id);
-    return <article key={work.id} className="task-card"><div className="task-card__head"><button onClick={() => onOpenWork(work.id)}><PixelAvatar agent={agent} size="sm" /><span><strong>{work.title}</strong><small>{agent?.name || "Unassigned"} · {agent?.temporary ? "Temporary worker" : "Recurring agent"}{agent?.retiredAt ? " · Retired" : ""}</small></span><ChevronRight size={17} /></button><span className={`status-label status-label--${work.status}`}><StatusDot status={work.status} />{work.status}</span></div><p>{work.goal}</p><WorkContext snapshot={snapshot} work={work} onOpenWork={onOpenWork} onOpenSource={onOpenSource} onOpenArtifact={onOpenArtifact} /><div className="task-card__foot"><span>{formatTime(work.createdAt)} · {work.mode === "demo" ? "Simulated execution" : "Codex execution"}</span>{artifacts.map((artifact) => <button key={artifact.id} className="text-link" onClick={() => onOpenArtifact(artifact.id)}><FileText size={14} />{artifact.title}</button>)}</div></article>;
+    return <article key={work.id} className="task-card"><div className="task-card__head"><button onClick={() => onOpenWork(work.id)}><PixelAvatar agent={agent} size="sm" /><span><strong>{work.title}</strong><small>{agent?.name || "Unassigned"} · {agent?.temporary ? "Temporary worker" : agent?.persistent ? "Recurring agent" : "Resident agent"}{agent?.retiredAt ? " · Retired" : ""}</small></span><ChevronRight size={17} /></button><span className={`status-label status-label--${work.status}`}><StatusDot status={work.status} />{work.status}</span></div><p>{work.goal}</p><WorkContext snapshot={snapshot} work={work} onOpenWork={onOpenWork} onOpenSource={onOpenSource} onOpenArtifact={onOpenArtifact} /><div className="task-card__foot"><span>{formatTime(work.createdAt)} · {work.mode === "demo" ? "Historical demo work" : "Codex execution"}</span>{artifacts.map((artifact) => <button key={artifact.id} className="text-link" onClick={() => onOpenArtifact(artifact.id)}><FileText size={14} />{artifact.title}</button>)}</div></article>;
   })}{!tasks.length && <EmptyState icon={<CheckCircle2 size={22} />} title="No tasks here yet" body="Deliver an incoming message. Codex will decide whether it needs a task." />}</div></div>;
 }
 
@@ -1739,7 +1737,7 @@ function SettingsView({
             <div>
               <h2>ChatGPT account</h2>
               <p>
-                Triage in both modes uses your ChatGPT sign-in. Authentication opens the
+                All triage and task execution use your ChatGPT sign-in. Authentication opens the
                 official flow.
               </p>
             </div>
@@ -1756,8 +1754,7 @@ function SettingsView({
                 <small>
                   {auth.plan
                     ? `${auth.plan} plan${auth.method ? ` · ${auth.method}` : ""}`
-                    : auth.error ||
-                      "Sign in to triage messages in either mode."}
+                    : auth.error || (auth.status === "signed-in" ? "Connected through local Codex." : "Sign in to triage messages and run tasks.")}
                 </small>
               </span>
             </div>
@@ -1843,45 +1840,14 @@ function SettingsView({
               <Gauge size={20} />
             </span>
             <div>
-              <h2>Work mode</h2>
-              <p>
-                Both modes use Codex to decide what needs work. Demo simulates task execution; Live executes tasks through Codex.
-              </p>
+              <h2>Real work, demo data</h2>
+              <p>Codex reviews incoming messages and executes every new task. A ChatGPT sign-in and internet connection are required.</p>
             </div>
           </div>
-          <div className="mode-options">
-            <button
-              className={snapshot.settings.mode === "demo" ? "active" : ""}
-              onClick={() =>
-                run({ type: "settings.update", settings: { mode: "demo" } })
-              }
-            >
-              <span className="mode-radio" />
-              <span>
-                <strong>Demo</strong>
-                <small>
-                  Codex triage with local simulated task execution.
-                </small>
-              </span>
-            </button>
-            <button
-              className={snapshot.settings.mode === "live" ? "active" : ""}
-              disabled={auth.status !== "signed-in"}
-              onClick={() =>
-                run({ type: "settings.update", settings: { mode: "live" } })
-              }
-            >
-              <span className="mode-radio" />
-              <span>
-                <strong>Live</strong>
-                <small>
-                  {auth.status === "signed-in"
-                    ? "Run work through your connected account."
-                    : "Sign in with ChatGPT to unlock live work."}
-                </small>
-              </span>
-              <ShieldCheck size={17} />
-            </button>
+          <div className="execution-details">
+            <div><Code2 size={18} /><span><strong>Real local files</strong><p>Reports, code changes, and verification results are written to task folders on this computer. Open the finished files from a task's artifacts.</p></span></div>
+            <div><Inbox size={18} /><span><strong>Fictional incoming data</strong><p>Replay prepared messages or write your own. Codex decides what deserves work, which existing task needs the context, and what to ignore.</p></span></div>
+            <div><CalendarDays size={18} /><span><strong>Local calendar and external actions</strong><p>Calendar changes stay inside Little Office. Invitations, messages, and pull requests are not published to external services.</p></span></div>
           </div>
         </section>
         <section className="settings-card">
@@ -1900,7 +1866,7 @@ function SettingsView({
             <label htmlFor="model-name">
               <span>
                 <strong>Model</strong>
-                <small>The Codex model used for new live work.</small>
+                <small>The Codex model used for triage and new tasks.</small>
               </span>
             </label>
             <div className="inline-save">
@@ -2021,7 +1987,7 @@ function WorkDrawer({
     )
     .sort((a, b) => b.sequence - a.sequence);
   const runItem = [...snapshot.runs].reverse().find((item) => work && item.workId === work.id);
-  const canSteer = work?.mode === "live" && work.status === "running" && Boolean(runItem?.turnId);
+  const canSteer = work?.status === "running" && Boolean(runItem?.turnId);
   const sources = snapshot.sources.filter((item) =>
     work?.sourceIds.includes(item.id),
   );
@@ -2105,11 +2071,8 @@ function WorkDrawer({
               </strong>
             </div>
             <div>
-              <span>Mode</span>
-              <strong>
-                {work?.mode?.toUpperCase() ||
-                  snapshot.settings.mode.toUpperCase()}
-              </strong>
+              <span>Execution</span>
+              <strong>{work?.mode === "demo" ? "Historical demo" : "Codex"}</strong>
             </div>
           </div>
           {sources.length > 0 && (
@@ -2205,7 +2168,7 @@ function WorkDrawer({
                 id="steer"
                 value={steer}
                 onChange={(event) => setSteer(event.target.value)}
-                placeholder={canSteer ? "Ask for a change or add context" : "Direction is available during a live Codex turn"}
+                placeholder={canSteer ? "Ask for a change or add context" : "Direction is available during an active Codex turn"}
                 disabled={!canSteer}
               />
               <button
@@ -2286,15 +2249,70 @@ function CalendarCard({ event }: { event: CalendarEvent }) {
   </div>;
 }
 
-function CalendarView({ snapshot, onOpenWork }: { snapshot: Snapshot; onOpenWork: (id: string) => void }) {
+function localDateTime(date: Date) {
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
+
+function CalendarEventModal({ snapshot, run, busy, onClose }: { snapshot: Snapshot; run: RunCommand; busy: string | null; onClose: () => void }) {
+  const [form, setForm] = useState(() => {
+    const start = new Date();
+    start.setHours(start.getHours() + 1, 0, 0, 0);
+    return { title: "", start: localDateTime(start), end: localDateTime(new Date(start.getTime() + 30 * 60_000)), attendees: "", location: "", description: "" };
+  });
+  const startTime = new Date(form.start).getTime();
+  const endTime = new Date(form.end).getTime();
+  const validTimes = Number.isFinite(startTime) && Number.isFinite(endTime) && endTime > startTime;
+  const signedIn = snapshot.auth.status === "signed-in";
+  const conflicts = validTimes ? snapshot.calendar.filter((event) => startTime < Date.parse(event.end) && endTime > Date.parse(event.start)) : [];
+  const changeStart = (value: string) => {
+    const newStart = new Date(value).getTime();
+    const duration = validTimes ? endTime - startTime : 30 * 60_000;
+    setForm({ ...form, start: value, end: Number.isFinite(newStart) ? localDateTime(new Date(newStart + duration)) : form.end });
+  };
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!validTimes || !form.title.trim() || !signedIn) return;
+    const result = await run({
+      type: "calendar.create",
+      event: {
+        title: form.title.trim(), start: new Date(startTime).toISOString(), end: new Date(endTime).toISOString(),
+        attendees: [...new Set(form.attendees.split(/[,;\n]/).map((value) => value.trim()).filter(Boolean))],
+        location: form.location.trim(), description: form.description.trim(),
+      },
+    }, "calendar.create", "Calendar event added. Codex will review it for meeting preparation.");
+    if (result) onClose();
+  };
+  return <Modal title="New calendar event" onClose={onClose} closeOnBackdrop={false}>
+    <form className="form-stack" onSubmit={submit}>
+      <p className="calendar-form-note">Add an event to the local demo calendar. Codex will receive the invitation, find relevant context, and decide what preparation it needs.</p>
+      <label><span>Event title</span><input autoFocus required maxLength={300} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Atlas launch review" /></label>
+      <div className="form-row calendar-time-row">
+        <label><span>Starts</span><input type="datetime-local" required value={form.start} onChange={(event) => changeStart(event.target.value)} /></label>
+        <label><span>Ends</span><input type="datetime-local" required value={form.end} min={form.start} onChange={(event) => setForm({ ...form, end: event.target.value })} /></label>
+      </div>
+      <p className="calendar-timezone">Times are in {Intl.DateTimeFormat().resolvedOptions().timeZone}. Invitations are not sent to attendees.</p>
+      {form.start && form.end && !validTimes && <p className="field-error" role="alert">Choose an end time after the start time.</p>}
+      {conflicts.length > 0 && <p className="calendar-conflict">Overlaps with {conflicts.map((event) => event.title).join(", ")}. You can still add this event.</p>}
+      <label><span>Attendees</span><input aria-label="Attendees" aria-describedby="calendar-attendees-help" value={form.attendees} maxLength={2000} onChange={(event) => setForm({ ...form, attendees: event.target.value })} placeholder="nora@example.com, alex@example.com" /><small id="calendar-attendees-help">Separate names or email addresses with commas.</small></label>
+      <label><span>Location</span><input value={form.location} maxLength={500} onChange={(event) => setForm({ ...form, location: event.target.value })} placeholder="Studio room or meeting link" /></label>
+      <label><span>Agenda and context</span><textarea rows={5} maxLength={20000} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="What will you discuss? Mention projects, decisions, or documents the agent should look for." /></label>
+      {!signedIn && <p className="field-error">Sign in with ChatGPT in Settings to create an event and prepare for it.</p>}
+      <div className="modal-actions"><button type="button" className="button button--quiet" onClick={onClose}>Cancel</button><button className="button button--primary" disabled={busy !== null || !signedIn || !validTimes || !form.title.trim()}><CalendarDays size={15} /> Create event</button></div>
+    </form>
+  </Modal>;
+}
+
+function CalendarView({ snapshot, onOpenWork, run, busy }: { snapshot: Snapshot; onOpenWork: (id: string) => void; run: RunCommand; busy: string | null }) {
+  const [creating, setCreating] = useState(false);
   const events = [...snapshot.calendar].sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
   return <div className="page page--calendar">
-    <PageHeader eyebrow="Your day, made a little easier" title="Calendar" description="The office's simulated calendar. All times use this computer's time zone." />
+    <PageHeader eyebrow="Your day, made a little easier" title="Calendar" description="Your local demo calendar. New events go to Codex for meeting preparation." action={<button className="button button--primary" onClick={() => setCreating(true)}><Plus size={15} /> New calendar event</button>} />
+    {creating && <CalendarEventModal snapshot={snapshot} run={run} busy={busy} onClose={() => setCreating(false)} />}
     <div className="calendar-agenda">
       {events.map((event) => {
         const linked = snapshot.work.filter((work) => work.sourceIds.some((id) => event.sourceIds.includes(id)));
         return <article className="calendar-agenda__event" key={event.id}>
-          <div className="calendar-agenda__heading"><span>{new Date(event.start).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span><span className="post-kind">{event.simulated ? "Simulated event" : "Event"}</span></div>
+          <div className="calendar-agenda__heading"><span>{new Date(event.start).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span><span className="post-kind">{event.simulated ? "Local demo event" : "Event"}</span></div>
           <CalendarCard event={event} />
           <p className="calendar-agenda__description">{event.description}</p>
           {linked.length > 0 && <div className="calendar-agenda__links">{linked.map((work) => <button className="text-link" key={work.id} onClick={() => onOpenWork(work.id)}><FileText size={14} />{work.title}<ChevronRight size={14} /></button>)}</div>}
