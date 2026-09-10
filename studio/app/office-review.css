@@ -60,9 +60,35 @@
     transform: translateY(-4px);
   }
 }
+.pixel-work-indicator {
+  display: inline-grid;
+  width: 10px;
+  height: 10px;
+  margin-left: 2px;
+  place-items: center;
+  border: 1px solid #b8d8b2;
+  background: #92c98d;
+  box-shadow: 2px 2px 0 #37634b;
+  image-rendering: pixelated;
+  animation: pixel-work-pulse 0.9s steps(2, end) infinite;
+}
+.pixel-work-indicator > span {
+  width: 4px;
+  height: 4px;
+  background: #f7ffe9;
+}
+@keyframes pixel-work-pulse {
+  50% {
+    transform: translateY(-1px);
+    background: #b2e5a4;
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .office-review-marker[data-motion='on'] {
+    animation: none;
+  }
+  .pixel-work-indicator {
     animation: none;
   }
 }

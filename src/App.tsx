@@ -71,6 +71,7 @@ import {
   CommitmentsPage,
   ConversationsPage,
   EmployeesPage,
+  FilesPage,
   NeedsYouPage,
   SettingsPage,
 } from './components/Pages';
@@ -79,6 +80,7 @@ const nav = [
   { id: 'office', label: 'Office', icon: Home },
   { id: 'employees', label: 'Employees', icon: Users },
   { id: 'roadmap', label: 'Roadmap', icon: GitBranch },
+  { id: 'files', label: 'Files', icon: FolderOpen },
 ] as const;
 const pageNames: Record<Page, string> = {
   office: 'Office',
@@ -86,6 +88,7 @@ const pageNames: Record<Page, string> = {
   announce: 'Announce',
   commitments: 'Commitments',
   roadmap: 'Roadmap',
+  files: 'Files',
   conversations: 'Chat',
   'needs-you': 'Needs you',
   activity: 'Activity',
@@ -570,6 +573,7 @@ export default function App() {
                       announce: 'One shared direction. Everyone on the same page.',
                       commitments: 'Flexibility in the path. Reliability in the promise.',
                       roadmap: 'Every milestone, connected to the goal.',
+                      files: 'Your local workspace objects and generated documents.',
                       conversations: 'The thinking, the handoffs, and the conversations in between.',
                       'needs-you': 'A few thoughtful decisions to keep good things moving.',
                       activity: 'Your decisions. Their work. Every step recorded.',
@@ -836,6 +840,7 @@ export default function App() {
               onEditGoal={() => setModal('goal')}
             />
           )}
+          {page === 'files' && <FilesPage state={state} notify={notify} />}
           {page === 'conversations' && (
             <ConversationsPage {...common} initialChannel={conversationTarget} onBroadcast={broadcast} />
           )}

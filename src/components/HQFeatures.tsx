@@ -319,7 +319,9 @@ export function VoiceAnnounce({
     try {
       if (!window.ahq) throw new Error('Open the desktop app to announce with your microphone.');
       if (!(await window.ahq.microphonePermission()))
-        throw new Error('Allow microphone access in macOS System Settings to use voice announcements.');
+        throw new Error(
+          'Turn on Astra HQ under System Settings → Privacy & Security → Microphone, then try again.',
+        );
       if (!held.current) return;
       stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (!held.current) {

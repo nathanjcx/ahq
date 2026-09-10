@@ -1378,15 +1378,15 @@ function EmployeeAvatar({
             }}
           />
           {employee.name.split(' ')[0]}
-          <small style={{ fontSize: 9, opacity: 0.8 }}>
-            {listening
-              ? 'Listening'
-              : employee.sessionId?.startsWith('chatgpt-')
-                ? 'ChatGPT plan'
-                : employee.sessionId
-                  ? '☁ Astra'
-                  : 'Ready'}
-          </small>
+          {(listening || employee.status === 'working') && (
+            <span
+              className="pixel-work-indicator"
+              title={listening ? 'Listening' : 'Working'}
+              aria-label={listening ? 'Listening' : 'Working'}
+            >
+              <span />
+            </span>
+          )}
           {selected && <span aria-hidden="true"> ↗</span>}
         </button>
         {selected && (

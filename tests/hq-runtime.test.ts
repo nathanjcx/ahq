@@ -61,6 +61,22 @@ test('checkpoints preserve exact workspace states and the activity journal survi
     await f.close();
   }
 });
+
+test('API fallback sessions are isolated from the primary hosted-session credentials', async () => {
+  const f = await fixture();
+  try {
+    const primary = new HostedEmployees(f.store, async () => config);
+    const fallback = new HostedEmployees(f.store, async () => config, 'fallback-astra');
+    await f.store.put('session:astra-primary', { id: 'astra-primary' });
+    await f.store.put('session:fallback-astra-secondary', { id: 'fallback-astra-secondary' });
+    assert.equal(primary.owns('astra-primary'), true);
+    assert.equal(fallback.owns('astra-primary'), false);
+    assert.equal(primary.owns('fallback-astra-secondary'), false);
+    assert.equal(fallback.owns('fallback-astra-secondary'), true);
+  } finally {
+    await f.close();
+  }
+});
 test('hosted employees use real background responses, persist session IDs, and do not persist API keys', async () => {
   const f = await fixture(),
     original = globalThis.fetch;

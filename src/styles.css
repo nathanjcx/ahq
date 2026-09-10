@@ -2335,6 +2335,63 @@ h1 {
   padding: 6px 9px;
   min-height: 32px;
 }
+.files-page {
+  display: grid;
+  gap: 18px;
+}
+.files-section {
+  padding: 20px;
+}
+.files-section .section-heading {
+  align-items: center;
+}
+.files-section .section-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.files-object-list {
+  display: grid;
+  gap: 8px;
+}
+.file-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 10px 12px;
+  border: 1px solid #e1e7d8;
+  background: #fffef8;
+  color: #60745a;
+}
+.file-row > svg {
+  color: #8ca475;
+}
+.file-row > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.file-row strong,
+.file-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-row small {
+  color: #899486;
+  font-size: 11px;
+}
+@media (max-width: 700px) {
+  .file-row {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+  .file-row .button {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
 .integration {
   display: flex;
   align-items: center;

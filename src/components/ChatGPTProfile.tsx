@@ -16,6 +16,7 @@ export default function ChatGPTProfile({
   const [account, setAccount] = useState<ChatGPTAccount | undefined>(cloud.account);
   const [checking, setChecking] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [fallbackKey, setFallbackKey] = useState('');
   const [error, setError] = useState('');
   const mounted = useRef(false);
   const request = useRef(0);
@@ -111,6 +112,21 @@ export default function ChatGPTProfile({
   const planLabel = plan ? `${plan.charAt(0).toUpperCase()}${plan.slice(1)} plan` : 'ChatGPT plan';
   const issue = error || account?.error;
 
+  async function saveFallback(key: string) {
+    if (!window.ahq || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const settings = await window.ahq.configureChatGPTFallback({ key });
+      onCloudRef.current(settings);
+      setFallbackKey('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save the API fallback key.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <Modal title="ChatGPT account" onClose={onClose}>
       <div className="chatgpt-profile">
@@ -127,7 +143,7 @@ export default function ChatGPTProfile({
           {checking || busy ? (
             <>
               <LoaderCircle size={15} className="chatgpt-profile-spinner" aria-hidden="true" />
-              {checking ? 'Checking your account…' : 'Connecting…'}
+              {checking ? 'Checking your account…' : 'Saving securely…'}
             </>
           ) : connected ? (
             <>
@@ -147,6 +163,35 @@ export default function ChatGPTProfile({
             {issue}
           </p>
         )}
+        <div className="chatgpt-profile-fallback">
+          <label htmlFor="chatgpt-fallback-key">API credit fallback key</label>
+          <input
+            id="chatgpt-fallback-key"
+            type="password"
+            autoComplete="new-password"
+            value={fallbackKey}
+            onChange={(event) => setFallbackKey(event.target.value)}
+            placeholder={cloud.fallbackConfigured ? 'A fallback key is saved securely' : 'sk-…'}
+          />
+          <p>
+            Used only if your ChatGPT plan reports that it is out of credits. It is encrypted on this Mac and
+            never added to workspace history or exports.
+          </p>
+          <div className="button-group">
+            <button
+              className="button secondary"
+              disabled={busy || !window.ahq || !fallbackKey.trim()}
+              onClick={() => void saveFallback(fallbackKey.trim())}
+            >
+              Save fallback key
+            </button>
+            {cloud.fallbackConfigured && (
+              <button className="text-button" disabled={busy} onClick={() => void saveFallback('')}>
+                Remove saved key
+              </button>
+            )}
+          </div>
+        </div>
       </div>
       <div className="modal-footer chatgpt-profile-footer">
         {signingIn ? (

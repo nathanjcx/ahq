@@ -4,6 +4,7 @@ export type Page =
   | 'announce'
   | 'commitments'
   | 'roadmap'
+  | 'files'
   | 'conversations'
   | 'needs-you'
   | 'settings'
@@ -94,6 +95,14 @@ export interface WorkspaceFolder {
   createdAt: string;
   excludedCount: number;
 }
+export interface LocalFileEntry {
+  path: string;
+  relativePath: string;
+  name: string;
+  kind: 'database' | 'document' | 'asset';
+  size: number;
+  modifiedAt: number;
+}
 export interface AppState {
   schemaVersion: 1;
   workspaceName: string;
@@ -130,6 +139,7 @@ export interface CloudSettings {
   endpoint: string;
   configured: boolean;
   connected: boolean;
+  fallbackConfigured?: boolean;
 }
 export interface ChatGPTAccount {
   status: 'signed-in' | 'signed-out' | 'signing-in' | 'unavailable';
@@ -180,6 +190,7 @@ export interface DesktopAPI {
   loginChatGPT(): Promise<ChatGPTAccount>;
   cancelChatGPTLogin(): Promise<ChatGPTAccount>;
   useChatGPT(): Promise<CloudSettings>;
+  configureChatGPTFallback(input: { key: string }): Promise<CloudSettings>;
   recordFrame(frame: OfficeFrame): Promise<void>;
   frameAt(time: number): Promise<OfficeFrame | null>;
   history(): Promise<HistoryEntry[]>;
@@ -191,6 +202,9 @@ export interface DesktopAPI {
   needsStorageSetup(): Promise<boolean>;
   useDefaultStorage(): Promise<void>;
   storageLocation(): Promise<string>;
+  listFiles(): Promise<LocalFileEntry[]>;
+  showFileInFinder(path: string): Promise<void>;
+  showStorageInFinder(): Promise<void>;
   chooseDatabaseFolder(): Promise<string | null>;
   integrations(): Promise<Integration[]>;
   saveIntegration(input: { id?: string; name: string; url: string; key: string }): Promise<Integration[]>;

@@ -288,10 +288,17 @@ export class ChatGPTEmployees {
   }
   async continue(id: string, prompt: string, cancelRunning = false) {
     const account = await this.signedIn();
-    if (this.load(id).accountEmail !== account.email)
+    const current = this.load(id);
+    if (current.accountEmail !== account.email)
       throw new Error('Use the ChatGPT account that started this session.');
     if (cancelRunning) await this.cancel(id);
-    else if (this.jobs.has(id)) throw new Error('This employee is still working.');
+    else if (this.jobs.has(id)) {
+      // A completed turn can publish its review before the final persistence
+      // promise removes the job. Wait for that save instead of rejecting a
+      // legitimate review revision as if the employee were still working.
+      if (['queued', 'running'].includes(current.status)) throw new Error('This employee is still working.');
+      await this.jobs.get(id)?.done;
+    }
     const s = this.load(id);
     s.version++;
     s.status = 'queued';

@@ -43,6 +43,28 @@
   justify-content: flex-end;
   flex-wrap: wrap;
 }
+.chatgpt-profile-fallback {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line, #dfe4dc);
+}
+.chatgpt-profile-fallback label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.chatgpt-profile-fallback input {
+  width: 100%;
+}
+.chatgpt-profile-fallback p {
+  margin: 7px 0 10px;
+  color: var(--muted, #68736b);
+  font-size: 12px;
+  line-height: 1.45;
+}
 .chatgpt-profile-spinner {
   animation: chatgpt-profile-spin 1s linear infinite;
 }

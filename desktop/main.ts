@@ -31,24 +31,33 @@ import { mergeWorkspace } from '../shared/workspaceMerge';
 import { assertCanAssignTask, recordAssignedTask } from '../src/lib/assignedTasks';
 import { applySession, applyDecision } from '../src/lib/workflow';
 import type { Command } from '../src/shared/types';
-import type { AppState, CloudSettings } from '../shared/types';
+import type { AppState, CloudSettings, LocalFileEntry } from '../shared/types';
 let win: BrowserWindow | null = null;
 let connected = false;
 const root = () => app.getPath('userData');
 let dataDir = '';
 let database: SnapshotStore;
 let hosted: HostedEmployees;
+let fallbackHosted: HostedEmployees;
 let chatgpt: ChatGPTEmployees;
 let goals: GoalCoordinator;
 let personalityBusy = false;
 const selectedProvider = () => database.get<string>('employee-provider') ?? 'chatgpt';
-const sessionEngine = (id: string) => (chatgpt.owns(id) ? chatgpt : hosted.owns(id) ? hosted : undefined);
+const sessionEngine = (id: string) =>
+  chatgpt.owns(id)
+    ? chatgpt
+    : fallbackHosted?.owns(id)
+      ? fallbackHosted
+      : hosted.owns(id)
+        ? hosted
+        : undefined;
 let localRuntime: OfficeRuntime | undefined;
 let pollTimer: ReturnType<typeof setInterval>;
 let snapshotTimer: ReturnType<typeof setInterval>;
 const vaultPath = () => path.join(root(), 'api-keys.json');
 const vaultSchema = z.object({
   key: z.string().default(''),
+  fallbackKey: z.string().default(''),
   model: z.string().default('gpt-6-astra'),
   integrations: z
     .array(z.object({ id: z.string(), name: z.string(), url: z.string(), key: z.string() }))
@@ -60,7 +69,7 @@ async function vault(): Promise<HostedConfig> {
     return vaultSchema.parse(JSON.parse(safeStorage.decryptString(await fs.readFile(vaultPath()))));
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT')
-      return { key: '', model: 'gpt-6-astra', integrations: [] };
+      return { key: '', fallbackKey: '', model: 'gpt-6-astra', integrations: [] };
     throw e;
   }
 }
@@ -72,6 +81,11 @@ async function hostedConfig() {
   const v = await vault();
   if (!v.key) throw new Error('Add your Astra / OpenAI API key in Settings first.');
   return v;
+}
+async function fallbackConfig() {
+  const v = await vault();
+  if (!v.fallbackKey) throw new Error('Add an API fallback key in your profile first.');
+  return { key: v.fallbackKey, model: v.model, integrations: v.integrations };
 }
 async function log(text: string) {
   await database.log({
@@ -92,6 +106,7 @@ async function setupDatabase() {
   }
   database = await SnapshotStore.open(dataDir);
   hosted = new HostedEmployees(database, hostedConfig);
+  fallbackHosted = new HostedEmployees(database, fallbackConfig, 'fallback-astra');
   chatgpt = new ChatGPTEmployees(database, path.join(root(), 'employee-workspaces'));
   if (!database.get<AppState>('workspace')) {
     try {
@@ -128,7 +143,11 @@ async function setupDatabase() {
           const engine = sessionEngine(employee.sessionId!);
           if (!engine) continue;
           try {
-            current = applySession(current, employee.id, await engine.get(employee.sessionId!));
+            const result = await engine.get(employee.sessionId!);
+            const before = current;
+            const recovered = await fallbackAssignedSession(current, employee.id, result);
+            current = recovered.state;
+            if (recovered.state === before) current = applySession(current, employee.id, recovered.session);
           } catch {
             /* Keep the last known state; the renderer displays connection failures. */
           }
@@ -181,6 +200,7 @@ async function cloudSettings(): Promise<CloudSettings> {
       configured: account.status === 'signed-in',
       connected: account.status === 'signed-in',
       account,
+      fallbackConfigured: !!(await vault()).fallbackKey,
     };
   }
   const v = await vault();
@@ -191,6 +211,7 @@ async function cloudSettings(): Promise<CloudSettings> {
       endpoint: 'https://api.openai.com/v1',
       configured: true,
       connected: true,
+      fallbackConfigured: !!v.fallbackKey,
     };
   const value = await savedSettings();
   return {
@@ -198,11 +219,61 @@ async function cloudSettings(): Promise<CloudSettings> {
     endpoint: value?.endpoint ?? '',
     configured: !!value,
     connected: !!value && connected,
+    fallbackConfigured: !!v.fallbackKey,
   };
 }
 async function loadState(): Promise<AppState | null> {
   const value = database.get<AppState>('workspace');
   return value ? StateSchema.parse(value) : null;
+}
+async function localFiles(): Promise<LocalFileEntry[]> {
+  const storageRoot = path.dirname(database.filePath);
+  const roots = [storageRoot, snapshotsRoot(), path.join(root(), 'employee-workspaces')];
+  const results: LocalFileEntry[] = [];
+  const seen = new Set<string>();
+  async function walk(directory: string, depth: number) {
+    if (depth > 5 || results.length >= 400) return;
+    let entries;
+    try {
+      entries = await fs.readdir(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (results.length >= 400 || entry.name.startsWith('.')) continue;
+      const fullPath = path.join(directory, entry.name);
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) {
+        await walk(fullPath, depth + 1);
+        continue;
+      }
+      if (!entry.isFile() || seen.has(fullPath)) continue;
+      seen.add(fullPath);
+      let stat;
+      try {
+        stat = await fs.stat(fullPath);
+      } catch {
+        continue;
+      }
+      const extension = path.extname(entry.name).toLowerCase();
+      const kind: LocalFileEntry['kind'] =
+        fullPath === database.filePath
+          ? 'database'
+          : ['.md', '.txt', '.csv', '.pdf'].includes(extension)
+            ? 'document'
+            : 'asset';
+      results.push({
+        path: fullPath,
+        relativePath: path.relative(root(), fullPath) || entry.name,
+        name: entry.name,
+        kind,
+        size: stat.size,
+        modifiedAt: stat.mtimeMs,
+      });
+    }
+  }
+  for (const directory of roots) await walk(directory, 0);
+  return results.sort((a, b) => b.modifiedAt - a.modifiedAt || a.relativePath.localeCompare(b.relativePath));
 }
 
 function assertSender(event: IpcMainInvokeEvent) {
@@ -232,10 +303,30 @@ async function knownSession(id: string) {
 }
 async function structuredGenerate(prompt: string, outputSchema: Record<string, unknown>): Promise<string> {
   const provider = selectedProvider();
-  if (provider === 'chatgpt') return chatgpt.generate(prompt, outputSchema);
+  if (provider === 'chatgpt') {
+    try {
+      return await chatgpt.generate(prompt, outputSchema);
+    } catch (error) {
+      if (!isCreditExhaustion(error)) throw error;
+      return generateHosted(fallbackConfig, prompt, outputSchema);
+    }
+  }
   if (provider !== 'openai')
     throw new Error('Choose ChatGPT or an OpenAI connection in Settings to generate with AI.');
-  const config = await hostedConfig();
+  return generateHosted(hostedConfig, prompt, outputSchema);
+}
+function isCreditExhaustion(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /out of credits|insufficient[_ ]quota|quota|credit(?:s)?|usage limit|rate limit|billing limit|429/i.test(
+    message,
+  );
+}
+async function generateHosted(
+  configLoader: () => Promise<HostedConfig>,
+  prompt: string,
+  outputSchema: Record<string, unknown>,
+) {
+  const config = await configLoader();
   const result = z
     .object({
       status: z.string(),
@@ -265,6 +356,64 @@ async function structuredGenerate(prompt: string, outputSchema: Record<string, u
     .filter((p) => p.type === 'output_text')
     .map((p) => p.text ?? '')
     .join('');
+}
+async function fallbackAssignedSession(
+  state: AppState,
+  employeeId: string,
+  session: import('../shared/types').CloudSession,
+) {
+  if (!chatgpt.owns(session.id) || session.status !== 'failed' || !isCreditExhaustion(session.activity))
+    return { state, session };
+  const task = state.commitments.find((item) => item.sessionId === session.id);
+  if (!task) return { state, session };
+  try {
+    const employee = state.employees.find((item) => item.id === employeeId);
+    if (!employee) return { state, session };
+    const replacement = await fallbackHosted.start(employee, task.assignment ?? task.description, state);
+    const next = {
+      ...state,
+      employees: state.employees.map((item) =>
+        item.id === employeeId
+          ? { ...item, sessionId: replacement.id, status: 'working' as const, activity: replacement.activity }
+          : item,
+      ),
+      commitments: state.commitments.map((item) =>
+        item.id === task.id
+          ? {
+              ...item,
+              sessionId: replacement.id,
+              status: 'in-progress' as const,
+              progress: 10,
+              nextStep: replacement.activity,
+            }
+          : item,
+      ),
+      roadmap: state.roadmap
+        ? {
+            ...state.roadmap,
+            assignments: state.roadmap.assignments.map((claim) =>
+              claim.sessionId === session.id
+                ? { ...claim, sessionId: replacement.id, status: 'assigned' as const }
+                : claim,
+            ),
+          }
+        : undefined,
+      events: [
+        ...state.events,
+        {
+          id: randomUUID(),
+          employeeId,
+          text: 'ChatGPT plan credits were unavailable, so this task continued with the saved API fallback key.',
+          time: new Date().toISOString(),
+          kind: 'system' as const,
+          source: 'local' as const,
+        },
+      ],
+    };
+    return { state: applySession(next, employeeId, replacement), session: replacement };
+  } catch {
+    return { state, session };
+  }
 }
 async function delegateRoadmap(state: AppState) {
   return advanceRoadmap(state, {
@@ -397,6 +546,17 @@ function registerHandlers() {
       return cloudSettings();
     }),
   );
+  handle('chatgpt:fallback', async (input) =>
+    queued(async () => {
+      const fields = z.object({ key: z.string().trim().max(8000) }).parse(input);
+      const current = await vault();
+      await saveVault({ ...current, fallbackKey: fields.key });
+      await log(
+        fields.key ? 'Saved an encrypted API credit fallback key.' : 'Removed the API credit fallback key.',
+      );
+      return cloudSettings();
+    }),
+  );
   handle('office:frame', async (input) => {
     await database.recordFrame(
       z
@@ -494,6 +654,17 @@ function registerHandlers() {
     await log('Chose the application folder for local storage.');
   });
   handle('storage:location', async () => database.filePath);
+  handle('files:list', async () => localFiles());
+  handle('files:show', async (input) => {
+    const filePath = z.string().min(1).max(2000).parse(input);
+    const entry = (await localFiles()).find((item) => item.path === filePath);
+    if (!entry) throw new Error('That file is not part of this Astra HQ workspace.');
+    shell.showItemInFolder(entry.path);
+  });
+  handle('files:show-storage', async () => {
+    const error = await shell.openPath(path.dirname(database.filePath));
+    if (error) throw new Error(`Could not open the local storage folder: ${error}`);
+  });
   handle('storage:choose', async () => {
     const result = await dialog.showOpenDialog(win!, {
       title: 'Allow Astra HQ to store its database in a folder',
@@ -522,6 +693,7 @@ function registerHandlers() {
       database = next;
       dataDir = destination;
       hosted = new HostedEmployees(database, hostedConfig);
+      fallbackHosted = new HostedEmployees(database, fallbackConfig, 'fallback-astra');
       chatgpt = new ChatGPTEmployees(database, path.join(root(), 'employee-workspaces'));
       await log('Selected a local database folder.');
       return database.filePath;
@@ -588,9 +760,13 @@ function registerHandlers() {
       return integrationList();
     }),
   );
-  handle('microphone:permission', async () =>
-    process.platform === 'darwin' ? systemPreferences.askForMediaAccess('microphone') : true,
-  );
+  handle('microphone:permission', async () => {
+    if (process.platform !== 'darwin') return true;
+    const granted = await systemPreferences.askForMediaAccess('microphone');
+    if (granted) return true;
+    await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
+    return false;
+  });
   handle('voice:transcribe', async (input) => {
     const fields = z
       .object({
@@ -953,11 +1129,20 @@ function registerHandlers() {
       const engine = sessionEngine(id);
       try {
         const config = engine ? undefined : await credentials();
-        const result = engine ? await engine.get(id) : await readSession(config!.endpoint, config!.token, id);
+        let result = engine ? await engine.get(id) : await readSession(config!.endpoint, config!.token, id);
         if (!engine) connected = true;
         const current = await loadState();
         const employee = current?.employees.find((e) => e.sessionId === id);
-        if (current && employee) await database.saveHQ(applySession(current, employee.id, result));
+        if (current && employee) {
+          const before = current;
+          const recovered = await fallbackAssignedSession(current, employee.id, result);
+          result = recovered.session;
+          await database.saveHQ(
+            recovered.state === before
+              ? applySession(recovered.state, employee.id, recovered.session)
+              : recovered.state,
+          );
+        }
         return result;
       } catch (e) {
         if (!engine) connected = false;

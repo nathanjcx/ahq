@@ -6,6 +6,7 @@ import {
   CheckCheck,
   ChevronRight,
   Cloud,
+  Database as DatabaseIcon,
   FileText,
   Flag,
   FolderOpen,
@@ -16,6 +17,7 @@ import {
   MessageCircle,
   MoreHorizontal,
   Plus,
+  RefreshCw,
   Search,
   Send,
   Settings,
@@ -30,6 +32,7 @@ import type {
   CloudSettings,
   Commitment,
   Employee,
+  LocalFileEntry,
   WorkspaceFolder,
 } from '../../shared/types';
 import type { UpdateState } from '../App';
@@ -38,6 +41,165 @@ import Avatar from './Avatar';
 import Modal from './Modal';
 import './office-chat.css';
 type Common = { state: AppState; update: UpdateState; notify: (message: string) => void };
+
+export function FilesPage({ state, notify }: { state: AppState; notify: (message: string) => void }) {
+  const [files, setFiles] = useState<LocalFileEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const refresh = async () => {
+    if (!window.ahq) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      setFiles(await window.ahq.listFiles());
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not read local files.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    void refresh();
+  }, []);
+  const documents = files.filter((file) => file.kind === 'document');
+  const assets = files.filter((file) => file.kind === 'asset');
+  const database = files.find((file) => file.kind === 'database');
+  const show = async (filePath: string) => {
+    if (!window.ahq || busy) return;
+    setBusy(true);
+    try {
+      await window.ahq.showFileInFinder(filePath);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not open that file in Finder.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const size = (bytes: number) =>
+    bytes < 1024
+      ? `${bytes} B`
+      : bytes < 1024 * 1024
+        ? `${Math.round(bytes / 1024)} KB`
+        : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return (
+    <div className="files-page">
+      <div className="page-toolbar">
+        <div className="tab-bar">
+          <button className="selected">
+            Local files <span>{files.length}</span>
+          </button>
+        </div>
+        <div className="button-group">
+          <button
+            className="button secondary"
+            disabled={!window.ahq || loading}
+            onClick={() => void refresh()}
+          >
+            <RefreshCw size={14} className={loading ? 'spin' : undefined} /> Refresh
+          </button>
+          <button
+            className="button primary"
+            disabled={!window.ahq || busy}
+            onClick={() =>
+              void window
+                .ahq!.showStorageInFinder()
+                .catch((error) =>
+                  notify(error instanceof Error ? error.message : 'Could not open local storage.'),
+                )
+            }
+          >
+            <FolderOpen size={14} /> Open storage folder
+          </button>
+        </div>
+      </div>
+      <section className="surface files-section">
+        <div className="section-heading">
+          <h2>
+            <DatabaseIcon size={18} /> Workspace objects
+          </h2>
+          {database && <span className="muted">{database.relativePath}</span>}
+        </div>
+        <div className="files-object-list">
+          {database && (
+            <div className="file-row">
+              <DatabaseIcon size={19} />
+              <div>
+                <strong>Office database</strong>
+                <small>
+                  {database.relativePath} · {size(database.size)}
+                </small>
+              </div>
+              <button className="button secondary" onClick={() => void show(database.path)}>
+                Show in Finder
+              </button>
+            </div>
+          )}
+          {state.folders.map((folder) => (
+            <div className="file-row" key={folder.id}>
+              <FolderOpen size={19} />
+              <div>
+                <strong>{folder.name}</strong>
+                <small>{folder.files.length} source files · local working copy</small>
+              </div>
+              <button className="button secondary" onClick={() => void window.ahq?.showStorageInFinder()}>
+                Storage folder
+              </button>
+            </div>
+          ))}
+          {assets.map((file) => (
+            <div className="file-row" key={file.path}>
+              <FolderOpen size={19} />
+              <div>
+                <strong>{file.name}</strong>
+                <small>
+                  {file.relativePath} · {size(file.size)}
+                </small>
+              </div>
+              <button className="button secondary" onClick={() => void show(file.path)}>
+                Show in Finder
+              </button>
+            </div>
+          ))}
+          {!database && !state.folders.length && !assets.length && (
+            <p className="muted">No local workspace objects yet.</p>
+          )}
+        </div>
+      </section>
+      <section className="surface files-section">
+        <div className="section-heading">
+          <h2>
+            <FileText size={18} /> Generated documents
+          </h2>
+          <span className="muted">{documents.length} saved</span>
+        </div>
+        {loading ? (
+          <p className="muted">Reading your local workspace…</p>
+        ) : documents.length ? (
+          <div className="files-object-list">
+            {documents.map((file) => (
+              <div className="file-row" key={file.path}>
+                <FileText size={19} />
+                <div>
+                  <strong>{file.name}</strong>
+                  <small>
+                    {file.relativePath} · {size(file.size)}
+                  </small>
+                </div>
+                <button className="button secondary" onClick={() => void show(file.path)}>
+                  Show in Finder
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="muted">Generated employee documents will appear here as they are saved.</p>
+        )}
+      </section>
+    </div>
+  );
+}
 export function EmployeesPage({
   state,
   onCreate,

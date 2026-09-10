@@ -8,6 +8,7 @@ const reviewTextFormat = {
 };
 export interface HostedConfig {
   key: string;
+  fallbackKey?: string;
   model: string;
   integrations: { id: string; name: string; url: string; key: string }[];
 }
@@ -59,9 +60,10 @@ export class HostedEmployees {
   constructor(
     private store: SnapshotStore,
     private config: () => Promise<HostedConfig>,
+    private idPrefix = 'astra',
   ) {}
   owns(id: string) {
-    return !!this.store.get<HostedSession>(`session:${id}`);
+    return id.startsWith(`${this.idPrefix}-`) && !!this.store.get<HostedSession>(`session:${id}`);
   }
   private load(id: string) {
     const s = this.store.get<HostedSession>(`session:${id}`);
@@ -228,7 +230,7 @@ export class HostedEmployees {
       tools: tools.map(({ authorization: _authorization, ...tool }) => tool),
     };
     const s: HostedSession = {
-      id: `astra-${randomUUID()}`,
+      id: `${this.idPrefix}-${randomUUID()}`,
       employeeId: employee.id,
       responseId: '',
       version: 1,
