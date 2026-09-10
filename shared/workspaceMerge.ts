@@ -26,11 +26,12 @@ export function mergeWorkspace(previous: AppState | null, incoming: AppState): A
     ...incoming,
     goal: roadmap ? previous.goal : incoming.goal,
     roadmap,
-    employees: incoming.employees.map((employee) => {
+    employees: [...previous.employees.filter(employee => employee.temporary && !incoming.employees.some(item => item.id === employee.id)), ...incoming.employees].map((employee) => {
       const saved = previous.employees.find((e) => e.id === employee.id);
       return saved && (saved.sessionId || employee.sessionId)
         ? {
             ...employee,
+            temporary: saved.temporary,
             sessionId: saved.sessionId,
             status: saved.status,
             activity: saved.activity,

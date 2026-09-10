@@ -1,3 +1,7 @@
+import { DemoCoordinator, type DemoRecord } from './demo';
+import { startDemoServer } from './demo-server';
+import { roadmapTask, validateLocalArtifacts } from './demo-roadmap';
+import type { DemoSnapshot } from '../shared/demo';
 import {
   app,
   BrowserWindow,
@@ -42,6 +46,10 @@ let fallbackHosted: HostedEmployees;
 let chatgpt: ChatGPTEmployees;
 let goals: GoalCoordinator;
 let personalityBusy = false;
+let demo: DemoCoordinator;
+let demoServer: Awaited<ReturnType<typeof startDemoServer>>;
+let demoTimer: ReturnType<typeof setInterval>;
+let demoTickBusy = false;
 const selectedProvider = () => database.get<string>('employee-provider') ?? 'chatgpt';
 const sessionEngine = (id: string) =>
   chatgpt.owns(id)
@@ -121,9 +129,25 @@ async function setupDatabase() {
     save: (state, reason, checkpoint) => database.saveHQ(state, reason, checkpoint),
     queue: queued,
     generate: (state) =>
-      generateRoadmap(structuredGenerate, { goal: state.goal, employees: state.employees }),
+      generateRoadmap(state.roadmap?.automatic ? (prompt, schema) => chatgpt.generate(prompt, schema) : structuredGenerate, { goal: state.goal, employees: state.employees, automatic: state.roadmap?.automatic }),
     advance: delegateRoadmap,
   });
+  demo = new DemoCoordinator({
+    load: async () => { const state = await loadState(); if (!state) throw new Error('Open your office first.'); return state; },
+    save: state => database.saveHQ(state),
+    store: { load: async () => database.get<DemoRecord[]>('demo-notifications') || [], save: records => database.put('demo-notifications', records) },
+    queue: queued,
+    start: (employee, assignment, state, task) => chatgpt.start(employee, assignment, state, [], task),
+    get: id => chatgpt.get(id),
+    decide: (id, version, decision, feedback) => chatgpt.decide(id, version, decision, feedback),
+    validateArtifacts: validateLocalArtifacts,
+  });
+  demoServer = await startDemoServer({ directory: root(), trigger: input => demo.trigger(input), snapshot: demoSnapshot, retry: id => demo.retry(id) });
+  demoTimer = setInterval(() => {
+    if (demoTickBusy) return;
+    demoTickBusy = true;
+    void demo.tick().catch(error => log(`Demo notification error: ${error instanceof Error ? error.message : error}`)).finally(() => { demoTickBusy = false; });
+  }, 1000);
   const recovered = await loadState();
   if (recovered?.roadmap?.status === 'planning')
     await database.saveHQ({
@@ -145,7 +169,8 @@ async function setupDatabase() {
           try {
             const result = await engine.get(employee.sessionId!);
             const before = current;
-            const recovered = await fallbackAssignedSession(current, employee.id, result);
+            const localDemo = result.taskKind || current.roadmap?.automatic;
+            const recovered = localDemo ? { state: current, session: result } : await fallbackAssignedSession(current, employee.id, result);
             current = recovered.state;
             if (recovered.state === before) current = applySession(current, employee.id, recovered.session);
           } catch {
@@ -155,7 +180,7 @@ async function setupDatabase() {
         await database.saveHQ(current);
         await delegateRoadmap(current);
       }).catch(() => undefined),
-    8000,
+    1000,
   );
   snapshotTimer = setInterval(
     () =>
@@ -419,7 +444,7 @@ async function delegateRoadmap(state: AppState) {
   return advanceRoadmap(state, {
     save: (next, reason) => database.saveHQ(next, reason),
     prepare: async () => {
-      if (selectedProvider() === 'chatgpt') {
+      if (state.roadmap?.automatic || selectedProvider() === 'chatgpt') {
         const account = await chatgpt.account();
         if (account.status !== 'signed-in')
           throw new Error(account.error ?? 'Sign in with ChatGPT in Settings, then resume the roadmap.');
@@ -429,15 +454,25 @@ async function delegateRoadmap(state: AppState) {
     getSession: async (id) => {
       const engine = sessionEngine(id);
       if (!engine) throw new Error('Reconnect the employee’s session before continuing this roadmap.');
-      return engine.get(id);
+      const session = await engine.get(id);
+      if (state.roadmap?.automatic && chatgpt.owns(id) && session.status === 'waiting_for_approval' && await validateLocalArtifacts(session)) return chatgpt.decide(id, session.output!.version, 'approve', 'Local demo artifact checks passed.');
+      return session;
     },
     start: async (employee, assignment, current) => {
+      if (current.roadmap?.automatic) {
+        const task = await roadmapTask(current, employee.id, id => chatgpt.get(id));
+        return chatgpt.start(employee, assignment, current, [], task);
+      }
       const provider = selectedProvider();
       if (provider === 'gateway')
         throw new Error('Choose ChatGPT or OpenAI in Settings for automatic delegation.');
       return (provider === 'chatgpt' ? chatgpt : hosted).start(employee, assignment, current);
     },
   });
+}
+async function demoSnapshot(): Promise<DemoSnapshot> {
+  const snapshot = await demo.snapshot();
+  return { ...snapshot, sessions: chatgpt.list(), triggerAddress: demoServer?.address };
 }
 function registerHandlers() {
   handle('employee:personality', async (input) => {
@@ -452,7 +487,22 @@ function registerHandlers() {
       personalityBusy = false;
     }
   });
-  handle('roadmap:create', async (input) => goals.create(z.string().trim().min(1).max(500).parse(input)));
+  handle('roadmap:create', async input => {
+    const fields = z.object({ goal: z.string().trim().min(1).max(500), automatic: z.boolean().optional() }).parse(typeof input === 'string' ? { goal: input } : input);
+    if (fields.automatic && (await chatgpt.account()).status !== 'signed-in') throw new Error('Sign in with ChatGPT before starting the local demo.');
+    return goals.create(fields.goal, { automatic: fields.automatic });
+  });
+  handle('demo:trigger', async input => demo.trigger(input));
+  handle('demo:snapshot', demoSnapshot);
+  handle('demo:retry', async input => demo.retry(z.string().min(1).max(200).parse(input)));
+  handle('demo:artifact', async input => {
+    const { sessionId, artifactId } = z.object({ sessionId: z.string(), artifactId: z.string() }).parse(input);
+    const session = chatgpt.list().find(item => item.id === sessionId);
+    const artifact = session?.artifacts?.find(item => item.id === artifactId);
+    if (!session || !artifact || !(await validateLocalArtifacts(session))) throw new Error('This local artifact is unavailable.');
+    const error = await shell.openPath(artifact.filePath);
+    if (error) throw new Error(error);
+  });
   handle('roadmap:control', async (input) =>
     queued(async () => {
       const action = z.enum(['pause', 'resume']).parse(input);
@@ -1328,9 +1378,11 @@ else {
     event.preventDefault();
     closing = true;
     goals?.close();
+    clearInterval(demoTimer);
     clearInterval(snapshotTimer);
     clearInterval(pollTimer);
     void (async () => {
+      await demoServer?.close();
       await diskQueue;
       await chatgpt?.close();
       await localRuntime?.close();
