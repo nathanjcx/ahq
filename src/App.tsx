@@ -1191,8 +1191,8 @@ function SimulationModal({ snapshot, run, busy, onClose, onMessage, onCalendar, 
     <div className="simulation-panel">
       <p className="simulation-intro">Choose what arrives next. Preview and edit a message, then watch Codex decide what to do.</p>
       <div className="simulation-create">
-        <button onClick={onMessage}><span className="simulation-create__icon"><Mail size={20} /></span><span><strong>New incoming message</strong><small>Write an email, chat message, or issue.</small></span><Plus size={17} /></button>
-        <button onClick={onCalendar}><span className="simulation-create__icon"><CalendarDays size={20} /></span><span><strong>New calendar event</strong><small>Add a meeting and let the office prepare.</small></span><Plus size={17} /></button>
+        <button aria-label="New incoming message" onClick={onMessage}><span className="simulation-create__icon"><Mail size={20} /></span><span><strong>New incoming message</strong><small>Write an email, chat message, or issue.</small></span><Plus size={17} /></button>
+        <button aria-label="New calendar event" onClick={onCalendar}><span className="simulation-create__icon"><CalendarDays size={20} /></span><span><strong>New calendar event</strong><small>Add a meeting and let the office prepare.</small></span><Plus size={17} /></button>
       </div>
       <div className="simulation-tabs" role="tablist" aria-label="Arrival templates">
         <button role="tab" aria-selected={category === "suggested"} onClick={() => setCategory("suggested")}>Suggested arrivals <span>{suggested.filter((entry) => !entry.delivered).length}</span></button>
@@ -1234,7 +1234,7 @@ function IncomingMessageModal({ run, busy, signedIn, template, onClose, onCreate
     <label><span>Source</span><select value={form.source} onChange={(event) => setForm({ ...form, source: event.target.value as Source })}>{SOURCES.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}</select></label>
     <label><span>Author</span><input required maxLength={200} autoFocus value={form.author} onChange={(event) => setForm({ ...form, author: event.target.value })} placeholder="Alex Morgan" /></label>
     <label><span>Subject</span><input required maxLength={300} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Could you prepare a launch summary?" /></label>
-    <label><span>Message</span><textarea required rows={6} maxLength={20000} value={form.content} onChange={(event) => setForm({ ...form, content: event.target.value })} placeholder="Include the context an agent would need to do the work." /></label>
+    <label><span>Message</span><textarea aria-label="Message" required rows={6} maxLength={20000} value={form.content} onChange={(event) => setForm({ ...form, content: event.target.value })} placeholder="Include the context an agent would need to do the work." /></label>
     <label><span>Thread ID <small>Optional, reuse an existing ID for a follow-up</small></span><input value={form.threadId} maxLength={200} onChange={(event) => setForm({ ...form, threadId: event.target.value })} /></label>
     <SourceAttachments attachments={item?.attachments} />
     {template?.delivered && <p className="field-error">This suggestion has already been delivered. Start a new message for another arrival.</p>}
