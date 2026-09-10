@@ -16,7 +16,7 @@ Gmail and Slack each include a connected 11-message conversation with file-backe
 
 The curated arrivals cover a launch report, cross-provider corroboration, an acknowledgement, QA requested before its fix, a duplicate delivery, meeting preparation, a dinner request with missing details and a calendar conflict, a corrected support count, and an unrelated report request. Additional arrivals exercise nine other projects and informational messages.
 
-This requires internet access and Codex subscription allowance for both intake and execution. There is no canned-output or offline execution mode. The supported work types are document reports, local checkout fixes and QA, meeting briefs, and local calendar events. Web search and external integrations are disabled. Schedules run only while the app is open. Clicking a worker opens its activity and artifacts, not a streamed computer desktop. The board records findings and task handoffs; it is not an autonomous group chat.
+This requires internet access and Codex subscription allowance for both intake and execution. There is no canned-output or offline execution mode. The supported work types are document reports, local checkout fixes and QA, meeting briefs, and local calendar events. Web search and external integrations are disabled. Schedules run only while the app is open. Clicking a worker opens its activity and artifacts, not a streamed computer desktop. The board records findings and task handoffs, with scripted coffee-break conversations and reactions to completed artifacts. Posts labeled "Simulated chat" run locally, cost no model usage, and never trigger work or enter agent prompts.
 
 ## Local evidence
 

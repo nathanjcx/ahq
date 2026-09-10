@@ -845,11 +845,13 @@ function OfficeView({
         <div className="board-posts">
           {[...snapshot.board]
             .sort((a, b) => b.timestamp - a.timestamp)
-            .slice(0, 8)
+            .slice(0, 20)
             .map((post) => {
               const agent = snapshot.agents.find(
                 (item) => item.id === post.agentId,
               );
+              const parent = snapshot.board.find(item => item.id === post.replyTo);
+              const speaker = snapshot.agents.find(item => item.id === parent?.agentId);
               return (
                 <article className="board-post" key={post.id}>
                   <PixelAvatar agent={agent} size="sm" />
@@ -857,10 +859,11 @@ function OfficeView({
                     <div className="board-post__meta">
                       <strong>{agent?.name || "Office"}</strong>
                       <span className={`post-kind post-kind--${post.kind}`}>
-                        {post.kind}
+                        {post.simulated ? "Simulated chat" : post.kind}
                       </span>
                       <time>{formatTime(post.timestamp)}</time>
                     </div>
+                    {parent && <div className="board-reply">Replying to {speaker?.name.split(" ")[0] || "Office"}: {parent.text}</div>}
                     <p>{post.text}</p>
                     {(post.workId || post.artifactId) && (
                       <button

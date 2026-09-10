@@ -1,3 +1,4 @@
+import { advanceBoardChatter } from './board-chatter';
 import { createHash, randomUUID } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import { mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
@@ -963,10 +964,11 @@ class Runtime implements OfficeRuntime {
     await this.exclusive(async () => {
       if (this.closed) return;
       const due = this.state.routines.filter((routine) => routine.enabled && routine.nextRunAt <= Date.now());
-      if (!due.length) return;
+      const chatted = advanceBoardChatter(this.state, Date.now());
+      if (!due.length && !chatted) return;
       for (const routine of due) this.runRoutine(routine.id);
       await this.persistAndEmit();
-      this.drainQueue();
+      if (due.length) this.drainQueue();
     });
   }
 

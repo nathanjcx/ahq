@@ -29,6 +29,13 @@ export function initialSnapshot(now = Date.now()): Snapshot {
     { id: 'board-welcome-2', agentId: 'agent-lena', workId: 'work-welcome', artifactId: 'artifact-welcome-qa', kind: 'finding', text: 'Simulated history: baseline checkout notes are pinned for comparison.', timestamp: now - 20 * HOUR },
   ];
 
+  board.push(
+    { id: 'chatter-seed-1', agentId: 'agent-sam', kind: 'chatter', simulated: true, text: 'There are biscuits by the coffee machine. Please save me one.', timestamp: now - 120_000 },
+    { id: 'chatter-seed-2', agentId: 'agent-lena', kind: 'chatter', simulated: true, replyTo: 'chatter-seed-1', text: 'One biscuit has been placed under my protection.', timestamp: now - 110_000 },
+    { id: 'chatter-seed-3', agentId: 'agent-eli', kind: 'chatter', simulated: true, text: 'Does the plant by my desk have a name yet?', timestamp: now - 90_000 },
+    { id: 'chatter-seed-4', agentId: 'agent-maya', kind: 'chatter', simulated: true, replyTo: 'chatter-seed-3', text: 'Fern. We spent very little time on this decision.', timestamp: now - 80_000 },
+  );
+
   return {
     revision: 1, sources, agents, triage: [], work: [{
       id: 'work-welcome', title: 'Prepare the office source digest', goal: 'Summarize the fictional office sources and prior checkout QA.',

@@ -18,6 +18,8 @@ try {
   let state = await command({ type: 'snapshot' });
   assert.equal(new Set(state.sources.map((source) => source.source)).size, 7);
   assert.equal(state.agents.length, 6);
+  assert.ok(state.board.filter(post => post.simulated && post.kind === 'chatter').length >= 4);
+  assert.ok(await page.locator('.board-reply').count() >= 2);
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined');
   await page.waitForSelector('canvas', { timeout: 30_000 });
   await page.waitForTimeout(1500);

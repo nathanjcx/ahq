@@ -2479,3 +2479,7 @@ select {
   .simulation-controls { align-items:flex-start; flex-direction:column; }
   .office-intro { flex-wrap:wrap; }
 }
+
+.board-posts { max-height: 640px; overflow-y: auto; overscroll-behavior: contain; }
+.board-reply { border-left: 2px solid var(--line); padding-left: 8px; margin-top: 7px; color: var(--ink-soft); font-size: 11px; max-height: 36px; overflow: hidden; }
+.post-kind--chatter { color: #647a72; background: #edf1eb; }

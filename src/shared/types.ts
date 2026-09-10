@@ -44,7 +44,8 @@ export interface Artifact {
 }
 export interface BoardPost {
   id: string; agentId: string; workId?: string; artifactId?: string;
-  kind: 'finding' | 'request' | 'handoff' | 'complete'; text: string; timestamp: number;
+  kind: 'finding' | 'request' | 'handoff' | 'complete' | 'chatter'; text: string; timestamp: number;
+  simulated?: boolean; replyTo?: string;
 }
 export interface Routine {
   id: string; agentId: string; name: string; instructions: string; enabled: boolean;
