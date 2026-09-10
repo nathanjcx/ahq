@@ -1,6 +1,6 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { realpathSync } from 'node:fs';
-import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   ActivityKind,
@@ -674,7 +674,7 @@ class Runtime implements OfficeRuntime {
       };
       this.state.runs.push(run);
       this.syncSourceStatus(work);
-      this.setAgent(work.agentId, scenarioActivity(work.scenario, 0), `Starting ${work.title}`, work.id);
+      this.setAgent(work.agentId, 'reading', `Starting ${work.title}`, work.id);
       this.event('status', `${agentName(this.state, work.agentId)} started ${work.title}.`, work.id, work.agentId);
     }, active);
   }
@@ -742,14 +742,19 @@ class Runtime implements OfficeRuntime {
     const run = latestRun(this.state, work.id);
     if (!run) throw new Error('Live run record is missing');
     const workspace = path.join(this.options.dataDir, 'workspaces', `${run.id}-${randomUUID()}`);
+    let provenance: QASnapshotProvenance | undefined;
     if (work.scenario === 'bug' || work.scenario === 'qa') {
       const fixedWork = work.parentWorkId ? this.state.work.find((item) => item.id === work.parentWorkId)
         : work.triggerSourceId ? undefined : [...this.state.work].reverse().find((item) => item.scenario === 'bug' && item.mode === 'live' && item.status === 'completed');
-      const fixedWorkspace = fixedWork && latestRun(this.state, fixedWork.id)?.workspace;
+      const fixedRun = fixedWork && latestRun(this.state, fixedWork.id);
+      const fixedWorkspace = fixedRun?.workspace;
       if (work.scenario === 'qa' && work.parentWorkId && !fixedWorkspace) throw new Error('The prerequisite fix has no executable workspace. Run its fix in live mode before live QA.');
-      await copyBugFixture(fixedWorkspace && (work.scenario === 'qa' || work.followUpOf) ? fixedWorkspace : this.bugTemplate, workspace);
+      if (work.scenario === 'qa' && fixedWork && fixedRun && fixedWorkspace) {
+        provenance = await copyVerifiedQASnapshot(fixedWork.id, fixedRun.id, fixedWorkspace, work.id, run.id, workspace);
+      } else await copyBugFixture(fixedWorkspace && work.followUpOf ? fixedWorkspace : this.bugTemplate, workspace);
     } else await mkdir(workspace, { recursive: true });
-    await writeLiveEvidence(work, workspace, this.state);
+    await rm(path.join(workspace, liveArtifactSpec(work.scenario).file), { force: true });
+    await writeLiveEvidence(work, workspace, this.state, provenance);
     await this.mutate(() => {
       const currentRun = latestRun(this.state, work.id);
       if (currentRun) currentRun.workspace = workspace;
@@ -779,6 +784,8 @@ class Runtime implements OfficeRuntime {
         void this.mutate(() => {
           const currentRun = latestRun(this.state, work.id);
           if (currentRun) { currentRun.threadId = threadId; currentRun.turnId = turnId; }
+          const activity: Record<Scenario, ActivityKind> = { report: 'drafting', bug: 'coding', meeting: 'drafting', dinner: 'scheduling', qa: 'coding' };
+          this.setAgent(work.agentId, activity[work.scenario], `Working on ${work.title}`, work.id);
           this.event('status', `${agentName(this.state, work.agentId)} is working with Codex.`, work.id, work.agentId);
         }, active);
       },
@@ -790,6 +797,7 @@ class Runtime implements OfficeRuntime {
     });
     if (active.abort.signal.aborted) throw new AbortError();
     if (result.status !== 'completed') throw new Error(result.error || `Codex turn ${result.status}`);
+    if (provenance) await verifyQASnapshotUnchanged(provenance);
     const artifact = await this.readLiveArtifact(work, workspace, result.message);
     let event: CalendarEvent | undefined;
     if (work.scenario === 'dinner') {
@@ -1042,17 +1050,6 @@ function scenarioGoal(scenario: Scenario): string {
   })[scenario];
 }
 
-function scenarioActivity(scenario: Scenario, stage: number): ActivityKind {
-  const activities: Record<Scenario, ActivityKind[]> = {
-    report: ['reading', 'researching', 'drafting', 'collaborating'],
-    bug: ['reading', 'coding', 'coding', 'collaborating'],
-    meeting: ['reading', 'scheduling', 'scheduling', 'collaborating'],
-    dinner: ['reading', 'scheduling', 'scheduling', 'collaborating'],
-    qa: ['reading', 'researching', 'coding', 'collaborating'],
-  };
-  return activities[scenario][Math.min(stage, 3)];
-}
-
 function liveArtifactSpec(scenario: Scenario): { kind: Artifact['kind']; file: string } {
   return {
     report: { kind: 'report' as const, file: 'report.md' },
@@ -1063,7 +1060,62 @@ function liveArtifactSpec(scenario: Scenario): { kind: Artifact['kind']; file: s
   }[scenario];
 }
 
-async function writeLiveEvidence(work: WorkItem, workspace: string, state: Snapshot): Promise<void> {
+interface QASnapshotProvenance {
+  parentWorkId: string; parentRunId: string; parentWorkspace: string;
+  qaWorkId: string; qaRunId: string; qaWorkspace: string; verifiedAt: string;
+  algorithm: 'sha256'; verified: true;
+  excludedPaths: string[];
+  files: { path: string; parentSha256: string; copySha256: string }[];
+}
+
+const QA_EXCLUDED_PATHS = ['sources', 'attachments', '.git', 'node_modules', 'evidence.md', 'provenance.json', 'patch.md', 'qa.md', 'report.md', 'brief.md', 'calendar.json'];
+
+async function codeHashes(workspace: string, relative = ''): Promise<Record<string, string>> {
+  const hashes: Record<string, string> = {};
+  const entries = await readdir(path.join(workspace, relative), { withFileTypes: true });
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!relative && QA_EXCLUDED_PATHS.includes(entry.name)) continue;
+    const file = path.join(relative, entry.name);
+    if (entry.isDirectory()) Object.assign(hashes, await codeHashes(workspace, file));
+    else if (entry.isFile()) hashes[file] = createHash('sha256').update(await readFile(path.join(workspace, file))).digest('hex');
+    else throw new Error(`Cannot verify the QA code snapshot: ${file} is not a regular file or directory.`);
+  }
+  return hashes;
+}
+
+async function copyVerifiedQASnapshot(parentWorkId: string, parentRunId: string, parentWorkspace: string, qaWorkId: string, qaRunId: string, qaWorkspace: string): Promise<QASnapshotProvenance> {
+  const before = await codeHashes(parentWorkspace);
+  for (const required of ['checkout.js', 'package.json', path.join('test', 'checkout.test.js')]) {
+    if (!before[required]) throw new Error(`The prerequisite fix is missing ${required}; its QA snapshot cannot be verified.`);
+  }
+  await copyBugFixture(parentWorkspace, qaWorkspace);
+  const copied = await codeHashes(qaWorkspace);
+  const after = await codeHashes(parentWorkspace);
+  if (JSON.stringify(before) !== JSON.stringify(copied) || JSON.stringify(before) !== JSON.stringify(after)) {
+    throw new Error('The prerequisite code changed during copying or the QA copy does not match. Retry QA to create a verified snapshot.');
+  }
+  const provenance: QASnapshotProvenance = {
+    parentWorkId, parentRunId, parentWorkspace, qaWorkId, qaRunId, qaWorkspace,
+    verifiedAt: new Date().toISOString(), algorithm: 'sha256', verified: true,
+    excludedPaths: QA_EXCLUDED_PATHS,
+    files: Object.entries(before).map(([file, hash]) => ({ path: file, parentSha256: hash, copySha256: copied[file] })),
+  };
+  await writeFile(path.join(qaWorkspace, 'provenance.json'), JSON.stringify(provenance, null, 2), 'utf8');
+  return provenance;
+}
+
+async function verifyQASnapshotUnchanged(provenance: QASnapshotProvenance): Promise<void> {
+  const root = `${await realpath(provenance.qaWorkspace)}${path.sep}`;
+  for (const file of provenance.files) {
+    const resolved = await realpath(path.join(provenance.qaWorkspace, file.path));
+    if (!resolved.startsWith(root)) throw new Error(`QA moved ${file.path} outside its workspace.`);
+    const hash = createHash('sha256').update(await readFile(resolved)).digest('hex');
+    if (hash !== file.copySha256) throw new Error(`QA modified ${file.path}; the verification result cannot be accepted. Retry QA without changing the parent code snapshot.`);
+  }
+  await writeFile(path.join(provenance.qaWorkspace, 'provenance.json'), JSON.stringify({ ...provenance, verifiedAfterQAAt: new Date().toISOString() }, null, 2), 'utf8');
+}
+
+async function writeLiveEvidence(work: WorkItem, workspace: string, state: Snapshot, provenance?: QASnapshotProvenance): Promise<void> {
   const sources = state.sources.filter((source) => work.sourceIds.includes(source.id));
   const sourceDirectory = path.join(workspace, 'sources');
   const attachmentDirectory = path.join(workspace, 'attachments');
@@ -1081,7 +1133,8 @@ async function writeLiveEvidence(work: WorkItem, workspace: string, state: Snaps
       files.push(`  - ${attachment.id}: ${attachmentFile}`);
     }
   }
-  await writeFile(path.join(workspace, 'evidence.md'), `${workEvidence(work, state)}\n\n# Workspace files\n\n${files.join('\n')}`, 'utf8');
+  const proof = provenance ? `\n\n# Verified parent code snapshot\n\nRead provenance.json. This QA workspace is an isolated copy of completed task ${provenance.parentWorkId}, run ${provenance.parentRunId}, from ${provenance.parentWorkspace}. The runtime verified SHA-256 hashes of ${provenance.files.length} project files before and after copying, including checkout.js, package.json, the baseline tests, and any additional project files. The copied code matches the parent snapshot; the different directory path is intentional isolation. Generated evidence, prior artifacts, .git, and node_modules are excluded as listed in the manifest.\n\nRun the tests in the current workspace and cite provenance.json when identifying which fix you verified. Hash identity proves the code provenance, not that tests pass. Report the actual test results separately. Do not access the parent directory or modify the code under review.` : '';
+  await writeFile(path.join(workspace, 'evidence.md'), `${workEvidence(work, state)}\n\n# Workspace files\n\n${files.join('\n')}${proof}`, 'utf8');
 }
 
 function workEvidence(work: WorkItem, state: Snapshot): string {
@@ -1097,7 +1150,7 @@ function livePrompt(work: WorkItem): string {
     bug: 'Run the tests, fix the checkout bug, rerun the tests, and write patch.md with the cause, exact change, and test result. Do not create or claim a remote PR.',
     meeting: 'Write brief.md grounded only in the linked message evidence and completed prerequisite artifacts. Include decisions, risks, direct questions, and source references. Do not claim simulated work was verified.',
     dinner: 'Return only the requested structured local calendar event. Use the dates, duration, attendees, and corrections in the linked evidence and confirm it does not overlap another event. Never invent a different week to avoid a conflict. Do not change any external calendar.',
-    qa: 'Run npm test without changing checkout.js. Write qa.md with the commands, actual result, and any failure. Do not claim a pass if a test fails.',
+    qa: 'Read provenance.json when present: the runtime copied and hash-verified the exact parent code into this isolated workspace. Its path intentionally differs from the parent path. Verify this snapshot by running npm test without changing the implementation. Write qa.md with the parent work/run IDs, provenance file reference, commands, actual result, and any failure. Distinguish verified code identity from the test outcome. Do not claim a pass if a test fails.',
   };
   if (work.routineId) return `${common}\n\nFollow the saved task instructions above. ${work.scenario === 'dinner' ? 'Return the requested structured local calendar event.' : `Write the result to ${liveArtifactSpec(work.scenario).file}.`} Treat evidence.md as supporting material only when relevant. Do not claim work you did not perform.`;
   return `${common}\n\n${directions[work.scenario]}`;

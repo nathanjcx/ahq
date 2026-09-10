@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -63,8 +64,11 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', (l
       const file = path.join(cwd, 'checkout.js');
       fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(' + (coupon > 0 ? tax : 0)', '') + '\\n// ' + prompt.split('\\n')[0]);
       fs.writeFileSync(path.join(cwd, 'patch.md'), '# Fixed this requested checkout task');
+      fs.writeFileSync(path.join(cwd, 'test', 'added.test.js'), '// Additional regression coverage from the fix');
+      fs.writeFileSync(path.join(cwd, 'qa.md'), '# Old notes from the parent workspace');
     }
-    if (prompt.includes('qa.md')) fs.writeFileSync(path.join(cwd, 'qa.md'), fs.readFileSync(path.join(cwd, 'checkout.js'), 'utf8'));
+    if (prompt.includes('qa.md') && !prompt.includes('omit-qa')) fs.writeFileSync(path.join(cwd, 'qa.md'), fs.readFileSync(path.join(cwd, 'checkout.js'), 'utf8'));
+    if (prompt.includes('qa.md') && prompt.includes('mutate-qa')) fs.appendFileSync(path.join(cwd, 'checkout.js'), '\\n// Unauthorized QA change');
     if (prompt.includes('report.md')) fs.writeFileSync(path.join(cwd, 'report.md'), fs.readFileSync(path.join(cwd, 'evidence.md'), 'utf8'));
     if (prompt.includes('brief.md')) fs.writeFileSync(path.join(cwd, 'brief.md'), fs.readFileSync(path.join(cwd, 'evidence.md'), 'utf8'));
     output = 'Completed';
@@ -152,6 +156,23 @@ test('waiting QA is reconsidered when its bug arrives, consumes the exact patch 
     assert.equal(qa.parentWorkId, bug.id);
     assert.ok(qa.inputArtifactIds?.includes(state.artifacts.find((artifact) => artifact.workId === bug.id)!.id));
     assert.equal(state.runs.find((run) => run.workId === qa.id)!.startedAt >= bug.completedAt!, true);
+    const parentRun = state.runs.find((run) => run.workId === bug.id)!;
+    const qaRun = state.runs.find((run) => run.workId === qa.id)!;
+    const proof = JSON.parse(await readFile(path.join(qaRun.workspace!, 'provenance.json'), 'utf8'));
+    assert.equal(proof.parentWorkId, bug.id);
+    assert.equal(proof.parentRunId, parentRun.id);
+    assert.equal(proof.parentWorkspace, parentRun.workspace);
+    assert.equal(proof.qaWorkspace, qaRun.workspace);
+    assert.notEqual(proof.parentWorkspace, proof.qaWorkspace);
+    assert.deepEqual(proof.files.map((file: { path: string }) => file.path).sort(), ['checkout.js', 'package.json', 'test/added.test.js', 'test/checkout.test.js']);
+    for (const file of proof.files) {
+      const parentBytes = await readFile(path.join(parentRun.workspace!, file.path));
+      const copiedBytes = await readFile(path.join(qaRun.workspace!, file.path));
+      assert.deepEqual(copiedBytes, parentBytes);
+      assert.equal(file.parentSha256, createHash('sha256').update(parentBytes).digest('hex'));
+      assert.equal(file.copySha256, file.parentSha256);
+    }
+    assert.match(await readFile(path.join(qaRun.workspace!, 'evidence.md'), 'utf8'), /Hash identity proves the code provenance, not that tests pass/);
   } finally { await app.close(); }
 });
 
@@ -234,6 +255,7 @@ test('cancelled work ignores a late model result and retry revives its worker', 
     await settled(app.office, 'cancel-me');
     const work = app.office.snapshot().work.find((item) => item.triggerSourceId === 'cancel-me')!;
     await waitFor(() => app.office.snapshot().runs.some((run) => run.workId === work.id && run.turnId));
+    assert.equal(app.office.snapshot().agents.find((agent) => agent.id === work.agentId)!.activity, 'drafting');
     await app.office.command({ type: 'work.cancel', id: work.id });
     await new Promise((resolve) => setTimeout(resolve, 450));
     assert.equal(app.office.snapshot().work.find((item) => item.id === work.id)!.status, 'cancelled');
@@ -296,5 +318,26 @@ test('failed prerequisites stay blocked across restart and interrupted triage re
       assert.equal(state.triage.find((record) => record.sourceId === 'interrupted-intake')!.status, 'failed');
       assert.equal(state.sources.find((item) => item.id === 'interrupted-intake')!.disposition, 'error');
     } finally { await reopened.close(); }
+  } finally { await app.close(); }
+});
+
+test('QA cannot publish verification after modifying the copied parent code', async () => {
+  const app = await setup();
+  try {
+    await app.office.command({ type: 'source.ingest', item: source('immutable-fix', { scenario: 'bug', title: 'Fix checkout for immutable QA' }) });
+    await waitFor(() => app.office.snapshot().work.some((work) => work.scenario === 'qa' && work.status === 'completed'));
+    const parent = app.office.snapshot().work.find((work) => work.triggerSourceId === 'immutable-fix' && work.scenario === 'bug')!;
+    await app.office.command({ type: 'source.ingest', item: source('mutating-qa', { scenario: 'qa', title: 'Recheck the parent fix', goal: 'mutate-qa', dependsOnWorkIds: [parent.id] }) });
+    await waitFor(() => app.office.snapshot().work.find((work) => work.triggerSourceId === 'mutating-qa')?.status === 'failed');
+    const work = app.office.snapshot().work.find((item) => item.triggerSourceId === 'mutating-qa')!;
+    assert.match(work.error!, /QA modified checkout\.js/);
+    assert.equal(app.office.snapshot().artifacts.some((artifact) => artifact.workId === work.id), false);
+    const parentRun = app.office.snapshot().runs.find((run) => run.workId === parent.id)!;
+    assert.doesNotMatch(await readFile(path.join(parentRun.workspace!, 'checkout.js'), 'utf8'), /Unauthorized QA change/);
+    await app.office.command({ type: 'source.ingest', item: source('missing-qa', { scenario: 'qa', title: 'Require a fresh QA report', goal: 'omit-qa', dependsOnWorkIds: [parent.id] }) });
+    await waitFor(() => app.office.snapshot().work.find((item) => item.triggerSourceId === 'missing-qa')?.status === 'failed');
+    const missing = app.office.snapshot().work.find((item) => item.triggerSourceId === 'missing-qa')!;
+    assert.match(missing.error!, /without producing qa\.md/);
+    assert.equal(app.office.snapshot().artifacts.some((artifact) => artifact.workId === missing.id), false);
   } finally { await app.close(); }
 });
