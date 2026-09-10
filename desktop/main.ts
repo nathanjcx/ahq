@@ -34,6 +34,7 @@ import { generatePersonality, generateRoadmap } from './planning';
 import { advanceRoadmap } from './roadmap';
 import { mergeWorkspace } from '../shared/workspaceMerge';
 import { assertCanAssignTask, recordAssignedTask } from '../src/lib/assignedTasks';
+import { freshWorkspaceState } from '../src/lib/store';
 import { applySession, applyDecision } from '../src/lib/workflow';
 import type { Command } from '../src/shared/types';
 import type { AppState, CloudSession, CloudSettings, LocalFileEntry } from '../shared/types';
@@ -65,6 +66,8 @@ let pollBusy = false;
 let pollTimer: ReturnType<typeof setInterval>;
 let snapshotTimer: ReturnType<typeof setInterval>;
 let shuttingDown = false;
+let rosterMigration: Promise<void> | undefined;
+let migratedRoster: AppState | undefined;
 const vaultPath = () => path.join(root(), 'api-keys.json');
 const vaultSchema = z.object({
   key: z.string().default(''),
@@ -128,6 +131,7 @@ async function setupDatabase() {
       await database.saveHQ(old, 'Imported AHQ Birth workspace');
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+      await database.saveHQ(freshWorkspaceState(), 'Created default team', true);
     }
   }
   goals = new GoalCoordinator({
@@ -290,7 +294,27 @@ async function cloudSettings(): Promise<CloudSettings> {
 }
 async function loadState(): Promise<AppState | null> {
   const value = database.get<AppState>('workspace');
-  return value ? StateSchema.parse(value) : null;
+  if (!value) return null;
+  const state = StateSchema.parse(value);
+  if (database.get<boolean>('default-roster-v1') === true) return state;
+  const migrated: AppState = {
+    ...state,
+    employees: freshWorkspaceState().employees,
+    roadmap: undefined,
+    commitments: [],
+    messages: [],
+    approvals: [],
+    events: [],
+    demo: false,
+  };
+  if (!rosterMigration) {
+    migratedRoster = migrated;
+    rosterMigration = database
+      .saveHQ(migrated, 'Replaced the default employee roster', true)
+      .then(() => database.put('default-roster-v1', true));
+  }
+  await rosterMigration;
+  return migratedRoster ?? migrated;
 }
 async function localFiles(): Promise<LocalFileEntry[]> {
   const storageRoot = path.dirname(database.filePath);

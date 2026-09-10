@@ -1,9 +1,29 @@
 import { StateSchema } from '../../shared/schemas';
 import type { AppState, Employee, WorkspaceFolder } from '../../shared/types';
+import { randomEmployeeAppearance } from './employeeAppearance';
 export const STORAGE_KEY = 'astra-hq:v1';
+const DEFAULT_ROSTER_MIGRATION_KEY = 'astra-hq:default-roster-v1';
 export const uid = () => crypto.randomUUID();
 export const timeNow = () => new Date().toISOString();
 export const employeeColors = ['#c49871', '#667e6b', '#718da1', '#c8a465', '#a0889b', '#82958a'];
+const defaultNames = [
+  'Alex',
+  'Jordan',
+  'Casey',
+  'Morgan',
+  'Taylor',
+  'Riley',
+  'Avery',
+  'Quinn',
+  'Rowan',
+  'Jamie',
+  'Cameron',
+  'Drew',
+  'Skyler',
+  'Parker',
+  'Reese',
+  'Dakota',
+];
 const at = (hour: number, minute: number) => {
   const date = new Date();
   date.setHours(hour, minute, 0, 0);
@@ -30,6 +50,69 @@ export function initialState(): AppState {
     events: [],
     folders: [],
   };
+}
+
+/** Fresh workspaces start with a small, useful team. Names and appearances are randomized once. */
+export function defaultEmployees(random: () => number = Math.random): Employee[] {
+  const names = [...defaultNames];
+  const pickName = () => names.splice(Math.floor(random() * names.length), 1)[0];
+  const make = (
+    id: string,
+    jobTitle: string,
+    personality: string,
+    skills: string,
+    activity: string,
+    location: Employee['location'],
+    colorIndex: number,
+  ): Employee => {
+    const appearance = randomEmployeeAppearance(random);
+    return {
+      id,
+      name: pickName(),
+      jobTitle,
+      personality,
+      skills,
+      color: appearance.color || employeeColors[colorIndex],
+      avatar: appearance.avatar,
+      appearance: appearance.appearance,
+      status: 'ready',
+      activity,
+      location,
+    };
+  };
+  return [
+    make(
+      'software-engineer',
+      'Software Engineer',
+      'Builder-minded, practical, and clear. Turns ideas into reliable product changes and explains decisions simply.',
+      'React, TypeScript, desktop applications, ASTRA cloud session',
+      'Creating the Astra HQ application',
+      'desk',
+      0,
+    ),
+    make(
+      'finance-bro',
+      'Finance Bro',
+      'Commercially minded and numbers-first. Turns assumptions into useful spreadsheets and profit scenarios.',
+      'Excel, financial modeling, profit analysis, ASTRA cloud session',
+      'Creating an Excel sheet and potential profit scenarios',
+      'library',
+      1,
+    ),
+    make(
+      'assistant',
+      'Assistant',
+      'Warm, organized, and proactive. Keeps meetings moving and replies clearly so nothing gets lost.',
+      'Meeting prep, scheduling, email replies, ASTRA cloud session',
+      'Creating meetings and replying to email',
+      'meeting',
+      2,
+    ),
+  ];
+}
+
+export function freshWorkspaceState(): AppState {
+  return { ...initialState(), employees: defaultEmployees() };
 }
 
 // Example data is available only when explicitly selected in Settings.
@@ -277,11 +360,25 @@ export function isState(value: unknown): value is AppState {
 export function readLocalState(): AppState {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-    if (isState(value)) return value;
+    if (isState(value)) {
+      if (localStorage.getItem(DEFAULT_ROSTER_MIGRATION_KEY) === 'done') return value;
+      const migrated: AppState = {
+        ...value,
+        employees: defaultEmployees(),
+        roadmap: undefined,
+        commitments: [],
+        messages: [],
+        approvals: [],
+        events: [],
+        demo: false,
+      };
+      localStorage.setItem(DEFAULT_ROSTER_MIGRATION_KEY, 'done');
+      return migrated;
+    }
   } catch {
     /* Recover a fresh workspace if local cache is damaged. */
   }
-  return initialState();
+  return freshWorkspaceState();
 }
 export function profileSuggestion(title: string) {
   const role = title.toLowerCase();

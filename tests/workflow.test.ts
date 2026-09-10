@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { initialState, sampleState, isState, folderBrief } from '../src/lib/store';
+import {
+  defaultEmployees,
+  freshWorkspaceState,
+  initialState,
+  sampleState,
+  isState,
+  folderBrief,
+} from '../src/lib/store';
 import { applyDecision, applySession } from '../src/lib/workflow';
 import type { CloudSession } from '../shared/types';
 
@@ -28,6 +35,19 @@ test('the starter workspace is valid, empty, and separate from the optional samp
   assert.equal(
     sample.events.every((e) => e.source === 'example'),
     true,
+  );
+});
+test('fresh workspaces include the three default role-based employees', () => {
+  const state = freshWorkspaceState();
+  assert.equal(isState(state), true);
+  assert.deepEqual(
+    state.employees.map((employee) => employee.jobTitle),
+    ['Software Engineer', 'Finance Bro', 'Assistant'],
+  );
+  assert.equal(new Set(state.employees.map((employee) => employee.name)).size, 3);
+  assert.deepEqual(
+    defaultEmployees(() => 0.1).map((employee) => employee.id),
+    ['software-engineer', 'finance-bro', 'assistant'],
   );
 });
 test('malformed stored profiles are rejected before rendering', () => {
