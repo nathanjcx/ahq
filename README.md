@@ -8,7 +8,7 @@ The sources and incoming streams are fictional. Triage and task execution use re
 
 The office contains 450 historical messages across ten projects, with 30 distinct new messages available for delivery and one deliberate duplicate delivery. The full dataset has 480 unique messages and 84 readable CSV, Markdown, and JSON attachments. Historical messages provide context without automatically starting work.
 
-Deliver an event from the office picker, advance playback, or write a message in the Inbox's incoming-message form. Codex decides whether to ignore it, create a task, attach it to existing work, or wait for missing information or another task. Decisions and reasons appear in the Inbox and Tasks view. New tasks receive temporary worker characters; recurring agents retain their identity. Idle residents welcome new workers at the door, take coffee breaks, and tend plants. Work animations reflect reading, drafting, coding, QA, and scheduling. Reduced motion skips social movement.
+Open **Simulate an arrival** to choose and edit a suggested message, write a new message, or create a meeting. Codex decides whether to ignore it, create a task, attach it to existing work, or wait for missing information or another task. Decisions and reasons appear in the Inbox and Tasks view. New tasks receive temporary worker characters; recurring agents retain their identity. Idle residents welcome new workers at the door, take coffee breaks, and tend plants. Work animations reflect reading, drafting, coding, QA, and scheduling. Reduced motion skips social movement.
 
 Tasks run through Codex against a workspace containing source messages, attachment files, and the exact prerequisite artifacts. Bug fixes use a small local checkout project with Node tests. QA uses a verified copy of its parent fix's workspace, with a file-hash manifest linking the two. Corrections can create linked revisions, completed work can release waiting tasks, and meeting briefs can be refreshed after their inputs change. Source content is evidence rather than privileged agent instructions.
 
@@ -50,11 +50,13 @@ Codex owns authentication credentials. Signing out uses Codex's logout operation
 
 ## Demo controls
 
-Use **Deliver** to send the selected fictional arrival, **Deliver next event** to advance once, or Play to deliver the sequence. These controls simulate the incoming stream; the resulting model calls are real. In Inbox, **New incoming message** lets you type a new request without assigning it a task type. The local calendar form creates a demo event and sends it through intake for preparation.
+The **Simulate an arrival** panel groups suggested requests and follow-ups. Choose a suggestion to review and edit its source, sender, subject, message, and thread before delivering it. Its evidence attachments and provider identity stay attached. Follow-ups include corrected figures, missing details, and a duplicate delivery. Nothing arrives until you submit it.
+
+**New incoming message** accepts a blank request without assigning a task type. **New calendar event** creates a local event and sends it through intake for preparation. These actions simulate the incoming stream; the resulting model calls are real. Recent activity and task history remain visible. There are no playback or speed controls.
 
 Use Tasks to inspect the intake reason, worker, dependencies, missing details, input artifacts, and finished output. Supply a clarifying message when a task needs information. Reuse its project or issue reference so intake can associate the reply correctly, including across providers.
 
-Reset restores the current fixture set and clears active office history. Existing installations retain their saved state until reset; use reset to load the expanded dataset after updating from V1. Generated files from earlier runs remain on disk.
+**Reset demo data** in the simulation panel restores the current fixture set and clears active office history. Existing installations retain their saved state until reset; use reset to load the expanded dataset after updating from V1. Generated files from earlier runs remain on disk.
 
 Closing the application stops its runtime. Routines do not run while the computer or application is off. Interrupted execution is surfaced for retry on the next launch; dependency waits remain waiting.
 
@@ -78,7 +80,7 @@ node scripts/auth-smoke.mjs
 node scripts/smoke.mjs
 ```
 
-The Electron smoke check requires a graphical session and writes screenshots to `test-results/`. It checks scene clicks, inbox filters, attachment previews, the incoming-message composer, routine editing, board posts, and the calendar without starting model work. Set `OFFICE_EXECUTABLE` to the packaged executable to run the same checks against the distribution.
+The Electron smoke check requires a graphical session and writes screenshots to `test-results/`. It checks scene clicks, inbox filters, attachment previews, the incoming-message composer, routine editing, board posts, and the calendar without starting model work. It also checks suggestion preview and cancellation. Set `OFFICE_TRIGGER_SMOKE=1` to additionally deliver an edited suggestion through real Codex triage. Set `OFFICE_EXECUTABLE` to the packaged executable to run the same checks against the distribution.
 
 The authentication check uses an isolated Codex profile to verify the real login URL and cancellation without changing your existing sign-in. It does not start a model turn.
 
