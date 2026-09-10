@@ -71,7 +71,8 @@ export async function createSimulatedPullRequest(input: SimulatedPullRequestInpu
     try {
       const env = { ...process.env };
       delete env.NODE_TEST_CONTEXT;
-      const result = await execute('node', ['--test'], {
+      if (process.versions.electron) env.ELECTRON_RUN_AS_NODE = '1';
+      const result = await execute(process.execPath, ['--test'], {
         cwd: verification,
         env,
         signal: input.signal,
