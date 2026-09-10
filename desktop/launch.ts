@@ -269,7 +269,7 @@ export class LaunchCoordinator {
     const tasks = launchTasks(state, record.snapshot.id).filter((item) =>
       ['product', 'marketing', 'forecast'].includes(item.launchStep ?? ''),
     );
-    if (state.roadmap?.status === 'failed')
+    if (state.roadmap?.status === 'failed' || state.roadmap?.status === 'paused')
       return this.fail(scene, state.roadmap.message || 'Launch planning failed.');
     if (
       tasks.length !== 3 ||

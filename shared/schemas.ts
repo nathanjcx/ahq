@@ -61,6 +61,7 @@ export const StateSchema = z.object({
       goal: z.string().min(1).max(500),
       status: z.enum(['planning', 'active', 'paused', 'failed', 'complete']),
       automatic: z.boolean().optional(),
+      folderIds: z.array(z.string().uuid()).max(10).optional(),
       launchId: z.string().optional(),
       message: z.string().max(4000),
       createdAt: dateTime,

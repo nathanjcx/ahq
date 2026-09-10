@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import type { LocalArtifact, LocalTaskInput } from '../shared/demo';
 import { createSimulatedPullRequest } from '../runtime/pull-request';
 import { writeReportPdf } from '../runtime/report-pdf';
+import { copyPackagedDirectory } from './copy-packaged-directory';
 
 const resources = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
 const packagedData = resources ? path.join(resources, 'app.asar', 'demo-data') : undefined;
@@ -62,7 +63,7 @@ export async function prepareTask(workspace: string, task: LocalTaskInput): Prom
   if (task.project === 'little-office' && (task.kind === 'product' || task.kind === 'bug'))
     await prepareLittleOffice(workspace, task);
   if (task.kind === 'bug' && task.project !== 'little-office')
-    await cp(path.join(demoDataPath, 'checkout'), workspace, { recursive: true });
+    await copyPackagedDirectory(path.join(demoDataPath, 'checkout'), workspace);
   if (task.kind === 'qa') {
     if (!task.parentWorkspace || !task.parentSessionId)
       throw new Error('QA needs the completed patch session and its workspace.');

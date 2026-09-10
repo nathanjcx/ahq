@@ -321,3 +321,29 @@ test('an immediate output is linked for review and never loses the assigned requ
   assert.equal(state.approvals[0].commitmentId, state.commitments[0].id);
   assert.equal(state.commitments[0].assignment, 'Write release notes');
 });
+
+test('a fresh announcement assignment preserves the previous approved deliverable and task', () => {
+  const first = runningSession();
+  let state = recordAssignedTask(workspace(), 'employee', 'Prepare the release notes', first);
+  state = applySession(state, 'employee', {
+    ...first,
+    status: 'completed',
+    reviewed: true,
+    output: {
+      title: 'Release notes',
+      content: 'Approved final release notes',
+      sources: [],
+      recipient: 'You',
+      version: 1,
+    },
+  });
+  const completedTask = structuredClone(state.commitments[0]);
+  const next = recordAssignedTask(state, 'employee', 'Announcement: prepare next week’s update', {
+    ...runningSession(),
+    id: 'chatgpt-new-announcement',
+  });
+  assert.equal(next.employees[0].sessionId, 'chatgpt-new-announcement');
+  assert.deepEqual(next.commitments[0], completedTask);
+  assert.equal(next.commitments[0].status, 'done');
+  assert.equal(next.commitments[1].sessionId, 'chatgpt-new-announcement');
+});

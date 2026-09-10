@@ -445,3 +445,25 @@ test('application execution context is authoritative, optional, and bounded befo
   }
   assert.equal(calls, 0);
 });
+
+test('roadmap planning receives selected source excerpts and marks incomplete content', async () => {
+  await generateRoadmap(
+    async (prompt) => {
+      const context = JSON.parse(prompt.split('Planning data: ')[1]);
+      assert.deepEqual(context.files, [
+        { folder: 'Client', path: 'brief.md', excerpt: 'Confirmed client context', truncated: false },
+        { folder: 'Client', path: 'data.csv', excerpt: 'x'.repeat(1500), truncated: true },
+      ]);
+      assert.match(prompt, /Workers receive the full selected files/);
+      return JSON.stringify(roadmap());
+    },
+    {
+      goal: 'Use the client brief',
+      employees: [employee],
+      files: [
+        { folder: 'Client', path: 'brief.md', content: 'Confirmed client context' },
+        { folder: 'Client', path: 'data.csv', content: 'x'.repeat(1501) },
+      ],
+    },
+  );
+});

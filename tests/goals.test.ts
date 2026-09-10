@@ -285,3 +285,37 @@ test('concurrent milestones cannot make the generated plan exceed the stored wor
   );
   assert.equal(run.advanced.length, 0);
 });
+
+test('goal sources require explicit sharing and remain selected through generation', async () => {
+  const folder = {
+    id: 'd5fd2c46-cedb-47b7-8bc0-44164412ffda',
+    name: 'Client brief',
+    files: [],
+    createdAt: new Date().toISOString(),
+    excludedCount: 0,
+  };
+  const run = harness({ ...initialState(), folders: [folder] });
+  await assert.rejects(
+    run.coordinator.create('Analyze client brief', { folderIds: [folder.id] }),
+    /Explicitly authorize/,
+  );
+  await assert.rejects(
+    run.coordinator.create('Analyze client brief', { folderIds: ['unknown'], allowCloudUpload: true }),
+    /not part of this workspace/,
+  );
+  await assert.rejects(
+    run.coordinator.create('Example', { automatic: true, folderIds: [folder.id], allowCloudUpload: true }),
+    /example files/,
+  );
+  assert.equal(run.saves.length, 0);
+  const plan = await run.coordinator.create('Analyze client brief', {
+    folderIds: [folder.id],
+    allowCloudUpload: true,
+  });
+  assert.deepEqual(plan.roadmap?.folderIds, [folder.id]);
+  run.generated.get('Analyze client brief')!.resolve([milestone('analysis')]);
+  await run.settle();
+  assert.deepEqual(run.advanced[0].roadmap?.folderIds, [folder.id]);
+  const next = await run.coordinator.create('An unrelated goal');
+  assert.deepEqual(next.roadmap?.folderIds, []);
+});

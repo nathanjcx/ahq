@@ -62,11 +62,13 @@ type Common = { state: AppState; update: UpdateState; notify: (message: string) 
 export function FilesPage({
   state,
   notify,
+  onAddFolder,
   demoElapsed = 0,
 }: {
   state: AppState;
   notify: (message: string) => void;
   demoElapsed?: number;
+  onAddFolder: () => void;
 }) {
   const { api: availableApi, isDemo } = useOfficeEnvironment();
   const api = isDemo ? undefined : availableApi;
@@ -140,7 +142,7 @@ export function FilesPage({
     try {
       await api.showFileInFinder(file.path);
     } catch (error) {
-      notify(error instanceof Error ? error.message : 'Could not open that file in Finder.');
+      notify(error instanceof Error ? error.message : 'Could not show that file in your file manager.');
     } finally {
       setBusy(false);
     }
@@ -160,7 +162,7 @@ export function FilesPage({
         disabled={isDemo ? !fixture : !api || busy}
         onClick={() => void show(file)}
       >
-        {isDemo ? 'Open preview' : 'Show in Finder'}
+        {isDemo ? 'Open preview' : 'Show in file manager'}
       </button>
     );
   };
@@ -173,6 +175,9 @@ export function FilesPage({
           </button>
         </div>
         <div className="button-group">
+          <button className="button primary" onClick={onAddFolder} disabled={isDemo}>
+            <Plus size={14} /> Add source folder
+          </button>
           <button className="button secondary" disabled={!api || loading} onClick={() => void refresh()}>
             <RefreshCw size={14} className={loading ? 'spin' : undefined} /> Refresh
           </button>

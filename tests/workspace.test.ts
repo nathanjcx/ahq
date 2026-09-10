@@ -4,7 +4,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { allowedPath, containsSecret, MAX_FILE_SIZE } from '../shared/workspace';
-import { atomicWrite, createSnapshot } from '../desktop/workspace';
+import { atomicWrite, createSnapshot, readSnapshotFiles } from '../desktop/workspace';
 
 test('file selection rejects traversal, hidden paths, generated files, and secret-like filenames', () => {
   for (const file of [
@@ -83,6 +83,38 @@ test('atomic writes leave one complete JSON file with private permissions', asyn
     assert.equal(JSON.parse(await fs.readFile(file, 'utf8')).version, 2);
     assert.deepEqual(await fs.readdir(root), ['workspace.json']);
     assert.equal((await fs.stat(file)).mode & 0o777, 0o600);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('assignment sources read only selected snapshots and reject unknown or changed unsafe files', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ahq-sources-test-'));
+  try {
+    const snapshots = path.join(root, 'snapshots');
+    const folders = [];
+    for (const name of ['selected', 'unselected']) {
+      const source = path.join(root, name);
+      await fs.mkdir(source);
+      await fs.writeFile(path.join(source, 'brief.md'), `${name} project details`);
+      folders.push(await createSnapshot(source, snapshots));
+    }
+    assert.deepEqual(await readSnapshotFiles([], folders, snapshots), []);
+    assert.deepEqual(await readSnapshotFiles([folders[0].id], folders, snapshots), [
+      { folder: 'selected', path: 'brief.md', content: 'selected project details' },
+    ]);
+    await assert.rejects(readSnapshotFiles(['unknown'], folders, snapshots), /not part of this workspace/);
+    const file = path.join(snapshots, folders[0].id, 'files', 'brief.md');
+    await fs.writeFile(file, 'password = "do-not-share-this-value"');
+    await assert.rejects(
+      readSnapshotFiles([folders[0].id], folders, snapshots),
+      /appears to contain a secret/,
+    );
+    await fs.rm(file);
+    const outside = path.join(root, 'outside.md');
+    await fs.writeFile(outside, 'outside snapshot');
+    await fs.symlink(outside, file);
+    await assert.rejects(readSnapshotFiles([folders[0].id], folders, snapshots), /outside the snapshot/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

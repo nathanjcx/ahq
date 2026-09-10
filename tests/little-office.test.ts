@@ -66,6 +66,13 @@ test(
         format: 'cjs',
         outfile: driver,
         external: ['electron', 'esbuild'],
+        define: process.env.AHQ_PACKAGED_APP
+          ? {
+              __dirname: JSON.stringify(
+                path.join(path.resolve(process.env.AHQ_PACKAGED_APP), 'dist-desktop'),
+              ),
+            }
+          : undefined,
       });
       const env = { ...process.env };
       delete env.ELECTRON_RUN_AS_NODE;

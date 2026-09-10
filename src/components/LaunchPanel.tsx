@@ -68,6 +68,7 @@ export default function LaunchPanel({
   const refreshRef = useRef(onWorkUpdate);
   refreshRef.current = onWorkUpdate;
   const celebrated = useRef<string | null>(null);
+  const firstSnapshot = useRef(true);
   const supported = !!api?.launchSnapshot && !!api?.launchAction;
 
   useEffect(() => {
@@ -104,9 +105,15 @@ export default function LaunchPanel({
   }, [supported, api]);
 
   useEffect(() => {
+    if (!snapshot) return;
+    if (firstSnapshot.current) {
+      firstSnapshot.current = false;
+      celebrated.current = snapshot.celebrationId ?? null;
+      return;
+    }
     if (
       !isDemo &&
-      snapshot?.celebrationId &&
+      snapshot.celebrationId &&
       snapshot.status === 'completed' &&
       celebrated.current !== snapshot.celebrationId
     ) {

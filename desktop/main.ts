@@ -21,10 +21,9 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { EmployeeSchema, FolderSchema, SessionSchema, StateSchema } from '../shared/schemas';
+import { EmployeeSchema, SessionSchema, StateSchema } from '../shared/schemas';
 import { activityExport } from '../shared/activity';
-import { allowedPath, containsSecret } from '../shared/workspace';
-import { atomicWrite, createSnapshot } from './workspace';
+import { atomicWrite, createSnapshot, readSnapshotFiles } from './workspace';
 import { checkGateway, gatewayRequest, readSession, validateEndpoint } from './gateway';
 import { SnapshotStore } from '../runtime/store';
 import { createRuntime, type OfficeRuntime } from '../runtime/engine';
@@ -152,11 +151,12 @@ async function setupDatabase() {
     load: loadState,
     save: (state, reason, checkpoint) => database.saveHQ(state, reason, checkpoint),
     queue: queued,
-    generate: (state) =>
+    generate: async (state) =>
       generateRoadmap(
         state.roadmap?.automatic ? (prompt, schema) => chatgpt.generate(prompt, schema) : structuredGenerate,
         {
           goal: state.goal,
+          files: await readSnapshotFiles(state.roadmap?.folderIds ?? [], state.folders, snapshotsRoot()),
           employees: state.employees,
           automatic: state.roadmap?.automatic,
           launchId: state.roadmap?.launchId,
@@ -471,9 +471,17 @@ function queued<T>(action: () => Promise<T>): Promise<T> {
   );
   return task;
 }
-async function knownSession(id: string) {
+async function knownSession(id: string, includeHistory = false) {
   const state = await loadState();
-  if (!state?.employees.some((e) => e.sessionId === id))
+  if (
+    !state ||
+    !(
+      state.employees.some((e) => e.sessionId === id) ||
+      (includeHistory &&
+        (state.commitments.some((task) => task.sessionId === id) ||
+          state.approvals.some((review) => review.sessionId === id)))
+    )
+  )
     throw new Error('That session is not part of this workspace.');
 }
 async function structuredGenerate(prompt: string, outputSchema: Record<string, unknown>): Promise<string> {
@@ -622,7 +630,12 @@ async function delegateRoadmap(state: AppState, sessions = new Map<string, Cloud
       const provider = selectedProvider();
       if (provider === 'gateway')
         throw new Error('Choose ChatGPT or OpenAI in Settings for automatic delegation.');
-      return (provider === 'chatgpt' ? chatgpt : hosted).start(employee, assignment, current);
+      return (provider === 'chatgpt' ? chatgpt : hosted).start(
+        employee,
+        assignment,
+        current,
+        await readSnapshotFiles(current.roadmap?.folderIds ?? [], current.folders, snapshotsRoot()),
+      );
     },
   });
 }
@@ -734,11 +747,16 @@ function registerHandlers() {
   });
   handle('roadmap:create', async (input) => {
     const fields = z
-      .object({ goal: z.string().trim().min(1).max(500), automatic: z.boolean().optional() })
+      .object({
+        goal: z.string().trim().min(1).max(500),
+        automatic: z.boolean().optional(),
+        folderIds: z.array(z.string().uuid()).max(10).optional(),
+        allowCloudUpload: z.boolean().optional(),
+      })
       .parse(typeof input === 'string' ? { goal: input } : input);
     if (fields.automatic && (await chatgpt.account()).status !== 'signed-in')
       throw new Error('Sign in with ChatGPT before starting the local demo.');
-    return goals.create(fields.goal, { automatic: fields.automatic });
+    return goals.create(fields.goal, fields);
   });
   handle('demo:trigger', async (input) => demo.trigger(DemoTriggerSchema.parse(input)));
   handle('demo:snapshot', demoSnapshot);
@@ -1087,26 +1105,23 @@ function registerHandlers() {
           if (employee.sessionId && !existingEngine)
             throw new Error('This employee uses a gateway. Give guidance through that gateway.');
           const engine = provider === 'chatgpt' ? chatgpt : hosted;
-          if (employee.sessionId && existingEngine && existingEngine !== engine) {
-            const previous = await existingEngine.get(employee.sessionId);
-            if (!['completed', 'failed'].includes(previous.status))
-              throw new Error(
-                'Finish or stop this employee’s previous session before switching connections.',
-              );
-          }
-          const result =
-            employee.sessionId && existingEngine === engine
-              ? await engine.continue(
-                  employee.sessionId,
-                  `Announcement from your manager: ${text}. Explain what this changes for your work, then act accordingly.`,
-                  true,
-                )
-              : await engine.start(
-                  employee,
-                  `Announcement from your manager: ${text}. Explain what this means for your role and take the next useful step.`,
-                  state,
-                );
-          state = applySession(state, employee.id, result);
+          const previous =
+            employee.sessionId && existingEngine ? await existingEngine.get(employee.sessionId) : undefined;
+          const active = previous && !['completed', 'failed'].includes(previous.status);
+          if (active && existingEngine !== engine)
+            throw new Error('Finish or stop this employee’s previous session before switching connections.');
+          if (!active) assertCanAssignTask(state);
+          const assignment = `Announcement from your manager: ${text}. Explain what this means for your role and take the next useful step.`;
+          const result: CloudSession = active
+            ? await engine.continue(
+                employee.sessionId!,
+                `Announcement from your manager: ${text}. Explain what this changes for your work, then act accordingly.`,
+                true,
+              )
+            : await engine.start(employee, assignment, state);
+          state = active
+            ? applySession(state, employee.id, result)
+            : recordAssignedTask(state, employee.id, assignment, result);
           state.messages = state.messages.map((m) =>
             m.id === message.id
               ? { ...m, acknowledgmentIds: [...(m.acknowledgmentIds ?? []), employee.id] }
@@ -1268,30 +1283,7 @@ function registerHandlers() {
         if (!['completed', 'failed'].includes(previousSession.status))
           throw new Error('This employee already has an active session. Finish or review that work first.');
       }
-      const files: { folder: string; path: string; content: string }[] = [];
-      let totalBytes = 0;
-      for (const id of fields.folderIds) {
-        if (!state?.folders.some((f) => f.id === id))
-          throw new Error('That folder is not part of this workspace.');
-        const manifest = FolderSchema.parse(
-          JSON.parse(await fs.readFile(path.join(snapshotsRoot(), id, 'manifest.json'), 'utf8')),
-        );
-        for (const file of manifest.files) {
-          if (!allowedPath(file.path)) throw new Error('An unsafe file was excluded from this request.');
-          const base = await fs.realpath(path.join(snapshotsRoot(), id, 'files'));
-          const target = await fs.realpath(path.join(base, file.path));
-          if (!target.startsWith(`${base}${path.sep}`))
-            throw new Error('File access outside the snapshot is not allowed.');
-          const content = await fs.readFile(target, 'utf8');
-          totalBytes += Buffer.byteLength(content);
-          if (totalBytes > 8_000_000) throw new Error('The selected context exceeds the 8 MB upload limit.');
-          if (containsSecret(content))
-            throw new Error(
-              'A file appears to contain a secret. Remove it from the source folder and make a fresh copy.',
-            );
-          files.push({ folder: manifest.name, path: file.path, content });
-        }
-      }
+      const files = await readSnapshotFiles(fields.folderIds, state!.folders, snapshotsRoot());
       if (engine) {
         const cloudSession = await engine.start(employee, fields.assignment, state!, files);
         await database.saveHQ(
@@ -1366,7 +1358,7 @@ function registerHandlers() {
   handle('cloud:session', async (input) => {
     const id = z.string().min(1).max(200).parse(input);
     return queued(async () => {
-      await knownSession(id);
+      await knownSession(id, true);
       const engine = sessionEngine(id);
       try {
         const config = engine ? undefined : await credentials();
