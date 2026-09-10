@@ -12,6 +12,7 @@ export default function OfficeScene({
   listening,
   microphoneLevel,
   angle = 0,
+  resetKey = 0,
 }: {
   employees: Employee[];
   animate: boolean;
@@ -24,6 +25,7 @@ export default function OfficeScene({
   listening: boolean;
   microphoneLevel: number;
   angle?: number;
+  resetKey?: number;
 }) {
   return (
     <Office
@@ -56,6 +58,7 @@ export default function OfficeScene({
       timeline={0}
       zoom={zoom * 37}
       angle={angle}
+      resetKey={resetKey}
       timeSeconds={timeSeconds}
       live={live}
       listening={listening}

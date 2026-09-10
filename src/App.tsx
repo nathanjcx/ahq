@@ -16,6 +16,7 @@ import {
   LoaderCircle,
   MessageCircle,
   Minus,
+  Move,
   Plus,
   Search,
   Settings,
@@ -128,6 +129,7 @@ export default function App() {
   const [listening, setListening] = useState(false);
   const [microphoneLevel, setMicrophoneLevel] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const [officeViewReset, setOfficeViewReset] = useState(0);
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
   const folderInput = useRef<HTMLInputElement>(null);
@@ -687,6 +689,7 @@ export default function App() {
                             }}
                             zoom={zoom}
                             angle={angle}
+                            resetKey={officeViewReset}
                             timeSeconds={
                               history.at !== null
                                 ? (pastFrame?.sceneTime ?? frameTime.current)
@@ -713,6 +716,9 @@ export default function App() {
                         </span>
                       </div>
                       <div className="scene-controls">
+                        <span className="office-pan-hint">
+                          <Move size={13} /> Drag to pan
+                        </span>
                         <button
                           aria-label="Zoom out"
                           onClick={() => setZoom((z) => Math.max(0.7, z - 0.12))}
@@ -724,6 +730,8 @@ export default function App() {
                           aria-label="Reset office view"
                           onClick={() => {
                             setZoom(1);
+                            setAngle(0);
+                            setOfficeViewReset((key) => key + 1);
                             setPlaying(true);
                           }}
                         >

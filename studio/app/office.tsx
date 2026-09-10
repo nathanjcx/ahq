@@ -21,6 +21,7 @@ import {
 import { Html, Line, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Employee } from './data';
+import { useOfficePan } from './office-pan';
 import './office-review.css';
 
 type OfficeProps = {
@@ -38,6 +39,7 @@ type OfficeProps = {
   zoom: number;
   /** Degrees relative to the initial view. */
   angle: number;
+  resetKey?: number;
   onRoom: (room: string) => void;
 };
 type Point = [number, number, number];
@@ -541,10 +543,21 @@ function Cylinder({
 }
 
 /** Camera fits the projected architecture to the actual Canvas container. */
-function Framing({ zoom, angle }: Pick<OfficeProps, 'zoom' | 'angle'>) {
+function Framing({
+  zoom,
+  angle,
+  resetKey = 0,
+  source,
+}: Pick<OfficeProps, 'zoom' | 'angle' | 'resetKey'> & { source: HTMLDivElement }) {
   const { camera, size, invalidate } = useThree();
+  const pan = useOfficePan(camera, source, invalidate, resetKey);
+  const previousReset = useRef(resetKey);
   useLayoutEffect(() => {
     if (!(camera instanceof THREE.OrthographicCamera)) return;
+    if (previousReset.current !== resetKey) {
+      pan.set(0, 0);
+      previousReset.current = resetKey;
+    }
     const azimuth = Math.PI / 4 + (angle * Math.PI) / 180;
     const target = new THREE.Vector3(0, 0.6, 0);
     camera.position.set(Math.sin(azimuth) * 28, 24.5, Math.cos(azimuth) * 28);
@@ -570,13 +583,15 @@ function Framing({ zoom, angle }: Pick<OfficeProps, 'zoom' | 'angle'>) {
     const center = bounds.getCenter(new THREE.Vector3());
     camera.translateX(center.x);
     camera.translateY(center.y);
+    camera.translateX(pan.x);
+    camera.translateY(pan.y);
     camera.updateMatrixWorld(true);
     const safeWidth = Math.max(100, size.width - (size.width < 500 ? 16 : 40));
     const safeHeight = Math.max(100, size.height - 32);
     camera.zoom = Math.min(safeWidth / w, safeHeight / h) * Math.max(0.5, zoom / 37);
     camera.updateProjectionMatrix();
     invalidate();
-  }, [camera, size.width, size.height, zoom, angle, invalidate]);
+  }, [camera, size.width, size.height, zoom, angle, resetKey, pan, invalidate]);
   return null;
 }
 
@@ -1604,12 +1619,12 @@ function OfficeSpeakers({
   );
 }
 
-function Scene(props: OfficeProps) {
+function Scene(props: OfficeProps & { eventSource: HTMLDivElement }) {
   const surfaces = useSurfaceTextures();
   return (
     <>
       <color attach="background" args={['#f1f4ee']} />
-      <Framing zoom={props.zoom} angle={props.angle} />
+      <Framing zoom={props.zoom} angle={props.angle} resetKey={props.resetKey} source={props.eventSource} />
       <ambientLight intensity={0.38} />
       <hemisphereLight args={['#dce7df', '#3e4631', 0.72]} />
       <directionalLight
@@ -1724,6 +1739,14 @@ const safeEvents: NonNullable<CanvasProps['events']> = (store) => {
   const connect = manager.connect;
   return {
     ...manager,
+    compute(event, state) {
+      const rect = state.gl.domElement.getBoundingClientRect();
+      state.pointer.set(
+        ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        -((event.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      state.raycaster.setFromCamera(state.pointer, state.camera);
+    },
     connect(target) {
       if (!target?.isConnected) {
         manager.disconnect?.();
@@ -1752,11 +1775,14 @@ export default function Office(props: OfficeProps) {
       ref={setEventSource}
       role="region"
       aria-label="Interactive 3D team office"
+      aria-description="Drag to pan. Use the arrow keys when the office is focused."
+      tabIndex={0}
       style={{
         width: '100%',
         height: '100%',
         minHeight: 280,
         position: 'relative',
+        touchAction: 'none',
       }}
     >
       <SceneBoundary fallback={fallback}>
@@ -1781,7 +1807,7 @@ export default function Office(props: OfficeProps) {
               gl.outputColorSpace = THREE.SRGBColorSpace;
             }}
           >
-            <Scene {...props} />
+            <Scene {...props} eventSource={eventSource} />
           </Canvas>
         )}
       </SceneBoundary>

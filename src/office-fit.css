@@ -160,6 +160,27 @@ body:has(.main-shell[data-page='office']) {
   height: 100%;
   min-width: 0;
   min-height: 0;
+  cursor: grab;
+}
+
+#root .main-shell[data-page='office'] .office-canvas[data-panning='true'] {
+  cursor: grabbing;
+}
+
+#root .main-shell[data-page='office'] .office-canvas:focus-visible {
+  outline: 2px solid #91a580;
+  outline-offset: -3px;
+}
+
+.office-pan-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 9px;
+  color: #66775d;
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 #root .main-shell[data-page='office'] .office-footer {
