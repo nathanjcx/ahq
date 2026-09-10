@@ -26,10 +26,10 @@ body:has(.main-shell[data-page='office']) {
 }
 
 #root .main-shell[data-page='office'] > .topbar {
-  flex: 0 0 52px;
-  height: 52px;
+  flex: 0 0 42px;
+  height: 42px;
   min-height: 0;
-  padding: 0 24px;
+  padding: 0 16px;
 }
 
 #root .main-shell[data-page='office'] > main {
@@ -38,8 +38,11 @@ body:has(.main-shell[data-page='office']) {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  padding: 14px 24px 8px;
-  gap: 10px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 8px 12px 6px;
+  gap: 6px;
   overflow: hidden;
 }
 
@@ -47,13 +50,13 @@ body:has(.main-shell[data-page='office']) {
   flex: 0 0 auto;
   min-height: 0;
   margin: 0;
-  gap: 16px;
+  gap: 12px;
 }
 
 #root .main-shell[data-page='office'] .office-goal-card {
-  height: clamp(84px, 12.5dvh, 110px);
+  height: 64px;
   min-height: 0;
-  padding: 8px 18px;
+  padding: 6px 14px;
   gap: 14px;
   overflow: hidden;
 }
@@ -63,7 +66,7 @@ body:has(.main-shell[data-page='office']) {
 }
 
 #root .main-shell[data-page='office'] .office-goal-label {
-  font-size: 12px;
+  font-size: 10px;
   line-height: 1;
 }
 
@@ -72,19 +75,52 @@ body:has(.main-shell[data-page='office']) {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  font-size: clamp(20px, 1.85vw, 27px);
+  font-size: clamp(16px, 1.4vw, 21px);
   line-height: 1.15;
 }
 
 #root .main-shell[data-page='office'] .office-layout.office-layout-with-chat {
+  position: relative;
   flex: 1 1 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(238px, 26vw, 340px);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
-  gap: 16px;
+  gap: 10px;
   align-items: stretch;
+}
+
+#root .main-shell[data-page='office'] .office-layout[data-chat-open='true'] {
+  grid-template-columns: minmax(0, 1fr) clamp(260px, 22vw, 300px);
+}
+
+#root .main-shell[data-page='office'] .office-chat-column[hidden] {
+  display: none;
+}
+
+#root .main-shell[data-page='office'] .office-chat-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 3px 9px;
+  border: 1px solid #becbad;
+  background: #f6f8ed;
+  color: #3b5135;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+#root .main-shell[data-page='office'] .office-chat-toggle[aria-expanded='true'] {
+  background: #e5ecd9;
+  border-color: #7f946d;
+}
+
+#root .main-shell[data-page='office'] .office-weather {
+  display: none;
 }
 
 #root .main-shell[data-page='office'] .office-stage {
@@ -92,7 +128,7 @@ body:has(.main-shell[data-page='office']) {
   flex-direction: column;
   min-height: 0;
   min-width: 0;
-  gap: 10px;
+  gap: 6px;
 }
 
 #root .main-shell[data-page='office'] .office-card {
@@ -105,8 +141,8 @@ body:has(.main-shell[data-page='office']) {
 }
 
 #root .main-shell[data-page='office'] .office-card-header {
-  flex: 0 0 40px;
-  height: 40px;
+  flex: 0 0 36px;
+  height: 36px;
   min-height: 0;
   padding: 0 12px;
 }
@@ -127,10 +163,10 @@ body:has(.main-shell[data-page='office']) {
 }
 
 #root .main-shell[data-page='office'] .office-footer {
-  flex: 0 0 36px;
+  flex: 0 0 30px;
   min-height: 0;
-  height: 36px;
-  padding: 4px 12px;
+  height: 30px;
+  padding: 2px 12px;
   gap: 8px;
 }
 
@@ -151,8 +187,14 @@ body:has(.main-shell[data-page='office']) {
   min-height: 0;
   max-height: 116px;
   margin: 0;
-  padding: 8px 10px;
+  padding: 4px 8px;
   overflow: auto;
+}
+
+#root .main-shell[data-page='office'] .voice-announce .button {
+  min-height: 32px;
+  padding: 5px 10px;
+  font-size: 12px;
 }
 
 #root .main-shell[data-page='office'] .voice-announce > span {
@@ -258,12 +300,12 @@ body:has(.main-shell[data-page='office']) {
 }
 
 #root .main-shell[data-page='office'] .office-scrubber {
-  flex: 0 0 36px;
+  flex: 0 0 28px;
   min-height: 0;
 }
 
 #root .main-shell[data-page='office'] .office-scrubber-row {
-  height: 36px;
+  height: 28px;
   min-height: 0;
   padding: 0 2px;
 }
@@ -279,14 +321,14 @@ body:has(.main-shell[data-page='office']) {
 
 @media (max-width: 1050px), (max-height: 700px) {
   #root .main-shell[data-page='office'] > .topbar {
-    flex-basis: 46px;
-    height: 46px;
+    flex-basis: 40px;
+    height: 40px;
     padding: 0 14px;
   }
 
   #root .main-shell[data-page='office'] > main {
-    padding: 10px 14px 6px;
-    gap: 8px;
+    padding: 6px 10px 4px;
+    gap: 6px;
   }
 
   #root .main-shell[data-page='office'] .office-layout.office-layout-with-chat {
@@ -308,7 +350,7 @@ body:has(.main-shell[data-page='office']) {
 
   #root .main-shell[data-page='office'] .voice-announce .button {
     font-size: 12px;
-    padding: 8px;
+    padding: 5px 8px;
   }
 
   #root .main-shell[data-page='office'] .office-hint {
@@ -319,6 +361,61 @@ body:has(.main-shell[data-page='office']) {
   }
 }
 
+/* A narrow navigation rail leaves the office room to breathe on desktop. */
+@media (min-width: 601px) {
+  #root .app-shell:has(.main-shell[data-page='office']) > .sidebar {
+    width: 72px;
+    align-items: center;
+    padding: 18px 8px 0;
+  }
+
+  html[data-desktop='true'] #root .app-shell:has(.main-shell[data-page='office']) > .sidebar {
+    padding-top: 48px;
+  }
+
+  #root .app-shell:has(.main-shell[data-page='office']) > .sidebar .brand {
+    padding: 0;
+  }
+
+  #root .app-shell:has(.main-shell[data-page='office']) > .sidebar .brand > span,
+  #root .app-shell:has(.main-shell[data-page='office']) > .sidebar .nav-item > span {
+    display: none;
+  }
+
+  #root .app-shell:has(.main-shell[data-page='office']) > .sidebar nav {
+    width: 100%;
+    margin-top: 28px;
+  }
+
+  #root .app-shell:has(.main-shell[data-page='office']) > .sidebar .nav-item {
+    height: 46px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  #root .main-shell[data-page='office'] {
+    margin-left: 72px;
+    width: calc(100% - 72px);
+  }
+}
+
+/* Chat opens over the scene on smaller screens instead of squeezing the office. */
+@media (max-width: 1050px) {
+  #root .main-shell[data-page='office'] .office-layout[data-chat-open='true'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #root .main-shell[data-page='office'] .office-chat-column {
+    position: absolute;
+    top: 40px;
+    right: 4px;
+    bottom: 4px;
+    width: min(340px, calc(100% - 8px));
+    z-index: 60;
+    box-shadow: -8px 8px 24px #263a3026;
+  }
+}
+
 /* The mobile navigation takes a fixed strip; Office still stays inside its viewport. */
 @media (max-width: 600px) {
   #root .main-shell[data-page='office'] {
@@ -326,8 +423,8 @@ body:has(.main-shell[data-page='office']) {
   }
 
   #root .main-shell[data-page='office'] .office-layout.office-layout-with-chat {
-    grid-template-columns: minmax(0, 1fr) minmax(150px, 42%);
-    gap: 8px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
   }
 
   #root .main-shell[data-page='office'] > main {
@@ -341,12 +438,12 @@ body:has(.main-shell[data-page='office']) {
   }
 
   #root .main-shell[data-page='office'] .office-goal-copy strong {
-    font-size: 18px;
+    font-size: 15px;
   }
 
   #root .main-shell[data-page='office'] .voice-announce {
     grid-template-columns: minmax(0, 1fr);
-    padding: 6px;
+    padding: 4px 6px;
   }
 
   #root .main-shell[data-page='office'] .voice-announce > span,

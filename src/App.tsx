@@ -97,6 +97,13 @@ export default function App() {
   const [ready, setReady] = useState(!window.ahq);
   const [page, setPage] = useState<Page>('office');
   const [conversationTarget, setConversationTarget] = useState('team');
+  const [officeChatOpen, setOfficeChatOpen] = useState(false);
+  const officeChatRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!officeChatOpen || page !== 'office') return;
+    const messages = officeChatRef.current?.querySelector('.conversation-messages');
+    if (messages) messages.scrollTop = messages.scrollHeight;
+  }, [officeChatOpen, page]);
   const [cloud, setCloud] = useState<CloudSettings>({ endpoint: '', configured: false, connected: false });
   const [toast, setToast] = useState('');
   const [modal, setModal] = useState<
@@ -612,7 +619,7 @@ export default function App() {
                   New employee
                 </button>
               </div>
-              <div className="office-layout office-layout-with-chat">
+              <div className="office-layout office-layout-with-chat" data-chat-open={officeChatOpen}>
                 <div className="office-stage">
                   <section className="office-card">
                     <div className="office-card-header">
@@ -628,6 +635,16 @@ export default function App() {
                         <span className="office-weather">
                           ☀<span>A little room to grow</span>
                         </span>
+                        <button
+                          className="office-chat-toggle"
+                          aria-label={officeChatOpen ? 'Hide office chat' : 'Show office chat'}
+                          aria-expanded={officeChatOpen}
+                          aria-controls="office-chat-panel"
+                          onClick={() => setOfficeChatOpen((open) => !open)}
+                        >
+                          {officeChatOpen ? <X size={15} /> : <MessageCircle size={15} />}
+                          <span>{officeChatOpen ? 'Hide chat' : 'Chat'}</span>
+                        </button>
                         <button
                           className="icon-button"
                           aria-label="Rotate office view"
@@ -766,7 +783,13 @@ export default function App() {
                     notify={notify}
                   />
                 </div>
-                <aside className="office-chat-column" aria-label="Office chat">
+                <aside
+                  className="office-chat-column"
+                  id="office-chat-panel"
+                  ref={officeChatRef}
+                  aria-label="Office chat"
+                  hidden={!officeChatOpen}
+                >
                   <ConversationsPage
                     {...common}
                     compact
