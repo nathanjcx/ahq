@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import type { LocalTaskInput } from '../shared/demo';
+import { copyPackagedDirectory } from './copy-packaged-directory';
 
 type LittleOfficeTask = LocalTaskInput & {
   project?: string;
@@ -97,10 +98,7 @@ async function copyDependencies(workspace: string): Promise<string> {
     if (copied.get(name) === source) return;
     const destination = path.join(copied.has(name) ? parentModules : modules, name);
     if (!copied.has(name)) copied.set(name, source);
-    await cp(source, destination, {
-      recursive: true,
-      filter: (file) => path.basename(file) !== 'node_modules',
-    });
+    await copyPackagedDirectory(source, destination, (file) => path.basename(file) !== 'node_modules');
     const manifestPath = path.join(source, 'package.json');
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
     for (const dependency of Object.keys(manifest.dependencies ?? {})) {
@@ -226,7 +224,9 @@ export async function prepareLittleOffice(
   signal?.throwIfAborted();
   const source = launch.launchStep === 'bug' ? launch.parentWorkspace : littleOfficeFixture;
   if (!source) throw new Error('The Little Office bug task needs the completed product workspace.');
-  await cp(source, workspace, { recursive: true, filter: (name) => !ignored.has(path.basename(name)) });
+  const filter = (name: string) => !ignored.has(path.basename(name));
+  if (launch.launchStep === 'product') await copyPackagedDirectory(source, workspace, filter);
+  else await cp(source, workspace, { recursive: true, filter });
   if (launch.launchStep === 'bug') {
     await mkdir(path.join(workspace, 'attachments'), { recursive: true });
     await cp(
