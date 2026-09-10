@@ -59,3 +59,9 @@ The final packaged app was reopened and displayed **ChatGPT plan · Connected** 
 - A message was saved in an isolated browser preview and appeared in the chat; announcements remained disabled for its empty team. No verification message was added to the native workspace.
 - The timeline contains only a Beta capsule, a scrubber, and Live. In the packaged desktop app, keyboard scrubbing displayed recorded office state; Live returned to the existing two-employee workspace. The replay timestamp opened rollback confirmation, which was cancelled without restoring or changing user data.
 - TypeScript and the production renderer/desktop build pass. The packaged macOS app was rebuilt and reopened; existing employees, goal, messages, and recorded history were preserved.
+
+## Minimal top bar and miniature office icon
+
+- The top bar now contains only the date and Settings. Search/Command-K, activity, review notification, and breadcrumb controls were removed from that row. Reviews and activity/export remain accessible inside Settings.
+- Replaced the lettermark with one text-free miniature-office SVG, shared by the sidebar, favicon, public PNG, and macOS ICNS. The icon generator regenerates every variant from the same source. Inspected 32px, 256px, and 512px renders.
+- TypeScript and the production build pass; browser inspection confirms the minimal top bar and new sidebar icon.

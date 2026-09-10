@@ -32,8 +32,8 @@ New workspaces start with an empty office: no employees, assignments, conversati
 
 ## What is included
 
-- **Navigation:** Office, Employees, and Roadmap, in that order. Settings/ChatGPT login, activity/export, and reviews stay available in the top bar.
-- **Office:** Ultra’s original cutaway, camera rotation/zoom, walking and articulated poses, with Birth’s light shell, north-star goal banner, and light isometric grid backdrop. Room tags are removed. The file cabinet opens your saved folders; employees with active file/storage tasks visit it and open its drawer.
+- **Navigation:** Office, Employees, and Roadmap, in that order. The top bar contains only the date and Settings. Reviews and activity/export are available inside Settings.
+- **Office:** a miniature office app icon and Ultra’s original cutaway, camera rotation/zoom, walking and articulated poses, with Birth’s light shell, north-star goal banner, and light isometric grid backdrop. Room tags are removed. The file cabinet opens your saved folders; employees with active file/storage tasks visit it and open its drawer.
 - **Roadmap:** an interactive dependency graph leading to your goal, with owner, date, status, progress, zoom, and a searchable list. Create and edit milestones, select their prerequisites, and prevent circular dependencies. Milestones can be planned before hiring employees.
 - **Chat:** a full chat panel beside the office, with a channel selector for the team, individual employees, and announcements. Includes typed broadcasts, voice transcripts, and delivery receipts. Team/direct notes remain saved context for new assignments.
 - **Appearance:** presentation, skin tone, short/long/bald hair, hair color, hats, glasses, and clothing color. Changes persist and appear in the office and portraits. The four-field employee form stays separate.

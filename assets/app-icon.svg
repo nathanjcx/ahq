@@ -1,1 +1,83 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#416847"/><stop offset="1" stop-color="#20472f"/></linearGradient></defs><rect x="40" y="40" width="944" height="944" rx="218" fill="url(#g)"/><rect x="65" y="65" width="894" height="894" rx="200" fill="none" stroke="#668358" stroke-width="2"/><text x="470" y="765" text-anchor="middle" font-family="Georgia" font-weight="bold" font-size="865" fill="#f2f2d9">a</text><path d="m785 155 15 78 65-45-45 65 78 15-78 15 45 65-65-45-15 78-15-78-65 45 45-65-78-15 78-15-45-65 65 45z" fill="#bbcda0"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <linearGradient id="tile" x1="160" y1="84" x2="864" y2="940" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7F9F1"/>
+      <stop offset="1" stop-color="#DDE6D6"/>
+    </linearGradient>
+    <linearGradient id="floor" x1="332" y1="512" x2="650" y2="816" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E6CFAC"/>
+      <stop offset="1" stop-color="#CFAA7B"/>
+    </linearGradient>
+    <linearGradient id="window" x1="594" y1="358" x2="778" y2="508" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F4FCF8"/>
+      <stop offset="1" stop-color="#A6CAC0"/>
+    </linearGradient>
+    <linearGradient id="desk" x1="450" y1="486" x2="596" y2="650" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F1D4A4"/>
+      <stop offset="1" stop-color="#D7AE73"/>
+    </linearGradient>
+    <filter id="shadow" x="0" y="0" width="1024" height="1024" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="20" stdDeviation="22" flood-color="#344F3B" flood-opacity=".18"/>
+    </filter>
+  </defs>
+
+  <rect x="40" y="40" width="944" height="944" rx="216" fill="url(#tile)"/>
+  <rect x="45" y="45" width="934" height="934" rx="211" stroke="#FFFFFF" stroke-opacity=".8" stroke-width="10"/>
+
+  <g filter="url(#shadow)" stroke-linejoin="round">
+    <!-- Open, two-wall room. -->
+    <path d="M170 642 512 469 854 642V674L512 850 170 674Z" fill="#9EAC8D"/>
+    <path d="M170 642 512 469 854 642 512 818Z" fill="url(#floor)"/>
+    <path d="m170 642 342 176 342-176" stroke="#F8E9CF" stroke-width="8"/>
+    <path d="m254 600 341 176m-255-220 341 176m-255-220 341 176" stroke="#BA9569" stroke-opacity=".38" stroke-width="5"/>
+
+    <path d="M170 381 512 207V469L170 642Z" fill="#D9E5CC"/>
+    <path d="m512 207 342 174v261L512 469Z" fill="#BDCEAF"/>
+    <path d="M170 642V381L512 207l342 174v261" stroke="#91A784" stroke-width="15"/>
+    <path d="M184 387 512 222l328 165" stroke="#F9FBEF" stroke-width="13"/>
+    <path d="M512 225v244" stroke="#A7BA98" stroke-width="8"/>
+    <path d="m179 622 333-168 333 168" stroke="#ECEDDC" stroke-width="13"/>
+
+    <!-- Wide office window, with a deep sill. -->
+    <path d="m578 300 204 104v146L578 446Z" fill="#648673"/>
+    <path d="m594 325 172 87v111l-172-87Z" fill="url(#window)"/>
+    <path d="m680 369 0 110m-85-99 170 86" stroke="#EFF7EC" stroke-width="11"/>
+    <path d="m570 444 220 112-20 13-220-112Z" fill="#F5F2DD"/>
+    <path d="m550 457 220 112v13L550 470Z" fill="#A5B49B"/>
+
+    <!-- Pinboard on the other wall. -->
+    <path d="m220 398 137-69v91l-137 69Z" fill="#9CAF8B"/>
+    <path d="m230 403 117-59v69l-117 59Z" fill="#EFE9CE"/>
+    <path d="m247 408 33-17v31l-33 17Z" fill="#D7B481"/>
+    <path d="m297 383 32-16v24l-32 16Z" fill="#9DB9A5"/>
+
+    <!-- Potted plant. -->
+    <ellipse cx="270" cy="628" rx="46" ry="22" fill="#8D835F" fill-opacity=".18"/>
+    <path d="m239 571 9 57q23 21 46-1l9-56Z" fill="#B38159"/>
+    <ellipse cx="271" cy="571" rx="33" ry="17" fill="#DEAC7B"/>
+    <ellipse cx="271" cy="568" rx="25" ry="12" fill="#655B43"/>
+    <path d="M271 570v-91m0 60-29-30m29 7 29-31" stroke="#416D43" stroke-width="11" stroke-linecap="round"/>
+    <path d="M268 518c-45 7-60-20-51-46 32-4 54 14 51 46Z" fill="#538455"/>
+    <path d="M274 501c-4-33 18-57 45-50 8 31-12 57-45 50Z" fill="#64985A"/>
+    <path d="M269 486c-31-10-40-43-20-64 28 7 42 35 20 64Z" fill="#3D7146"/>
+
+    <!-- Desk and monitor. -->
+    <path d="M350 573v107m155-41v100m175-176v101" stroke="#65705B" stroke-width="20" stroke-linecap="round"/>
+    <path d="m337 554 189-95 172 88v26l-188 96-173-88Z" fill="#B58C56"/>
+    <path d="m337 554 189-95 172 88-188 96Z" fill="url(#desk)"/>
+    <path d="m337 554 173 89 188-96" stroke="#F5DCB6" stroke-width="7"/>
+    <path d="m522 552 43-22 38 20-44 22Z" fill="#70847A"/>
+    <path d="M562 551v-38" stroke="#577063" stroke-width="13"/>
+    <path d="m486 411 139 70v92l-139-70Z" fill="#355647"/>
+    <path d="m498 430 115 58v63l-115-58Z" fill="#AFCFC3"/>
+    <path d="m510 444 89 45v9l-89-45Zm0 18 53 27v8l-53-27Z" fill="#ECF5EA" fill-opacity=".9"/>
+    <path d="m459 551 82 42 32-16-82-42Z" fill="#F7F1DB"/>
+    <path d="m592 594 35-18 16 8-35 18Z" fill="#E8EAD5"/>
+
+    <!-- Comfortable green office chair. -->
+    <path d="M473 714v54m0-5-41 21m41-21 44 23m-44-23 17-19" stroke="#556757" stroke-width="13" stroke-linecap="round"/>
+    <path d="m421 680 50-26q9-4 18 1l63 33q9 6 0 11l-54 28q-9 5-19 0l-59-31q-11-7 1-16Z" fill="#3D6A51"/>
+    <path d="m407 620 75 38q14 7 14 22v46q0 12-13 6l-76-39q-13-6-13-20v-44q0-16 13-9Z" fill="#2F5B43"/>
+    <path d="m409 628 70 36" stroke="#729276" stroke-width="9" stroke-linecap="round"/>
+  </g>
+</svg>

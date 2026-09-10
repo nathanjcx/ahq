@@ -2,10 +2,8 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import {
   History,
   ArrowRight,
-  Bell,
   BookOpen,
   Check,
-  ChevronRight,
   CircleHelp,
   Coffee,
   Ellipsis,
@@ -59,6 +57,7 @@ import Modal from './components/Modal';
 import SceneBoundary from './components/SceneBoundary';
 import Markdown from './components/Markdown';
 import Roadmap from './components/Roadmap';
+import officeIcon from '../assets/app-icon.svg';
 import {
   useOfficeHistory,
   OfficeTimeline,
@@ -464,9 +463,7 @@ export default function App() {
           }}
           aria-label="Astra HQ home"
         >
-          <span className="brand-mark">
-            a<span>✳</span>
-          </span>
+          <img className="brand-office-icon" src={officeIcon} alt="" />
           <span>
             astra<span className="brand-hq">HQ</span>
           </span>
@@ -488,42 +485,11 @@ export default function App() {
         </nav>
       </aside>
       <div className="main-shell">
-        <header className="topbar">
-          <div className="breadcrumbs">
-            <span>Astra HQ</span>
-            <ChevronRight size={13} />
-            <strong>{pageNames[page]}</strong>
-          </div>
+        <header className="topbar topbar-minimal">
           <div className="topbar-actions">
             <span className="today">
               {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
             </span>
-            <span className="topbar-line" />
-            <button
-              className="search-button"
-              aria-label="Search workspace"
-              onClick={() => setModal('search')}
-            >
-              <Search size={17} />
-              <span>Search anything</span>
-              <kbd>⌘ K</kbd>
-            </button>
-            <button
-              className="notification-button icon-button"
-              aria-label={`${pending.length} pending reviews`}
-              onClick={() => navigate('needs-you')}
-            >
-              <Bell size={18} />
-              {pending.length > 0 && <i />}
-            </button>
-            <button
-              className="icon-button"
-              aria-label="Activity and export"
-              title="Activity and export"
-              onClick={() => navigate('activity')}
-            >
-              <History size={18} />
-            </button>
             <button
               className="icon-button"
               aria-label="Settings and ChatGPT login"
@@ -797,6 +763,16 @@ export default function App() {
           {page === 'activity' && <ActivityPage {...common} />}
           {page === 'settings' && (
             <>
+              <div className="settings-workspace-links">
+                <button className="button secondary" onClick={() => navigate('needs-you')}>
+                  <Inbox size={16} />
+                  Reviews{pending.length > 0 ? ` (${pending.length})` : ''}
+                </button>
+                <button className="button secondary" onClick={() => navigate('activity')}>
+                  <History size={16} />
+                  Activity & exports
+                </button>
+              </div>
               <ConnectionSettings cloud={cloud} onCloud={setCloud} notify={notify} />
               <SettingsPage
                 {...common}

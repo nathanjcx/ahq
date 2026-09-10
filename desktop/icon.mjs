@@ -2,6 +2,9 @@ import { Resvg } from '@resvg/resvg-js';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 const svg = await readFile('assets/app-icon.svg', 'utf8');
+await writeFile('public/icon.svg', svg);
+await writeFile('public/favicon.svg', svg);
+await writeFile('public/icon.png', new Resvg(svg, { fitTo: { mode: 'width', value: 512 } }).render().asPng());
 await mkdir('assets/app.iconset', { recursive: true });
 for (const size of [16, 32, 128, 256, 512]) {
   for (const density of [1, 2]) {
