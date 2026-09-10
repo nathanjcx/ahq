@@ -8,4 +8,5 @@ export interface NewsCollection {
   coverage: Array<{ account: string; status: 'checked' | 'partial' | 'unavailable'; note: string }>;
   items: NewsItem[];
   excluded: number;
+  reviewedUrls?: string[];
 }

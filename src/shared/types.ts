@@ -30,9 +30,10 @@ export interface WorkItem {
   inputArtifactIds?: string[]; blockedReason?: string; needsInformation?: boolean; followUpOf?: string;
   calendarDraft?: CalendarEvent;
 }
+export interface AgentMessage { id: string; text: string; complete: boolean; timestamp: number }
 export interface Run {
   id: string; workId: string; status: WorkStatus; startedAt: number; completedAt?: number;
-  threadId?: string; turnId?: string; workspace?: string;
+  threadId?: string; turnId?: string; workspace?: string; messages?: AgentMessage[];
 }
 export interface ActivityEvent {
   id: string; sequence: number; timestamp: number; workId?: string; agentId?: string;

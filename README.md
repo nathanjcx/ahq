@@ -6,7 +6,7 @@ The sources and incoming streams are fictional. Triage and task execution use re
 
 ## Incoming-work demo
 
-The office contains 450 historical messages across ten projects, with 53 distinct new messages available for delivery and one deliberate duplicate delivery. The full dataset has 503 unique messages and 105 readable CSV, Markdown, JSON, JavaScript, and text attachments. Historical messages provide context without automatically starting work.
+The office starts with 26 useful context messages across ten projects. Three CSV-to-PDF report requests lead the arrival picker, followed by the existing task, follow-up, and integration scenarios. Archived acknowledgements, social notices, digests, and other filler have been removed. Historical context does not automatically start work.
 
 Open **Simulate an arrival** to choose and edit a suggested message, write a new message, or create a meeting. Codex decides whether to ignore it, create a task, attach it to existing work, or wait for missing information or another task. Decisions and reasons appear in the Inbox and Tasks view. New tasks receive temporary worker characters; recurring agents retain their identity. Idle residents welcome new workers at the door, take coffee breaks, and tend plants. Work animations reflect reading, drafting, coding, QA, and scheduling. Reduced motion skips social movement.
 
@@ -16,13 +16,13 @@ Gmail and Slack each include a connected 11-message conversation with file-backe
 
 The curated arrivals cover a launch report, cross-provider corroboration, an acknowledgement, QA requested before its fix, a duplicate delivery, meeting preparation, a dinner request with missing details and a calendar conflict, a corrected support count, and an unrelated report request. Additional arrivals exercise nine other projects and informational messages.
 
-This requires internet access and Codex subscription allowance for both intake and execution. There is no canned-output or offline execution mode. The supported work types are document reports, local checkout fixes and QA, meeting briefs, and local calendar events. External integrations are disabled. The AI news watch is the only routine with live public-web search enabled. Schedules run only while the app is open. Clicking a worker opens its activity and artifacts, not a streamed computer desktop. The board records findings and task handoffs, with scripted coffee-break conversations and reactions to completed artifacts. Posts labeled "Simulated chat" run locally, cost no model usage, and never trigger work or enter agent prompts.
+This requires internet access and Codex subscription allowance for both intake and execution. There is no canned-output or offline execution mode. The supported work types are document reports, local checkout fixes and QA, meeting briefs, and local calendar events. External integrations are disabled. The AI news watch fetches public X profiles directly. Schedules run only while the app is open. Clicking a worker opens full streaming agent messages, activity and artifacts. Messages persist per attempt, including failed and cancelled runs. This is not a streamed computer desktop. The board records findings and task handoffs, with scripted coffee-break conversations and reactions to completed artifacts. Posts labeled "Simulated chat" run locally, cost no model usage, and never trigger work or enter agent prompts.
 
 ## AI news watch
 
-A paused routine checks ten X accounts every ten minutes when enabled: @OpenAI, @AnthropicAI, @GoogleDeepMind, @xAI, @MistralAI, @huggingface, @sama, @karpathy, @_akhaliq, and @swyx. Run now performs one collection without enabling its schedule. Each collection uses one Codex turn with live web search and no subagents.
+A paused routine checks ten X accounts every ten minutes when enabled: @OpenAI, @AnthropicAI, @GoogleDeepMind, @xAI, @MistralAI, @huggingface, @sama, @karpathy, @_akhaliq, and @swyx. Run now performs one collection without enabling its schedule. Each collection fetches public profile data locally. If it finds previously unreviewed posts in the window, one offline Codex turn classifies them. Empty checks use no model allowance. No subagents are started.
 
-The first window starts at local midnight. Later collections resume from the last fully checked window; partial coverage keeps the earlier boundary so unseen posts are not skipped. Post IDs prevent duplicates, and their encoded timestamps help reject old URLs presented as current news. Rumors are labeled unconfirmed. Search coverage is not a complete X timeline: unavailable accounts and partial results stay visible in each report.
+The first window starts at local midnight. Later collections resume from the last fully checked window; partial coverage keeps the earlier boundary so unseen posts are not skipped. Post IDs prevent duplicates, and their encoded timestamps help reject old URLs presented as current news. Rumors are labeled unconfirmed. Public profile data is a limited timeline: unavailable accounts and partial results stay visible in each report.
 
 Routines show past runs and their artifacts. AI news also has a cumulative, searchable collection with announcement/rumor filters and original post links. Structured results persist in the local SQLite snapshot and each run's `collection.json`; reports are saved beside them. This feature requires ChatGPT sign-in and internet access, but no X API key. It cannot guarantee complete or immediate X coverage.
 
@@ -131,3 +131,11 @@ Future real integrations should normalize external items into the existing sourc
 | `OFFICE_PORT` | Override the browser-preview port |
 
 Desktop state normally lives in Electron's application data directory. No connector OAuth credentials or real inbox data are required for this demo.
+
+## Simulate a message with your own data
+
+Choose **Simulate an arrival → New incoming message**, select any channel, and attach UTF-8 CSV, JSON, Markdown, text, or code files. Each file can be up to 200 KB, with ten files per message. The app copies their contents into the local inbox and the agent's isolated workspace. Binary formats such as PDF and Excel are not supported by this picker.
+
+**Use sales report example** fills a complete request and attaches `demo-data/custom-arrival/sales.csv`. The picker also includes campaign and support CSV report requests across Gmail and Slack. Codex calculates and writes each report, and the app exports a PDF locally. Use **Open PDF** on the completed artifact. Delivering the message starts real Codex triage and execution. Open its task or worker, then **Agent messages** to follow the response live or revisit it after completion. Existing historical runs retain only the activity they originally saved.
+
+Demo action labels appear on suggested arrivals and historical messages. They describe the intended demonstration in the UI and are excluded from the model's message content.

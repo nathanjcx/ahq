@@ -1,3 +1,4 @@
+import { reportDemos } from './report-demos';
 import { readArrivalSequence, readProjectEvidence } from './evidence';
 import type { CalendarEvent, Source, SourceAttachment, SourceItem } from '../src/shared/types';
 
@@ -50,50 +51,13 @@ function historicalMessages(p: Project): Array<[string, string]> {
     ['Previous release signed off', `${p.engineer}: ${p.closedIssue} is closed. The reporter verified the correction in the previous release. The attached notes state the scope of that test.`],
     ['Review agenda archived', `The ${p.milestone} agenda is attached for reference. The meeting happened earlier this month. This is a copy of the agenda, not a new meeting invitation.`],
     ['Evidence index published', `${p.analyst}: The evidence index lists the metrics, owner register, and prior release notes for ${p.code}. Use the project identifier when citing these records.`],
-    ['Operations handover', `${p.owner} handed the ${p.product} morning checks to ${p.analyst}. ${p.engineer} remains the engineering contact. The handover was completed during the previous review.`],
-    ['First organization check-in', `${p.customers[0]} confirmed receipt of the ${p.name} briefing. Their contact had no further questions after the walkthrough.`],
-    ['Second organization notes', `${p.customers[1]} asked whether the review would include ${p.measures[2]}. ${p.analyst} already answered yes and pointed them to the weekly export. Conversation closed.`],
-    ['Training attendance', `${p.customers[2]} and ${p.customers[3]} attended the recorded ${p.product} training. Slides and attendance were filed by ${p.owner}. No follow-up was requested.`],
-    ['Archived support trend', `${p.analyst}: The previous baseline was ${p.previousTickets} ${p.measures[2]}. The current archive shows ${p.tickets}. This comparison belongs to ${p.code}; it should not be copied into another project's report.`],
-    ['Risk accepted for review', `The review retained this open risk: ${p.risk} ${p.owner} will discuss it at the next planned checkpoint. This message records the earlier review decision.`],
-    ['Working agreement', `${p.engineer}: When discussing ${p.name}, include ${p.code} in the subject. The ${p.closedIssue.split(' ')[0]} thread is closed; new failures should have their own reproduction and date.`],
-    ['Receipt confirmed', `${p.owner}: Thanks, I have the ${p.name} metrics and the owner register. The files opened correctly. Nothing else needed today.`],
-    ['Community note', `A participant from ${p.customers[4]} liked the clearer ${p.product} instructions. They were sharing feedback, not asking for a redesign.`],
-    ['Archive retention', `Operations retained the ${p.code} review files with the weekly export. The approved budget is $${p.budget}; invoices are already reconciled. This is an archive notice.`],
-    ['Accessibility review closed', `${p.customers[5]} checked the large-text instructions for ${p.name}. The earlier formatting issue was resolved, and they confirmed the final version.`],
-    ['Office hours recap', `${p.analyst} answered two questions from ${p.customers[6]} about ${p.measures[0]}. Both answers are now in the project brief. There are no unanswered questions in this conversation.`],
-    ['Review minutes approved', `${p.owner} approved the earlier ${p.milestone} minutes. Accepted decision: ${p.decision} The minutes are final.`],
-    ['Delivery receipt', `The ${p.name} evidence bundle reached ${p.owner} and ${p.engineer}. This automatic delivery receipt confirms a completed handoff.`],
-    ['Earlier request withdrawn', `${p.owner}: Please disregard my earlier request for a separate ${p.code} summary. I used the existing review notes and no longer need another document.`],
-    ['Resolved issue reminder', `${p.closedIssue} remains closed. This automatic issue summary repeats the resolution from last week; no new reproduction or regression is reported.`],
-    ['Photo from the walkthrough', `${p.customers[0]} shared a photo after the ${p.name} walkthrough and thanked ${p.analyst}. No action requested.`],
-    ['Definitions clarified', `For ${p.code}, the numerator is ${p.measures[0]} and the denominator is ${p.measures[1]}. ${p.analyst} confirmed that ${p.adopted}/${p.eligible} uses the same reporting window.`],
-    ['Spending explanation', `${p.owner}: The $${p.spent} spent includes implementation, operations, and training. The attached budget from the earlier thread is authoritative; avoid treating the approved $${p.budget} as money already spent.`],
-    ['Completed reminder', `The reminder for the previous ${p.milestone} has expired. The meeting was held and its minutes were approved. No new event should be created from this archive notice.`],
-    ['Engineering contact', `${p.engineer} is the owner for technical questions about ${p.product}. ${p.owner} approves changes to scope. This is a saved contact note.`],
-    ['Closed checklist', `${p.analyst} completed the previous ${p.code} weekly checklist: reconciled metrics, checked the register, and filed the meeting notes. No checklist items remain from that week.`],
-    ['Newsletter subscription confirmed', `You are subscribed to the ${p.name} monthly update. The next edition will cover the ${p.product}. This automatic confirmation does not require a reply.`],
-    ['Reporting boundary', `${p.owner}: ${p.name} and Pinecone Commerce have separate budgets and customer populations. A similar request for a readout does not make them the same piece of work.`],
-    ['Correction to an old address', `${p.customers[3]} corrected the office mailing address in the archived contact register. Operations has already applied the change. No calendar or shipping action is outstanding.`],
-    ['Meeting declined and closed', `${p.engineer} declined the optional retrospective because the notes covered their questions. The organizer accepted the decline; no replacement meeting is needed.`],
-    ['Support queue reconciled', `${p.analyst} checked that the archived ${p.tickets} support count belongs to ${p.name}. The support export and the review notes agree for this period.`],
-    ['Scope question answered', `${p.customers[2]} asked whether the ${p.product} included an extra location. ${p.owner} answered that the approved scope is the seven organizations in the register. They accepted the answer.`],
-    ['Friday sign-off', `${p.owner}: All documents from the earlier ${p.milestone} are filed. The open project risk is still documented separately: ${p.risk}`],
-    ['Automated backup notice', `The ${p.code} archive backup completed successfully. Eight evidence files passed checksum verification. This is a system notification.`],
-    ['Thank-you note', `${p.customers[6]}: Thanks to ${p.engineer} for explaining the ${p.product} changes. We have what we need for the next internal review.`],
-    ['Old draft superseded', `${p.analyst}: The first ${p.name} draft used preliminary counts. It was superseded by the CSV with ${p.adopted} and ${p.eligible}. Do not resurrect the preliminary version.`],
-    ['Planning note filed', `Earlier planning note for ${p.code}: ${p.nextStep} The owner is ${p.owner}. This note was saved as background for the next review, not assigned as a new task.`],
-    ['Resolved discussion locked', `The conversation about ${p.closedIssue.split(' ')[0]} was locked after the reporter confirmed the fix. Further replies are archived; there is no new failure here.`],
-    ['Weekly digest delivered', `The weekly ${p.name} digest was delivered to ${p.owner}. It included ${p.adopted}/${p.eligible} adoption, ${p.tickets} questions, and the open project risk. Delivery succeeded.`],
-    ['No change to our appointment', `${p.customers[1]}: We will keep the appointment already on the calendar. There is no change of date, time, attendees, or location.`],
-    ['Archive complete', `${p.analyst}: This closes the previous ${p.name} reporting period. The next review can cite the metrics and owner register, but any new request should be evaluated on its own wording.`],
   ];
 }
 
 export function initialSources(): SourceItem[] {
   return projects.flatMap((project, projectIndex) => {
     const attachments = files(project);
-    return historicalMessages(project).map(([title, content], index) => {
+    return historicalMessages(project).slice(0, project.id === 'pinecone' ? 8 : 2).map(([title, content], index) => {
       const source = providers[(projectIndex * 45 + index) % providers.length];
       const topic = Math.floor(index / 3);
       return {
@@ -184,5 +148,5 @@ export function demoEvents(now: number): Array<{ id: string; label: string; item
   } }));
   // Provider redelivery repeats the external identity, while the transport event has its own ID.
   result.splice(6, 0, { ...result[4], id: 'arrival-checkout-provider-redelivery', label: '[ACTION: SUPPRESS DUPLICATE DELIVERY] Slack redelivers the same event', item: { ...result[4].item, timestamp: now + 6 * 90_000 } });
-  return result;
+  return [...reportDemos(now), ...result];
 }

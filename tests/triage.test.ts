@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -370,5 +370,25 @@ test('suggested arrivals expose editable previews without leaking future evidenc
     assert.equal(triagePrompt(incoming, after).includes(unseen.content), false);
     await app.office.command({ type: 'source.ingest', item: incoming });
     assert.equal(app.office.snapshot().triage.length, 1, 'Provider redelivery must still deduplicate.');
+  } finally { await app.close(); }
+});
+
+
+test('every channel carries an uploaded attachment into its completed task workspace', async () => {
+  const app = await setup();
+  try {
+    for (const channel of ['gmail', 'calendar', 'imessage', 'slack', 'discord', 'linear', 'asana'] as const) {
+      const incoming = { ...source(`uploaded-${channel}`), source: channel };
+      await app.office.command({ type: 'source.ingest', item: incoming });
+      await settled(app.office, incoming.id);
+      await waitFor(() => app.office.snapshot().work.some(work => work.triggerSourceId === incoming.id && work.status === 'completed'));
+      const state = app.office.snapshot();
+      const work = state.work.find(item => item.triggerSourceId === incoming.id)!;
+      const run = state.runs.find(item => item.workId === work.id)!;
+      const directory = path.join(run.workspace!, 'attachments');
+      const file = (await readdir(directory)).find(name => name.endsWith('customer.csv'))!;
+      assert.equal(await readFile(path.join(directory, file), 'utf8'), incoming.attachments![0].content);
+      assert.equal(run.messages?.[0].text, 'Completed');
+    }
   } finally { await app.close(); }
 });

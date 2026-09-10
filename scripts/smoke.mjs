@@ -42,10 +42,29 @@ try {
   state = await command({ type: 'snapshot' });
   assert.equal(state.triage.length, 0, 'Preview and cancellation must not send a message.');
   await page.keyboard.press('Escape');
+  await page.locator('.nav-rail').getByRole('button', { name: 'Inbox', exact: true }).click();
+  await page.locator('.message-action').first().waitFor();
+  assert.equal(await page.locator('.message-row').count(), await page.locator('.message-action').count());
+  await page.locator('.nav-rail').getByRole('button', { name: 'Office', exact: true }).click();
   for (const name of ['New incoming message', 'New calendar event']) {
     await page.getByRole('button', { name: 'Simulate an arrival', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: new RegExp('^' + name) }).click();
     await page.getByRole('dialog').getByRole('heading', { name, exact: true }).waitFor();
+    if (name === 'New incoming message') {
+      const dialog = page.getByRole('dialog');
+      await dialog.getByRole('button', { name: 'Use sales report example' }).click();
+      assert.equal(await dialog.getByLabel('Subject', { exact: true }).inputValue(), 'Create a PDF sales performance report');
+      assert.equal(await dialog.getByRole('combobox').first().locator('option').count(), 7);
+      await dialog.getByRole('combobox').first().selectOption('slack');
+      await dialog.getByLabel('Attach local files').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Actual uploaded file contents for the report.') });
+      await dialog.getByRole('button', { name: 'Remove notes.txt', exact: true }).waitFor();
+      const attachment = dialog.locator('details').filter({ hasText: 'notes.txt' });
+      await attachment.locator('summary').click();
+      await attachment.getByText('Actual uploaded file contents for the report.', { exact: true }).waitFor();
+      await page.screenshot({ path: 'test-results/message-attachments.png', fullPage: true });
+      await dialog.getByRole('button', { name: 'Remove notes.txt', exact: true }).click();
+      assert.equal(await dialog.getByRole('button', { name: 'Remove notes.txt', exact: true }).count(), 0);
+    }
     await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
     await page.keyboard.press('Escape');
   }
@@ -67,9 +86,9 @@ try {
   await page.locator('.nav-rail').getByRole('button', { name: 'Inbox' }).click();
   await page.getByRole('tab', { name: /Slack/ }).click();
   assert.ok((await page.locator('.message-row').count()) > 0);
-  assert.ok((await page.locator('.message-row').count()) >= 60);
+  assert.equal(await page.locator('.message-row').count(), state.sources.filter(source => source.source === 'slack').length);
   await page.getByRole('tab', { name: /Gmail/ }).click();
-  assert.ok((await page.locator('.message-row').count()) >= 60);
+  assert.equal(await page.locator('.message-row').count(), state.sources.filter(source => source.source === 'gmail').length);
   const evidence = state.sources.find((source) => source.source === 'gmail' && source.attachments?.length);
   assert.ok(evidence);
   await page.getByRole('textbox', { name: 'Search inbox' }).fill(evidence.title);

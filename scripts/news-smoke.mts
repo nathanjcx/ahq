@@ -15,6 +15,7 @@ for (let index = 0; index < 2; index++) {
   const id = `news-ui-work-${index}`;
   const time = Date.now() - (2 - index) * 600_000;
   state.work.push({ ...state.work[0], id, title: `UI test collection ${index}`, routineId: routine.id, createdAt: time });
+  state.runs.push({ id: `news-ui-run-${index}`, workId: id, status: 'completed', startedAt: time, completedAt: time + 1000, messages: [{ id: 'message-1', text: 'Full saved agent response. ' + 'Detailed evidence. '.repeat(40), complete: true, timestamp: time }] });
   state.artifacts.push({ id: `news-ui-artifact-${index}`, workId: id, title: `UI test report ${index}`, kind: 'report', content: 'Synthetic test report only.', createdAt: time, simulated: true,
     news: { since: new Date(time - 600_000).toISOString(), until: new Date(time).toISOString(), excluded: 0,
       coverage: AI_NEWS_ACCOUNTS.map(account => ({ account, status: 'partial', note: 'Synthetic test coverage.' })),
@@ -42,5 +43,8 @@ try {
   assert.equal(await page.locator('.routine-result-row').count(), 2);
   await page.getByRole('button', { name: /UI test report 1/ }).click();
   await page.getByRole('dialog').getByText('Synthetic test report only.', { exact: true }).waitFor();
+  await page.getByRole('tab', { name: /Agent messages/ }).click();
+  assert.ok((await page.locator('.agent-message').innerText()).length > 500);
+  await page.screenshot({ path: 'test-results/agent-messages.png', fullPage: true });
   console.log('News UI passed: cumulative results, filters, ten-account coverage, past runs and report access. No Codex calls.');
 } finally { await desktop.close(); await rm(dataDir, { recursive: true, force: true }); }

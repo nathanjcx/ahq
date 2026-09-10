@@ -1,3 +1,4 @@
+import { messageDemoAction } from '../src/shared/demo-labels';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { demoEvents, initialCalendar, initialSources } from '../runtime/story';
@@ -8,9 +9,9 @@ const deliveries = demoEvents(now);
 const identity = (item: { source: string; externalId: string }) => `${item.source}:${item.externalId}`;
 const unique = new Map([...history, ...deliveries.map((event) => event.item)].map((item) => [identity(item), item]));
 
-test('the expanded office contains 503 distinct messages and a duplicate delivery', () => {
-  assert.equal(history.length, 450);
-  assert.equal(unique.size, 503);
+test('the expanded office contains 82 distinct messages and a duplicate delivery', () => {
+  assert.equal(history.length, 26);
+  assert.equal(unique.size, 82);
   assert.equal(new Set(history.map(identity)).size, history.length);
   assert.equal(new Set(deliveries.map((event) => event.id)).size, deliveries.length);
   assert.ok(deliveries.length > new Set(deliveries.map((event) => identity(event.item))).size);
@@ -30,7 +31,7 @@ test('historical context and future arrivals are separate, with readable evidenc
   }
   for (const event of deliveries) assert.ok(!historicalIds.has(identity(event.item)));
   const attachments = [...unique.values()].flatMap((item) => item.attachments || []);
-  assert.ok(attachments.length >= 80, `Only ${attachments.length} attachments provided`);
+  assert.ok(attachments.length >= 50, `Only ${attachments.length} attachments provided`);
   for (const attachment of attachments) {
     assert.ok(attachment.id && attachment.name && attachment.mediaType);
     assert.ok(attachment.content.trim().length >= 80, `${attachment.name} needs readable evidence`);
@@ -54,4 +55,14 @@ test('Gmail and Slack each have eleven connected arrivals with file-backed attac
       assert.ok(event.item.content.length > 60);
     }
   }
+});
+
+
+test('every demo message has a display-only action label, including the archive', () => {
+  const entries = deliveries.map(entry => ({ ...entry, source: entry.item.source, delivered: false }));
+  for (const item of unique.values()) {
+    assert.match(messageDemoAction(item, entries) || '', /^\[ACTION: .+\]$/, item.id);
+    assert.doesNotMatch(item.title + item.content, /\[ACTION:/);
+  }
+  assert.ok(deliveries.filter(entry => entry.id.startsWith('arrival-pdf-')).every(entry => entry.item.attachments?.[0].name.endsWith('.csv')));
 });

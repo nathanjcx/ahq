@@ -1,3 +1,5 @@
+import sampleSales from "../demo-data/custom-arrival/sales.csv?raw";
+import { messageDemoAction } from './shared/demo-labels';
 import { AI_NEWS_ACCOUNTS } from './shared/news';
 import {
   AlertCircle,
@@ -64,6 +66,7 @@ import type {
   Snapshot,
   Source,
   SourceItem,
+  SourceAttachment,
   WorkItem,
 } from "./shared/types";
 
@@ -1057,7 +1060,7 @@ function InboxView({
               <MessageRow
                 key={item.id}
                 item={item}
-                demoLabel={snapshot.demo.events?.find(entry => entry.item?.id === item.id)?.label}
+                demoLabel={messageDemoAction(item, snapshot.demo.events)}
                 selected={selected?.id === item.id}
                 onClick={() => setSelectedId(item.id)}
               />
@@ -1084,7 +1087,7 @@ function InboxView({
                     {selected.channel ? ` · ${selected.channel}` : ""}
                   </p>
                   <h2>{selected.title}</h2>
-                  <p className="demo-action">{snapshot.demo.events?.find(entry => entry.item?.id === selected.id)?.label.match(/^\[ACTION: [^\]]+\]/)?.[0]}</p>
+                  <p className="demo-action">{messageDemoAction(selected, snapshot.demo.events)}</p>
                   <p>
                     {selected.author} · {formatTime(selected.timestamp)}
                   </p>
@@ -1231,12 +1234,34 @@ function SourceAttachments({ attachments }: { attachments: SourceItem["attachmen
 function IncomingMessageModal({ run, busy, signedIn, template, onClose, onCreated }: { run: RunCommand; busy: string | null; signedIn: boolean; template?: ReplayEntry; onClose: () => void; onCreated: (id: string) => void }) {
   const item = template?.item;
   const [form, setForm] = useState({ source: item?.source || "gmail" as Source, author: item?.author || "", title: item?.title || "", content: item?.content || "", threadId: item?.threadId || "" });
+  const [attachments, setAttachments] = useState<SourceAttachment[]>([]);
+  const [fileError, setFileError] = useState("");
+  const [readingFiles, setReadingFiles] = useState(false);
+  const addFiles = async (files: File[]) => {
+    setFileError(""); setReadingFiles(true);
+    try {
+      if (attachments.length + files.length > 10) throw new Error("Attach up to 10 files.");
+      const added = await Promise.all(files.map(async file => {
+        if (file.size > 200_000) throw new Error(`${file.name} exceeds the 200 KB limit.`);
+        const content = new TextDecoder("utf-8", { fatal: true }).decode(await file.arrayBuffer());
+        if (content.includes("\0") || /\.(pdf|docx?|xlsx?|zip|png|jpe?g|gif)$/i.test(file.name)) throw new Error(`${file.name} is not a supported text file. Use CSV, JSON, Markdown, text, or source code.`);
+        return { id: crypto.randomUUID(), name: file.name.slice(0, 200), mediaType: file.type || "text/plain", content };
+      }));
+      setAttachments(current => [...current, ...added]);
+    } catch (error) { setFileError(error instanceof Error ? error.message : "Could not read the file."); }
+    finally { setReadingFiles(false); }
+  };
+  const loadExample = () => {
+    setForm({ ...form, author: "Alex Morgan", title: "Create a PDF sales performance report", content: "Please use the attached sales.csv to write a PDF report for July through September. Calculate revenue, cost, gross profit and margin by month and product. Explain the changes, recommend two next steps, and show your calculations. All amounts are USD; these six rows are the complete dataset.", threadId: "" });
+    setAttachments([{ id: crypto.randomUUID(), name: "sales.csv", mediaType: "text/csv", content: sampleSales }]);
+    setFileError("");
+  };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!signedIn || template?.delivered || (template && !item)) return;
+    if (readingFiles || !signedIn || template?.delivered || (template && !item)) return;
     const id = item?.id || crypto.randomUUID();
     const changes = { ...form, author: form.author.trim(), title: form.title.trim(), content: form.content.trim(), threadId: form.threadId.trim() || item?.threadId || id };
-    const command: Command = template ? { type: "demo.deliver", id: template.id, changes } : { type: "source.ingest", item: { ...changes, id, externalId: id, timestamp: Date.now() } };
+    const command: Command = template ? { type: "demo.deliver", id: template.id, changes } : { type: "source.ingest", item: { ...changes, id, externalId: id, timestamp: Date.now(), attachments } };
     const next = await run(command);
     if (next) onCreated(id);
   };
@@ -1248,10 +1273,17 @@ function IncomingMessageModal({ run, busy, signedIn, template, onClose, onCreate
     <label><span>Subject</span><input required maxLength={300} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Could you prepare a launch summary?" /></label>
     <label><span>Message</span><textarea aria-label="Message" required rows={6} maxLength={20000} value={form.content} onChange={(event) => setForm({ ...form, content: event.target.value })} placeholder="Include the context an agent would need to do the work." /></label>
     <label><span>Thread ID <small>Optional, reuse an existing ID for a follow-up</small></span><input value={form.threadId} maxLength={200} onChange={(event) => setForm({ ...form, threadId: event.target.value })} /></label>
-    <SourceAttachments attachments={item?.attachments} />
+    {!template && <section className="attachment-picker">
+      <button type="button" className="button button--quiet" onClick={loadExample} disabled={readingFiles}>Use sales report example</button>
+      <label><span>Attach local files</span><input type="file" multiple disabled={readingFiles || attachments.length >= 10} onChange={event => { const files = Array.from(event.target.files || []); event.target.value = ""; void addFiles(files); }} /></label>
+      <p className="muted">CSV, JSON, Markdown, text, or source code. Up to 10 files, 200 KB each. Copies are saved with the message and placed in the agent's local workspace.</p>
+      {attachments.map(file => <div className="attachment-picker__file" key={file.id}><span>{file.name} · {new TextEncoder().encode(file.content).length.toLocaleString()} bytes</span><button type="button" className="button button--quiet" disabled={readingFiles} aria-label={`Remove ${file.name}`} onClick={() => setAttachments(current => current.filter(item => item.id !== file.id))}><X size={14} /></button></div>)}
+      {fileError && <p role="alert" className="field-error">{fileError}</p>}
+    </section>}
+    <SourceAttachments attachments={template ? item?.attachments : attachments} />
     {template?.delivered && <p className="field-error">This suggestion has already been delivered. Start a new message for another arrival.</p>}
     {!signedIn && <p className="field-error">Sign in with ChatGPT in Settings before delivering messages for triage.</p>}
-    <div className="modal-actions"><button type="button" className="button button--quiet" onClick={onClose}>Cancel</button><button className="button button--primary" disabled={busy !== null || !signedIn || template?.delivered || !form.author.trim() || !form.title.trim() || !form.content.trim()}><Send size={15} /> Deliver message</button></div>
+    <div className="modal-actions"><button type="button" className="button button--quiet" onClick={onClose}>Cancel</button><button className="button button--primary" disabled={readingFiles || busy !== null || !signedIn || template?.delivered || !form.author.trim() || !form.title.trim() || !form.content.trim()}><Send size={15} /> Deliver message</button></div>
   </form></Modal>;
 }
 
@@ -1319,7 +1351,8 @@ function MessageRow({
           <strong>{item.author}</strong>
           <time>{formatTime(item.timestamp)}</time>
         </span>
-        <b>{demoLabel?.match(/^\[ACTION: [^\]]+\]/)?.[0]} {item.title}</b>
+        {demoLabel && <span className="message-action">{demoLabel}</span>}
+        <b>{item.title}</b>
         <small>{item.content}</small>
       </span>
       {(!item.disposition || item.disposition === "pending") && (
@@ -1496,7 +1529,7 @@ function RoutinesView({
         {selected.kind === "ai-news" && <>
           <div className="news-accounts">{AI_NEWS_ACCOUNTS.map(account => <button key={account} onClick={() => openNewsLink(`https://x.com/${account}`)}>@{account}</button>)}</div>
           <p className="muted">Public-web coverage can be incomplete. Each run uses Codex allowance. Rumors remain unconfirmed.</p>
-          {latestNews && <details className="news-coverage"><summary>Latest coverage: {latestNews.coverage.filter(entry => entry.status === "checked").length}/10 fully checked · {new Date(latestNews.until).toLocaleString()}</summary><p>Window: {new Date(latestNews.since).toLocaleString()} to {new Date(latestNews.until).toLocaleString()}. {latestNews.excluded} duplicate or invalid items excluded.</p>{latestNews.coverage.map(entry => <p key={entry.account}><strong>@{entry.account} · {entry.status}</strong> {entry.note}</p>)}</details>}
+          {latestNews && <details className="news-coverage"><summary>Latest coverage: {latestNews.coverage.filter(entry => entry.status !== "unavailable").length}/10 accounts readable · {new Date(latestNews.until).toLocaleString()}</summary><p>Window: {new Date(latestNews.since).toLocaleString()} to {new Date(latestNews.until).toLocaleString()}. {latestNews.excluded} duplicate or invalid items excluded. Public profiles provide limited timelines; readable does not mean fully checked.</p>{latestNews.coverage.map(entry => <p key={entry.account}><strong>@{entry.account} · {entry.status}</strong> {entry.note}</p>)}</details>}
         </>}
         {linkError && <p role="alert" className="field-error">{linkError}</p>}
         {resultTab === "collected" && (selected.kind === "ai-news" ? <>
@@ -2036,8 +2069,8 @@ function WorkDrawer({
   onError: (message: string) => void;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<"activity" | "artifacts">(
-    initialArtifactId ? "artifacts" : "activity",
+  const [tab, setTab] = useState<"messages" | "activity" | "artifacts">(
+    initialArtifactId ? "artifacts" : "messages",
   );
   const [artifactId, setArtifactId] = useState(initialArtifactId);
   const [steer, setSteer] = useState("");
@@ -2052,6 +2085,7 @@ function WorkDrawer({
     )
     .sort((a, b) => b.sequence - a.sequence);
   const runItem = [...snapshot.runs].reverse().find((item) => work && item.workId === work.id);
+  const workRuns = snapshot.runs.filter(item => work && item.workId === work.id);
   const canSteer = work?.status === "running" && Boolean(runItem?.turnId);
   const sources = snapshot.sources.filter((item) =>
     work?.sourceIds.includes(item.id),
@@ -2099,6 +2133,7 @@ function WorkDrawer({
         </div>
       )}
       <div className="drawer-tabs" role="tablist">
+        <button role="tab" aria-selected={tab === "messages"} className={tab === "messages" ? "active" : ""} onClick={() => setTab("messages")}>Agent messages <span>{workRuns.reduce((count, run) => count + (run.messages?.length || 0), 0)}</span></button>
         <button
           role="tab"
           aria-selected={tab === "activity"}
@@ -2116,7 +2151,17 @@ function WorkDrawer({
           Artifacts <span>{artifacts.length}</span>
         </button>
       </div>
-      {tab === "activity" ? (
+      {tab === "messages" ? <div className="agent-messages" aria-label="Agent messages">
+        <p className="muted">Live updates and complete responses, saved with each attempt. Activity contains task status changes and your directions.</p>
+        {workRuns.map((attempt, index) => <section key={attempt.id}>
+          <h4>Attempt {index + 1} · {attempt.status} · {formatTime(attempt.startedAt)}</h4>
+          {attempt.messages?.map(message => <article className="agent-message" key={message.id}><header><strong>{agent?.name || "Agent"}</strong><time>{formatTime(message.timestamp)}</time><span>{!message.complete ? attempt.status === "running" ? "Writing…" : "Interrupted" : ""}</span></header><div className="markdown"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+            a: ({ href, children }) => href?.startsWith("https://") ? <a href={href} onClick={event => { event.preventDefault(); void bridge.openExternal(href).catch((error: unknown) => onError(error instanceof Error ? error.message : "Could not open this link.")); }}>{children}</a> : <span title={href}>{children}</span>,
+          }}>{message.text}</ReactMarkdown></div></article>)}
+          {!attempt.messages?.length && <p className="muted">{attempt.status === "running" ? "Waiting for the agent's first message…" : "No messages were saved for this attempt. Older runs may have summaries in Activity."}</p>}
+        </section>)}
+        {!workRuns.length && <p className="muted">Messages will appear when this task starts.</p>}
+      </div> : tab === "activity" ? (
         <div className="drawer-body">
           <div className="run-summary">
             <div>
@@ -2415,7 +2460,7 @@ function ArtifactPreview({
         </div>
         {artifact.filePath && (
           <button className="button button--quiet" onClick={onOpen}>
-            <ExternalLink size={14} /> Open file
+            <ExternalLink size={14} /> {artifact.filePath?.endsWith(".pdf") ? "Open PDF" : "Open file"}
           </button>
         )}
       </header>

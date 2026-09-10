@@ -2519,3 +2519,14 @@ select {
 .routine-workspace .routine-card__top h2 { font-size:18px; }
 .routine-workspace .routine-card__schedule { flex-wrap:wrap; }
 @media (max-width:1100px) { .routine-workspace { grid-template-columns:1fr; } }
+
+.message-row__copy .message-action { display:block; white-space:normal; color:#285947; font-size:10px; font-weight:750; line-height:1.4; margin:5px 0; }
+
+.attachment-picker { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; }
+.attachment-picker__file, .agent-message header { display: flex; align-items: center; gap: 12px; }
+.attachment-picker__file { justify-content: space-between; }
+.agent-messages { padding: 20px 0; }
+.agent-message { margin: 12px 0; padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: #fffdf7; overflow-wrap: anywhere; }
+.agent-message header { margin-bottom: 12px; font-size: 12px; }
+.agent-message time, .agent-message header > span { color: var(--ink-soft); }
+.agent-message pre { overflow-x: auto; }

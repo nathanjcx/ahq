@@ -1,3 +1,4 @@
+import { parseXProfile } from '../runtime/x-posts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { AI_NEWS_ACCOUNTS } from '../src/shared/news';
@@ -39,4 +40,32 @@ test('all ten account statuses are required and the seeded routine is disabled',
   assert.equal(routine.enabled, false);
   assert.equal(routine.intervalMinutes, 10);
   assert.ok(initialSnapshot(now).agents.some(agent => agent.id === routine.agentId));
+});
+
+
+test('classification cannot add a post that was not fetched', () => {
+  const fetched = post(now - 60_000);
+  const invented = post(now - 30_000);
+  const result = parseNews(JSON.stringify({ coverage, items: [fetched, invented] }), window, [], [{ ...fetched, text: 'Synthetic source evidence.' }]);
+  assert.deepEqual(result.items.map(item => item.url), [fetched.url]);
+  assert.equal(result.excluded, 1);
+});
+
+
+test('public X parser reads data without executing scripts and verifies authors and timestamps', () => {
+  const item = post(now);
+  const id = item.url.split('/').at(-1);
+  const record = (key: string, type: string, fields: string) => `__id:${JSON.stringify(key)},__typename:${JSON.stringify(type)},${fields}`;
+  const html = [
+    record('tweet', 'Tweet', `rest_id:"${id}"`),
+    record('client:tweet:details', 'TBirdData', `full_text:${JSON.stringify('Synthetic "quoted" post')},created_at_ms:${now}`),
+    record('client:tweet:core', 'TweetCore', '__ref:"result"'),
+    record('result', 'UserResults', '__ref:"user"'),
+    record('user', 'User', ''),
+    record('client:user:core', 'UserCore', 'screen_name:"OpenAI"'),
+  ].join('};');
+  assert.equal(parseXProfile(html, 'OpenAI')[0]?.url, item.url);
+  assert.equal(parseXProfile(html, 'sama').length, 0);
+  assert.equal(parseXProfile(html.replace(String(now), String(now - 120_000)), 'OpenAI').length, 0);
+  assert.deepEqual(parseXProfile('<script>throw new Error("Do not execute")</script>', 'OpenAI'), []);
 });

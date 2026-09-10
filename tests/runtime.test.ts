@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { createRuntime, type OfficeRuntime } from '../runtime/engine';
+import { SnapshotStore } from '../runtime/store';
 import { CodexAppServer } from '../runtime/codex';
 
 process.env.CODEX_BIN = path.join(os.tmpdir(), 'little-office-codex-not-installed');
@@ -33,7 +34,8 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   if (message.method === 'thread/start') send({ id: message.id, result: { thread: { id: 'thread-1' } } });
   if (message.method === 'turn/start') {
     if (Object.hasOwn(message.params, 'model') || message.params.sandboxPolicy.networkAccess !== false) throw new Error('Unsafe turn settings');
-    const turn = { id: 'turn-1', status: 'completed', error: null, items: [{ type: 'agentMessage', text: 'early result' }] };
+    const turn = { id: 'turn-1', status: 'completed', error: null, items: [{ id: 'message-1', type: 'agentMessage', text: 'early result' }] };
+    send({ method: 'item/agentMessage/delta', params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'message-1', delta: 'early ' } });
     send({ method: 'item/completed', params: { threadId: 'thread-1', turnId: 'turn-1', item: turn.items[0] } });
     send({ method: 'turn/completed', params: { threadId: 'thread-1', turn } });
     send({ id: message.id, result: { turn: { id: 'turn-1' } } });
@@ -46,7 +48,9 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   const client = new CodexAppServer();
   try {
     await client.start();
-    const result = await client.runTurn({ cwd: directory, model: '', prompt: 'test' });
+    const messages: import('../src/shared/types').AgentMessage[] = [];
+    const result = await client.runTurn({ cwd: directory, model: '', prompt: 'test', onMessage: message => messages.push(message) });
+    assert.deepEqual(messages.map(message => [message.id, message.text, message.complete]), [['message-1', 'early result', true]]);
     assert.equal(result.status, 'completed');
     assert.equal(result.message, 'early result');
   } finally {
@@ -109,15 +113,19 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', (l
       fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(' + (coupon > 0 ? tax : 0)', ''));
       fs.writeFileSync(path.join(cwd, 'patch.md'), '# Actual fixture patch');
     }
-    const turn = { id: 'turn-' + thread, status: 'completed', items: [{ type: 'agentMessage', text: 'Model summary is not the artifact' }] };
-    send({ method: 'turn/completed', params: { threadId: message.params.threadId, turn } });
+    const turn = { id: 'turn-' + thread, status: 'completed', items: [{ id: 'message-' + thread, type: 'agentMessage', text: 'Model summary is not the artifact' }] };
+    send({ method: 'item/agentMessage/delta', params: { threadId: message.params.threadId, turnId: turn.id, itemId: 'message-' + thread, delta: 'Model summary is not the artifact' } });
     reply({ turn: { id: turn.id } });
+    setTimeout(() => send({ method: 'turn/completed', params: { threadId: message.params.threadId, turn } }), 400);
   }
 });
 `, { mode: 0o700 });
   const previous = process.env.CODEX_BIN;
   process.env.CODEX_BIN = executable;
-  const office = await createRuntime({ dataDir: path.join(directory, 'data'), onSnapshot: () => undefined });
+  let sawStreaming = false;
+  const office = await createRuntime({ dataDir: path.join(directory, 'data'), onSnapshot: state => {
+    if (state.runs.some(run => run.messages?.some(message => !message.complete && message.text.length > 0))) sawStreaming = true;
+  } });
   try {
     await office.command({ type: 'auth.login' });
     await waitFor(() => office.snapshot().auth.status === 'signed-in', 2_000);
@@ -125,6 +133,11 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', (l
     await office.command({ type: 'scenario.run', scenario: 'report' });
     await waitFor(() => office.snapshot().work.at(-1)?.status === 'completed', 2_000);
     assert.equal(office.snapshot().artifacts.at(-1)?.content, '# Actual file report');
+    const pdf = office.snapshot().artifacts.at(-1)!.filePath!;
+    assert.ok(pdf.endsWith('.pdf'));
+    assert.equal((await readFile(pdf)).subarray(0, 5).toString(), '%PDF-');
+    assert.equal(office.snapshot().runs.at(-1)?.messages?.[0].text, 'Model summary is not the artifact');
+    assert.equal(sawStreaming, true, 'Agent messages arrive before the turn completes');
     await office.command({ type: 'scenario.run', scenario: 'bug' });
     await waitFor(() => office.snapshot().work.at(-1)?.status === 'completed', 2_000);
     const run = office.snapshot().runs.at(-1)!;
@@ -138,6 +151,9 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', (l
     assert.match(office.snapshot().work.at(-1)!.error!, /without producing report.md/);
   } finally {
     await office.close();
+    const store = await SnapshotStore.open(path.join(directory, 'data'));
+    assert.ok(store.load()?.runs.some(run => run.messages?.some(message => message.text === 'Model summary is not the artifact' && message.complete)));
+    store.close();
     process.env.CODEX_BIN = previous;
   }
 });
