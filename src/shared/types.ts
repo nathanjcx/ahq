@@ -1,3 +1,4 @@
+import type { NewsCollection } from './news';
 export type Source = 'gmail' | 'calendar' | 'imessage' | 'slack' | 'discord' | 'linear' | 'asana';
 export type ActivityKind = 'idle' | 'walking' | 'reading' | 'researching' | 'drafting' | 'coding' | 'scheduling' | 'collaborating' | 'waiting' | 'celebrating';
 export type WorkStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'waiting';
@@ -41,6 +42,7 @@ export interface Artifact {
   id: string; workId: string; title: string; kind: 'report' | 'brief' | 'patch' | 'calendar' | 'qa';
   content: string; createdAt: number; filePath?: string; simulated: boolean;
   supersedesArtifactId?: string;
+  news?: NewsCollection;
 }
 export interface BoardPost {
   id: string; agentId: string; workId?: string; artifactId?: string;
@@ -48,6 +50,7 @@ export interface BoardPost {
   simulated?: boolean; replyTo?: string;
 }
 export interface Routine {
+  kind?: 'ai-news';
   id: string; agentId: string; name: string; instructions: string; enabled: boolean;
   schedule: 'interval' | 'daily'; intervalMinutes: number; dailyTime: string;
   nextRunAt: number; lastRunAt?: number; notes: string;

@@ -1,3 +1,4 @@
+import { aiNewsRoutine } from './news';
 import { cp, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Agent, Artifact, BoardPost, Snapshot } from '../src/shared/types';
@@ -44,6 +45,7 @@ export function initialSnapshot(now = Date.now()): Snapshot {
     }], runs: [], activity: [
       { id: 'event-1', sequence: 1, timestamp: now - HOUR, kind: 'system', text: 'Sample inbox ready. Deliver a message to give the office work.' },
     ], artifacts, board, routines: [
+      aiNewsRoutine(now),
       { id: 'routine-1', agentId: 'agent-eli', name: 'Morning launch readout', instructions: 'Summarize the launch evidence and list open decisions.', enabled: false, schedule: 'daily', intervalMinutes: 60, dailyTime: '09:00', nextRunAt: now + 24 * HOUR, notes: 'Keep the readout concise. Enable this routine when ready.' },
       { id: 'routine-2', agentId: 'agent-lena', name: 'Checkout verification', instructions: 'Run focused checkout QA and report any failures.', enabled: false, schedule: 'daily', intervalMinutes: 60, dailyTime: '10:00', nextRunAt: now + 25 * HOUR, notes: 'Check full-price and coupon totals after a live fix.' },
     ], calendar: initialCalendar(now),

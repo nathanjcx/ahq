@@ -72,6 +72,7 @@ test('seed references resolve, snapshots do not write, and routine edits preserv
     } });
     assert.equal(edited.routines[0].lastRunAt, lastRunAt);
     assert.equal(edited.routines[0].notes, 'Keep this note');
+    assert.equal(edited.routines[0].kind, routine.kind, 'Editing a routine preserves its collection type');
     await assert.rejects(office.command({ type: 'unknown' } as never), /Unknown command/);
   } finally { await office.close(); }
 });

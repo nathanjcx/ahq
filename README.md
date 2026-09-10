@@ -16,7 +16,15 @@ Gmail and Slack each include a connected 11-message conversation with file-backe
 
 The curated arrivals cover a launch report, cross-provider corroboration, an acknowledgement, QA requested before its fix, a duplicate delivery, meeting preparation, a dinner request with missing details and a calendar conflict, a corrected support count, and an unrelated report request. Additional arrivals exercise nine other projects and informational messages.
 
-This requires internet access and Codex subscription allowance for both intake and execution. There is no canned-output or offline execution mode. The supported work types are document reports, local checkout fixes and QA, meeting briefs, and local calendar events. Web search and external integrations are disabled. Schedules run only while the app is open. Clicking a worker opens its activity and artifacts, not a streamed computer desktop. The board records findings and task handoffs, with scripted coffee-break conversations and reactions to completed artifacts. Posts labeled "Simulated chat" run locally, cost no model usage, and never trigger work or enter agent prompts.
+This requires internet access and Codex subscription allowance for both intake and execution. There is no canned-output or offline execution mode. The supported work types are document reports, local checkout fixes and QA, meeting briefs, and local calendar events. External integrations are disabled. The AI news watch is the only routine with live public-web search enabled. Schedules run only while the app is open. Clicking a worker opens its activity and artifacts, not a streamed computer desktop. The board records findings and task handoffs, with scripted coffee-break conversations and reactions to completed artifacts. Posts labeled "Simulated chat" run locally, cost no model usage, and never trigger work or enter agent prompts.
+
+## AI news watch
+
+A paused routine checks ten X accounts every ten minutes when enabled: @OpenAI, @AnthropicAI, @GoogleDeepMind, @xAI, @MistralAI, @huggingface, @sama, @karpathy, @_akhaliq, and @swyx. Run now performs one collection without enabling its schedule. Each collection uses one Codex turn with live web search and no subagents.
+
+The first window starts at local midnight. Later collections resume from the last fully checked window; partial coverage keeps the earlier boundary so unseen posts are not skipped. Post IDs prevent duplicates, and their encoded timestamps help reject old URLs presented as current news. Rumors are labeled unconfirmed. Search coverage is not a complete X timeline: unavailable accounts and partial results stay visible in each report.
+
+Routines show past runs and their artifacts. AI news also has a cumulative, searchable collection with announcement/rumor filters and original post links. Structured results persist in the local SQLite snapshot and each run's `collection.json`; reports are saved beside them. This feature requires ChatGPT sign-in and internet access, but no X API key. It cannot guarantee complete or immediate X coverage.
 
 ## Local evidence
 

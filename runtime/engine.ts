@@ -1,3 +1,4 @@
+import { newsPrompt, newsSchema, newsWindow, parseNews, newsReport } from './news';
 import { advanceBoardChatter } from './board-chatter';
 import { createHash, randomUUID } from 'node:crypto';
 import { realpathSync } from 'node:fs';
@@ -760,6 +761,7 @@ class Runtime implements OfficeRuntime {
 
   private async runLive(work: WorkItem, active: ActiveJob): Promise<void> {
     if (this.state.auth.status !== 'signed-in') throw new Error('Sign in with a ChatGPT subscription before running live work');
+    if (work.routineId && requiredRoutine(this.state, work.routineId).kind === 'ai-news') return this.runNews(work, active);
     await this.beginJob(work.id, active);
     active.abort.signal.throwIfAborted();
     const run = latestRun(this.state, work.id);
@@ -830,6 +832,40 @@ class Runtime implements OfficeRuntime {
       artifact.content = JSON.stringify(event, null, 2);
     }
     await this.completeJob(work.id, artifact, active, event);
+  }
+
+  private async runNews(work: WorkItem, active: ActiveJob): Promise<void> {
+    await this.beginJob(work.id, active);
+    const run = latestRun(this.state, work.id)!;
+    const workspace = path.join(this.options.dataDir, 'workspaces', `${run.id}-${randomUUID()}`);
+    await mkdir(workspace, { recursive: true });
+    const previousIds = new Set(this.state.work.filter(item => item.routineId === work.routineId).map(item => item.id));
+    const previous = this.state.artifacts.filter(artifact => previousIds.has(artifact.workId) && artifact.news);
+    const window = newsWindow(previous, Date.now());
+    const result = await this.codex.runTurn({
+      cwd: workspace, model: this.state.settings.model, signal: active.abort.signal, webSearch: true,
+      prompt: newsPrompt(window, previous, work.goal), outputSchema: newsSchema,
+      onStarted: ({ threadId, turnId }) => {
+        active.threadId = threadId; active.turnId = turnId;
+        if (active.abort.signal.aborted) { void this.codex.interrupt(threadId, turnId).catch(() => undefined); return; }
+        void this.mutate(() => {
+          run.threadId = threadId; run.turnId = turnId; run.workspace = workspace;
+          this.setAgent(work.agentId, 'researching', 'Checking ten AI news accounts', work.id);
+          this.event('status', 'Checking public X posts with live web search. No other agents are being started.', work.id, work.agentId);
+        }, active);
+      },
+      onProgress: text => void this.mutate(() => this.event('tool', compact(text, 180), work.id, work.agentId), active),
+    });
+    active.abort.signal.throwIfAborted();
+    if (result.status !== 'completed') throw new Error(result.error || `News collection ${result.status}`);
+    const news = parseNews(result.message, window, previous);
+    const content = newsReport(news);
+    const filePath = path.join(workspace, 'report.md');
+    await writeFile(filePath, content, 'utf8');
+    await writeFile(path.join(workspace, 'collection.json'), JSON.stringify(news, null, 2), 'utf8');
+    await this.completeJob(work.id, { id: `artifact-news-${randomUUID()}`, workId: work.id,
+      title: `AI news · ${news.items.length} new posts · ${new Date().toLocaleString()}`,
+      kind: 'report', content, createdAt: Date.now(), filePath, simulated: false, news }, active);
   }
 
   private async readLiveArtifact(work: WorkItem, workspace: string, message: string): Promise<Artifact> {
@@ -912,6 +948,7 @@ class Runtime implements OfficeRuntime {
     const name = input.name.trim();
     const instructions = input.instructions.trim();
     if (!name || !instructions) throw new Error('Routine name and instructions are required');
+    if (input.kind && input.kind !== 'ai-news') throw new Error('Unknown routine collection type');
     if (!this.state.agents.some((agent) => agent.id === input.agentId)) throw new Error('Routine agent not found');
     validateSchedule(input.schedule, input.intervalMinutes, input.dailyTime);
     const existing = input.id ? this.state.routines.find((routine) => routine.id === input.id) : undefined;
@@ -919,6 +956,7 @@ class Runtime implements OfficeRuntime {
     const id = existing?.id || `routine-${nextNumber(this.state.routines.map((item) => item.id))}`;
     const routine: Routine = {
       ...input,
+      kind: input.kind ?? existing?.kind,
       id,
       name,
       instructions,
@@ -945,11 +983,12 @@ class Runtime implements OfficeRuntime {
       this.event('system', `${routine.name} is already running.`, undefined, routine.agentId);
       return;
     }
-    const scenario = routineScenario(routine.instructions);
+    const scenario = routine.kind === 'ai-news' ? 'report' : routineScenario(routine.instructions);
     const work = this.startScenario(scenario, routine.id);
     work.agentId = routine.agentId;
     work.title = routine.name;
     work.goal = routine.instructions;
+    if (routine.kind === 'ai-news') work.sourceIds = [];
     routine.lastRunAt = Date.now();
     routine.nextRunAt = nextRoutineTime(routine.schedule, routine.intervalMinutes, routine.dailyTime, routine.lastRunAt);
   }
@@ -963,7 +1002,8 @@ class Runtime implements OfficeRuntime {
   private async checkRoutines(): Promise<void> {
     await this.exclusive(async () => {
       if (this.closed) return;
-      const due = this.state.routines.filter((routine) => routine.enabled && routine.nextRunAt <= Date.now());
+      const due = this.state.routines.filter((routine) => routine.enabled && routine.nextRunAt <= Date.now()
+        && !this.state.work.some(work => work.routineId === routine.id && activeStatus(work.status)));
       const chatted = advanceBoardChatter(this.state, Date.now());
       if (!due.length && !chatted) return;
       for (const routine of due) this.runRoutine(routine.id);

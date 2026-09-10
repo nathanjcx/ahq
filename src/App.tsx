@@ -1,3 +1,4 @@
+import { AI_NEWS_ACCOUNTS } from './shared/news';
 import {
   AlertCircle,
   Archive,
@@ -603,6 +604,8 @@ function App() {
         )}
         {activeTab === "routines" && (
           <RoutinesView
+            onOpenWork={openWork}
+            onOpenArtifact={openArtifact}
             snapshot={snapshot}
             run={run}
             busy={busy}
@@ -1351,6 +1354,8 @@ function PageHeader({
 
 function RoutinesView({
   snapshot,
+  onOpenWork,
+  onOpenArtifact,
   run,
   busy,
   onCreate,
@@ -1361,7 +1366,22 @@ function RoutinesView({
   busy: string | null;
   onCreate: () => void;
   onEdit: (routine: Routine) => void;
+  onOpenWork: (id: string) => void;
+  onOpenArtifact: (id: string) => void;
 }) {
+  const [selectedId, setSelectedId] = useState<string>();
+  const [resultTab, setResultTab] = useState<"collected" | "history">("collected");
+  const [newsFilter, setNewsFilter] = useState("all");
+  const [newsQuery, setNewsQuery] = useState("");
+  const [linkError, setLinkError] = useState("");
+  const selected = snapshot.routines.find(routine => routine.id === selectedId) || snapshot.routines.find(routine => routine.kind === "ai-news") || snapshot.routines[0];
+  const history = snapshot.work.filter(work => work.routineId === selected?.id).sort((a, b) => b.createdAt - a.createdAt);
+  const workIds = new Set(history.map(work => work.id));
+  const collected = snapshot.artifacts.filter(artifact => workIds.has(artifact.workId)).sort((a, b) => b.createdAt - a.createdAt);
+  const latestNews = collected.find(artifact => artifact.news)?.news;
+  const news = [...new Map(collected.flatMap(artifact => (artifact.news?.items || []).map(item => [item.url, { ...item, artifactId: artifact.id }] as const))).values()].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+  const visibleNews = news.filter(item => (newsFilter === "all" || item.kind === newsFilter) && `${item.title} ${item.summary} ${item.account}`.toLowerCase().includes(newsQuery.toLowerCase()));
+  const openNewsLink = (url: string) => { setLinkError(""); void bridge.openExternal(url).catch(error => setLinkError(error instanceof Error ? error.message : "Could not open source.")); };
   return (
     <div className="page">
       <PageHeader
@@ -1374,6 +1394,7 @@ function RoutinesView({
           </button>
         }
       />
+      <div className="routine-workspace">
       <div className="routine-grid">
         {snapshot.routines.map((routine) => {
           const agent = snapshot.agents.find(
@@ -1410,7 +1431,7 @@ function RoutinesView({
                     ? `Daily at ${routine.dailyTime}`
                     : `Every ${routine.intervalMinutes} minutes`}
                 </span>
-                <small>Next {formatTime(routine.nextRunAt)}</small>
+                <small>{routine.enabled ? `Next ${formatTime(routine.nextRunAt)}` : "Schedule paused"}</small>
               </div>
               {routine.notes && (
                 <div className="routine-note">
@@ -1419,6 +1440,7 @@ function RoutinesView({
                 </div>
               )}
               <div className="routine-card__actions">
+                <button className="button button--quiet" aria-pressed={selected?.id === routine.id} onClick={() => setSelectedId(routine.id)}><HistoryIcon size={14} /> Results · {snapshot.work.filter(work => work.routineId === routine.id).length}</button>
                 <button
                   className="button button--quiet"
                   disabled={busy !== null}
@@ -1431,7 +1453,7 @@ function RoutinesView({
                 </button>
                 <button
                   className="button button--quiet"
-                  disabled={busy !== null}
+                  disabled={busy !== null || snapshot.work.some(work => work.routineId === routine.id && ["queued", "running", "waiting"].includes(work.status))}
                   onClick={() =>
                     run(
                       { type: "routine.run", id: routine.id },
@@ -1468,6 +1490,32 @@ function RoutinesView({
           />
         )}
       </div>
+      {selected && <section className="routine-results">
+        <div className="panel-heading"><div><p className="eyebrow">Collected over time</p><h2>{selected.name}</h2></div><span className="count-pill">{history.length}</span></div>
+        <div className="routine-result-tabs" role="tablist" aria-label="Routine results"><button role="tab" aria-selected={resultTab === "collected"} onClick={() => setResultTab("collected")}>Collected results · {selected.kind === "ai-news" ? news.length : collected.length}</button><button role="tab" aria-selected={resultTab === "history"} onClick={() => setResultTab("history")}>Run history · {history.length}</button></div>
+        {selected.kind === "ai-news" && <>
+          <div className="news-accounts">{AI_NEWS_ACCOUNTS.map(account => <button key={account} onClick={() => openNewsLink(`https://x.com/${account}`)}>@{account}</button>)}</div>
+          <p className="muted">Public-web coverage can be incomplete. Each run uses Codex allowance. Rumors remain unconfirmed.</p>
+          {latestNews && <details className="news-coverage"><summary>Latest coverage: {latestNews.coverage.filter(entry => entry.status === "checked").length}/10 fully checked · {new Date(latestNews.until).toLocaleString()}</summary><p>Window: {new Date(latestNews.since).toLocaleString()} to {new Date(latestNews.until).toLocaleString()}. {latestNews.excluded} duplicate or invalid items excluded.</p>{latestNews.coverage.map(entry => <p key={entry.account}><strong>@{entry.account} · {entry.status}</strong> {entry.note}</p>)}</details>}
+        </>}
+        {linkError && <p role="alert" className="field-error">{linkError}</p>}
+        {resultTab === "collected" && (selected.kind === "ai-news" ? <>
+          <div className="news-filters"><input aria-label="Search collected news" placeholder="Search news or accounts" value={newsQuery} onChange={event => setNewsQuery(event.target.value)} /><select aria-label="News classification" value={newsFilter} onChange={event => setNewsFilter(event.target.value)}><option value="all">All news</option><option value="announcement">Announcements</option><option value="rumor">Unconfirmed rumors</option></select></div>
+          <div className="news-feed">{visibleNews.map(item => <article className="news-item" key={item.url}><div className="news-item__meta"><span className={`news-kind news-kind--${item.kind}`}>{item.kind === "rumor" ? "Unconfirmed rumor" : "Announcement"}</span><span>@{item.account}</span><time>{new Date(item.publishedAt).toLocaleString()}</time></div><h3>{item.title}</h3><p>{item.summary}</p><div className="news-item__links"><button className="text-link" onClick={() => openNewsLink(item.url)}>Original post <ExternalLink size={14} /></button><button className="text-link" onClick={() => onOpenArtifact(item.artifactId)}>Collection report <FileText size={14} /></button></div></article>)}</div>
+          {!visibleNews.length && <EmptyState icon={<Search size={22} />} title={news.length ? "No matching news" : "No verified new posts yet"} body={history.length ? "Check the latest account coverage and run history. Missing results do not mean no news was posted." : "Run once to collect today's posts. New results will accumulate here without duplicate posts."} />}
+        </> : <div className="routine-collected">{collected.map(artifact => <button className="context-link" key={artifact.id} onClick={() => onOpenArtifact(artifact.id)}><FileText size={18} /><span><strong>{artifact.title}</strong><small>{new Date(artifact.createdAt).toLocaleString()}</small></span><ChevronRight size={16} /></button>)}{!collected.length && <p className="muted">Completed results will collect here.</p>}</div>)}
+        {resultTab === "history" && history.map(work => {
+          const artifacts = snapshot.artifacts.filter(artifact => artifact.workId === work.id);
+          return <article className="routine-result-row" key={work.id}>
+            <button className="text-link" onClick={() => onOpenWork(work.id)}><Clock3 size={15} />{new Date(work.createdAt).toLocaleString()}<ChevronRight size={14} /></button>
+            <span className={`status-label status-label--${work.status}`}>{work.status}</span>
+            {work.error && <p className="field-error">{work.error}</p>}
+            {artifacts.map(artifact => <button key={artifact.id} className="context-link" onClick={() => onOpenArtifact(artifact.id)}><FileText size={16} /><span>{artifact.title}</span><ChevronRight size={14} /></button>)}
+          </article>;
+        })}
+        {resultTab === "history" && !history.length && <EmptyState icon={<HistoryIcon size={22} />} title="No runs yet" body="Run this routine when ready. Its results will be saved here." />}
+      </section>}
+      </div>
     </div>
   );
 }
@@ -1487,6 +1535,7 @@ function RoutineModal({
 }) {
   const [form, setForm] = useState({
     id: routine?.id,
+    kind: routine?.kind,
     name: routine?.name || "",
     instructions: routine?.instructions || "",
     agentId: routine?.agentId || snapshot.agents.find((agent) => !agent.temporary)?.id || "",
