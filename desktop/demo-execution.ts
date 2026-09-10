@@ -1,3 +1,5 @@
+import { verifyLaunchForecast } from './launch-finance';
+import { prepareLittleOffice, finishLittleOffice, littleOfficeInstructions } from './little-office';
 import { existsSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { cp, lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
@@ -51,9 +53,14 @@ export interface TaskEvidence {
   hashes?: Record<string, string>;
   parentSessionId?: string;
 }
+export function attachmentPath(workspace: string, name: string, index: number) {
+  const safe = path.basename(name).replace(/[^a-zA-Z0-9._-]/g, '_') || 'attachment';
+  return path.join(workspace, 'attachments', `${index + 1}-${safe}`);
+}
 export async function prepareTask(workspace: string, task: LocalTaskInput): Promise<TaskEvidence> {
   let evidence: TaskEvidence = {};
-  if (task.kind === 'bug') await cp(path.join(demoDataPath, 'checkout'), workspace, { recursive: true });
+  if (task.project === 'little-office' && (task.kind === 'product' || task.kind === 'bug')) await prepareLittleOffice(workspace, task);
+  if (task.kind === 'bug' && task.project !== 'little-office') await cp(path.join(demoDataPath, 'checkout'), workspace, { recursive: true });
   if (task.kind === 'qa') {
     if (!task.parentWorkspace || !task.parentSessionId)
       throw new Error('QA needs the completed patch session and its workspace.');
@@ -79,13 +86,18 @@ export async function prepareTask(workspace: string, task: LocalTaskInput): Prom
   }
   await mkdir(path.join(workspace, 'attachments'), { recursive: true });
   for (const [i, file] of task.files.entries()) {
-    const name = path.basename(file.name).replace(/[^a-zA-Z0-9._-]/g, '_') || 'attachment';
-    await writeFile(path.join(workspace, 'attachments', `${i + 1}-${name}`), file.content, { flag: 'wx' });
+    await writeFile(attachmentPath(workspace, file.name, i), file.encoding === 'base64' ? Buffer.from(file.content, 'base64') : file.content, { flag: 'wx' });
   }
   return evidence;
 }
 export function taskInstructions(task: LocalTaskInput): string {
-  return {
+  if (task.project === 'little-office' && (task.kind === 'product' || task.kind === 'bug')) return littleOfficeInstructions(task);
+  const launch = task.launchStep === 'forecast' || task.launchStep === 'revision'
+    ? ' Write forecast.csv using forecast-contract.md and the supplied assumptions. ' + (task.launchStep === 'revision' ? 'Use original-forecast.csv as the baseline, apply competitor-scenario.csv changes, preserve original files, and explain before/after totals and assumption changes in report.md.' : 'Compute the six-month baseline forecast and explain calculations and fictional assumptions in report.md.')
+    : task.launchStep === 'marketing' ? ' Write a Little Office launch messaging kit in brief.md including positioning, three slogans, launch announcement draft, target users, and a clear distinction between existing product and planned features. Use product-brief.md.'
+    : task.launchStep === 'reporter' ? ' Use the current launch artifacts, revised forecast and verified code fix for the reporter briefing. Include slogans, three key messages, likely questions, concise answers, and facts to avoid overstating. Do not invent a meeting transcript.' : '';
+  return launch + {
+    product: 'Complete the supplied Little Office launch task in the actual source project. Follow LAUNCH-TASK.md. Write product.md with the actual changes and verification. Do not fix the deferred launch-demo bug yet.',
     report:
       'Analyze the supplied evidence. Write the complete report to report.md, citing input files and preserving uncertainty. The app exports it to PDF. Do not create the PDF or install tools.',
     meeting:
@@ -112,7 +124,9 @@ export async function finishTask(
 ): Promise<{ artifacts: LocalArtifact[]; error?: string }> {
   signal.throwIfAborted();
   if (task.kind === 'triage') return { artifacts: [] };
+  if (task.project === 'little-office' && (task.kind === 'product' || task.kind === 'bug')) return finishLittleOffice(workspace, task, signal);
   const spec = {
+    product: ['product.md', 'product'],
     report: ['report.md', 'report'],
     meeting: ['brief.md', 'brief'],
     bug: ['patch.md', 'patch'],
@@ -129,6 +143,7 @@ export async function finishTask(
       content,
       simulated: false,
     });
+    if (task.launchStep === 'forecast' || task.launchStep === 'revision') artifacts.push(await verifyLaunchForecast(workspace, task, path.join(demoDataPath, 'launch')));
     if (task.kind === 'report') {
       const pdf = path.join(workspace, `report-${randomUUID()}.pdf`);
       await writeReportPdf(pdf, task.title, content);

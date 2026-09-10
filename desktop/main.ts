@@ -1,3 +1,6 @@
+import { LaunchCoordinator } from './launch';
+import { restoreLaunchState } from './launch-restore';
+import type { LaunchAction } from '../shared/launch';
 import { DemoCoordinator, DemoTriggerSchema, type DemoRecord } from './demo';
 import { startDemoServer } from './demo-server';
 import { roadmapTask, validateLocalArtifacts } from './demo-roadmap';
@@ -47,6 +50,13 @@ let chatgpt: ChatGPTEmployees;
 let goals: GoalCoordinator;
 let personalityBusy = false;
 let demo: DemoCoordinator;
+let launch: LaunchCoordinator;
+let launchQueue = Promise.resolve();
+function queueLaunch<T>(work: () => Promise<T>): Promise<T> {
+  const next = launchQueue.then(work);
+  launchQueue = next.then(() => undefined, () => undefined);
+  return next;
+}
 let demoServer: Awaited<ReturnType<typeof startDemoServer>>;
 let demoTimer: ReturnType<typeof setInterval>;
 let demoTickBusy = false;
@@ -133,7 +143,7 @@ async function setupDatabase() {
     generate: (state) =>
       generateRoadmap(
         state.roadmap?.automatic ? (prompt, schema) => chatgpt.generate(prompt, schema) : structuredGenerate,
-        { goal: state.goal, employees: state.employees, automatic: state.roadmap?.automatic },
+        { goal: state.goal, employees: state.employees, automatic: state.roadmap?.automatic, launchId: state.roadmap?.launchId },
       ),
     advance: delegateRoadmap,
   });
@@ -154,17 +164,49 @@ async function setupDatabase() {
     decide: (id, version, decision, feedback) => chatgpt.decide(id, version, decision, feedback),
     validateArtifacts: validateLocalArtifacts,
   });
+  launch = new LaunchCoordinator({
+    load: async () => { const state = await loadState(); if (!state) throw new Error('Open your office first.'); return state; },
+    store: { get: async key => database.get(key), put: (key, value) => database.put(key, value) },
+    queue: queueLaunch,
+    createGoal: async (goal, launchId) => {
+      if ((await chatgpt.account()).status !== 'signed-in') throw new Error('Sign in with ChatGPT before starting the launch demo.');
+      return goals.create(goal, { automatic: true, launchId });
+    },
+    trigger: (input, task) => demo.trigger(input, task),
+    retryNotification: id => demo.retry(id),
+    retryLaunch: async launchId => {
+      const state = await loadState();
+      if (state?.roadmap?.launchId !== launchId) throw new Error('The launch roadmap is no longer current.');
+      if (state.roadmap.status === 'failed') { await goals.create(state.goal, { automatic: true, launchId }); return; }
+      await controlRoadmap('resume');
+    },
+    demoSnapshot,
+    getSession: id => chatgpt.get(id),
+    validateArtifacts: validateLocalArtifacts,
+    restoreState: (checkpoint, launchId) => queued(async () => {
+      const current = await loadState();
+      if (!current) throw new Error('The office is unavailable.');
+      for (const task of current.commitments.filter(task => task.launchId === launchId && task.sessionId)) {
+        const session = await chatgpt.get(task.sessionId!);
+        if (['queued', 'running', 'waiting_for_approval'].includes(session.status)) throw new Error('Finish or stop the launch sessions before restoring a checkpoint.');
+      }
+      await database.saveHQ(restoreLaunchState(current, checkpoint, launchId), 'Restored launch checkpoint', true);
+    }),
+  });
   demoServer = await startDemoServer({
     directory: root(),
     trigger: (input) => demo.trigger(input),
     snapshot: demoSnapshot,
     retry: (id) => demo.retry(id),
+    launchSnapshot: () => launch.snapshot(),
+    launchAction: runLaunchAction,
   });
   demoTimer = setInterval(() => {
     if (demoTickBusy) return;
     demoTickBusy = true;
     void demo
       .tick()
+      .then(() => launch.tick())
       .catch((error) => log(`Demo notification error: ${error instanceof Error ? error.message : error}`))
       .finally(() => {
         demoTickBusy = false;
@@ -509,43 +551,16 @@ async function demoSnapshot(): Promise<DemoSnapshot> {
   const snapshot = await demo.snapshot();
   return { ...snapshot, sessions: chatgpt.list(), triggerAddress: demoServer?.address };
 }
-function registerHandlers() {
-  handle('employee:personality', async (input) => {
-    const fields = z
-      .object({ name: z.string().trim().min(1).max(40), jobTitle: z.string().trim().min(1).max(80) })
-      .parse(input);
-    if (personalityBusy) throw new Error('A personality is already being generated. Please wait a moment.');
-    personalityBusy = true;
-    try {
-      return await generatePersonality(structuredGenerate, fields);
-    } finally {
-      personalityBusy = false;
-    }
-  });
-  handle('roadmap:create', async (input) => {
-    const fields = z
-      .object({ goal: z.string().trim().min(1).max(500), automatic: z.boolean().optional() })
-      .parse(typeof input === 'string' ? { goal: input } : input);
-    if (fields.automatic && (await chatgpt.account()).status !== 'signed-in')
-      throw new Error('Sign in with ChatGPT before starting the local demo.');
-    return goals.create(fields.goal, { automatic: fields.automatic });
-  });
-  handle('demo:trigger', async (input) => demo.trigger(DemoTriggerSchema.parse(input)));
-  handle('demo:snapshot', demoSnapshot);
-  handle('demo:retry', async (input) => demo.retry(z.string().min(1).max(200).parse(input)));
-  handle('demo:artifact', async (input) => {
-    const { sessionId, artifactId } = z
-      .object({ sessionId: z.string(), artifactId: z.string() })
-      .parse(input);
-    const session = chatgpt.list().find((item) => item.id === sessionId);
-    const artifact = session?.artifacts?.find((item) => item.id === artifactId);
-    if (!session || !artifact || !(await validateLocalArtifacts(session)))
-      throw new Error('This local artifact is unavailable.');
-    const error = await shell.openPath(artifact.filePath);
-    if (error) throw new Error(error);
-  });
-  handle('roadmap:control', async (input) =>
-    queued(async () => {
+async function runLaunchAction(input: unknown) {
+  const action = z.object({ action: z.enum(['start','advance','restore','retry']), scene: z.enum(['launch','investor','bug','reporter','celebrate']).optional(), checkpointId: z.string().min(1).optional() }).strict().parse(input) as LaunchAction;
+  if (action.action === 'start') return launch.start();
+  if (action.action === 'restore') { if (!action.checkpointId) throw new Error('Choose a checkpoint.'); return launch.restore(action.checkpointId); }
+  if (!action.scene) throw new Error('Choose a launch scene.');
+  return action.action === 'retry' ? launch.retry(action.scene) : launch.advance(action.scene);
+}
+
+async function controlRoadmap(input: unknown) {
+  return queued(async () => {
       const action = z.enum(['pause', 'resume']).parse(input);
       const state = await loadState();
       if (!state?.roadmap) throw new Error('Create a roadmap first.');
@@ -612,8 +627,47 @@ function registerHandlers() {
       };
       await database.saveHQ(next, 'Roadmap delegation changed');
       return delegateRoadmap(next);
-    }),
-  );
+  });
+}
+
+function registerHandlers() {
+  handle('employee:personality', async (input) => {
+    const fields = z
+      .object({ name: z.string().trim().min(1).max(40), jobTitle: z.string().trim().min(1).max(80) })
+      .parse(input);
+    if (personalityBusy) throw new Error('A personality is already being generated. Please wait a moment.');
+    personalityBusy = true;
+    try {
+      return await generatePersonality(structuredGenerate, fields);
+    } finally {
+      personalityBusy = false;
+    }
+  });
+  handle('roadmap:create', async (input) => {
+    const fields = z
+      .object({ goal: z.string().trim().min(1).max(500), automatic: z.boolean().optional() })
+      .parse(typeof input === 'string' ? { goal: input } : input);
+    if (fields.automatic && (await chatgpt.account()).status !== 'signed-in')
+      throw new Error('Sign in with ChatGPT before starting the local demo.');
+    return goals.create(fields.goal, { automatic: fields.automatic });
+  });
+  handle('demo:trigger', async (input) => demo.trigger(DemoTriggerSchema.parse(input)));
+  handle('demo:snapshot', demoSnapshot);
+  handle('launch:snapshot', () => launch.snapshot());
+  handle('launch:action', runLaunchAction);
+  handle('demo:retry', async (input) => demo.retry(z.string().min(1).max(200).parse(input)));
+  handle('demo:artifact', async (input) => {
+    const { sessionId, artifactId } = z
+      .object({ sessionId: z.string(), artifactId: z.string() })
+      .parse(input);
+    const session = chatgpt.list().find((item) => item.id === sessionId);
+    const artifact = session?.artifacts?.find((item) => item.id === artifactId);
+    if (!session || !artifact || !(await validateLocalArtifacts(session)))
+      throw new Error('This local artifact is unavailable.');
+    const error = await shell.openPath(artifact.filePath);
+    if (error) throw new Error(error);
+  });
+  handle('roadmap:control', controlRoadmap);
   handle('chatgpt:account', async () => chatgpt.account());
   handle('chatgpt:login', async () => {
     const url = new URL(await chatgpt.login());
@@ -1424,6 +1478,7 @@ else {
     clearInterval(pollTimer);
     void (async () => {
       await demoServer?.close();
+      await launchQueue;
       await diskQueue;
       await chatgpt?.close();
       await localRuntime?.close();

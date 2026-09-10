@@ -5,7 +5,7 @@ import { CodexAppServer, type CodexTurnResult } from '../runtime/codex';
 import type { SnapshotStore } from '../runtime/store';
 import type { AppState, ChatGPTAccount, CloudSession, Employee } from '../shared/types';
 import type { LocalTaskInput, SessionMessage } from '../shared/demo';
-import { prepareTask, finishTask, taskInstructions, type TaskEvidence } from './demo-execution';
+import { prepareTask, finishTask, taskInstructions, attachmentPath, type TaskEvidence } from './demo-execution';
 import { parseReviewContent, reviewChoiceInstructions, reviewOutputSchema } from '../shared/reviewChoices';
 
 type Client = Pick<
@@ -323,7 +323,7 @@ export class ChatGPTEmployees {
       JSON.stringify({
         assignment,
         goal: state.goal,
-        files: task ? task.files : files,
+        files: task ? task.files.map(file => file.encoding ? { ...file, content: '[Image attached directly to this session]' } : file) : files,
         announcements: state.messages.filter((m) => m.channel === 'announce').slice(-20),
         conversation: state.messages.filter((m) => m.channel === employee.id).slice(-30),
       }),
@@ -345,6 +345,7 @@ export class ChatGPTEmployees {
           : `${s.instructions}\n\n${reviewChoiceInstructions}`,
         outputSchema: s.task ? undefined : reviewOutputSchema,
         prompt,
+        images: s.task?.files.flatMap((file, index) => file.encoding === 'base64' ? [attachmentPath(s.cwd, file.name, index)] : []),
         signal: job.abort.signal,
         onStarted: async (ids) => {
           Object.assign(job, ids);

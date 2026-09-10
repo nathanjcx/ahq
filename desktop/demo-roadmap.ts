@@ -29,7 +29,7 @@ export async function roadmapTask(
   );
   const task = state.commitments.find((item) => item.id === claim?.commitmentId);
   if (!task?.taskKind) throw new Error('This automatic roadmap step has no supported execution type.');
-  const files = await Promise.all(
+  const files = task.launchId ? await Promise.all(['product-brief.md', 'assumptions.csv', 'customers.csv', 'forecast-contract.md'].map(async name => ({ name, mediaType: name.endsWith('.csv') ? 'text/csv' : 'text/markdown', content: await readFile(path.join(demoDataPath, 'launch', name), 'utf8') }))) : await Promise.all(
     ['sales', 'campaigns', 'support'].map(async (name) => ({
       name: `${name}.csv`,
       mediaType: 'text/csv',
@@ -59,6 +59,7 @@ export async function roadmapTask(
     kind: task.taskKind,
     title: task.title,
     files,
+    ...(task.launchId ? { project: 'little-office' as const, launchId: task.launchId, launchStep: task.launchStep } : {}),
     ...(parent ? { parentWorkspace: parent.workspace, parentSessionId: parent.id } : {}),
   };
 }

@@ -44,6 +44,7 @@ export interface RunTurnOptions {
   model: string;
   signal?: AbortSignal;
   prompt: string;
+  images?: string[];
   outputSchema?: JsonObject;
   onStarted?(ids: { threadId: string; turnId: string }): void | Promise<void>;
   onProgress?(text: string): void;
@@ -230,7 +231,7 @@ export class CodexAppServer {
       options.signal?.throwIfAborted();
       const turnResult = (await this.request('turn/start', {
         threadId,
-        input: [{ type: 'text', text: options.prompt, text_elements: [] }],
+        input: [{ type: 'text', text: options.prompt, text_elements: [] }, ...(options.images ?? []).map(path => ({ type: 'localImage', path }))],
         cwd: options.cwd,
         approvalPolicy: 'never',
         ...(options.model.trim() ? { model: options.model.trim() } : {}),

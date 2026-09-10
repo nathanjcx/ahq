@@ -3,6 +3,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { mkdir, writeFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { DemoTriggerSchema } from './demo';
+import type { LaunchSnapshot } from '../shared/launch';
 import type { DemoNotification, DemoSnapshot, DemoTrigger } from '../shared/demo';
 
 async function body(request: IncomingMessage) {
@@ -10,7 +11,7 @@ async function body(request: IncomingMessage) {
   let size = 0;
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > 512 * 1024) throw new Error('Request exceeds 512 KiB.');
+    if (size > 4 * 1024 * 1024) throw new Error('Request exceeds 4 MiB.');
     chunks.push(Buffer.from(chunk));
   }
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
@@ -21,6 +22,8 @@ export async function startDemoServer(options: {
   trigger(input: DemoTrigger): Promise<DemoNotification>;
   snapshot(): Promise<DemoSnapshot>;
   retry?(id: string): Promise<DemoNotification>;
+  launchSnapshot?(): Promise<LaunchSnapshot>;
+  launchAction?(input: unknown): Promise<LaunchSnapshot>;
 }) {
   const token = randomBytes(32).toString('hex');
   const server = createServer(async (request, response) => {
@@ -35,6 +38,8 @@ export async function startDemoServer(options: {
     if (request.method !== 'GET' && request.headers.origin)
       return reply(403, { error: 'Browser mutations are not allowed.' });
     try {
+      if (request.method === 'GET' && request.url === '/launch' && options.launchSnapshot) return reply(200, await options.launchSnapshot());
+      if (request.method === 'POST' && request.url === '/launch' && options.launchAction) return reply(200, await options.launchAction(await body(request)));
       if (request.method === 'GET' && request.url === '/state') return reply(200, await options.snapshot());
       if (request.method === 'POST' && request.url === '/notifications') {
         const input = DemoTriggerSchema.parse(await body(request));
