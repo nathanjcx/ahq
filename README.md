@@ -1,3 +1,5 @@
+<img width="1462" height="833" alt="Screenshot 2026-09-10 at 5 36 41 PM" src="https://github.com/user-attachments/assets/43ebccac-e706-43b2-bdc0-3c29a75ec017" />
+
 # Astra HQ
 
 A desktop office for AI employees. Give the team a direction, let employees do the work using your ChatGPT plan, and provide judgment when they bring results back.
