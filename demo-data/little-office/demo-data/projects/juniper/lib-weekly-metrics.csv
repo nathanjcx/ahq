@@ -1,0 +1,8 @@
+period,measure,value,source,owner
+previous_week,online reservations,44,operations_export,Owen Price
+current_week,online reservations,63,operations_export,Owen Price
+current_week,available reservations,90,eligibility_register,Marta Bell
+previous_week,booking questions,19,support_queue,Owen Price
+current_week,booking questions,8,support_queue,Owen Price
+current_week,budget_usd,22000,approved_budget,Marta Bell
+current_week,spent_usd,14700,invoice_register,Marta Bell

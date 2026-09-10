@@ -1,0 +1,8 @@
+period,measure,value,source,owner
+previous_week,confirmed boxes,137,operations_export,Miles Cook
+current_week,confirmed boxes,156,operations_export,Miles Cook
+current_week,box capacity,200,eligibility_register,Rosa Silva
+previous_week,delivery questions,35,support_queue,Miles Cook
+current_week,delivery questions,15,support_queue,Miles Cook
+current_week,budget_usd,27000,approved_budget,Rosa Silva
+current_week,spent_usd,18300,invoice_register,Rosa Silva

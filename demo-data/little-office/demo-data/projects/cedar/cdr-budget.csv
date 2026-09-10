@@ -1,0 +1,5 @@
+line,approved_usd,spent_usd,owner,status
+implementation,12000,8400,Zoe Park,in_progress
+operations,7200,5040,Olivia Hart,in_progress
+training,4800,3360,Noah Stone,scheduled
+total,24000,16800,Olivia Hart,within_budget

@@ -1,0 +1,8 @@
+period,measure,value,source,owner
+previous_week,reminders delivered,65,operations_export,Tessa Ng
+current_week,reminders delivered,84,operations_export,Tessa Ng
+current_week,scheduled reminders,120,eligibility_register,Dr. Leah Moss
+previous_week,front desk questions,24,support_queue,Tessa Ng
+current_week,front desk questions,11,support_queue,Tessa Ng
+current_week,budget_usd,36000,approved_budget,Dr. Leah Moss
+current_week,spent_usd,21900,invoice_register,Dr. Leah Moss

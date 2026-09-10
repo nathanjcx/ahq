@@ -1,0 +1,8 @@
+branch,online_reservations,available_online_reservations,phone_reservations,kiosk_status,saturday_room_hours_used,saturday_room_hours_available
+Central Branch,18,22,2,online,13,16
+West Branch,0,10,7,offline,7,12
+Hill Branch,10,13,1,online,8,12
+Elm Branch,9,12,0,online,9,12
+River Branch,11,14,1,online,10,14
+Market Branch,8,10,2,online,6,10
+College Branch,7,9,0,online,8,10

@@ -1,0 +1,5 @@
+line,approved_usd,spent_usd,owner,status
+implementation,37500,23100,Chen Wu,in_progress
+operations,22500,13860,Amir Khan,in_progress
+training,15000,9240,Sofia Reed,scheduled
+total,75000,46200,Amir Khan,within_budget

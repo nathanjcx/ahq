@@ -1,0 +1,5 @@
+line,approved_usd,spent_usd,owner,status
+implementation,9000,5250,Anika Roy,in_progress
+operations,5400,3150,Grace Wilson,in_progress
+training,3600,2100,Isaac Lee,scheduled
+total,18000,10500,Grace Wilson,within_budget

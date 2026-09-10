@@ -1,0 +1,8 @@
+period,measure,value,source,owner
+previous_week,confirmed enrollments,93,operations_export,Isaac Lee
+current_week,confirmed enrollments,112,operations_export,Isaac Lee
+current_week,available places,160,eligibility_register,Grace Wilson
+previous_week,family questions,28,support_queue,Isaac Lee
+current_week,family questions,12,support_queue,Isaac Lee
+current_week,budget_usd,18000,approved_budget,Grace Wilson
+current_week,spent_usd,10500,invoice_register,Grace Wilson

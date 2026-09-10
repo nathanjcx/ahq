@@ -1,0 +1,8 @@
+request_id,club,requested_at,status
+MAP-W01,Robotics,2026-09-02T09:00:00-04:00,waiting
+MAP-W02,Ceramics,2026-09-02T10:00:00-04:00,waiting
+MAP-W03,Robotics,2026-09-03T09:00:00-04:00,waiting
+MAP-W04,Ceramics,2026-09-03T11:00:00-04:00,waiting
+MAP-W05,Robotics,2026-09-04T14:00:00-04:00,waiting
+MAP-W06,Robotics,2026-09-05T10:00:00-04:00,waiting
+MAP-W07,Ceramics,2026-09-05T13:00:00-04:00,waiting
