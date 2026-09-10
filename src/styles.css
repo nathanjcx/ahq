@@ -4609,6 +4609,12 @@ html[data-desktop] .topbar .avatar {
   touch-action: none;
   user-select: none;
 }
+.voice-permission-help {
+  flex-basis: 100%;
+  padding: 0;
+  text-align: left;
+  font-size: 12px;
+}
 .voice-announce.recording {
   background: #e0efe3;
   border-color: #65a578;

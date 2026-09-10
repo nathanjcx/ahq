@@ -29,6 +29,7 @@ const api: DesktopAPI = {
   removeIntegration: (id) => ipcRenderer.invoke('integrations:remove', id),
   configureOpenAI: (input) => ipcRenderer.invoke('openai:configure', input),
   microphonePermission: () => ipcRenderer.invoke('microphone:permission'),
+  revealApplication: () => ipcRenderer.invoke('application:reveal'),
   transcribe: (input) => ipcRenderer.invoke('voice:transcribe', input),
   broadcast: (text) => ipcRenderer.invoke('cloud:broadcast', text),
   cancelSession: (id) => ipcRenderer.invoke('cloud:cancel', id),

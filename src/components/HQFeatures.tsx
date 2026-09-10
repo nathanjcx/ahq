@@ -273,7 +273,8 @@ export function VoiceAnnounce({
 }) {
   const [recording, setRecording] = useState(false),
     [busy, setBusy] = useState(false),
-    [transcript, setTranscript] = useState('');
+    [transcript, setTranscript] = useState(''),
+    [permissionHelp, setPermissionHelp] = useState(false);
   const mounted = useRef(true);
   const held = useRef(false),
     recorder = useRef<MediaRecorder | null>(null),
@@ -318,10 +319,13 @@ export function VoiceAnnounce({
     setBusy(true);
     try {
       if (!window.ahq) throw new Error('Open the desktop app to announce with your microphone.');
-      if (!(await window.ahq.microphonePermission()))
+      if (!(await window.ahq.microphonePermission())) {
+        setPermissionHelp(true);
         throw new Error(
           'Turn on Astra HQ under System Settings → Privacy & Security → Microphone, then try again.',
         );
+      }
+      setPermissionHelp(false);
       if (!held.current) return;
       stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (!held.current) {
@@ -434,6 +438,14 @@ export function VoiceAnnounce({
             ? 'Everyone is listening through the office speakers.'
             : 'Release to transcribe and send to every employee.'}
       </span>
+      {permissionHelp && window.ahq && (
+        <button
+          className="text-button voice-permission-help"
+          onClick={() => void window.ahq!.revealApplication().catch((error) => notify(errorText(error)))}
+        >
+          Reveal Astra HQ in Finder to drag it into Microphone permissions
+        </button>
+      )}
       {transcript && <p className="voice-transcript">“{transcript}”</p>}
     </div>
   );

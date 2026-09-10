@@ -767,6 +767,11 @@ function registerHandlers() {
     await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
     return false;
   });
+  handle('application:reveal', async () => {
+    const bundlePath =
+      process.platform === 'darwin' ? path.resolve(app.getPath('exe'), '../../../') : app.getAppPath();
+    shell.showItemInFolder(bundlePath);
+  });
   handle('voice:transcribe', async (input) => {
     const fields = z
       .object({

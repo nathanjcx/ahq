@@ -211,6 +211,7 @@ export interface DesktopAPI {
   removeIntegration(id: string): Promise<Integration[]>;
   configureOpenAI(input: { key: string; model: string }): Promise<CloudSettings>;
   microphonePermission(): Promise<boolean>;
+  revealApplication(): Promise<void>;
   transcribe(input: { audio: ArrayBuffer; mime: string }): Promise<string>;
   broadcast(text: string): Promise<{ employeeId: string; session?: CloudSession; error?: string }[]>;
   cancelSession(id: string): Promise<CloudSession>;
