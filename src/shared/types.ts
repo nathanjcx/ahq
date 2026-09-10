@@ -14,7 +14,7 @@ export interface TriageRecord {
   createdAt: number; completedAt?: number; action?: 'ignore' | 'create' | 'attach' | 'wait';
   reason?: string; workId?: string; error?: string; threadId?: string; turnId?: string;
 }
-export interface ReplayEntry { id: string; label: string; source: Source; delivered: boolean }
+export interface ReplayEntry { id: string; label: string; source: Source; delivered: boolean; item?: SourceItem }
 export interface Agent {
   id: string; name: string; role: string; color: string; hair: string; skin: string;
   accessory: 'glasses' | 'cap' | 'headphones' | 'none'; persistent: boolean;
@@ -71,7 +71,7 @@ export type Command =
   | { type: 'auth.refresh' | 'auth.login' | 'auth.cancel' | 'auth.logout' }
   | { type: 'demo.play' | 'demo.pause' | 'demo.next' | 'demo.reset' }
   | { type: 'demo.speed'; speed: number }
-  | { type: 'demo.deliver'; id: string }
+  | { type: 'demo.deliver'; id: string; changes?: Pick<SourceItem, 'source' | 'author' | 'title' | 'content' | 'threadId'> }
   | { type: 'source.ingest'; item: Omit<SourceItem, 'scenario' | 'disposition' | 'reason'> }
   | { type: 'calendar.create'; event: Omit<CalendarEvent, 'id' | 'sourceIds' | 'simulated'> }
   | { type: 'scenario.run'; scenario: Scenario }

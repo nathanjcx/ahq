@@ -76,7 +76,7 @@ class Runtime implements OfficeRuntime {
     state.demo.startedAt ??= Date.now();
     this.replay = demoEvents(state.demo.startedAt);
     state.triage ??= [];
-    state.demo.events = this.replay.map((event, index) => ({ id: event.id, label: event.label, source: event.item.source, delivered: state.demo.events?.find((entry) => entry.id === event.id)?.delivered ?? index < state.demo.nextIndex }));
+    state.demo.events = this.replay.map((event, index) => ({ id: event.id, label: event.label, source: event.item.source, item: event.item, delivered: state.demo.events?.find((entry) => entry.id === event.id)?.delivered ?? index < state.demo.nextIndex }));
   }
 
   static async create(options: RuntimeOptions): Promise<Runtime> {
@@ -158,7 +158,7 @@ class Runtime implements OfficeRuntime {
         case 'source.evaluate': this.evaluateSource(command.id); break;
         case 'source.ingest': this.ingestSource(command.item); break;
         case 'calendar.create': this.createCalendar(command.event); break;
-        case 'demo.deliver': this.deliverDemo(command.id); break;
+        case 'demo.deliver': this.deliverDemo(command.id, command.changes); break;
         case 'work.cancel': await this.cancelWork(command.id); break;
         case 'work.retry': this.retryWork(command.id); break;
         case 'work.steer': await this.steerWork(command.id, command.text); break;
@@ -306,13 +306,14 @@ class Runtime implements OfficeRuntime {
     this.deliverDemo(entry.id);
   }
 
-  private deliverDemo(id: string): void {
+  private deliverDemo(id: string, changes?: Pick<SourceItem, 'source' | 'author' | 'title' | 'content' | 'threadId'>): void {
     this.requireTriageAuth();
     const entry = this.state.demo.events?.find((event) => event.id === id);
     const event = this.replay.find((event) => event.id === id);
     if (!entry || !event) throw new Error('Replay event not found');
     if (entry.delivered) return;
-    this.ingestSource(event.item);
+    const item = changes ? { ...event.item, source: changes.source, author: changes.author, title: changes.title, content: changes.content, threadId: changes.threadId } : event.item;
+    this.ingestSource(item);
     entry.delivered = true;
     this.state.demo.nextIndex = this.state.demo.events!.filter((item) => item.delivered).length;
     if (this.state.demo.events!.every((item) => item.delivered)) this.pauseDemo();
@@ -365,7 +366,7 @@ class Runtime implements OfficeRuntime {
     this.state.demo.startedAt = Date.now();
     this.replay = demoEvents(this.state.demo.startedAt);
     this.state.triage = [];
-    this.state.demo.events = this.replay.map((event) => ({ id: event.id, label: event.label, source: event.item.source, delivered: false }));
+    this.state.demo.events = this.replay.map((event) => ({ id: event.id, label: event.label, source: event.item.source, item: event.item, delivered: false }));
     for (const error of interruptionErrors) this.event('error', `Codex interruption failed during reset: ${error}`);
     this.pauseDemo();
   }

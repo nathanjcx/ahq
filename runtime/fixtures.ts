@@ -40,7 +40,7 @@ export function initialSnapshot(now = Date.now()): Snapshot {
     ], calendar: initialCalendar(now),
     auth: { status: 'checking' },
     settings: { mode: 'live', reducedMotion: false, sound: true, model: '' },
-    demo: { playing: false, nextIndex: 0, speed: 1, events: demoEvents(now).map(event => ({ id: event.id, label: event.label, source: event.item.source, delivered: false })) },
+    demo: { playing: false, nextIndex: 0, speed: 1, events: demoEvents(now).map(event => ({ id: event.id, label: event.label, source: event.item.source, item: event.item, delivered: false })) },
   };
 }
 

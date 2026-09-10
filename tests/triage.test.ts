@@ -341,3 +341,33 @@ test('QA cannot publish verification after modifying the copied parent code', as
     assert.equal(app.office.snapshot().artifacts.some((artifact) => artifact.workId === missing.id), false);
   } finally { await app.close(); }
 });
+
+
+test('suggested arrivals expose editable previews without leaking future evidence into intake', async () => {
+  const app = await setup();
+  try {
+    const before = app.office.snapshot();
+    const event = before.demo.events!.find((item) => item.item?.attachments?.length)!;
+    assert.ok(event.item);
+    assert.equal(before.sources.some((item) => item.id === event.item!.id), false);
+    assert.equal(before.triage.length, 0);
+    const changes = { source: event.item.source, author: 'Demo visitor', title: 'Edited incoming request', threadId: event.item.threadId,
+      content: source('edited', { action: 'ignore', scenario: null, reason: 'An acknowledgement needs no work.' }).content };
+    await assert.rejects(app.office.command({ type: 'demo.deliver', id: event.id, changes: { ...changes, content: '' } }), /invalid/);
+    assert.equal(app.office.snapshot().demo.events!.find((item) => item.id === event.id)!.delivered, false);
+    await app.office.command({ type: 'demo.deliver', id: event.id, changes });
+    await settled(app.office, event.item.id);
+    const after = app.office.snapshot();
+    const incoming = after.sources.find((item) => item.id === event.item!.id)!;
+    assert.equal(incoming.title, changes.title);
+    assert.equal(incoming.content, changes.content);
+    assert.equal(incoming.author, changes.author);
+    assert.equal(incoming.externalId, event.item.externalId);
+    assert.deepEqual(incoming.attachments, event.item.attachments);
+    assert.equal(after.demo.events!.find((item) => item.id === event.id)!.delivered, true);
+    const unseen = after.demo.events!.find((item) => !item.delivered)!.item!;
+    assert.equal(triagePrompt(incoming, after).includes(unseen.content), false);
+    await app.office.command({ type: 'source.ingest', item: incoming });
+    assert.equal(app.office.snapshot().triage.length, 1, 'Provider redelivery must still deduplicate.');
+  } finally { await app.close(); }
+});
