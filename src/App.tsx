@@ -11,6 +11,7 @@ import {
   Focus,
   GitBranch,
   FolderOpen,
+  Hand,
   Home,
   Inbox,
   LoaderCircle,
@@ -123,12 +124,21 @@ export default function App() {
   const [angle, setAngle] = useState(0);
   const [listening, setListening] = useState(false);
   const [microphoneLevel, setMicrophoneLevel] = useState(0);
+  const [slapMode, setSlapMode] = useState(false);
+  const [slapTarget, setSlapTarget] = useState<{ employeeId: string; token: number } | null>(null);
+  const slapReset = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [zoom, setZoom] = useState(1);
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
   const folderInput = useRef<HTMLInputElement>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
+  useEffect(
+    () => () => {
+      if (slapReset.current) clearTimeout(slapReset.current);
+    },
+    [],
+  );
   const notify = useCallback((text: string) => setToast(text), []);
   const update: UpdateState = useCallback((fn) => setState((previous) => fn(previous)), []);
   const history = useOfficeHistory(state, update, notify);
@@ -188,6 +198,14 @@ export default function App() {
         ? `Reached ${results.length - failed.length} employees. ${failed.map((f) => state.employees.find((e) => e.id === f.employeeId)?.name).join(', ')} could not receive the announcement.`
         : 'Announcement delivered to every employee’s Astra session.',
     );
+  }
+  function slapEmployee(employee: Employee) {
+    if (history.at !== null || !slapMode) return;
+    setSlapTarget({ employeeId: employee.id, token: Date.now() });
+    if (slapReset.current) clearTimeout(slapReset.current);
+    slapReset.current = setTimeout(() => setSlapTarget(null), 2_000);
+    playSlapSound();
+    notify(`${employee.name} got a playful 8-bit slap and will be back on their feet in a moment.`);
   }
   useEffect(() => {
     const room = (event: Event) => {
@@ -682,6 +700,12 @@ export default function App() {
                             live={history.at === null}
                             listening={history.at !== null ? !!pastFrame?.listening : listening}
                             microphoneLevel={history.at !== null ? (pastFrame?.level ?? 0) : microphoneLevel}
+                            slapMode={history.at === null && slapMode}
+                            slapTarget={history.at === null ? slapTarget : null}
+                            onSlap={(id) => {
+                              const employee = state.employees.find((item) => item.id === id);
+                              if (employee) slapEmployee(employee);
+                            }}
                           />
                         </Suspense>
                       </SceneBoundary>
@@ -722,6 +746,16 @@ export default function App() {
                           disabled={zoom >= 1.5}
                         >
                           <Plus size={17} />
+                        </button>
+                        <button
+                          className={`slap-toggle${slapMode ? ' active' : ''}`}
+                          aria-label={slapMode ? 'Turn off slap mode' : 'Turn on slap mode'}
+                          title={slapMode ? 'Slap mode on' : 'Slap mode off'}
+                          aria-pressed={slapMode}
+                          disabled={history.at !== null || !state.employees.length}
+                          onClick={() => setSlapMode((enabled) => !enabled)}
+                        >
+                          <Hand size={14} />
                         </button>
                       </div>
                       {history.at !== null && (
@@ -1379,6 +1413,43 @@ function playReviewChime() {
     oscillator.start();
     oscillator.stop(ctx.currentTime + 0.5);
     oscillator.onended = () => void ctx.close();
+  } catch {
+    /* Audio is optional. */
+  }
+}
+function playSlapSound() {
+  try {
+    const ctx = new AudioContext();
+    const now = ctx.currentTime;
+    const noise = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.16), ctx.sampleRate);
+    const samples = noise.getChannelData(0);
+    for (let i = 0; i < samples.length; i++)
+      samples[i] = (Math.random() * 2 - 1) * (1 - i / samples.length) ** 2;
+    const source = ctx.createBufferSource();
+    const filter = ctx.createBiquadFilter();
+    const gain = ctx.createGain();
+    source.buffer = noise;
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(1_500, now);
+    filter.Q.setValueAtTime(0.8, now);
+    gain.gain.setValueAtTime(0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    source.start(now);
+    source.stop(now + 0.16);
+    const thump = ctx.createOscillator();
+    const thumpGain = ctx.createGain();
+    thump.frequency.setValueAtTime(170, now);
+    thump.frequency.exponentialRampToValueAtTime(62, now + 0.11);
+    thumpGain.gain.setValueAtTime(0.18, now);
+    thumpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    thump.connect(thumpGain);
+    thumpGain.connect(ctx.destination);
+    thump.start(now);
+    thump.stop(now + 0.12);
+    source.onended = () => void ctx.close();
   } catch {
     /* Audio is optional. */
   }

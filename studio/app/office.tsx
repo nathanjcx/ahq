@@ -28,6 +28,9 @@ type OfficeProps = {
   timeSeconds?: number;
   listening?: boolean;
   microphoneLevel?: number;
+  slapMode?: boolean;
+  slapTarget?: { employeeId: string; token: number } | null;
+  onSlap?: (id: string) => void;
   team: Employee[];
   selected: string | null;
   onSelect: (id: string) => void;
@@ -1125,10 +1128,16 @@ function EmployeeAvatar({
   timeSeconds,
   live,
   listening,
+  slapMode,
+  slapTarget,
+  onSlap,
 }: {
   live?: boolean;
   timeSeconds?: number;
   listening?: boolean;
+  slapMode?: boolean;
+  slapTarget?: { employeeId: string; token: number } | null;
+  onSlap?: (id: string) => void;
   employee: Employee;
   index: number;
   selected: boolean;
@@ -1169,6 +1178,12 @@ function EmployeeAvatar({
     activity === 'lounge'
       ? Math.PI
       : 0;
+  const knockedAt = useRef(0);
+  const knockedOrigin = useRef<Point>(home);
+  const knockedYaw = useRef(idleYaw);
+  const knockedDirection = useRef(1);
+  const knockedDrift = useRef<Point>([0, 0, 0]);
+  const [knocked, setKnocked] = useState(false);
   const route = useMemo<Point[]>(() => {
     const corridorX =
       employee.position && employee.position[0] > -0.7 && employee.position[0] < 0.75
@@ -1202,8 +1217,50 @@ function EmployeeAvatar({
       document.body.style.cursor = old;
     };
   }, [hovered]);
+  useEffect(() => {
+    if (!slapTarget || slapTarget.employeeId !== employee.id) return;
+    knockedOrigin.current = group.current
+      ? [group.current.position.x, group.current.position.y, group.current.position.z]
+      : home;
+    knockedYaw.current = group.current?.rotation.y ?? idleYaw;
+    knockedDirection.current = Math.random() < 0.5 ? -1 : 1;
+    knockedDrift.current = [(Math.random() - 0.5) * 0.42, 0, (Math.random() - 0.5) * 0.42];
+    knockedAt.current = performance.now();
+    walkingRef.current = false;
+    setWalking(false);
+    setKnocked(true);
+    const timeout = window.setTimeout(() => {
+      setKnocked(false);
+      if (group.current) {
+        group.current.position.set(...home);
+        group.current.rotation.y = idleYaw;
+      }
+      if (figure.current) figure.current.rotation.set(0, 0, 0);
+    }, 1_750);
+    return () => window.clearTimeout(timeout);
+  }, [slapTarget?.employeeId, slapTarget?.token]);
   useFrame((_, delta) => {
     if (!group.current) return;
+    if (knocked) {
+      const elapsed = Math.max(0, (performance.now() - knockedAt.current) / 1000);
+      const fall = Math.min(1, elapsed / 0.24);
+      const rise = Math.min(1, Math.max(0, (elapsed - 1.08) / 0.5));
+      const easeFall = 1 - (1 - fall) ** 3;
+      const easeRise = 1 - (1 - rise) ** 3;
+      const remaining = 1 - easeRise;
+      const y = knockedOrigin.current[1] + remaining * 0.025;
+      group.current.position.set(
+        knockedOrigin.current[0] + knockedDrift.current[0] * easeFall * remaining,
+        y,
+        knockedOrigin.current[2] + knockedDrift.current[2] * easeFall * remaining,
+      );
+      group.current.rotation.y = knockedYaw.current + Math.sin(elapsed * 18) * 0.08 * (1 - easeRise);
+      if (figure.current) {
+        figure.current.rotation.z = knockedDirection.current * (Math.PI / 2) * easeFall * remaining;
+        figure.current.rotation.y = knockedDirection.current * Math.sin(elapsed * 15) * 0.08 * remaining;
+      }
+      return;
+    }
     if (listening) {
       const cameraPosition = _.camera.position;
       group.current.rotation.y = Math.atan2(
@@ -1271,7 +1328,8 @@ function EmployeeAvatar({
       <group
         onClick={(event) => {
           event.stopPropagation();
-          onSelect(employee.id);
+          if (slapMode && onSlap) onSlap(employee.id);
+          else onSelect(employee.id);
         }}
         onPointerOver={(event) => {
           event.stopPropagation();
@@ -1290,6 +1348,13 @@ function EmployeeAvatar({
             phase={phase}
           />
         </group>
+        {knocked && (
+          <Html center position={[0, 2.18, 0]} zIndexRange={[50, 45]}>
+            <div className="slap-burst" aria-hidden="true">
+              SLAP!
+            </div>
+          </Html>
+        )}
         {(selected || hovered) && (
           <mesh position={[0, 0.052, 0]} rotation={[-Math.PI / 2, 0, 0]}>
             <ringGeometry args={[0.43, 0.48, 48]} />
@@ -1343,7 +1408,11 @@ function EmployeeAvatar({
         <button
           type="button"
           className={`person-label${selected ? ' chosen' : ''}`}
-          onClick={() => onSelect(employee.id)}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (slapMode && onSlap) onSlap(employee.id);
+            else onSelect(employee.id);
+          }}
           aria-label={`${employee.name}, ${employee.role}. ${employee.task}`}
           aria-pressed={selected}
           style={
@@ -1660,6 +1729,9 @@ function Scene(props: OfficeProps) {
             timeSeconds={props.timeSeconds}
             live={props.live}
             listening={props.listening}
+            slapMode={props.slapMode}
+            slapTarget={props.slapTarget}
+            onSlap={props.onSlap}
           />
         ))}
       </SurfaceContext.Provider>
@@ -1677,7 +1749,9 @@ function Fallback({
   onSelect,
   reviewEmployeeIds,
   onReview,
-}: Pick<OfficeProps, 'team' | 'onSelect' | 'reviewEmployeeIds' | 'onReview'>) {
+  slapMode,
+  onSlap,
+}: Pick<OfficeProps, 'team' | 'onSelect' | 'reviewEmployeeIds' | 'onReview' | 'slapMode' | 'onSlap'>) {
   return (
     <div className="scene-fallback">
       <p>
@@ -1688,7 +1762,10 @@ function Fallback({
       <ul>
         {team.map((employee) => (
           <li key={employee.id}>
-            <button type="button" onClick={() => onSelect(employee.id)}>
+            <button
+              type="button"
+              onClick={() => (slapMode && onSlap ? onSlap(employee.id) : onSelect(employee.id))}
+            >
               <strong>{employee.name}</strong> · {employee.role}
               <span>{employee.task}</span>
             </button>
@@ -1744,6 +1821,8 @@ export default function Office(props: OfficeProps) {
       onSelect={props.onSelect}
       reviewEmployeeIds={props.reviewEmployeeIds}
       onReview={props.onReview}
+      slapMode={props.slapMode}
+      onSlap={props.onSlap}
     />
   );
   return (
@@ -1768,7 +1847,7 @@ export default function Office(props: OfficeProps) {
             shadows={{ type: THREE.PCFShadowMap }}
             camera={{ position: [28, 27, 28], zoom: 25, near: 0.1, far: 150 }}
             dpr={[1, 1.75]}
-            frameloop={props.motion || props.listening ? 'always' : 'demand'}
+            frameloop={props.motion || props.listening || !!props.slapTarget ? 'always' : 'demand'}
             fallback={fallback}
             gl={{
               antialias: true,
