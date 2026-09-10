@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { demoDataPath } from './demo-execution';
 import { z } from 'zod';
 import type { AppState, CloudSession, Employee } from '../shared/types';
 import type { DemoNotification, DemoSnapshot, DemoTrigger, LocalTaskInput } from '../shared/demo';
@@ -67,43 +70,44 @@ export interface DemoDependencies {
   decide(id: string, version: number, decision: 'approve', feedback: string): Promise<CloudSession>;
   validateArtifacts(session: CloudSession): Promise<boolean>;
 }
-const sales = {
-  name: 'sales.csv',
-  mediaType: 'text/csv',
-  content:
-    'month,revenue,costs,customers\nJune,84000,51000,140\nJuly,92000,55000,153\nAugust,108000,61000,180\n',
-};
 const presets = {
   meeting: {
     title: 'Calendar: quarterly sales review',
     content:
-      'Prepare meeting notes and a decision brief for the quarterly sales review using the agenda and sales figures.',
+      'Calendar invitation: Northstar Q3 sales review, October 2, 2026, 10:00-10:45 America/New_York. Attendees: Maya Chen (sales lead), Jordan Ellis (finance), Sam Rivera (growth). Prepare a pre-meeting brief with calculated sales trends, campaign performance, discussion questions and proposed decisions. Label proposed actions clearly; no meeting has occurred yet.',
     attachments: [
-      sales,
       {
         name: 'agenda.md',
         mediaType: 'text/markdown',
         content:
-          '# Quarterly sales review\nDiscuss revenue growth, costs, customer growth, risks and next-quarter actions.\n',
+          '# Northstar Q3 sales review\nOctober 2, 2026, 10:00-10:45 America/New_York\nAttendees: Maya Chen (sales), Jordan Ellis (finance), Sam Rivera (growth).\n\n10:00 Sales by month and product, July through September.\n10:15 Product margins and September cost changes.\n10:25 Campaign acquisition cost and return on spend.\n10:35 Proposed next-quarter priorities, owners and open questions.\n\nUse sales.csv and campaigns.csv. This is preparation for a future meeting; do not invent discussion, agreement or attendance.\n',
       },
     ],
   },
   email: {
     title: 'Gmail: financial report requested',
     content:
-      'Please prepare a financial report PDF from the attached sales figures. Explain revenue, costs, margin and trends with the actual calculations.',
-    attachments: [sales],
+      'From Jordan Ellis, Finance. Subject: Northstar Q3 financial report. Please prepare a financial report PDF from the attached July-September sales.csv. Calculate revenue as units times unit_price_usd and cost as units times unit_cost_usd. Show monthly and product revenue, costs, gross profit, gross margin and trends. Explain September unit-cost changes. These are sample figures for the demo; do not send the report externally.',
+    attachments: [],
   },
   slack: {
     title: 'Slack: PIN-184 checkout discount bug',
     content:
-      'PIN-184: checkout applies a percentage discount twice. Reproduce the bug, fix the local sample code, run tests, and produce a simulated PR with the actual diff. Do not publish a PR.',
+      'Slack #engineering, PIN-184: checkout counts tax twice when a fixed-dollar coupon is present. In the bundled checkout app, checkoutTotal(100, 0.08, 10) returns approximately 104.4 instead of 97.2; without a coupon, checkoutTotal(100, 0.08) correctly returns 108. Reproduce the bug, fix the actual local app, preserve and run its existing node --test tests, and produce a simulated PR with the verified code diff. The coupon is a dollar amount, not a percentage. Do not publish a PR.',
     attachments: [
       {
-        name: 'checkout.js',
-        mediaType: 'text/javascript',
-        content:
-          'export function checkoutTotal(price, quantity, discountPercent) {\n  const subtotal = price * quantity;\n  const discounted = subtotal * (1 - discountPercent / 100);\n  return Math.round(discounted * (1 - discountPercent / 100) * 100) / 100;\n}\n',
+        name: 'reproduction.json',
+        mediaType: 'application/json',
+        content: JSON.stringify({
+          issue: 'PIN-184',
+          function: 'checkoutTotal(subtotal, taxRate, coupon = 0)',
+          couponType: 'fixed dollar amount',
+          cases: [
+            { arguments: [100, 0.08, 10], actualApprox: 104.4, expected: 97.2 },
+            { arguments: [100, 0.08], expected: 108 },
+            { arguments: [200, 0.08, 10], expected: 205.2 },
+          ],
+        }),
       },
     ],
   },
@@ -122,9 +126,19 @@ export class DemoCoordinator {
         parsed.idempotencyKey && records.find((n) => n.idempotencyKey === parsed.idempotencyKey);
       if (existing) return structuredClone(existing);
       const preset = presets[parsed.kind];
+      const attachments = parsed.attachments ?? [...preset.attachments];
+      if (!parsed.attachments && parsed.kind !== 'slack') {
+        for (const name of parsed.kind === 'meeting' ? ['sales.csv', 'campaigns.csv'] : ['sales.csv'])
+          attachments.push({
+            name,
+            mediaType: 'text/csv',
+            content: await readFile(path.join(demoDataPath, 'custom-arrival', name), 'utf8'),
+          });
+      }
       const notification: DemoRecord = {
         ...preset,
         ...parsed,
+        attachments,
         id: randomUUID(),
         receivedAt: new Date().toISOString(),
         status: 'triaging',

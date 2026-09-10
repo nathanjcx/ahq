@@ -122,3 +122,26 @@ test('an interrupted dispatch is never automatically replayed after restart', as
   assert.equal((await restarted.trigger({ kind: 'meeting', idempotencyKey: 'restart' })).id, first.id);
   await assert.rejects(restarted.retry(first.id), /dispatch was interrupted/);
 });
+
+test('presets use the bundled sales data and fixed-dollar checkout reproduction', async () => {
+  const f = fixture();
+  const email = await f.coordinator.trigger({ kind: 'email' });
+  assert.match(email.attachments[0].content, /^month,product,units,unit_price_usd,unit_cost_usd\n/);
+  const meeting = await f.coordinator.trigger({ kind: 'meeting' });
+  assert.deepEqual(
+    meeting.attachments.map((file) => file.name),
+    ['agenda.md', 'sales.csv', 'campaigns.csv'],
+  );
+  assert.match(meeting.content, /America\/New_York/);
+  const slack = await f.coordinator.trigger({ kind: 'slack' });
+  assert.deepEqual(
+    slack.attachments.map((file) => file.name),
+    ['reproduction.json'],
+  );
+  const reproduction = JSON.parse(slack.attachments[0].content);
+  assert.deepEqual(reproduction.cases[0], {
+    arguments: [100, 0.08, 10],
+    actualApprox: 104.4,
+    expected: 97.2,
+  });
+});
