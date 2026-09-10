@@ -718,3 +718,24 @@ test('unpersisted terminal state does not emit a successful completion notificat
     await f.close();
   }
 });
+
+test('task preparation failure remains visible as a failed session without starting Codex', async () => {
+  const f = await fixture();
+  try {
+    const state = sampleState();
+    const employee = state.employees[0];
+    const session = await f.engine.start(employee, 'Fix the launch', state, [], {
+      kind: 'bug',
+      title: 'Missing parent',
+      project: 'little-office',
+      launchStep: 'bug',
+      files: [],
+    });
+    assert.equal(session.status, 'failed');
+    assert.match(session.activity, /Could not prepare task files/);
+    assert.equal((await f.engine.get(session.id)).status, 'failed');
+    assert.equal(f.client.runs.length, 0);
+  } finally {
+    await f.close();
+  }
+});

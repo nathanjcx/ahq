@@ -386,3 +386,16 @@ test('ignored triage fails visibly and retries with a fresh source key', async (
   assert.equal((await f.coordinator.retry('investor')).scenes[1].status, 'running');
   assert.notEqual(f.notifications[0].idempotencyKey, f.notifications[1].idempotencyKey);
 });
+
+test('a paused dispatch fails the launch scene instead of leaving it running', async () => {
+  const f = fixture();
+  await f.coordinator.start();
+  f.setState({
+    ...f.state(),
+    roadmap: { ...f.state().roadmap!, status: 'paused', message: 'Could not confirm product work.' },
+  });
+  const snapshot = await f.coordinator.snapshot();
+  assert.equal(snapshot.scenes[0].status, 'failed');
+  assert.equal(snapshot.scenes[0].error, 'Could not confirm product work.');
+  assert.equal(snapshot.scenes[1].status, 'locked');
+});

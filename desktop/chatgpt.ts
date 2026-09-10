@@ -369,7 +369,6 @@ export class ChatGPTEmployees {
       artifacts: [],
       taskKind: task?.kind,
       task,
-      evidence: task ? await prepareTask(cwd, task) : undefined,
       employeeId: employee.id,
       accountEmail: account.email,
       threadId: !task && latest?.accountEmail === account.email ? latest?.threadId : undefined,
@@ -384,6 +383,15 @@ export class ChatGPTEmployees {
     this.event(s, `${employee.name} started work using your ChatGPT plan.`);
     await this.save(s);
     this.employeeSessions.set(employee.id, s.id);
+    try {
+      if (task) s.evidence = await prepareTask(cwd, task);
+    } catch (error) {
+      s.status = 'failed';
+      s.activity = `Could not prepare task files: ${messageOf(error)}`;
+      this.event(s, s.activity);
+      await this.save(s);
+      return this.public(s);
+    }
     this.launch(
       s,
       JSON.stringify({
