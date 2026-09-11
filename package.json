@@ -1,93 +1,50 @@
 {
   "name": "astra-hq",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "private": true,
-  "description": "A little space for big things. Your AI workforce, together.",
   "type": "module",
-  "main": "dist-desktop/main.cjs",
-  "author": "Astra HQ",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
-    "build:desktop": "node desktop/build.mjs",
-    "dev:desktop": "npm run build:desktop && node scripts/dev-desktop.mjs",
-    "start": "node scripts/start.mjs",
-    "build": "tsc -b && vite build && npm run build:desktop",
-    "preview": "vite preview --host 127.0.0.1",
-    "test": "tsx --test tests/*.test.ts",
-    "package": "npm run build && electron-builder --dir",
-    "dist:mac": "npm run build && electron-builder --mac dmg",
-    "format": "prettier --write src shared desktop tests *.json *.ts *.html README.md docs",
-    "check": "npm test && npm run build",
-    "install:desktop": "node node_modules/electron/install.js"
-  },
-  "build": {
-    "appId": "com.astra.hq",
-    "productName": "Astra HQ",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "dist-desktop/**/*",
-      "package.json",
-      "demo-data/**/*"
-    ],
-    "mac": {
-      "category": "public.app-category.productivity",
-      "target": [
-        "dmg"
-      ],
-      "icon": "assets/app.icns",
-      "identity": "-",
-      "notarize": false,
-      "extendInfo": {
-        "NSMicrophoneUsageDescription": "Hold Announce to speak to your Astra HQ employees. Audio is sent for transcription only when you release.",
-        "NSSpeechRecognitionUsageDescription": "Astra HQ transcribes office announcements on this Mac when you release the microphone button."
-      }
-    },
-    "npmRebuild": false,
-    "asarUnpack": [
-      "dist-desktop/transcribe",
-      "node_modules/@esbuild/**/*",
-      "node_modules/esbuild/**/*"
-    ]
+    "dev": "next dev --hostname 0.0.0.0",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0 --port ${PORT:-3000}",
+    "worker": "tsx --env-file-if-exists=.env.local services/worker.ts",
+    "gateway": "tsx --env-file-if-exists=.env.local services/gateway.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm test && npm run build",
+    "convex:dev": "convex dev",
+    "convex:deploy": "convex deploy",
+    "format": "prettier --write app components lib convex services web-tests docs *.json *.ts"
   },
   "dependencies": {
-    "@fontsource/dm-sans": "^5.3.0",
-    "@fontsource/dm-serif-display": "^5.3.0",
-    "@fontsource/pixelify-sans": "^5.3.0",
+    "@clerk/nextjs": "7.9.2",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
-    "esbuild": "^0.28.2",
-    "little-office-lucide": "npm:lucide-react@^0.577.0",
+    "convex": "1.45.0",
+    "fflate": "^0.8.2",
+    "jose": "^6.1.3",
     "lucide-react": "^1.44.0",
-    "pdfkit": "^0.20.2",
-    "pixi.js": "8.20.1",
+    "next": "16.3.5",
+    "openai": "7.15.0",
     "react": "~19.2.0",
     "react-dom": "~19.2.0",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "sql.js": "^1.14.1",
+    "server-only": "^0.0.1",
     "three": "^0.186.0",
+    "tsx": "^4.23.13",
     "zod": "^4.6.1"
   },
   "devDependencies": {
-    "@resvg/resvg-js": "^2.6.2",
+    "@playwright/test": "^1.58.2",
     "@types/node": "^24.13.4",
-    "@types/pdfkit": "^0.17.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@types/sql.js": "^1.4.9",
     "@types/three": "^0.185.4",
-    "@vitejs/plugin-react": "^6.1.1",
-    "concurrently": "^10.0.5",
-    "cross-env": "^10.1.0",
-    "electron": "^44.3.0",
-    "electron-builder": "^26.15.3",
+    "convex-test": "^0.0.41",
     "prettier": "^3.9.6",
-    "tsx": "^4.23.13",
-    "typescript": "^7.0.2",
-    "vite": "^8.3.0",
-    "wait-on": "^9.1.0"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   }
 }
