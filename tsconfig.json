@@ -1,12 +1,50 @@
 {
   "compilerOptions": {
-    "target": "ES2022", "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true, "skipLibCheck": true, "strict": true, "noEmit": true,
-    "esModuleInterop": true, "module": "esnext", "moduleResolution": "bundler",
-    "resolveJsonModule": true, "isolatedModules": true, "jsx": "preserve",
-    "incremental": true, "plugins": [{"name":"next"}],
-    "paths": {"@/*":["./*"]}
+    "target": "ES2022",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
   },
-  "include": ["next-env.d.ts", "app/**/*.ts", "app/**/*.tsx", "components/**/*.ts", "components/**/*.tsx", "lib/**/*.ts", "lib/**/*.tsx", "convex/**/*.ts", "services/**/*.ts", "web-tests/**/*.ts", ".next/types/**/*.ts", ".next/dev/types/**/*.ts", "next.config.ts", "proxy.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "next-env.d.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "lib/**/*.ts",
+    "lib/**/*.tsx",
+    "convex/**/*.ts",
+    "services/**/*.ts",
+    "web-tests/**/*.ts",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "next.config.ts",
+    "proxy.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

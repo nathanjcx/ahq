@@ -41,7 +41,7 @@ export async function GET(request: Request) {
       credentialCiphertext: seal(credential),
       credentialKeyVersion: '1',
     });
-    return NextResponse.redirect(new URL('/integrations?connected=1', requiredEnv('APP_URL')));
+    return NextResponse.redirect(new URL('/#integrations', requiredEnv('APP_URL')));
   } catch (error) {
     return failure(error);
   }

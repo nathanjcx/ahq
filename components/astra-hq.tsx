@@ -64,6 +64,7 @@ import type {
 } from '@/lib/contracts';
 import { emptyDashboard } from '@/lib/contracts';
 import { uiApi, type AdminDraft } from '@/lib/ui-api';
+import { providers as providerCatalog, getProvider } from '@/lib/providers';
 
 const Github = GitBranch;
 
@@ -121,63 +122,7 @@ const offlineActions: Actions = {
   retire: unavailable,
 };
 
-const providers: Array<{
-  id: ProviderId;
-  name: string;
-  short: string;
-  description: string;
-  inbox: string;
-  color: string;
-}> = [
-  {
-    id: 'salesforce',
-    name: 'Salesforce',
-    short: 'SF',
-    description: 'Accounts, contacts, opportunities, and cases',
-    inbox: 'Records on demand',
-    color: '#1676d2',
-  },
-  {
-    id: 'linear',
-    name: 'Linear',
-    short: 'LI',
-    description: 'Issues, projects, comments, and cycles',
-    inbox: 'Live activity',
-    color: '#645bd7',
-  },
-  {
-    id: 'slack',
-    name: 'Slack',
-    short: 'SL',
-    description: 'Messages, channels, threads, and search',
-    inbox: 'Channel activity',
-    color: '#4a154b',
-  },
-  {
-    id: 'google-workspace',
-    name: 'Google Workspace',
-    short: 'GW',
-    description: 'Gmail, Drive, Calendar, Docs, and Sheets',
-    inbox: 'Mail and calendar',
-    color: '#4285f4',
-  },
-  {
-    id: 'github',
-    name: 'GitHub',
-    short: 'GH',
-    description: 'Repositories, issues, pull requests, and checks',
-    inbox: 'Repository activity',
-    color: '#25292e',
-  },
-  {
-    id: 'servicenow',
-    name: 'ServiceNow',
-    short: 'SN',
-    description: 'Incidents, requests, knowledge, and workflows',
-    inbox: 'Queue activity',
-    color: '#2e8b57',
-  },
-];
+const providers = providerCatalog.map(provider=>({...provider,short:provider.id==='google-workspace'?'GW':provider.name.slice(0,2).toUpperCase(),inbox:'Event delivery needs setup'}));
 
 const nav: Array<{ id: Page; label: string; icon: typeof LayoutGrid }> = [
   { id: 'office', label: 'Office', icon: LayoutGrid },
@@ -280,6 +225,7 @@ function WorkspaceShell({
   actions: Actions;
 }) {
   const [page, setPage] = useState<Page>('office');
+  useEffect(()=>{const sync=()=>{const value=window.location.hash.slice(1);if(nav.some(item=>item.id===value)||value==='admin')setPage(value as Page);};sync();window.addEventListener('hashchange',sync);return ()=>window.removeEventListener('hashchange',sync);},[]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
@@ -298,6 +244,7 @@ function WorkspaceShell({
 
   function go(next: Page) {
     setPage(next);
+    window.location.hash=next;
     setSidebarOpen(false);
   }
 
@@ -1324,7 +1271,7 @@ function FilesPage({ dashboard, onTasks }: { dashboard: Dashboard; onTasks: () =
       {dashboard.artifacts.length ? (
         <div className="file-grid">
           {dashboard.artifacts.map((artifact) => (
-            <a className="file-card card" key={artifact.id} href={`/api/artifacts/${artifact.id}`}>
+            <a className="file-card card" key={artifact.id} href={`/api/files/${artifact.id}`}>
               <span className="file-icon">
                 <FileText size={22} />
               </span>
@@ -1661,6 +1608,8 @@ function ConnectPanel({
   const [name, setName] = useState('');
   const [token, setToken] = useState('');
   const [scope, setScope] = useState('');
+  const definition=getProvider(provider);
+  const [serverUrl,setServerUrl]=useState(definition.serverUrl);
   const [busy, setBusy] = useState(false);
   const [tools, setTools] = useState<DiscoveredTool[]>([]);
   const [allowed, setAllowed] = useState<string[]>([]);
@@ -1672,7 +1621,7 @@ function ConnectPanel({
       body: JSON.stringify({
         provider,
         name: name.trim() || providerName(provider),
-        serverUrl: '',
+        serverUrl,
         accessToken: token || undefined,
         allowedTools: discoverOnly ? [] : allowed,
         resourceScope: scope.trim(),
@@ -1741,6 +1690,9 @@ function ConnectPanel({
                 placeholder={`My ${providerName(provider)} account`}
               />
             </label>
+            <p className="form-note">{definition.note}</p>
+            {definition.products ? <label>Google Workspace product<select value={serverUrl} onChange={event=>setServerUrl(event.target.value)}>{definition.products.map(product=><option key={product.url} value={product.url}>{product.name}</option>)}</select></label> : null}
+            {!definition.serverUrl ? <label>Approved MCP server URL<input type="url" required value={serverUrl} onChange={event=>setServerUrl(event.target.value)} placeholder="https://your-instance.example/mcp" /></label> : null}
             <label>
               Access token, if required
               <input
@@ -1756,13 +1708,12 @@ function ConnectPanel({
               <textarea
                 value={scope}
                 onChange={(event) => setScope(event.target.value)}
-                placeholder="Name the teams, projects, channels, repositories, or folders this connection may access."
-                required
+                placeholder="Optional comma-separated resource IDs. Leave blank to use the provider account permissions."
               />
             </label>
             <div className="form-note">
               <LockKeyhole size={15} />A platform-approved server is selected from the registry. Arbitrary MCP
-              URLs are rejected.
+              URLs are rejected. Resource restrictions require a verified tool mapping; broad searches are blocked on restricted connections.
             </div>
             <button className="primary-button full" disabled={busy}>
               {busy ? <LoaderCircle className="spin" size={16} /> : <Link2 size={16} />}
@@ -1818,7 +1769,6 @@ function ToolAccessPanel({
         </div>
         <button
           className="primary-button full"
-          disabled={selected.length === 0}
           onClick={() => onSave(selected, scope.trim())}
         >
           Save access
