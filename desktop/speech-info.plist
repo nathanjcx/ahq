@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-<key>CFBundleIdentifier</key><string>com.astra.hq.speech</string>
-<key>CFBundleName</key><string>Astra HQ</string>
-<key>NSSpeechRecognitionUsageDescription</key><string>Astra HQ transcribes your office announcements on this Mac when you release the microphone button.</string>
-</dict></plist>

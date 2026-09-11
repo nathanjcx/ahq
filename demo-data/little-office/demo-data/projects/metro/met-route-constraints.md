@@ -1,3 +1,0 @@
-# Weekend route constraints
-
-Dante Brooks approves dispatch. Asha Das ranks commuter stations with repeated morning outages first, using the outage count in met-station-register.csv and station ID to break ties. Two battery units are unreserved at export. The single six-unit shipment expected Friday is not received or available stock. Leo Kim must confirm receipt before assigning those units. Each unhealthy station requires diagnosis; the one-unit battery demand is a planning allowance, not a verified root cause. The requested output is a proposed route and stock gap, not crew dispatch. There are 13 current maintenance tickets; a ticket may cover several station checks.

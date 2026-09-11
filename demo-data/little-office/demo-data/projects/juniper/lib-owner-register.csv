@@ -1,8 +1,0 @@
-record_id,organization,owner,status,evidence
-LIB-M1,Central Branch,Marta Bell,confirmed,LIB-operations-notes section 1
-LIB-M2,West Branch,Owen Price,confirmed,LIB-operations-notes section 2
-LIB-M3,Hill Branch,Jules Tran,confirmed,LIB-operations-notes section 3
-LIB-M4,Elm Branch,Sam Okafor,confirmed,LIB-operations-notes section 4
-LIB-M5,River Branch,Jonah Brooks,awaiting_confirmation,LIB-operations-notes section 5
-LIB-M6,Market Branch,Lena Ortiz,awaiting_confirmation,LIB-operations-notes section 6
-LIB-M7,College Branch,Maya Chen,awaiting_confirmation,LIB-operations-notes section 7

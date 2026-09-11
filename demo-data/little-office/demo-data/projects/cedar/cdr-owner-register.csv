@@ -1,8 +1,0 @@
-record_id,organization,owner,status,evidence
-CDR-M1,North Hall,Olivia Hart,confirmed,CDR-operations-notes section 1
-CDR-M2,Cedar Center,Noah Stone,confirmed,CDR-operations-notes section 2
-CDR-M3,Union Shelter,Zoe Park,confirmed,CDR-operations-notes section 3
-CDR-M4,Park Pantry,Sam Okafor,confirmed,CDR-operations-notes section 4
-CDR-M5,Elm House,Jonah Brooks,awaiting_confirmation,CDR-operations-notes section 5
-CDR-M6,River Table,Lena Ortiz,awaiting_confirmation,CDR-operations-notes section 6
-CDR-M7,West Hub,Maya Chen,awaiting_confirmation,CDR-operations-notes section 7

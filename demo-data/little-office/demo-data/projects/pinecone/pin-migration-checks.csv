@@ -1,8 +1,0 @@
-migration_id,organization,owner,remaining_check,status,last_review
-PIN-M1,Birch Books,Nora Feld,Settlement reconciliation,awaiting_confirmation,2026-09-06
-PIN-M2,Copper Coffee,Eli Navarro,Catalog import totals,awaiting_confirmation,2026-09-06
-PIN-M3,Poppy Goods,Mina Park,Coupon receipt smoke check,awaiting_confirmation,2026-09-06
-PIN-M4,Juniper Bikes,Sam Okafor,Tax configuration review,awaiting_confirmation,2026-09-06
-PIN-M5,Fern Market,Jonah Brooks,Shipping rate mapping,awaiting_confirmation,2026-09-06
-PIN-M6,Oak Paper,Lena Ortiz,Refund permission check,awaiting_confirmation,2026-09-06
-PIN-M7,Willow Studio,Maya Chen,Order history reconciliation,awaiting_confirmation,2026-09-06

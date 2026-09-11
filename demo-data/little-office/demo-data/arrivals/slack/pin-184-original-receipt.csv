@@ -1,8 +1,0 @@
-line,amount_usd
-cart_subtotal,100.00
-fixed_coupon,-10.00
-discounted_subtotal,90.00
-tax_8_percent,7.20
-erroneous_repeated_tax,7.20
-charged_total,104.40
-expected_total,97.20

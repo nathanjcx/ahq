@@ -1,8 +1,0 @@
-period,measure,value,source,owner
-previous_week,activated merchants,151,operations_export,Eli Navarro
-current_week,activated merchants,170,operations_export,Eli Navarro
-current_week,eligible merchants,250,eligibility_register,Nora Feld
-previous_week,support tickets,31,support_queue,Eli Navarro
-current_week,support tickets,18,support_queue,Eli Navarro
-current_week,budget_usd,48000,approved_budget,Nora Feld
-current_week,spent_usd,31200,invoice_register,Nora Feld

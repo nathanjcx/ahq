@@ -1,6 +1,0 @@
-metric,baseline,unit,note
-monthly_price,12,USD,Fictional Little Office subscription price
-starting_customers,120,customers,Fictional launch-month customer count
-monthly_customer_growth,0.15,ratio,Fictional baseline assumption
-monthly_churn,0.04,ratio,Fictional baseline assumption
-variable_cost_per_customer,2.40,USD,Fictional hosting and support assumption

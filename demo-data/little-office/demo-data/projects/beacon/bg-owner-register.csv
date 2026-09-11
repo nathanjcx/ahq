@@ -1,8 +1,0 @@
-record_id,organization,owner,status,evidence
-BG-M1,Beacon Tower,Amir Khan,confirmed,BG-operations-notes section 1
-BG-M2,Canal House,Sofia Reed,confirmed,BG-operations-notes section 2
-BG-M3,Foundry Hall,Chen Wu,confirmed,BG-operations-notes section 3
-BG-M4,Station Annex,Sam Okafor,confirmed,BG-operations-notes section 4
-BG-M5,Stone Yard,Jonah Brooks,awaiting_confirmation,BG-operations-notes section 5
-BG-M6,Waterfront Hub,Lena Ortiz,awaiting_confirmation,BG-operations-notes section 6
-BG-M7,Park Offices,Maya Chen,awaiting_confirmation,BG-operations-notes section 7

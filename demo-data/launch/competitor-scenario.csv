@@ -1,5 +1,0 @@
-metric,baseline,revised,unit,note
-monthly_price,12,12,USD,Little Office price is unchanged
-monthly_customer_growth,0.15,0.09,ratio,Competitor launch reduces expected growth by 6 percentage points
-monthly_churn,0.04,0.06,ratio,Competitor launch raises expected churn by 2 percentage points
-marketing_spend_month_2,2400,3000,USD,Fictional response scenario

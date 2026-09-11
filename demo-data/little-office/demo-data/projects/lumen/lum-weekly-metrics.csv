@@ -1,8 +1,0 @@
-period,measure,value,source,owner
-previous_week,member bookings,72,operations_export,Finn Murphy
-current_week,member bookings,91,operations_export,Finn Murphy
-current_week,released slots,140,eligibility_register,Hazel Wright
-previous_week,visitor questions,23,support_queue,Finn Murphy
-current_week,visitor questions,7,support_queue,Finn Murphy
-current_week,budget_usd,31000,approved_budget,Hazel Wright
-current_week,spent_usd,19250,invoice_register,Hazel Wright

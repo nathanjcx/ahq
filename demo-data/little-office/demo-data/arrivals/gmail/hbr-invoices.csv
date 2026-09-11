@@ -1,6 +1,0 @@
-invoice_id,line,amount_usd,approval_owner,status
-HBR-I01,implementation,6400,Ravi Patel,paid
-HBR-I02,implementation,4550,Ravi Patel,paid
-HBR-I03,operations,4000,Dr. Leah Moss,paid
-HBR-I04,operations,2570,Dr. Leah Moss,paid
-HBR-I05,training,4380,Tessa Ng,paid

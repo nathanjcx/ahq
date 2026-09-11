@@ -1,4 +1,0 @@
-depot,item,on_hand_units,reserved_units,incoming_shipments_this_week,incoming_units,arrival_status
-Canal Depot,spare_battery,3,1,1,6,expected_friday_not_received
-Canal Depot,tire_kit,12,2,0,0,none
-Canal Depot,brake_kit,8,1,0,0,none

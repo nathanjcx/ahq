@@ -1,8 +1,0 @@
-record_id,organization,owner,status,evidence
-ORC-M1,Apple Ridge Farm,Rosa Silva,confirmed,ORC-operations-notes section 1
-ORC-M2,Blue Barn Growers,Miles Cook,confirmed,ORC-operations-notes section 2
-ORC-M3,Creekside Produce,Nia James,confirmed,ORC-operations-notes section 3
-ORC-M4,Dawn Orchards,Sam Okafor,confirmed,ORC-operations-notes section 4
-ORC-M5,Evergreen Acres,Jonah Brooks,awaiting_confirmation,ORC-operations-notes section 5
-ORC-M6,Fox Hollow Farm,Lena Ortiz,awaiting_confirmation,ORC-operations-notes section 6
-ORC-M7,Green Lane,Maya Chen,awaiting_confirmation,ORC-operations-notes section 7

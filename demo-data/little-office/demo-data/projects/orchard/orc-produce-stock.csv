@@ -1,5 +1,0 @@
-item,unit,required_per_box,confirmed_boxes,required_quantity,committed_quantity,weather_risk_quantity,earliest_substitute,substitution_approved
-tomatoes,kg,0.5,156,78,78,18,squash,False
-squash,kg,0.5,156,78,100,0,,False
-apples,kg,1,156,156,160,0,,False
-greens,bunch,1,156,156,160,0,,False
