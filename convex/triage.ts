@@ -68,7 +68,7 @@ export const dismiss = mutation({
   },
 });
 
-/** Closing is a person confirming the fix held; only a fixed or triaged alert can be closed. */
+/** Closing is a person confirming the resolution. An alert that was dismissed has no fix to confirm. */
 export const close = mutation({
   args: { alertId: v.id('alerts') },
   returns: v.null(),

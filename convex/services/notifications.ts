@@ -4,6 +4,7 @@ import { mutation, query } from '../_generated/server';
 import { settingsFor } from '../lib/triage';
 import { publicNotification } from '../notifications';
 import { cleanText, requireService, type Ctx } from '../shared';
+import { workspaceForActor } from './context';
 
 const notificationKind = v.union(
   v.literal('triage'),
@@ -29,7 +30,14 @@ async function workspaceSubjects(ctx: Ctx, workspace: Doc<'workspaces'>) {
       .collect(),
   ]);
   const owner = workspace.authKey.startsWith('user:') ? [workspace.authKey.slice('user:'.length)] : [];
-  return [...new Set([...owner, ...floors.map((f) => f.createdBy), ...projects.map((p) => p.createdBy)])];
+  const subjects = new Set([
+    ...owner,
+    ...floors.map((floor) => floor.createdBy),
+    ...projects.map((project) => project.createdBy),
+  ]);
+  // Reserved floors are created by the platform, not by a person there is any point paging.
+  subjects.delete('system');
+  return [...subjects];
 }
 
 /**
@@ -145,23 +153,25 @@ async function subscriptionFor(ctx: Ctx, subject: string, endpoint: string) {
 export const subscribePush = mutation({
   args: {
     secret: v.string(),
-    workspaceId: v.id('workspaces'),
-    subject: v.string(),
+    authSubject: v.string(),
+    authOrgId: v.optional(v.string()),
     endpoint: v.string(),
     keysCiphertext: v.string(),
   },
   returns: v.object({ subscriptionId: v.id('pushSubscriptions') }),
   handler: async (ctx, args) => {
     requireService(args.secret);
+    const workspace = await workspaceForActor(ctx, args.authSubject, args.authOrgId);
+    if (!workspace) throw new Error('Create a workspace first');
     const endpoint = cleanText(args.endpoint, 'Endpoint', 2_048);
-    const existing = await subscriptionFor(ctx, args.subject, endpoint);
+    const existing = await subscriptionFor(ctx, args.authSubject, endpoint);
     if (existing) {
       await ctx.db.patch(existing._id, { keysCiphertext: args.keysCiphertext });
       return { subscriptionId: existing._id };
     }
     const subscriptionId = await ctx.db.insert('pushSubscriptions', {
-      workspaceId: args.workspaceId,
-      subject: args.subject,
+      workspaceId: workspace._id,
+      subject: args.authSubject,
       endpoint,
       keysCiphertext: args.keysCiphertext,
       createdAt: Date.now(),
@@ -171,11 +181,11 @@ export const subscribePush = mutation({
 });
 
 export const unsubscribePush = mutation({
-  args: { secret: v.string(), subject: v.string(), endpoint: v.string() },
+  args: { secret: v.string(), authSubject: v.string(), endpoint: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
     requireService(args.secret);
-    const existing = await subscriptionFor(ctx, args.subject, args.endpoint);
+    const existing = await subscriptionFor(ctx, args.authSubject, args.endpoint);
     if (existing) await ctx.db.delete(existing._id);
     return null;
   },

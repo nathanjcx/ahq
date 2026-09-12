@@ -6,6 +6,11 @@ export const webApi = {
   relaySecret: (connectionId: string) => `/api/integrations/relay-secret/${encodeURIComponent(connectionId)}`,
   adminOAuthClient: '/api/admin/oauth-client',
   adminInboxSecret: '/api/admin/inbox-secret',
+  adminAlertSecret: '/api/admin/alert-secret',
+  alerts: '/api/alerts',
+  notifications: '/api/notifications',
+  acknowledgeNotification: (id: string) => `/api/notifications/${encodeURIComponent(id)}/ack`,
+  pushSubscribe: '/api/push/subscribe',
 } as const;
 
 /** Proves to a route that the request came from this application's own code, not a cross-site form. */
