@@ -7,6 +7,9 @@
   margin: 0 0 14px;
   overflow-x: auto;
 }
+.records-scopes button {
+  white-space: nowrap;
+}
 .records-layout {
   min-height: 620px;
   grid-template-columns: 275px minmax(0, 1fr);

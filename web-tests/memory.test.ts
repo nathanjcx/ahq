@@ -294,6 +294,43 @@ describe('workspace memory', () => {
     );
   });
 
+  it('reads the janitor log back off the claims curation left behind', async () => {
+    const t = harness();
+    const context = await tower(t);
+    const { owner, floorId } = context;
+    const { runToken: janitorToken } = await janitor(context);
+    const claimOn = (text: string) =>
+      owner.mutation(api.memory.propose, { scope: 'floor', scopeId: floorId, kind: 'fact', text });
+    const first = await claimOn('The review is Tuesday morning.');
+    const second = await claimOn('The review happens on Tuesday.');
+    const third = await claimOn('We deploy on Wednesday.');
+    const fourth = await claimOn('We deploy on Thursday.');
+
+    const merged = await t.mutation(api.services.memory.merge, {
+      secret,
+      runToken: janitorToken,
+      ids: [first.memoryId, second.memoryId],
+      text: 'The review is on Tuesday morning.',
+      kind: 'fact',
+      tags: [],
+    });
+    await t.mutation(api.services.memory.promote, { secret, runToken: janitorToken, id: merged.memoryId });
+    await t.mutation(api.services.memory.contest, {
+      secret,
+      runToken: janitorToken,
+      id: third.memoryId,
+      otherId: fourth.memoryId,
+      reason: 'Two deploy days.',
+    });
+
+    const log = await owner.query(api.memory.janitorLog, {});
+    // One line per conflict, not one per side, and a merge that says what it replaced.
+    expect(log.map((entry) => entry.action).sort()).toEqual(['contested', 'merged', 'promoted']);
+    expect(log.find((entry) => entry.action === 'merged')?.detail).toBe('Replaced 2 overlapping claims');
+    expect(log.find((entry) => entry.action === 'contested')?.detail).toBe('Two deploy days.');
+    expect(log.every((entry, index) => index === 0 || log[index - 1].at >= entry.at)).toBe(true);
+  });
+
   it('creates one janitor per workspace on a reserved version', async () => {
     const t = harness();
     const { workspaceId } = await tower(t);

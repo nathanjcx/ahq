@@ -310,7 +310,7 @@ const janitorLog: JanitorLogEntry[] = [
     scope: 'floor',
     scopeId: 'proj_launch',
     text: 'Release notes ship with the migration guide in the same pull request.',
-    detail: 'Replaced 1 overlapping claims',
+    detail: 'Replaced 1 overlapping claim',
     authorName: 'The Janitor',
   },
 ];

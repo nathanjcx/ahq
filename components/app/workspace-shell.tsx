@@ -200,9 +200,10 @@ export function WorkspaceShell({
         <SettingsPanel
           dashboard={dashboard}
           configured={configured}
+          canManageWorkspace={canManageWorkspace}
+          actions={actions}
+          run={run}
           onClose={() => setSettingsOpen(false)}
-          onBootstrap={(name) => run(() => actions.bootstrap(name), 'Workspace created')}
-          onTokenCap={(cap) => run(() => actions.setTokenCap(cap), 'Token cap updated')}
         />
       )}
       {newTaskOpen && (

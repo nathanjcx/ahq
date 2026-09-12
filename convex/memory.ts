@@ -373,7 +373,9 @@ export const janitorLog = query({
                 ...common,
                 action: 'merged',
                 at: row.createdAt,
-                detail: count ? `Replaced ${count} overlapping claims` : 'Written during curation',
+                detail: count
+                  ? `Replaced ${count} overlapping ${count === 1 ? 'claim' : 'claims'}`
+                  : 'Written during curation',
               },
         );
       }

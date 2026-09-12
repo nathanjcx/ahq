@@ -51,7 +51,15 @@ export function AuditPage({
   const settings = useUiQuery(uiApi.workspaceSettings, {});
   const hardPolicy = settings?.auditPolicy === 'hard';
 
-  const floorOf = new Map(dashboard.employees.map((employee) => [employee.id, employee.floorId ?? 'lobby']));
+  // Where an instance sits: its own floor, or the floor whose staff list names it.
+  const floorOf = new Map(
+    dashboard.employees.map((employee) => [
+      employee.id,
+      employee.floorId ??
+        dashboard.floors.find((floor) => floor.employeeIds.includes(employee.id))?.id ??
+        'lobby',
+    ]),
+  );
   const taskTitles = new Map(dashboard.tasks.map((task) => [task.id, task.title]));
   const ownedTasks = new Set(dashboard.tasks.filter((task) => task.isOwner).map((task) => task.id));
 
