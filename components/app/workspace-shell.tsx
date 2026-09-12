@@ -7,9 +7,8 @@ import type {
   Listing,
   Project,
   ProviderReadiness,
-  WebSetup,
+  RegistryTool,
 } from '@/lib/contracts';
-import type { AdminToolRegistry } from '@/lib/ui-api';
 import type { EditorDraft } from '../admin/draft-issues';
 import { ProjectPanel } from '../floors/project-panel';
 import type { Actions } from './actions';
@@ -23,21 +22,19 @@ import { Topbar } from './topbar';
 
 export function WorkspaceShell({
   configured,
-  setup,
   readiness,
   dashboard,
   listings,
   drafts,
-  toolRegistry,
+  registryTools,
   actions,
 }: {
   configured: boolean;
-  setup: WebSetup;
   readiness: ProviderReadiness[];
   dashboard: Dashboard;
   listings: Listing[];
   drafts: EditorDraft[];
-  toolRegistry: AdminToolRegistry;
+  registryTools: RegistryTool[];
   actions: Actions;
 }) {
   const [page, setPage] = useState<Page>('office');
@@ -114,7 +111,6 @@ export function WorkspaceShell({
         configured={configured}
         page={page}
         open={sidebarOpen}
-        canManageWorkspace={canManageWorkspace}
         onClose={() => setSidebarOpen(false)}
         onNavigate={go}
         onSettings={() => setSettingsOpen(true)}
@@ -149,9 +145,8 @@ export function WorkspaceShell({
             dashboard={dashboard}
             listings={listings}
             drafts={drafts}
-            toolRegistry={toolRegistry}
+            registryTools={registryTools}
             readiness={readiness}
-            setup={setup}
             configured={configured}
             canManageWorkspace={canManageWorkspace}
             actions={actions}
@@ -180,7 +175,7 @@ export function WorkspaceShell({
           configured={configured}
           onClose={() => setSettingsOpen(false)}
           onBootstrap={(name) => run(() => actions.bootstrap(name), 'Workspace created')}
-          onBudget={(amount) => run(() => actions.setBudget(amount), 'Budget updated')}
+          onTokenCap={(cap) => run(() => actions.setTokenCap(cap), 'Token cap updated')}
         />
       )}
       {newTaskOpen && (

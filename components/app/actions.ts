@@ -8,7 +8,7 @@ export type CorrectionResult = { kind: 'task'; taskId: string } | { kind: 'propo
 /** Every workspace mutation the UI can perform, in UI terms. */
 export type Actions = {
   bootstrap: (name: string) => Promise<unknown>;
-  setBudget: (monthlyBudget: number) => Promise<unknown>;
+  setTokenCap: (monthlyTokenCap: number) => Promise<unknown>;
   hire: (versionId: string) => Promise<unknown>;
   createTask: (employeeId: string, prompt: string, title: string, projectId?: string) => Promise<unknown>;
   createProject: (name: string, brief: string, employeeIds: string[]) => Promise<unknown>;
@@ -40,7 +40,7 @@ const unavailableCorrection = async (): Promise<CorrectionResult> => {
 /** Preview mode: every mutation is a no-op so the interface stays explorable. */
 export const offlineActions: Actions = {
   bootstrap: unavailable,
-  setBudget: unavailable,
+  setTokenCap: unavailable,
   hire: unavailable,
   createTask: unavailable,
   createProject: unavailable,
@@ -61,7 +61,7 @@ export const offlineActions: Actions = {
 
 export function useWorkspaceActions(): Actions {
   const bootstrap = useMutation(uiApi.bootstrapWorkspace);
-  const setBudget = useMutation(uiApi.setBudget);
+  const setTokenCap = useMutation(uiApi.setTokenCap);
   const hire = useMutation(uiApi.hire);
   const createTask = useMutation(uiApi.createTask);
   const createProject = useMutation(uiApi.createProject);
@@ -81,7 +81,7 @@ export function useWorkspaceActions(): Actions {
 
   return {
     bootstrap: (name) => bootstrap({ name }),
-    setBudget: (monthlyBudget) => setBudget({ monthlyBudget }),
+    setTokenCap: (monthlyTokenCap) => setTokenCap({ monthlyTokenCap }),
     hire: (versionId) => hire({ versionId }),
     createTask: (employeeId, prompt, title, projectId) =>
       createTask({ employeeId, prompt, title, projectId }),

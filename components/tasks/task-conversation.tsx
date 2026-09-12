@@ -1,31 +1,18 @@
 'use client';
 
 import { useQuery } from 'convex/react';
-import { LoaderCircle, Send, Square } from 'lucide-react';
+import { LoaderCircle, Send } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import type { ActionProposal, Task } from '@/lib/contracts';
+import type { Task } from '@/lib/contracts';
 import { uiApi } from '@/lib/ui-api';
-import { statusLabel } from '../shared/format';
-import { StatusMark } from '../shared/marks';
 import { MessageBubble } from './message-bubble';
-import { ProposalCard } from './proposal-card';
 
 export function TaskConversation({
   task,
-  floorName,
-  proposals,
   onSend,
-  onCancel,
-  onDecide,
-  onCorrect,
 }: {
   task: Task;
-  floorName: string;
-  proposals: ActionProposal[];
   onSend: (taskId: string, text: string) => void;
-  onCancel: (taskId: string) => void;
-  onDecide: (id: string, approved: boolean) => void;
-  onCorrect: (id: string) => void;
 }) {
   const messages = useQuery(uiApi.messages, { taskId: task.id });
   const [text, setText] = useState('');
@@ -37,26 +24,7 @@ export function TaskConversation({
     setText('');
   }
   return (
-    <div className="conversation">
-      <div className="conversation-head">
-        <div>
-          <span className="eyebrow">
-            {floorName} · {task.employeeName}
-          </span>
-          <h2>{task.title}</h2>
-        </div>
-        <div>
-          <span className={`task-status status-${task.status}`}>
-            <StatusMark status={task.status} />
-            {statusLabel(task.status)}
-          </span>
-          {['queued', 'running', 'awaiting_approval'].includes(task.status) && (
-            <button className="icon-button" onClick={() => onCancel(task.id)} aria-label="Cancel task">
-              <Square size={14} />
-            </button>
-          )}
-        </div>
-      </div>
+    <>
       <div className="message-stream">
         {task.projectContext && (
           <details className="task-project-context">
@@ -84,9 +52,6 @@ export function TaskConversation({
         ) : (
           messages.map((message) => <MessageBubble key={message.id} message={message} />)
         )}
-        {proposals.map((proposal) => (
-          <ProposalCard key={proposal.id} proposal={proposal} onDecide={onDecide} onCorrect={onCorrect} />
-        ))}
         {task.status === 'running' && (
           <div className="working-line">
             <span>
@@ -112,6 +77,6 @@ export function TaskConversation({
           </button>
         </div>
       </form>
-    </div>
+    </>
   );
 }

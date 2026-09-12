@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { Connection, ProviderId, ProviderReadiness, WebSetup } from '@/lib/contracts';
+import type { Connection, ProviderId, ProviderReadiness } from '@/lib/contracts';
 import { getProvider, providers } from '@/lib/providers';
 import { PageIntro } from '../shared/page-intro';
 import { providerSetup, startConnect } from './connect';
@@ -12,7 +12,6 @@ import { ProductPicker } from './product-picker';
 export function IntegrationsPage({
   connections,
   configured,
-  setup,
   readiness,
   canManage,
   onDisconnect,
@@ -21,7 +20,6 @@ export function IntegrationsPage({
 }: {
   connections: Connection[];
   configured: boolean;
-  setup: WebSetup;
   readiness: ProviderReadiness[];
   canManage: boolean;
   onDisconnect: (id: string) => void;
@@ -55,7 +53,7 @@ export function IntegrationsPage({
           <IntegrationCard
             key={provider.id}
             provider={provider}
-            state={providerSetup(provider, readiness, setup)}
+            state={providerSetup(provider, readiness)}
             connections={connections.filter((item) => item.provider === provider.id)}
             configured={configured}
             checking={checking}
@@ -73,13 +71,13 @@ export function IntegrationsPage({
           provider={getProvider(choosingProducts)}
           products={
             getProvider(choosingProducts).products?.filter((product) =>
-              providerSetup(getProvider(choosingProducts), readiness, setup).connectable.includes(
-                product.url,
-              ),
+              providerSetup(getProvider(choosingProducts), readiness).connectable.includes(product.url),
             ) ?? []
           }
           connected={connections
-            .filter((item) => item.provider === choosingProducts && item.status === 'connected')
+            .filter(
+              (item) => item.provider === choosingProducts && item.status === 'connected' && item.isOwner,
+            )
             .map((item) => item.serverUrl)}
           onClose={() => setChoosingProducts(null)}
           onConnect={(urls) => connect(choosingProducts, urls)}
@@ -88,7 +86,7 @@ export function IntegrationsPage({
       {managing && (
         <ManageAccessPanel
           connection={managing}
-          inboxConfigured={setup.inboxProviders.includes(managing.provider)}
+          inboxConfigured={providerSetup(getProvider(managing.provider), readiness).inboxConfigured}
           onClose={() => setManaging(null)}
           onSave={(tools, scope, inboxResources) => {
             onUpdateAccess(managing.id, tools, scope, inboxResources);

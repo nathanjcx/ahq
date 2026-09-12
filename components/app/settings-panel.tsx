@@ -2,28 +2,36 @@
 
 import { CheckCircle2, Cloud, LockKeyhole } from 'lucide-react';
 import { useState } from 'react';
-import type { Dashboard } from '@/lib/contracts';
+import type { Dashboard, ModelUsage } from '@/lib/contracts';
+import { modelName } from '../shared/format';
 import { Sheet } from '../shared/sheet';
+
+/** Cached tokens as a share of input tokens, the practical cache hit rate. */
+function cacheHitRate(usage: ModelUsage) {
+  return usage.input === 0 ? 'n/a' : `${Math.round((usage.cached / usage.input) * 100)}%`;
+}
 
 export function SettingsPanel({
   dashboard,
   configured,
   onClose,
   onBootstrap,
-  onBudget,
+  onTokenCap,
 }: {
   dashboard: Dashboard;
   configured: boolean;
   onClose: () => void;
   onBootstrap: (name: string) => void;
-  onBudget: (amount: number) => void;
+  onTokenCap: (monthlyTokenCap: number) => void;
 }) {
-  const [name, setName] = useState(dashboard.workspace?.name ?? '');
-  const [budget, setBudget] = useState(String(dashboard.workspace?.monthlyBudget || 250));
+  const workspace = dashboard.workspace;
+  const [name, setName] = useState(workspace?.name ?? '');
+  const [tokenCap, setTokenCap] = useState(String(workspace?.monthlyTokenCap ?? 0));
+  const canManage = workspace?.role === 'owner' || workspace?.role === 'admin';
   return (
     <Sheet
       title="Workspace settings"
-      subtitle="Identity, budget, and environment status for this workspace."
+      subtitle="Identity, token usage, and environment status for this workspace."
       onClose={onClose}
     >
       <div className="settings-stack">
@@ -32,7 +40,11 @@ export function SettingsPanel({
             <CheckCircle2 size={18} />
             <span>
               <strong>Application connected</strong>
-              <small>Clerk and Convex are configured.</small>
+              <small>
+                {dashboard.viewer.name
+                  ? `Signed in as ${dashboard.viewer.name}.`
+                  : 'Clerk and Convex are configured.'}
+              </small>
             </span>
           </div>
         ) : (
@@ -44,7 +56,7 @@ export function SettingsPanel({
             </span>
           </div>
         )}
-        {!dashboard.workspace ? (
+        {!workspace ? (
           <form
             className="form-stack"
             onSubmit={(event) => {
@@ -65,38 +77,73 @@ export function SettingsPanel({
               Create workspace
             </button>
           </form>
-        ) : dashboard.workspace.role === 'owner' || dashboard.workspace.role === 'admin' ? (
-          <form
-            className="form-stack"
-            onSubmit={(event) => {
-              event.preventDefault();
-              onBudget(Number(budget));
-            }}
-          >
-            <label>
-              Monthly OpenAI budget
-              <div className="money-input">
-                <span>$</span>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={budget}
-                  onChange={(e) => setBudget(e.target.value)}
-                />
-              </div>
-              <small>Work pauses before starting a task that would exceed this limit.</small>
-            </label>
-            <button className="primary-button full">Save budget</button>
-          </form>
         ) : (
-          <div className="settings-status">
-            <LockKeyhole size={18} />
-            <span>
-              <strong>Budget managed by an administrator</strong>
-              <small>Your workspace owner controls the monthly OpenAI limit.</small>
-            </span>
-          </div>
+          <>
+            <section className="usage-summary">
+              <span className="eyebrow">TOKEN USAGE · {workspace.usage.period.toUpperCase()}</span>
+              {workspace.usage.byModel.length ? (
+                <table className="usage-table">
+                  <thead>
+                    <tr>
+                      <th>Model</th>
+                      <th>Input</th>
+                      <th>Cached</th>
+                      <th>Output</th>
+                      <th>Cache hits</th>
+                      <th>Tasks</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {workspace.usage.byModel.map((usage) => (
+                      <tr key={usage.model}>
+                        <th scope="row">{modelName(usage.model)}</th>
+                        <td>{usage.input.toLocaleString()}</td>
+                        <td>{usage.cached.toLocaleString()}</td>
+                        <td>{usage.output.toLocaleString()}</td>
+                        <td>{cacheHitRate(usage)}</td>
+                        <td>{usage.tasks.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p>No tokens recorded in this period yet.</p>
+              )}
+            </section>
+            {canManage ? (
+              <form
+                className="form-stack"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  onTokenCap(Number(tokenCap));
+                }}
+              >
+                <label>
+                  Monthly token cap
+                  <input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    value={tokenCap}
+                    onChange={(e) => setTokenCap(e.target.value)}
+                  />
+                  <small>
+                    Counted against input plus output tokens for the period. Use 0 for no limit. New tasks and
+                    follow-up messages are refused once the cap is reached.
+                  </small>
+                </label>
+                <button className="primary-button full">Save token cap</button>
+              </form>
+            ) : (
+              <div className="settings-status">
+                <LockKeyhole size={18} />
+                <span>
+                  <strong>Usage limits managed by an administrator</strong>
+                  <small>Your workspace owner controls the monthly token cap.</small>
+                </span>
+              </div>
+            )}
+          </>
         )}
         <div id="setup" className="setup-list">
           <span className="eyebrow">SETUP CHECKLIST</span>

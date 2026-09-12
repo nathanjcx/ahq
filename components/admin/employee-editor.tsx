@@ -3,22 +3,22 @@
 import { Check, LockKeyhole, Plus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import type { ModelId } from '@/lib/contracts';
-import type { AdminToolRegistry } from '@/lib/ui-api';
 import { lines } from '../shared/format';
 import { Sheet } from '../shared/sheet';
 import { CapabilityRows, type CapabilityRow } from './capability-rows';
 import { MediaRows, type MediaRow } from './media-rows';
 import { SkillRows, type SkillRow } from './skill-rows';
 import { editorRowId, sha256, type EditorDraft } from './draft-issues';
+import type { RegistryByProvider } from './registry';
 
 export function EmployeeEditor({
   draft,
-  toolRegistry,
+  registry,
   onClose,
   onSave,
 }: {
   draft?: EditorDraft;
-  toolRegistry: AdminToolRegistry;
+  registry: RegistryByProvider;
   onClose: () => void;
   onSave: (value: Record<string, unknown>) => Promise<void>;
 }) {
@@ -205,7 +205,7 @@ export function EmployeeEditor({
             <Plus size={14} /> Add MCP
           </button>
         </section>
-        <CapabilityRows capabilities={capabilities} toolRegistry={toolRegistry} onChange={setCapabilities} />
+        <CapabilityRows capabilities={capabilities} registry={registry} onChange={setCapabilities} />
         <section>
           <span className="editor-step">04</span>
           <div>

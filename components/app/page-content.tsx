@@ -1,7 +1,6 @@
 'use client';
 
-import type { Dashboard, Listing, Project, ProviderReadiness, WebSetup } from '@/lib/contracts';
-import type { AdminToolRegistry } from '@/lib/ui-api';
+import type { Dashboard, Listing, Project, ProviderReadiness, RegistryTool } from '@/lib/contracts';
 import type { EditorDraft } from '../admin/draft-issues';
 import { MarketplaceStudioPage } from '../admin/marketplace-studio';
 import { ActivityPage } from '../activity/activity-page';
@@ -20,9 +19,8 @@ export type PageContentProps = {
   dashboard: Dashboard;
   listings: Listing[];
   drafts: EditorDraft[];
-  toolRegistry: AdminToolRegistry;
+  registryTools: RegistryTool[];
   readiness: ProviderReadiness[];
-  setup: WebSetup;
   configured: boolean;
   canManageWorkspace: boolean;
   actions: Actions;
@@ -132,7 +130,6 @@ export function PageContent(props: PageContentProps) {
       <IntegrationsPage
         connections={dashboard.connections}
         configured={props.configured}
-        setup={props.setup}
         readiness={props.readiness}
         canManage={props.canManageWorkspace || dashboard.isPlatformAdmin}
         onDisconnect={(id) => run(() => actions.disconnect(id), 'Integration disconnected')}
@@ -148,7 +145,7 @@ export function PageContent(props: PageContentProps) {
       <MarketplaceStudioPage
         drafts={props.drafts}
         listings={props.listings}
-        toolRegistry={props.toolRegistry}
+        registryTools={props.registryTools}
         onSave={(draft) => run(() => actions.saveDraft(draft), 'Draft saved')}
         onPublish={(id) => run(() => actions.publish(id), 'Employee published')}
         onRetire={(id) => run(() => actions.retire(id), 'Version retired')}

@@ -2,29 +2,33 @@
 
 import { Link2, LockKeyhole, X } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { Capability, ProviderId } from '@/lib/contracts';
-import type { AdminToolRegistry } from '@/lib/ui-api';
+import type { Capability, ProviderId, ToolMode } from '@/lib/contracts';
 import { providers } from '@/lib/providers';
 import { EmptyMini } from '../shared/empty';
+import { providerName } from '../shared/format';
+import type { RegistryByProvider } from './registry';
 
 export type CapabilityRow = Capability & { rowId: string };
 
 export function CapabilityRows({
   capabilities,
-  toolRegistry,
+  registry,
   onChange,
 }: {
   capabilities: CapabilityRow[];
-  toolRegistry: AdminToolRegistry;
+  registry: RegistryByProvider;
   onChange: Dispatch<SetStateAction<CapabilityRow[]>>;
 }) {
   return (
     <div className="editor-rows">
       {capabilities.map((capability) => {
-        const registry = toolRegistry.find((item) => item.provider === capability.provider);
-        const registeredTools = registry?.tools ?? [];
-        const visibleTools = [
-          ...registeredTools,
+        const registeredTools = registry.get(capability.provider) ?? [];
+        const visibleTools: { name: string; description: string; mode: ToolMode }[] = [
+          ...registeredTools.map((tool) => ({
+            name: tool.name,
+            description: tool.description,
+            mode: tool.mode,
+          })),
           ...capability.tools
             .filter((name) => !registeredTools.some((tool) => tool.name === name))
             .map((name) => ({
@@ -83,9 +87,10 @@ export function CapabilityRows({
                 <X size={16} />
               </button>
             </div>
-            {!registry?.configured && (
+            {!registeredTools.length && (
               <p className="registry-warning">
-                <LockKeyhole size={13} /> Configure this provider in MCP_TOOL_REGISTRY_JSON before publishing.
+                <LockKeyhole size={13} /> Add reviewed {providerName(capability.provider)} tools on the
+                Operations page before publishing.
               </p>
             )}
             <div className="registry-tools">

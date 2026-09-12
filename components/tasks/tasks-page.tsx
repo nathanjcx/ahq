@@ -7,7 +7,7 @@ import { EmptyPane, EmptySection } from '../shared/empty';
 import { relativeTime } from '../shared/format';
 import { StatusMark } from '../shared/marks';
 import { PageIntro } from '../shared/page-intro';
-import { TaskConversation } from './task-conversation';
+import { TaskDetail } from './task-detail';
 
 export function taskFloorName(task: Task, projects: Project[]) {
   return (
@@ -91,6 +91,11 @@ export function TasksPage({
                   <small>
                     {task.employeeName} · {relativeTime(task.updatedAt)}
                   </small>
+                  {task.visibility === 'workspace' && (
+                    <small className="task-shared">
+                      {task.isOwner ? 'Shared with the workspace' : `Shared by ${task.createdByName}`}
+                    </small>
+                  )}
                   <span className="task-floor-label">{taskFloorName(task, projects)}</span>
                 </span>
               </button>
@@ -104,7 +109,7 @@ export function TasksPage({
             )}
           </div>
           {selected && (
-            <TaskConversation
+            <TaskDetail
               task={selected}
               floorName={taskFloorName(selected, projects)}
               proposals={proposals.filter((proposal) => proposal.taskId === selected.id)}

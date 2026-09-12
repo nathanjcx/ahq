@@ -2,30 +2,31 @@
 
 import { BadgeCheck, Bot, FileText, LockKeyhole, Plus, Store } from 'lucide-react';
 import { useState } from 'react';
-import type { Listing } from '@/lib/contracts';
-import type { AdminToolRegistry } from '@/lib/ui-api';
+import type { Listing, RegistryTool } from '@/lib/contracts';
 import { EmptyMini } from '../shared/empty';
 import { modelName, relativeTime } from '../shared/format';
 import { PageIntro } from '../shared/page-intro';
 import { draftPublishIssues, type EditorDraft } from './draft-issues';
+import { groupRegistryTools } from './registry';
 import { EmployeeEditor } from './employee-editor';
 
 export function MarketplaceStudioPage({
   drafts,
   listings,
-  toolRegistry,
+  registryTools,
   onSave,
   onPublish,
   onRetire,
 }: {
   drafts: EditorDraft[];
   listings: Listing[];
-  toolRegistry: AdminToolRegistry;
+  registryTools: RegistryTool[];
   onSave: (draft: Record<string, unknown>) => Promise<boolean>;
   onPublish: (id: string) => void;
   onRetire: (id: string) => void;
 }) {
   const [editing, setEditing] = useState<EditorDraft | 'new' | null>(null);
+  const registry = groupRegistryTools(registryTools);
   return (
     <div>
       <PageIntro
@@ -66,7 +67,7 @@ export function MarketplaceStudioPage({
         {drafts.length ? (
           <div className="admin-list">
             {drafts.map((draft) => {
-              const issues = draftPublishIssues(draft, toolRegistry);
+              const issues = draftPublishIssues(draft, registry);
               return (
                 <article className="card" key={draft.id}>
                   <span className="draft-avatar" style={{ background: draft.color }}>
@@ -141,7 +142,7 @@ export function MarketplaceStudioPage({
       {editing && (
         <EmployeeEditor
           draft={editing === 'new' ? undefined : editing}
-          toolRegistry={toolRegistry}
+          registry={registry}
           onClose={() => setEditing(null)}
           onSave={async (value) => {
             if (await onSave(value)) setEditing(null);

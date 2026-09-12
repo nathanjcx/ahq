@@ -44,9 +44,11 @@ export function IntegrationCard({
         : { className: 'setup', text: checking ? 'Checking setup' : 'Setup needed' };
   const remainingProducts = provider.products?.filter(
     (product) =>
-      state.connectable.includes(product.url) && !connected.some((item) => item.serverUrl === product.url),
+      state.connectable.includes(product.url) &&
+      !connected.some((item) => item.isOwner && item.serverUrl === product.url),
   );
-  const canAdd = ready && (provider.products ? (remainingProducts?.length ?? 0) > 0 : active.length === 0);
+  const owned = active.filter((item) => item.isOwner);
+  const canAdd = ready && (provider.products ? (remainingProducts?.length ?? 0) > 0 : owned.length === 0);
 
   return (
     <article className="integration-card card">
@@ -78,22 +80,28 @@ export function IntegrationCard({
                 {connectionLabel(connection.status)}
               </span>
               <div>
-                {connection.status === 'connected' ? (
-                  <button className="text-button" onClick={() => onManage(connection)}>
-                    Manage access
-                  </button>
+                {!connection.isOwner ? (
+                  <span className="connection-shared">Shared by {connection.ownerName}</span>
                 ) : (
-                  <button
-                    className="text-button"
-                    disabled={busy || !state.connectable.includes(connection.serverUrl)}
-                    onClick={() => onConnect([connection.serverUrl])}
-                  >
-                    Reconnect
-                  </button>
+                  <>
+                    {connection.status === 'connected' ? (
+                      <button className="text-button" onClick={() => onManage(connection)}>
+                        Manage access
+                      </button>
+                    ) : (
+                      <button
+                        className="text-button"
+                        disabled={busy || !state.connectable.includes(connection.serverUrl)}
+                        onClick={() => onConnect([connection.serverUrl])}
+                      >
+                        Reconnect
+                      </button>
+                    )}
+                    <button className="text-button danger-text" onClick={() => onDisconnect(connection.id)}>
+                      Disconnect
+                    </button>
+                  </>
                 )}
-                <button className="text-button danger-text" onClick={() => onDisconnect(connection.id)}>
-                  Disconnect
-                </button>
               </div>
             </div>
           ))}

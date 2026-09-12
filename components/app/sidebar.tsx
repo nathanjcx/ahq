@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  ChevronDown,
-  CircleDollarSign,
-  MoreHorizontal,
-  PanelLeftClose,
-  Settings,
-  ShieldCheck,
-  Sparkles,
-} from 'lucide-react';
+import { ChevronDown, MoreHorizontal, PanelLeftClose, Settings, ShieldCheck, Sparkles } from 'lucide-react';
 import type { Dashboard } from '@/lib/contracts';
 import { nav, type Page } from './nav';
 
@@ -17,7 +9,6 @@ export function Sidebar({
   configured,
   page,
   open,
-  canManageWorkspace,
   onClose,
   onNavigate,
   onSettings,
@@ -26,7 +17,6 @@ export function Sidebar({
   configured: boolean;
   page: Page;
   open: boolean;
-  canManageWorkspace: boolean;
   onClose: () => void;
   onNavigate: (page: Page) => void;
   onSettings: () => void;
@@ -93,27 +83,6 @@ export function Sidebar({
       </nav>
 
       <div className="sidebar-footer">
-        {canManageWorkspace && (
-          <div className="budget-mini">
-            <span>
-              <CircleDollarSign size={14} /> Monthly budget
-            </span>
-            <strong>
-              {workspace
-                ? `$${Math.round(workspace.spent)} of $${Math.round(workspace.monthlyBudget)}`
-                : 'Not configured'}
-            </strong>
-            <div className="budget-track">
-              <span
-                style={{
-                  width: workspace?.monthlyBudget
-                    ? `${Math.min(100, (workspace.spent / workspace.monthlyBudget) * 100)}%`
-                    : '0%',
-                }}
-              />
-            </div>
-          </div>
-        )}
         <button className="account-row" onClick={onSettings}>
           <span className="avatar avatar-user">
             <Settings size={16} />

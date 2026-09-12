@@ -2,7 +2,9 @@
 
 import { Check, RotateCcw, ShieldCheck } from 'lucide-react';
 import type { ActionProposal } from '@/lib/contracts';
-import { correctionLabel, providerName, safeJson } from '../shared/format';
+import { correctionLabel, providerName, relativeTime, safeJson } from '../shared/format';
+
+const CANNOT_DECIDE = 'Only the owner of this connection, or a workspace owner or admin, can decide it.';
 
 export function ProposalCard({
   proposal,
@@ -13,7 +15,8 @@ export function ProposalCard({
   onDecide: (id: string, approved: boolean) => void;
   onCorrect: (id: string) => void;
 }) {
-  const args = safeJson(proposal.arguments);
+  const correctable =
+    proposal.status === 'succeeded' && !['irreversible', 'unknown'].includes(proposal.correction);
   return (
     <div className="proposal-card">
       <div className="proposal-head">
@@ -30,8 +33,20 @@ export function ProposalCard({
       </div>
       <div className="proposal-diff">
         <span>Proposed change</span>
-        <pre>{args}</pre>
+        <pre>{safeJson(proposal.arguments)}</pre>
       </div>
+      {proposal.beforeState && (
+        <div className="proposal-diff">
+          <span>Before</span>
+          <pre>{safeJson(proposal.beforeState)}</pre>
+        </div>
+      )}
+      {proposal.afterState && (
+        <div className="proposal-diff">
+          <span>After</span>
+          <pre>{safeJson(proposal.afterState)}</pre>
+        </div>
+      )}
       {proposal.result && (
         <div className="proposal-diff">
           <span>Result</span>
@@ -44,21 +59,45 @@ export function ProposalCard({
           <strong>{correctionLabel(proposal.correction)}</strong> {proposal.correctionReason}
         </span>
       </p>
+      {proposal.approvedByName && proposal.approvedAt && (
+        <p className="proposal-decision">
+          Approved by {proposal.approvedByName} · {relativeTime(proposal.approvedAt)}
+        </p>
+      )}
       {proposal.status === 'pending' ? (
         <div className="proposal-actions">
-          <button className="secondary-button danger" onClick={() => onDecide(proposal.id, false)}>
+          {!proposal.canDecide && <p className="proposal-locked">{CANNOT_DECIDE}</p>}
+          <button
+            className="secondary-button danger"
+            disabled={!proposal.canDecide}
+            title={proposal.canDecide ? undefined : CANNOT_DECIDE}
+            onClick={() => onDecide(proposal.id, false)}
+          >
             Reject
           </button>
-          <button className="primary-button" onClick={() => onDecide(proposal.id, true)}>
+          <button
+            className="primary-button"
+            disabled={!proposal.canDecide}
+            title={proposal.canDecide ? undefined : CANNOT_DECIDE}
+            onClick={() => onDecide(proposal.id, true)}
+          >
             <Check size={15} />
             Approve action
           </button>
         </div>
-      ) : proposal.status === 'succeeded' && !['irreversible', 'unknown'].includes(proposal.correction) ? (
-        <button className="text-button correction-button" onClick={() => onCorrect(proposal.id)}>
-          <RotateCcw size={14} />
-          Request correction
-        </button>
+      ) : correctable ? (
+        <>
+          {!proposal.canDecide && <p className="proposal-locked">{CANNOT_DECIDE}</p>}
+          <button
+            className="text-button correction-button"
+            disabled={!proposal.canDecide}
+            title={proposal.canDecide ? undefined : CANNOT_DECIDE}
+            onClick={() => onCorrect(proposal.id)}
+          >
+            <RotateCcw size={14} />
+            Request correction
+          </button>
+        </>
       ) : null}
     </div>
   );

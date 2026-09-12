@@ -1,10 +1,11 @@
-import type { AdminDraft, AdminToolRegistry } from '@/lib/ui-api';
+import type { AdminDraft } from '@/lib/ui-api';
 import { providerName } from '../shared/format';
+import type { RegistryByProvider } from './registry';
 
 export type EditorDraft = AdminDraft & { id: string };
 
 /** Everything that must be fixed before a draft can be published. */
-export function draftPublishIssues(draft: EditorDraft, registry: AdminToolRegistry) {
+export function draftPublishIssues(draft: EditorDraft, registry: RegistryByProvider) {
   const issues: string[] = [];
   if (!draft.name.trim() || !draft.role.trim() || !draft.description.trim() || !draft.category.trim())
     issues.push('Complete the public listing.');
@@ -12,16 +13,14 @@ export function draftPublishIssues(draft: EditorDraft, registry: AdminToolRegist
   if (new Set(draft.capabilities.map((item) => item.provider)).size !== draft.capabilities.length)
     issues.push('Use one capability row per MCP provider.');
   for (const capability of draft.capabilities) {
-    const providerRegistry = registry.find((item) => item.provider === capability.provider);
-    if (!providerRegistry?.configured) {
-      issues.push(`Configure ${providerName(capability.provider)} in the tool registry.`);
+    const providerTools = registry.get(capability.provider);
+    if (!providerTools?.length) {
+      issues.push(`Add reviewed ${providerName(capability.provider)} tools to the registry.`);
       continue;
     }
     if (!capability.tools.length)
       issues.push(`Choose at least one ${providerName(capability.provider)} tool.`);
-    const known = new Set(
-      providerRegistry.tools.filter((tool) => tool.mode !== 'blocked').map((tool) => tool.name),
-    );
+    const known = new Set(providerTools.filter((tool) => tool.mode !== 'blocked').map((tool) => tool.name));
     if (capability.tools.some((tool) => !known.has(tool)))
       issues.push(`Review unavailable ${providerName(capability.provider)} tools.`);
   }
