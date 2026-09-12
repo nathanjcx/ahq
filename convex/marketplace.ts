@@ -24,19 +24,21 @@ const media = v.object({
   alt: v.string(),
 });
 const skill = v.object({ name: v.string(), version: v.string(), sha256: v.string(), content: v.string() });
-function validateCapabilities(capabilities: Array<{ provider: ProviderId; tools: string[]; optional: boolean }>) {
+function validateCapabilities(
+  capabilities: Array<{ provider: ProviderId; tools: string[]; optional: boolean }>,
+) {
   const registry = new Map(toolRegistry().map((entry) => [entry.provider, entry]));
   const seenProviders = new Set<ProviderId>();
   for (const capability of capabilities) {
     if (seenProviders.has(capability.provider))
       throw new Error(`Employee has duplicate ${capability.provider} capability entries`);
     seenProviders.add(capability.provider);
-    if (!capability.tools.length) throw new Error(`${capability.provider} capability requires at least one tool`);
+    if (!capability.tools.length)
+      throw new Error(`${capability.provider} capability requires at least one tool`);
     if (new Set(capability.tools).size !== capability.tools.length)
       throw new Error(`${capability.provider} capability has duplicate tools`);
     const entry = registry.get(capability.provider);
-    if (!entry?.configured)
-      throw new Error(`${capability.provider} has no configured MCP tool registry`);
+    if (!entry?.configured) throw new Error(`${capability.provider} has no configured MCP tool registry`);
     const tools = new Map(entry.tools.map((tool) => [tool.name, tool]));
     for (const tool of capability.tools) {
       const registered = tools.get(tool);

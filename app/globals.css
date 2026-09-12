@@ -2353,6 +2353,60 @@ p {
 .connection-state.degraded i {
   background: #c28d43;
 }
+.connection-state.revoked {
+  color: #a0574f;
+}
+.connection-state.revoked i {
+  background: #c3675d;
+}
+.connection-state.setup {
+  color: #8a8f86;
+}
+.setup-note {
+  margin-top: 14px;
+  padding: 12px 13px;
+  border: 1px dashed #d3dacd;
+  border-radius: 8px;
+  color: #6f7d6d;
+  font-size: 9px;
+}
+.setup-note strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #4d5c4b;
+  font-size: 9px;
+}
+.setup-note ul {
+  margin: 0 0 8px 14px;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+}
+.setup-note p {
+  margin: 0;
+}
+.setup-note a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #567753;
+  font-weight: 600;
+}
+.integration-card .primary-button,
+.integration-card .secondary-button {
+  margin-top: 14px;
+}
+.integration-card > .form-note {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 8px;
+}
+.field-hint {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 8px;
+}
 .integration-card h2 {
   margin-top: 16px;
   font-size: 15px;

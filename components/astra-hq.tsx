@@ -20,7 +20,6 @@ import {
   FileText,
   GitBranch,
   Inbox,
-  KeyRound,
   LayoutGrid,
   Link2,
   ListTodo,
@@ -64,12 +63,19 @@ import type {
   Message,
   ModelId,
   ProviderId,
+  ProviderReadiness,
   Project,
   Task,
+  WebSetup,
 } from '@/lib/contracts';
 import { emptyDashboard } from '@/lib/contracts';
 import { uiApi, type AdminDraft, type AdminToolRegistry } from '@/lib/ui-api';
-import { providers as providerCatalog, getProvider } from '@/lib/providers';
+import {
+  providers as providerCatalog,
+  getProvider,
+  providerServerUrls,
+  type ProviderDefinition,
+} from '@/lib/providers';
 
 const Github = GitBranch;
 const OfficeView = dynamic(() => import('./office/office-view'), { ssr: false });
@@ -101,10 +107,11 @@ type Actions = {
   decide: (proposalId: string, approved: boolean) => Promise<unknown>;
   correct: (proposalId: string) => Promise<CorrectionResult>;
   disconnect: (connectionId: string) => Promise<unknown>;
-  setConnectionTools: (
+  updateConnectionAccess: (
     connectionId: string,
     allowedTools: string[],
-    resourceScope?: string,
+    resourceScope: string,
+    inboxResources: string[],
   ) => Promise<unknown>;
   markRead: (itemId: string) => Promise<unknown>;
   assign: (itemId: string, employeeId: string, projectId?: string) => Promise<unknown>;
@@ -130,7 +137,7 @@ const offlineActions: Actions = {
   decide: unavailable,
   correct: unavailableCorrection,
   disconnect: unavailable,
-  setConnectionTools: unavailable,
+  updateConnectionAccess: unavailable,
   markRead: unavailable,
   assign: unavailable,
   saveDraft: unavailable,
@@ -141,8 +148,8 @@ const offlineActions: Actions = {
 const providers = providerCatalog.map((provider) => ({
   ...provider,
   short: provider.id === 'google-workspace' ? 'GW' : provider.name.slice(0, 2).toUpperCase(),
-  inbox: 'Event delivery needs setup',
 }));
+const emptySetup: WebSetup = { oauthServers: [], inboxProviders: [] };
 
 const nav: Array<{ id: Page; label: string; icon: typeof LayoutGrid }> = [
   { id: 'office', label: 'Office', icon: LayoutGrid },
@@ -155,12 +162,14 @@ const nav: Array<{ id: Page; label: string; icon: typeof LayoutGrid }> = [
   { id: 'integrations', label: 'Integrations', icon: Link2 },
 ];
 
-export function AstraHq({ configured }: { configured: boolean }) {
+export function AstraHq({ configured, setup }: { configured: boolean; setup: WebSetup }) {
   return configured ? (
-    <ConnectedAstraHq />
+    <ConnectedAstraHq setup={setup} />
   ) : (
     <WorkspaceShell
       configured={false}
+      setup={emptySetup}
+      readiness={[]}
       dashboard={emptyDashboard}
       listings={[]}
       drafts={[]}
@@ -170,10 +179,11 @@ export function AstraHq({ configured }: { configured: boolean }) {
   );
 }
 
-function ConnectedAstraHq() {
+function ConnectedAstraHq({ setup }: { setup: WebSetup }) {
   const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
   const dashboard = useQuery(uiApi.dashboard, isAuthenticated ? {} : 'skip');
   const listings = useQuery(uiApi.listings, isAuthenticated ? {} : 'skip');
+  const readiness = useQuery(uiApi.readiness, isAuthenticated && dashboard?.workspace ? {} : 'skip');
   const drafts = useQuery(uiApi.adminDrafts, isAuthenticated && dashboard?.isPlatformAdmin ? {} : 'skip');
   const toolRegistry = useQuery(
     uiApi.adminToolRegistry,
@@ -191,7 +201,7 @@ function ConnectedAstraHq() {
   const decide = useMutation(uiApi.decideAction);
   const correct = useMutation(uiApi.requestCorrection);
   const disconnect = useMutation(uiApi.disconnect);
-  const setConnectionTools = useMutation(uiApi.setConnectionTools);
+  const updateConnectionAccess = useMutation(uiApi.updateConnectionAccess);
   const markRead = useMutation(uiApi.markInboxRead);
   const assign = useMutation(uiApi.assignInbox);
   const saveDraft = useMutation(uiApi.saveDraft);
@@ -211,6 +221,8 @@ function ConnectedAstraHq() {
         ) : (
           <WorkspaceShell
             configured
+            setup={setup}
+            readiness={readiness ?? []}
             dashboard={dashboard}
             listings={listings}
             drafts={(drafts ?? []).map((draft) => ({ ...draft, id: draft.draftId }))}
@@ -230,8 +242,8 @@ function ConnectedAstraHq() {
               decide: (proposalId, approved) => decide({ proposalId, approved }),
               correct: (proposalId) => correct({ proposalId }),
               disconnect: (connectionId) => disconnect({ connectionId }),
-              setConnectionTools: (connectionId, allowedTools, resourceScope) =>
-                setConnectionTools({ connectionId, allowedTools, resourceScope }),
+              updateConnectionAccess: (connectionId, allowedTools, resourceScope, inboxResources) =>
+                updateConnectionAccess({ connectionId, allowedTools, resourceScope, inboxResources }),
               markRead: (itemId) => markRead({ itemId }),
               assign: (itemId, employeeId, projectId) => assign({ itemId, employeeId, projectId }),
               saveDraft: (draft) => saveDraft(draft),
@@ -247,6 +259,8 @@ function ConnectedAstraHq() {
 
 function WorkspaceShell({
   configured,
+  setup,
+  readiness,
   dashboard,
   listings,
   drafts,
@@ -254,6 +268,8 @@ function WorkspaceShell({
   actions,
 }: {
   configured: boolean;
+  setup: WebSetup;
+  readiness: ProviderReadiness[];
   dashboard: Dashboard;
   listings: Listing[];
   drafts: EditorDraft[];
@@ -574,9 +590,15 @@ function WorkspaceShell({
             <IntegrationsPage
               connections={dashboard.connections}
               configured={configured}
+              setup={setup}
+              readiness={readiness}
+              canManage={canManageWorkspace || dashboard.isPlatformAdmin}
               onDisconnect={(id) => run(() => actions.disconnect(id), 'Integration disconnected')}
-              onSetTools={(id, tools, scope) =>
-                run(() => actions.setConnectionTools(id, tools, scope), 'Integration access updated')
+              onUpdateAccess={(id, tools, scope, inbox) =>
+                run(
+                  () => actions.updateConnectionAccess(id, tools, scope, inbox),
+                  'Integration access updated',
+                )
               }
               onNotice={setNotice}
             />
@@ -2118,89 +2140,157 @@ function MarketplaceDetail({
   );
 }
 
+type ProviderSetup = {
+  /** Server URLs a user can connect right now. */
+  connectable: string[];
+  /** What an operator still has to configure. Empty when at least one server is connectable. */
+  missing: string[];
+};
+
+function providerSetup(
+  provider: ProviderDefinition,
+  readiness: ProviderReadiness[],
+  setup: WebSetup,
+): ProviderSetup {
+  const entry = readiness.find((item) => item.provider === provider.id);
+  const enabled = providerServerUrls(provider).filter((url) => entry?.enabledUrls.includes(url));
+  const withOAuth = enabled.filter((url) => setup.oauthServers.includes(url));
+  const missing: string[] = [];
+  if (!enabled.length) missing.push('Enable its server URL in the Convex server allowlist.');
+  else if (!withOAuth.length) missing.push('Register its OAuth client on the web service.');
+  if (entry && !entry.reviewedTools) missing.push('Add reviewed tools to the tool registry.');
+  return { connectable: entry && entry.reviewedTools ? withOAuth : [], missing };
+}
+
+async function startConnect(provider: ProviderId, serverUrls?: string[]) {
+  const response = await fetch('/api/integrations/connect', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ provider, serverUrls }),
+  });
+  const body = (await response.json()) as { authorizationUrl?: string; error?: string };
+  if (!response.ok || !body.authorizationUrl) throw new Error(body.error || 'Connection failed');
+  window.location.assign(body.authorizationUrl);
+}
+
+function connectionLabel(status: Connection['status']) {
+  return status === 'connected'
+    ? 'Connected'
+    : status === 'degraded'
+      ? 'Needs attention'
+      : status === 'revoked'
+        ? 'Disconnected'
+        : status;
+}
+
 function IntegrationsPage({
   connections,
   configured,
+  setup,
+  readiness,
+  canManage,
   onDisconnect,
-  onSetTools,
+  onUpdateAccess,
   onNotice,
 }: {
   connections: Connection[];
   configured: boolean;
+  setup: WebSetup;
+  readiness: ProviderReadiness[];
+  canManage: boolean;
   onDisconnect: (id: string) => void;
-  onSetTools: (id: string, tools: string[], scope?: string) => void;
+  onUpdateAccess: (id: string, tools: string[], scope: string, inboxResources: string[]) => void;
   onNotice: (text: string) => void;
 }) {
-  const [connecting, setConnecting] = useState<ProviderId | null>(null);
+  const [choosingProducts, setChoosingProducts] = useState<ProviderId | null>(null);
   const [managing, setManaging] = useState<Connection | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  async function connect(provider: ProviderId, serverUrls?: string[]) {
+    setBusy(provider);
+    try {
+      await startConnect(provider, serverUrls);
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : 'Connection failed');
+      setBusy(null);
+    }
+  }
+
   return (
     <div>
       <PageIntro
         eyebrow="CONNECTIONS"
         title="Integrations"
-        description="Choose exactly which services, tools, and resources your employees may use."
+        description="Sign in once per service. Employees only use the tools an administrator reviewed, and every external change waits for your approval."
       />
-      <div className="security-callout">
-        <ShieldCheck size={20} />
-        <div>
-          <strong>Access stays explicit</strong>
-          <p>
-            Every write is checked against the employee, connection, tool, and resource scope. Sensitive
-            actions wait for your review.
-          </p>
-        </div>
-        <span>MCP only</span>
-      </div>
       <div className="integration-grid">
         {providers.map((provider) => {
-          const providerConnections = connections.filter(
+          const state = providerSetup(provider, readiness, setup);
+          const active = connections.filter(
             (item) => item.provider === provider.id && item.status !== 'disconnected',
           );
-          const connectedCount = providerConnections.filter((item) => item.status === 'connected').length;
+          const connected = active.filter((item) => item.status === 'connected');
+          const attention = active.some((item) => item.status !== 'connected');
+          const ready = configured && state.connectable.length > 0;
+          const pill = attention
+            ? { className: 'degraded', text: 'Needs attention' }
+            : connected.length
+              ? { className: 'connected', text: 'Connected' }
+              : ready
+                ? { className: 'available', text: 'Ready to connect' }
+                : { className: 'setup', text: 'Setup needed' };
+          const remainingProducts = provider.products?.filter(
+            (product) =>
+              state.connectable.includes(product.url) &&
+              !connected.some((item) => item.serverUrl === product.url),
+          );
+          const canAdd =
+            ready && (provider.products ? (remainingProducts?.length ?? 0) > 0 : active.length === 0);
           return (
             <article className="integration-card card" key={provider.id}>
               <div className="integration-top">
                 <ProviderLogo provider={provider} />
-                <span className={`connection-state ${connectedCount ? 'connected' : 'available'}`}>
+                <span className={`connection-state ${pill.className}`}>
                   <i />
-                  {connectedCount ? `${connectedCount} connected` : 'Available'}
+                  {pill.text}
                 </span>
               </div>
               <h2>{provider.name}</h2>
               <p>{provider.description}</p>
-              <div className="integration-meta">
-                <span>
-                  <Inbox size={14} />
-                  {providerConnections.some((connection) => connection.inboxMode === 'push')
-                    ? 'Live inbox'
-                    : provider.inbox}
-                </span>
-                {providerConnections.length > 0 && (
-                  <span>
-                    <KeyRound size={14} />
-                    {providerConnections.reduce((count, item) => count + item.allowedTools.length, 0)} tools
-                    allowed
-                  </span>
-                )}
-              </div>
-              {providerConnections.length > 0 ? (
+              {active.length > 0 && (
                 <div className="connection-accounts">
-                  {providerConnections.map((connection) => (
+                  {active.map((connection) => (
                     <div className="connection-account" key={connection.id}>
                       <span>
                         <strong>{connection.name}</strong>
                         <small>
-                          {connection.account} · {connection.allowedTools.length} tools
+                          {connection.status === 'connected'
+                            ? `${connection.allowedTools.length} of ${connection.tools.length} reviewed tools · ${
+                                connection.inboxMode === 'push' ? 'live inbox' : 'no inbox events yet'
+                              }`
+                            : connection.error || 'Sign in again to continue.'}
                         </small>
                       </span>
                       <span className={`connection-state ${connection.status}`}>
                         <i />
-                        {connection.status}
+                        {connectionLabel(connection.status)}
                       </span>
                       <div>
-                        <button className="text-button" onClick={() => setManaging(connection)}>
-                          Manage
-                        </button>
+                        {connection.status === 'connected' ? (
+                          <button className="text-button" onClick={() => setManaging(connection)}>
+                            Manage access
+                          </button>
+                        ) : (
+                          <button
+                            className="text-button"
+                            disabled={
+                              busy === provider.id || !state.connectable.includes(connection.serverUrl)
+                            }
+                            onClick={() => connect(provider.id, [connection.serverUrl])}
+                          >
+                            Reconnect
+                          </button>
+                        )}
                         <button
                           className="text-button danger-text"
                           onClick={() => onDisconnect(connection.id)}
@@ -2210,36 +2300,69 @@ function IntegrationsPage({
                       </div>
                     </div>
                   ))}
-                  <button
-                    className="secondary-button full"
-                    disabled={!configured}
-                    onClick={() => setConnecting(provider.id)}
-                  >
-                    <Plus size={15} /> Add another {provider.name} connection
-                  </button>
                 </div>
-              ) : (
-                <button
-                  className="secondary-button full"
-                  disabled={!configured}
-                  onClick={() => setConnecting(provider.id)}
-                >
-                  Connect {provider.name} <ArrowRight size={15} />
-                </button>
               )}
+              {canAdd ? (
+                <button
+                  className={`${active.length ? 'secondary-button' : 'primary-button'} full`}
+                  disabled={busy === provider.id}
+                  onClick={() =>
+                    provider.products ? setChoosingProducts(provider.id) : connect(provider.id)
+                  }
+                >
+                  {busy === provider.id ? <LoaderCircle className="spin" size={15} /> : <Link2 size={15} />}
+                  {active.length ? `Connect more ${provider.name} products` : `Connect ${provider.name}`}
+                </button>
+              ) : active.length === 0 ? (
+                <div className="setup-note">
+                  {!configured ? (
+                    <p>Connect the backend to enable integrations.</p>
+                  ) : canManage ? (
+                    <>
+                      <strong>Before anyone can connect {provider.name}</strong>
+                      <ul>
+                        {state.missing.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                      <a href={provider.documentation} target="_blank" rel="noreferrer">
+                        Provider setup guide <ExternalLink size={11} />
+                      </a>
+                    </>
+                  ) : (
+                    <p>{provider.name} is not available yet. Ask your workspace administrator.</p>
+                  )}
+                </div>
+              ) : null}
+              {active.length === 0 && ready && <p className="form-note">{provider.note}</p>}
             </article>
           );
         })}
       </div>
-      {connecting && (
-        <ConnectPanel provider={connecting} onClose={() => setConnecting(null)} onNotice={onNotice} />
+      {choosingProducts && (
+        <ProductPicker
+          provider={getProvider(choosingProducts)}
+          products={
+            getProvider(choosingProducts).products?.filter((product) =>
+              providerSetup(getProvider(choosingProducts), readiness, setup).connectable.includes(
+                product.url,
+              ),
+            ) ?? []
+          }
+          connected={connections
+            .filter((item) => item.provider === choosingProducts && item.status === 'connected')
+            .map((item) => item.serverUrl)}
+          onClose={() => setChoosingProducts(null)}
+          onConnect={(urls) => connect(choosingProducts, urls)}
+        />
       )}
       {managing && (
-        <ToolAccessPanel
+        <ManageAccessPanel
           connection={managing}
+          inboxConfigured={setup.inboxProviders.includes(managing.provider)}
           onClose={() => setManaging(null)}
-          onSave={(tools, scope) => {
-            onSetTools(managing.id, tools, scope);
+          onSave={(tools, scope, inboxResources) => {
+            onUpdateAccess(managing.id, tools, scope, inboxResources);
             setManaging(null);
           }}
         />
@@ -2248,204 +2371,147 @@ function IntegrationsPage({
   );
 }
 
-type DiscoveredTool = { name: string; description?: string };
-
-function ConnectPanel({
+function ProductPicker({
   provider,
+  products,
+  connected,
   onClose,
-  onNotice,
+  onConnect,
 }: {
-  provider: ProviderId;
+  provider: ProviderDefinition;
+  products: { name: string; url: string }[];
+  connected: string[];
   onClose: () => void;
-  onNotice: (text: string) => void;
+  onConnect: (serverUrls: string[]) => Promise<void>;
 }) {
-  const [name, setName] = useState('');
-  const [token, setToken] = useState('');
-  const [scope, setScope] = useState('');
-  const definition = getProvider(provider);
-  const [serverUrl, setServerUrl] = useState(definition.serverUrl);
+  const [selected, setSelected] = useState(() =>
+    products.map((product) => product.url).filter((url) => !connected.includes(url)),
+  );
   const [busy, setBusy] = useState(false);
-  const [tools, setTools] = useState<DiscoveredTool[]>([]);
-  const [allowed, setAllowed] = useState<string[]>([]);
-
-  async function request(discoverOnly: boolean) {
-    const productName = definition.products?.find((product) => product.url === serverUrl)?.name;
-    const response = await fetch('/api/integrations/connect', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        provider,
-        name: name.trim() || productName || providerName(provider),
-        serverUrl,
-        accessToken: token || undefined,
-        allowedTools: discoverOnly ? [] : allowed,
-        resourceScope: scope.trim(),
-        discoverOnly,
-      }),
-    });
-    const body = (await response.json()) as {
-      authorizationUrl?: string;
-      tools?: Array<DiscoveredTool | string>;
-      error?: string;
-    };
-    if (!response.ok) throw new Error(body.error || 'Connection failed');
-    if (body.authorizationUrl) {
-      window.location.assign(body.authorizationUrl);
-      return;
-    }
-    if (discoverOnly) {
-      const discovered = (body.tools ?? []).map((tool) => (typeof tool === 'string' ? { name: tool } : tool));
-      setTools(discovered);
-      setAllowed([]);
-    } else {
-      onNotice('Connection added with the selected tools.');
-      onClose();
-    }
-  }
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    try {
-      await request(tools.length === 0);
-    } catch (error) {
-      onNotice(error instanceof Error ? error.message : 'Connection failed');
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <Sheet
-      title={`Connect ${providerName(provider)}`}
-      subtitle="Credentials stay on the server. Review discovered MCP tools before granting access."
+      title={`Connect ${provider.name}`}
+      subtitle="Choose the products to connect, then sign in once."
       onClose={onClose}
     >
-      <form className="form-stack" onSubmit={submit}>
-        {tools.length === 0 ? (
-          <>
-            {provider === 'google-workspace' && (
-              <div className="workspace-guidance">
-                <ShieldCheck size={17} />
-                <div>
-                  <strong>Google Workspace preview rules</strong>
-                  <p>
-                    Start with named drives, calendars, or mail scopes. Gmail sending and broad deletion stay
-                    unavailable. Employees treat messages and documents as untrusted content, and
-                    cross-service exports always need an explicit destination.
-                  </p>
-                </div>
-              </div>
-            )}
-            <label>
-              Connection name
-              <input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder={`My ${providerName(provider)} account`}
-              />
-            </label>
-            <p className="form-note">{definition.note}</p>
-            {definition.products ? (
-              <label>
-                Google Workspace product
-                <select value={serverUrl} onChange={(event) => setServerUrl(event.target.value)}>
-                  {definition.products.map((product) => (
-                    <option key={product.url} value={product.url}>
-                      {product.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            {!definition.serverUrl ? (
-              <label>
-                Approved MCP server URL
+      <form
+        className="form-stack"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          setBusy(true);
+          await onConnect(selected);
+          setBusy(false);
+        }}
+      >
+        <div className="tool-checklist">
+          {products.map((product) => {
+            const already = connected.includes(product.url);
+            const checked = already || selected.includes(product.url);
+            return (
+              <label key={product.url}>
                 <input
-                  type="url"
-                  required
-                  value={serverUrl}
-                  onChange={(event) => setServerUrl(event.target.value)}
-                  placeholder="https://your-instance.example/mcp"
+                  type="checkbox"
+                  checked={checked}
+                  disabled={already}
+                  onChange={() =>
+                    setSelected(
+                      checked ? selected.filter((url) => url !== product.url) : [...selected, product.url],
+                    )
+                  }
                 />
+                <span>
+                  <strong>{product.name}</strong>
+                  {already && <small>Already connected</small>}
+                </span>
               </label>
-            ) : null}
-            <label>
-              Access token, if required
-              <input
-                type="password"
-                autoComplete="off"
-                value={token}
-                onChange={(event) => setToken(event.target.value)}
-                placeholder="Paste a service token or continue with OAuth"
-              />
-            </label>
-            <label>
-              Resource scope
-              <textarea
-                value={scope}
-                onChange={(event) => setScope(event.target.value)}
-                placeholder="Optional comma-separated resource IDs. Leave blank to use the provider account permissions."
-              />
-            </label>
-            <div className="form-note">
-              <LockKeyhole size={15} />A platform-approved server is selected from the registry. Arbitrary MCP
-              URLs are rejected. Resource restrictions require a verified tool mapping; broad searches are
-              blocked on restricted connections.
-            </div>
-            <button className="primary-button full" disabled={busy}>
-              {busy ? <LoaderCircle className="spin" size={16} /> : <Link2 size={16} />}
-              {busy ? 'Checking connection' : token ? 'Discover MCP tools' : 'Continue with OAuth'}
-            </button>
-          </>
-        ) : (
-          <>
-            <div className="permission-heading">
-              <span className="eyebrow">DISCOVERED TOOLS</span>
-              <h3>Choose what this connection can do</h3>
-              <p>Nothing is granted until you select and save it.</p>
-            </div>
-            <ToolChecklist tools={tools} selected={allowed} onChange={setAllowed} />
-            <button className="primary-button full" disabled={busy || allowed.length === 0}>
-              {busy ? <LoaderCircle className="spin" size={16} /> : <ShieldCheck size={16} />}
-              {busy ? 'Saving access' : `Allow ${allowed.length} ${allowed.length === 1 ? 'tool' : 'tools'}`}
-            </button>
-          </>
-        )}
+            );
+          })}
+        </div>
+        <p className="form-note">{provider.note}</p>
+        <button className="primary-button full" disabled={busy || selected.length === 0}>
+          {busy ? <LoaderCircle className="spin" size={16} /> : <Link2 size={16} />}
+          {busy ? 'Opening sign-in' : `Sign in with ${provider.name.split(' ')[0]}`}
+        </button>
       </form>
     </Sheet>
   );
 }
 
-function ToolAccessPanel({
+function ManageAccessPanel({
   connection,
+  inboxConfigured,
   onClose,
   onSave,
 }: {
   connection: Connection;
+  inboxConfigured: boolean;
   onClose: () => void;
-  onSave: (tools: string[], scope?: string) => void;
+  onSave: (tools: string[], scope: string, inboxResources: string[]) => void;
 }) {
+  const provider = getProvider(connection.provider);
   const [selected, setSelected] = useState(connection.allowedTools);
   const [scope, setScope] = useState(connection.resourceScope);
+  const [inboxResources, setInboxResources] = useState(connection.inboxResources.join(', '));
+  const [advanced, setAdvanced] = useState(Boolean(connection.resourceScope));
   const tools = connection.tools.map((name) => ({ name }));
   return (
     <Sheet
       title={`Manage ${connection.name}`}
-      subtitle="Changes take effect for new gateway calls as soon as you save."
+      subtitle="Changes apply to new agent calls as soon as you save."
       onClose={onClose}
     >
       <div className="form-stack">
-        <label>
-          Resource scope
-          <textarea value={scope} onChange={(event) => setScope(event.target.value)} />
-        </label>
-        <ToolChecklist tools={tools} selected={selected} onChange={setSelected} />
-        <div className="form-note">
-          <ShieldCheck size={15} />
-          Removing a tool revokes access immediately, including for running agent sessions.
+        <div className="permission-heading">
+          <span className="eyebrow">TOOLS</span>
+          <h3>What employees may use</h3>
+          <p>Only tools your administrator reviewed appear here. Unchecking one revokes it immediately.</p>
         </div>
-        <button className="primary-button full" onClick={() => onSave(selected, scope.trim())}>
+        <ToolChecklist tools={tools} selected={selected} onChange={setSelected} />
+        {provider.inbox && (
+          <label>
+            Inbox: {provider.inbox.label} to follow
+            <textarea
+              value={inboxResources}
+              onChange={(event) => setInboxResources(event.target.value)}
+              placeholder={`Comma-separated, for example ${provider.inbox.example}`}
+            />
+            {!inboxConfigured && (
+              <small className="field-hint">
+                Event delivery for {provider.name} is not configured yet. Ask your administrator.
+              </small>
+            )}
+          </label>
+        )}
+        <button type="button" className="text-button" onClick={() => setAdvanced(!advanced)}>
+          {advanced ? 'Hide' : 'Show'} advanced restrictions
+        </button>
+        {advanced && (
+          <label>
+            Restrict tool calls to these resource IDs
+            <textarea
+              value={scope}
+              onChange={(event) => setScope(event.target.value)}
+              placeholder="Leave blank to rely on the provider account permissions."
+            />
+            <small className="field-hint">
+              Applies only to tools with a verified resource mapping. Other tools are blocked while a
+              restriction is set.
+            </small>
+          </label>
+        )}
+        <button
+          className="primary-button full"
+          onClick={() =>
+            onSave(
+              selected,
+              scope.trim(),
+              inboxResources
+                .split(',')
+                .map((id) => id.trim())
+                .filter(Boolean),
+            )
+          }
+        >
           Save access
         </button>
       </div>
@@ -2458,7 +2524,7 @@ function ToolChecklist({
   selected,
   onChange,
 }: {
-  tools: DiscoveredTool[];
+  tools: { name: string; description?: string }[];
   selected: string[];
   onChange: (tools: string[]) => void;
 }) {
@@ -3731,12 +3797,6 @@ function ProviderLogo({ provider }: { provider: (typeof providers)[number] }) {
     return (
       <span className="provider-logo" style={{ background: provider.color }}>
         <MessageSquareText size={21} />
-      </span>
-    );
-  if (provider.id === 'salesforce')
-    return (
-      <span className="provider-logo" style={{ background: provider.color }}>
-        <Cloud size={22} />
       </span>
     );
   if (provider.id === 'linear')

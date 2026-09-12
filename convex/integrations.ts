@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
-import { providerReadiness } from './registry';
+import { grantableTools, providerReadiness } from './registry';
 import { canSeeConnection, requireWorkspace } from './shared';
 
 export const disconnect = mutation({
@@ -50,8 +50,9 @@ export const updateAccess = mutation({
       throw new Error('Connection not found');
     if (connection.status !== 'connected') throw new Error('Connection is not active');
     const allowedTools = [...new Set(args.allowedTools)];
-    if (allowedTools.some((tool) => !connection.tools.includes(tool)))
-      throw new Error('An allowed tool was not discovered on this connection');
+    const grantable = grantableTools(connection.provider, connection.tools);
+    if (allowedTools.some((tool) => !grantable.includes(tool)))
+      throw new Error('An allowed tool is not available on this connection');
     const inboxResources = [...new Set(args.inboxResources.map((id) => id.trim()).filter(Boolean))];
     if (inboxResources.length > 100 || inboxResources.some((id) => !resourceId.test(id)))
       throw new Error('Inbox resources must be exact provider IDs');

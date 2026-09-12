@@ -329,9 +329,7 @@ describe('Convex data boundaries', () => {
       configured: false,
       tools: [],
     });
-    await expect(user.query(api.marketplace.adminToolRegistry, {})).rejects.toThrow(
-      'Platform administrator',
-    );
+    await expect(user.query(api.marketplace.adminToolRegistry, {})).rejects.toThrow('Platform administrator');
 
     const { draftId } = await admin.mutation(api.marketplace.saveDraft, {
       name: 'Unregistered employee',
@@ -365,8 +363,8 @@ describe('Convex data boundaries', () => {
       instructions: 'Review records.',
       skills: [],
     });
-    await expect(
-      admin.mutation(api.marketplace.publish, { draftId: unsafeMediaDraftId }),
-    ).rejects.toThrow('Marketplace media must use HTTPS');
+    await expect(admin.mutation(api.marketplace.publish, { draftId: unsafeMediaDraftId })).rejects.toThrow(
+      'Marketplace media must use HTTPS',
+    );
   });
 });

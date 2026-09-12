@@ -45,7 +45,9 @@ export function oauthConfigured(provider: string, serverUrl?: string) {
 function config(provider: string, serverUrl?: string): OAuthConfig {
   const value = configured(provider, serverUrl);
   if (!value)
-    throw new Error(`Sign-in for ${provider} is not set up yet. Ask your administrator to register its OAuth client.`);
+    throw new Error(
+      `Sign-in for ${provider} is not set up yet. Ask your administrator to register its OAuth client.`,
+    );
   return value;
 }
 function providerFor(

@@ -40,8 +40,7 @@ export const assign = mutation({
       .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
       .collect();
     const active = connections.filter(
-      (connection) =>
-        connection.status === 'connected' && canSeeConnection(connection, actor.subject, role),
+      (connection) => connection.status === 'connected' && canSeeConnection(connection, actor.subject, role),
     );
     for (const capability of version.capabilities) {
       if (capability.optional) continue;

@@ -17,14 +17,19 @@ export async function POST(request: Request) {
     const identity = await actor(request);
     const body = input.parse(await jsonBody(request));
     const definition = getProvider(body.provider);
-    const serverUrls = [...new Set((body.serverUrls ?? [definition.serverUrl]).map((url) => approvedMcpUrl(body.provider, url).href))];
+    const serverUrls = [
+      ...new Set(
+        (body.serverUrls ?? [definition.serverUrl]).map((url) => approvedMcpUrl(body.provider, url).href),
+      ),
+    ];
     // Never send a user to a consent screen that cannot end in a working connection.
     const readiness = (await query<ProviderReadiness[]>('services:readiness')).find(
       (entry) => entry.provider === body.provider,
     );
     if (!readiness?.reviewedTools) throw new Error('No reviewed tools are available for this provider yet.');
     for (const url of serverUrls) {
-      if (!readiness.enabledUrls.includes(url)) throw new Error('This server is not enabled by your administrator.');
+      if (!readiness.enabledUrls.includes(url))
+        throw new Error('This server is not enabled by your administrator.');
       if (!oauthConfigured(body.provider, url)) throw new Error('Sign-in for this server is not set up yet.');
     }
     const [serverUrl, ...queue] = serverUrls;

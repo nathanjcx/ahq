@@ -1,6 +1,7 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
 import type { Doc } from './_generated/dataModel';
+import { grantableTools } from './registry';
 import {
   authKey,
   canSeeConnection,
@@ -19,8 +20,10 @@ function publicConnection(connection: Doc<'connections'>) {
     provider: connection.provider,
     name: connection.name,
     account: connection.account,
+    serverUrl: connection.serverUrl,
     status: connection.status,
-    tools: connection.tools,
+    // Only reviewed tools can be granted, so that is the list the owner manages.
+    tools: grantableTools(connection.provider, connection.tools),
     allowedTools: connection.allowedTools,
     resourceScope: connection.resourceScope,
     inboxResources: connection.inboxResources ?? [],
@@ -82,45 +85,46 @@ export const dashboard = query({
         artifacts: [],
       };
     const { workspace, role } = found;
-    const [installations, allConnections, projects, tasks, events, proposals, inbox, artifacts] = await Promise.all([
-      ctx.db
-        .query('installations')
-        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
-        .collect(),
-      ctx.db
-        .query('connections')
-        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
-        .collect(),
-      ctx.db
-        .query('projects')
-        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
-        .collect(),
-      ctx.db
-        .query('tasks')
-        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
-        .order('desc')
-        .take(200),
-      ctx.db
-        .query('events')
-        .withIndex('by_workspace_sequence', (q) => q.eq('workspaceId', workspace._id))
-        .order('desc')
-        .take(500),
-      ctx.db
-        .query('proposals')
-        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
-        .order('desc')
-        .take(200),
-      ctx.db
-        .query('inbox')
-        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
-        .order('desc')
-        .take(200),
-      ctx.db
-        .query('artifacts')
-        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
-        .order('desc')
-        .take(200),
-    ]);
+    const [installations, allConnections, projects, tasks, events, proposals, inbox, artifacts] =
+      await Promise.all([
+        ctx.db
+          .query('installations')
+          .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
+          .collect(),
+        ctx.db
+          .query('connections')
+          .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
+          .collect(),
+        ctx.db
+          .query('projects')
+          .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
+          .collect(),
+        ctx.db
+          .query('tasks')
+          .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
+          .order('desc')
+          .take(200),
+        ctx.db
+          .query('events')
+          .withIndex('by_workspace_sequence', (q) => q.eq('workspaceId', workspace._id))
+          .order('desc')
+          .take(500),
+        ctx.db
+          .query('proposals')
+          .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
+          .order('desc')
+          .take(200),
+        ctx.db
+          .query('inbox')
+          .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
+          .order('desc')
+          .take(200),
+        ctx.db
+          .query('artifacts')
+          .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
+          .order('desc')
+          .take(200),
+      ]);
     const connections = allConnections.filter((connection) =>
       canSeeConnection(connection, actor.subject, role),
     );

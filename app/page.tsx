@@ -1,5 +1,6 @@
 import { ClientProviders, type PublicConfig } from '@/lib/client';
 import { AstraHq } from '@/components/astra-hq';
+import { webSetup } from '@/lib/server/setup';
 
 export default function Home() {
   const config: PublicConfig = {
@@ -10,7 +11,7 @@ export default function Home() {
 
   return (
     <ClientProviders config={config}>
-      <AstraHq configured={configured} />
+      <AstraHq configured={configured} setup={webSetup()} />
     </ClientProviders>
   );
 }

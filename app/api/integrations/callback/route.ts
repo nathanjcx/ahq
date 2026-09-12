@@ -2,13 +2,23 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { actor, failure } from '@/lib/server/http';
 import { unseal, seal, equalSecret, requiredEnv } from '@/lib/server/secrets';
-import { finishOAuth, oauthCookie, startOAuth, type OAuthState, type StoredCredential } from '@/lib/server/oauth';
+import {
+  finishOAuth,
+  oauthCookie,
+  startOAuth,
+  type OAuthState,
+  type StoredCredential,
+} from '@/lib/server/oauth';
 import { discoverTools } from '@/lib/server/mcp';
 import { mutate } from '@/lib/server/backend';
 import { getProvider } from '@/lib/providers';
 export const runtime = 'nodejs';
 
-async function connect(identity: { authSubject: string; authOrgId?: string }, state: OAuthState, credential: StoredCredential) {
+async function connect(
+  identity: { authSubject: string; authOrgId?: string },
+  state: OAuthState,
+  credential: StoredCredential,
+) {
   const tools = await discoverTools(state, credential);
   await mutate('services:connectIntegration', {
     ...identity,
@@ -49,7 +59,11 @@ export async function GET(request: Request) {
     while (queue.length) {
       const serverUrl = queue.shift() as string;
       const productName = definition.products?.find((product) => product.url === serverUrl)?.name;
-      const next = { ...state, serverUrl, name: productName ? `${definition.name} ${productName}` : definition.name };
+      const next = {
+        ...state,
+        serverUrl,
+        name: productName ? `${definition.name} ${productName}` : definition.name,
+      };
       try {
         await connect(identity, next, credential);
       } catch {

@@ -1,12 +1,6 @@
+import type { WebSetup } from '../contracts';
 import { providers, providerServerUrls } from '../providers';
 import { oauthConfigured } from './oauth';
-
-export interface WebSetup {
-  /** MCP server URLs with a registered OAuth client. */
-  oauthServers: string[];
-  /** Providers with an app-level inbox webhook secret. */
-  inboxProviders: string[];
-}
 
 /** Web-service deployment state. Convex reports the server allowlist and reviewed tools separately. */
 export function webSetup(): WebSetup {

@@ -39,18 +39,18 @@ export async function identity(ctx: Ctx): Promise<Actor> {
     typeof organization?.id === 'string'
       ? organization.id
       : typeof claims.org_id === 'string'
-      ? claims.org_id
-      : typeof claims.orgId === 'string'
-        ? claims.orgId
-        : undefined;
+        ? claims.org_id
+        : typeof claims.orgId === 'string'
+          ? claims.orgId
+          : undefined;
   const orgRole =
     typeof organization?.rol === 'string'
       ? organization.rol
       : typeof claims.org_role === 'string'
-      ? claims.org_role
-      : typeof claims.orgRole === 'string'
-        ? claims.orgRole
-        : undefined;
+        ? claims.org_role
+        : typeof claims.orgRole === 'string'
+          ? claims.orgRole
+          : undefined;
   return { subject: value.subject, orgId, orgRole };
 }
 

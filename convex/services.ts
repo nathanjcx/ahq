@@ -1383,7 +1383,10 @@ export const ingestInboxByResource = mutation({
   args: { secret: v.string(), provider, resourceIds: v.array(v.string()), items: v.array(inboxItem) },
   handler: async (ctx, args) => {
     requireService(args.secret);
-    if (args.items.length > 100 || args.items.some((item) => item.title.length > 500 || item.preview.length > 20_000))
+    if (
+      args.items.length > 100 ||
+      args.items.some((item) => item.title.length > 500 || item.preview.length > 20_000)
+    )
       throw new Error('Inbox batch is too large');
     const connections = await ctx.db
       .query('connections')
