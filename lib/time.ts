@@ -121,20 +121,22 @@ function windowFor(inDay: number, settings: TimeSettings) {
 /** How far ahead or behind the calendar is scanned before a workspace is treated as never working. */
 const SCAN_DAYS = 14;
 
-/** Whether the workspace is inside its working hours right now. */
-export function isWorkingTime(now: number, settings: TimeSettings) {
+/** Whether an instant falls on a worked day, between two whole local hours. */
+function withinHours(now: number, settings: TimeSettings, fromHour: number, toHour: number) {
   const parts = localParts(now, settings.timezone);
   if (!settings.workingDays.includes(parts.weekday)) return false;
   const minutes = parts.hour * 60 + parts.minute;
-  return minutes >= settings.startHour * 60 && minutes < settings.endHour * 60;
+  return minutes >= fromHour * 60 && minutes < toHour * 60;
+}
+
+/** Whether the workspace is inside its working hours right now. */
+export function isWorkingTime(now: number, settings: TimeSettings) {
+  return withinHours(now, settings, settings.startHour, settings.endHour);
 }
 
 /** Whether a person is expected to be reachable right now. Attended hours sit inside working hours. */
 export function isAttendedTime(now: number, settings: TimeSettings) {
-  const parts = localParts(now, settings.timezone);
-  if (!settings.workingDays.includes(parts.weekday)) return false;
-  const minutes = parts.hour * 60 + parts.minute;
-  return minutes >= settings.attendedStartHour * 60 && minutes < settings.attendedEndHour * 60;
+  return withinHours(now, settings, settings.attendedStartHour, settings.attendedEndHour);
 }
 
 /**
@@ -171,12 +173,15 @@ export function overnightWindow(now: number, settings: TimeSettings) {
   return start === undefined ? undefined : { start, end };
 }
 
+/** Days a single span may cover. Past this a deadline is too far away for the hours to matter. */
+const MAX_SPAN_DAYS = 420;
+
 /** Working hours between two instants, counting only time inside the working windows they span. */
 export function workingHoursBetween(from: number, to: number, settings: TimeSettings) {
   if (!(to > from)) return 0;
   let total = 0;
   let cursor = noonOf(from, settings.timezone);
-  for (let day = 0; day <= SCAN_DAYS * 30 && cursor < to + DAY_MS; day++, cursor += DAY_MS) {
+  for (let day = 0; day <= MAX_SPAN_DAYS && cursor < to + DAY_MS; day++, cursor += DAY_MS) {
     const window = windowFor(cursor, settings);
     if (!window) continue;
     total += Math.max(0, Math.min(window.end, to) - Math.max(window.start, from));

@@ -29,12 +29,10 @@ function datesBetween(from: number, to: number, timezone: string) {
   return days;
 }
 
-async function employeeNames(ctx: Ctx, workspaceId: Id<'workspaces'>) {
+/** Instance names, which fall back to the version's name until hiring a count makes them unique. */
+async function employeeNames(ctx: Ctx, installations: Doc<'installations'>[]) {
   const names = new Map<string, string>();
-  for (const installation of await ctx.db
-    .query('installations')
-    .withIndex('by_workspace', (q) => q.eq('workspaceId', workspaceId))
-    .collect()) {
+  for (const installation of installations) {
     const version = await ctx.db.get(installation.versionId);
     names.set(installation._id, installation.name ?? version?.name ?? 'Employee');
   }
@@ -70,7 +68,6 @@ export const entries = query({
     if (!(args.to > args.from)) throw new Error('The calendar range must end after it starts');
     const to = Math.min(args.to, args.from + MAX_RANGE_DAYS * DAY_MS);
     const settings = await settingsFor(ctx, workspace._id);
-    const names = await employeeNames(ctx, workspace._id);
     const [stored, tasks, installations] = await Promise.all([
       ctx.db
         .query('calendarEntries')
@@ -88,6 +85,7 @@ export const entries = query({
         .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
         .collect(),
     ]);
+    const names = await employeeNames(ctx, installations);
 
     const result: CalendarEntry[] = [];
     for (const entry of stored) {

@@ -23,8 +23,6 @@ const MEETING_HORIZON_MS = 8 * 3_600_000;
 /** Tasks, entries, and claims read per workspace per tick. */
 const SCAN_LIMIT = 500;
 const REPORT_LINE_LIMIT = 2_000;
-/** Statuses a dependency is finished in. Anything else keeps the dependent task waiting. */
-const FINISHED = ['completed'];
 const shiftKind = v.union(v.literal('work'), v.literal('review'), v.literal('prep'), v.literal('wrapup'));
 
 /** The brief a reserved employee's standing session opens with; every real run arrives as a job. */
@@ -131,9 +129,8 @@ async function tickWorkspace(ctx: MutationCtx, workspace: Doc<'workspaces'>, now
     status: task.status,
     cadence: task.cadence,
     deadlineAt: task.deadlineAt,
-    unfinishedDependencies: (task.dependsOn ?? []).filter(
-      (id) => !FINISHED.includes(statusById.get(id) ?? 'queued'),
-    ),
+    // A dependency outside the scanned window counts as unfinished, so a task waits rather than races.
+    unfinishedDependencies: (task.dependsOn ?? []).filter((id) => statusById.get(id) !== 'completed'),
     model: task.model,
     lastShiftDate: ranToday.has(task._id) ? date : undefined,
     lastReviewDate: reviewedToday.has(task._id) ? date : undefined,
@@ -218,15 +215,9 @@ export const tick = internalMutation({
   handler: async (ctx) => {
     const now = Date.now();
     let enqueued = 0;
+    // Workers are woken by their own one-minute cron, so the tick only has to leave the jobs behind.
     for (const workspace of await ctx.db.query('workspaces').take(200))
       enqueued += await tickWorkspace(ctx, workspace, now);
-    if (enqueued) {
-      const signal = await ctx.db
-        .query('workerSignals')
-        .withIndex('by_name', (q) => q.eq('name', 'jobs'))
-        .unique();
-      if (signal) await ctx.db.patch(signal._id, { revision: signal.revision + 1, updatedAt: now });
-    }
     return { enqueued };
   },
 });

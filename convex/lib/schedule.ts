@@ -20,9 +20,7 @@ import {
   workingHoursBetween,
 } from './time';
 
-/** The zone a workspace gets until an administrator picks one. */
-export const FALLBACK_TIMEZONE = 'UTC';
-/** Working minutes before a meeting at which attendees prepare. */
+/** Working hours before a meeting at which attendees prepare. */
 export const PREP_LEAD_HOURS = 1;
 /** Proposals that force a curation run without waiting for the night. */
 export const CURATION_THRESHOLD = 20;
@@ -52,7 +50,8 @@ export async function settingsFor(ctx: Ctx, workspaceId: Id<'workspaces'>): Prom
   if (row) return settingsValues(row);
   const values: WorkspaceSettings = {
     ...defaultWorkspaceSettings,
-    timezone: FALLBACK_TIMEZONE,
+    // A workspace answers in UTC until an administrator picks its zone.
+    timezone: 'UTC',
     updatedAt: Date.now(),
   };
   if (isMutation(ctx)) await ctx.db.insert('workspaceSettings', { workspaceId, ...values });
@@ -128,9 +127,9 @@ export function pacingFrom(
   input: { deadlineAt?: number; deadlineConfidence?: number },
 ) {
   const { deadlineAt, deadlineConfidence } = input;
-  if (deadlineConfidence === undefined) return { pacing: 'unknown' as const, workingHoursLeft: 0 };
   const workingHoursLeft = deadlineAt ? workingHoursBetween(now, deadlineAt, settings) : 0;
-  if (deadlineAt && workingHoursLeft <= 0) return { pacing: 'behind' as const, workingHoursLeft: 0 };
+  if (deadlineConfidence === undefined) return { pacing: 'unknown' as const, workingHoursLeft };
+  if (deadlineAt && workingHoursLeft <= 0) return { pacing: 'behind' as const, workingHoursLeft };
   if (deadlineConfidence < 0.5) return { pacing: 'behind' as const, workingHoursLeft };
   if (deadlineConfidence >= 0.8) return { pacing: 'ahead' as const, workingHoursLeft };
   return { pacing: 'on_track' as const, workingHoursLeft };
@@ -199,8 +198,11 @@ export interface PlannerInput {
 }
 
 export type PlannedJobKind = 'shift' | 'review_shift' | 'prep_turn' | 'curation' | 'audit' | 'triage';
+/** The queue kinds the worker implements, beyond the ones it already handles. */
+export type JobKind =
+  'start_shift' | 'review_shift' | 'prep_turn' | 'curation_run' | 'audit_run' | 'triage_run';
 /** The queue kind the worker implements for each planned kind. */
-export const JOB_KINDS: Record<PlannedJobKind, string> = {
+export const JOB_KINDS: Record<PlannedJobKind, JobKind> = {
   shift: 'start_shift',
   review_shift: 'review_shift',
   prep_turn: 'prep_turn',
@@ -245,11 +247,11 @@ export function planTick(input: PlannerInput): PlannedJob[] {
   const instances = new Map(input.instances.map((instance) => [instance.employeeId, instance]));
   const unavailable = new Set(input.busyEmployeeIds);
   const findingsByEmployee = new Map<string, string[]>();
-  for (const finding of input.findings)
-    findingsByEmployee.set(finding.employeeId, [
-      ...(findingsByEmployee.get(finding.employeeId) ?? []),
-      finding.findingId,
-    ]);
+  for (const finding of input.findings) {
+    const open = findingsByEmployee.get(finding.employeeId);
+    if (open) open.push(finding.findingId);
+    else findingsByEmployee.set(finding.employeeId, [finding.findingId]);
+  }
 
   const planned: PlannedJob[] = [];
   const take = (job: PlannedJob) => {
@@ -259,8 +261,10 @@ export function planTick(input: PlannerInput): PlannedJob[] {
 
   const triageSpent = settings.triageAllowance > 0 && input.triageUsageToday >= settings.triageAllowance;
   if (!triageSpent) {
-    const responders = input.instances.filter(
-      (instance) => instance.kind === 'triage' && instance.standingTaskId,
+    const responders = input.instances.flatMap((instance) =>
+      instance.kind === 'triage' && instance.standingTaskId
+        ? [{ ...instance, standingTaskId: instance.standingTaskId }]
+        : [],
     );
     const alerts = [...input.alerts].sort(
       (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.createdAt - b.createdAt,
@@ -270,11 +274,12 @@ export function planTick(input: PlannerInput): PlannedJob[] {
       if (!responder) break;
       take({
         kind: 'triage',
-        taskId: alert.triageTaskId ?? (responder.standingTaskId as string),
+        taskId: alert.triageTaskId ?? responder.standingTaskId,
         employeeId: responder.employeeId,
         uniqueKey: `triage:${alert.alertId}`,
         date,
-        model: modelFor(false, responder),
+        // An incident is never run on the cheap model, whatever the hour.
+        model: responder.model,
         findingIds: [],
         alertId: alert.alertId,
         reason: `${alert.severity} alert is open`,
@@ -306,15 +311,17 @@ export function planTick(input: PlannerInput): PlannedJob[] {
   }
 
   const open = input.tasks.filter((task) => !CLOSED_STATUSES.includes(task.status));
-  const shifts = open.filter(
-    (task) =>
-      task.cadence === 'daily' &&
-      SHIFT_STATUSES.includes(task.status) &&
-      task.unfinishedDependencies.length === 0 &&
-      task.lastShiftDate !== date &&
-      (working || settings.overnightPolicy === 'cheap') &&
-      instances.has(task.employeeId),
-  );
+  const canWorkNow = working || settings.overnightPolicy === 'cheap';
+  const shifts = canWorkNow
+    ? open.filter(
+        (task) =>
+          task.cadence === 'daily' &&
+          SHIFT_STATUSES.includes(task.status) &&
+          task.unfinishedDependencies.length === 0 &&
+          task.lastShiftDate !== date &&
+          instances.has(task.employeeId),
+      )
+    : [];
   const leadsTheDay = (task: PlannerTask) => (findingsByEmployee.has(task.employeeId) ? 0 : 1);
   shifts.sort(
     (a, b) => leadsTheDay(a) - leadsTheDay(b) || (a.deadlineAt ?? Infinity) - (b.deadlineAt ?? Infinity),
