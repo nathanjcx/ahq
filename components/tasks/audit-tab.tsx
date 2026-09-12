@@ -2,8 +2,9 @@
 
 import { Download, LoaderCircle, RefreshCw, ScrollText } from 'lucide-react';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import type { AuditEntry, AuditTimeline } from '@/lib/contracts';
-import { webApi } from '@/lib/ui-api';
+import { webClient, WebApiError } from '@/lib/api/client';
+import type { AuditResponse } from '@/lib/api/schemas';
+import type { AuditEntry } from '@/lib/contracts';
 import { EmptyPane } from '../shared/empty';
 import { correctionLabel, providerName } from '../shared/format';
 import { JsonView } from '../shared/json-view';
@@ -155,7 +156,7 @@ function Entry({ entry }: { entry: AuditEntry }) {
 
 /** The unsealed journal for one task: events, messages, tool calls, and proposals in order. */
 export function AuditTab({ taskId }: { taskId: string }) {
-  const [timeline, setTimeline] = useState<AuditTimeline | null>(null);
+  const [timeline, setTimeline] = useState<AuditResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -163,20 +164,14 @@ export function AuditTab({ taskId }: { taskId: string }) {
     async (signal?: AbortSignal) => {
       setLoading(true);
       try {
-        const response = await fetch(webApi.audit(taskId), { credentials: 'same-origin', signal });
-        if (response.status === 401 || response.status === 403) {
+        setTimeline(await webClient.audit(taskId, signal));
+        setError(null);
+      } catch (cause) {
+        if (signal?.aborted) return;
+        if (cause instanceof WebApiError && (cause.status === 401 || cause.status === 403)) {
           setTimeline(null);
           setError(NO_ACCESS);
-          return;
-        }
-        if (!response.ok) {
-          setError(LOAD_FAILED);
-          return;
-        }
-        setTimeline((await response.json()) as AuditTimeline);
-        setError(null);
-      } catch {
-        if (!signal?.aborted) setError(LOAD_FAILED);
+        } else setError(LOAD_FAILED);
       } finally {
         if (!signal?.aborted) setLoading(false);
       }
@@ -207,7 +202,7 @@ export function AuditTab({ taskId }: { taskId: string }) {
       <div className="audit-toolbar">
         <p>
           {timeline
-            ? `${timeline.entries.length.toLocaleString()} recorded ${
+            ? `${timeline.truncated ? 'Most recent ' : ''}${timeline.entries.length.toLocaleString()} recorded ${
                 timeline.entries.length === 1 ? 'entry' : 'entries'
               }`
             : 'Every event, message, tool call, and proposal for this task.'}

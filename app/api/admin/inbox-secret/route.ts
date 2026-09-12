@@ -1,25 +1,26 @@
-import { NextResponse } from 'next/server';
-import { z } from 'zod';
-import { failure, jsonBody, platformAdmin } from '@/lib/server/http';
+import { failure, jsonOk, parseBody, platformAdmin } from '@/lib/server/http';
+import {
+  clearInboxSecretRequest,
+  inboxSecretRequest,
+  type RemovedResponse,
+  type SavedResponse,
+} from '@/lib/api/schemas';
 import { mutate } from '@/lib/server/backend';
 import { seal } from '@/lib/server/secrets';
 import { getProvider } from '@/lib/providers';
 export const runtime = 'nodejs';
 
-const input = z.object({ provider: z.string(), inboxSecret: z.string().min(1).max(2000).optional() });
-
 /** The provider's app-level webhook signing secret, sealed here and stored only as ciphertext. */
 export async function POST(request: Request) {
   try {
     const identity = await platformAdmin(request);
-    const body = input.parse(await jsonBody(request));
-    if (!body.inboxSecret) throw new Error('An inbox secret is required.');
+    const body = await parseBody(request, inboxSecretRequest);
     await mutate('services/config:setInboxSecret', {
       actorSubject: identity.authSubject,
       provider: getProvider(body.provider).id,
       inboxSecretCiphertext: seal(body.inboxSecret),
     });
-    return NextResponse.json({ saved: true });
+    return jsonOk({ saved: true } satisfies SavedResponse);
   } catch (error) {
     return failure(error);
   }
@@ -28,12 +29,12 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const identity = await platformAdmin(request);
-    const body = input.pick({ provider: true }).parse(await jsonBody(request));
+    const body = await parseBody(request, clearInboxSecretRequest);
     await mutate('services/config:setInboxSecret', {
       actorSubject: identity.authSubject,
       provider: getProvider(body.provider).id,
     });
-    return NextResponse.json({ removed: true });
+    return jsonOk({ removed: true } satisfies RemovedResponse);
   } catch (error) {
     return failure(error);
   }

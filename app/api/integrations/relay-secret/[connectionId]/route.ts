@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
-import { NextResponse } from 'next/server';
-import { actor, failure, HttpError } from '@/lib/server/http';
+import { actor, failure, HttpError, jsonOk } from '@/lib/server/http';
+import { withinRateLimit } from '@/lib/server/rate-limit';
+import type { RelaySecretResponse } from '@/lib/api/schemas';
 import { mutate, query } from '@/lib/server/backend';
 import { requiredEnv, seal, unseal } from '@/lib/server/secrets';
 export const runtime = 'nodejs';
@@ -19,7 +20,7 @@ async function ownedConnection(connectionId: string, subject: string) {
     connectionId,
   }).catch(() => null);
   if (!context || context.authorization.ownerSubject !== subject)
-    throw new HttpError(404, 'Connection not found.');
+    throw new HttpError(404, 'Connection not found.', 'not_found');
   return context;
 }
 
@@ -28,13 +29,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ con
   try {
     const identity = await actor();
     const { connectionId } = await params;
+    if (!withinRateLimit(`relay-reveal:${connectionId}`, 10))
+      throw new HttpError(429, 'Too many reveal requests. Try again in a minute.', 'rate_limited');
     const context = await ownedConnection(connectionId, identity.authSubject);
     if (!context.inboxRelaySecretCiphertext)
-      throw new HttpError(404, 'This connection has no relay secret yet. Rotate it to create one.');
-    return NextResponse.json(
-      { url: relayUrl(connectionId), secret: unseal<string>(context.inboxRelaySecretCiphertext) },
-      { headers: { 'Cache-Control': 'private, no-store' } },
-    );
+      throw new HttpError(
+        404,
+        'This connection has no relay secret yet. Rotate it to create one.',
+        'not_found',
+      );
+    return jsonOk({
+      url: relayUrl(connectionId),
+      secret: unseal<string>(context.inboxRelaySecretCiphertext),
+    } satisfies RelaySecretResponse);
   } catch (error) {
     return failure(error);
   }
@@ -51,10 +58,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ con
       authSubject: identity.authSubject,
       inboxRelaySecretCiphertext: seal(secret),
     });
-    return NextResponse.json(
-      { url: relayUrl(connectionId), secret },
-      { headers: { 'Cache-Control': 'private, no-store' } },
-    );
+    return jsonOk({ url: relayUrl(connectionId), secret } satisfies RelaySecretResponse);
   } catch (error) {
     return failure(error);
   }

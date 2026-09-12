@@ -1,9 +1,12 @@
-import { NextResponse } from 'next/server';
-import { actor, failure } from '@/lib/server/http';
+import { actor, failure, jsonOk } from '@/lib/server/http';
 import { query } from '@/lib/server/backend';
 import { unseal } from '@/lib/server/secrets';
+import type { AuditResponse } from '@/lib/api/schemas';
 import type { AuditEntry, AuditTimeline, CorrectionKind, ProviderId } from '@/lib/contracts';
 export const runtime = 'nodejs';
+
+/** Newest entries win when a long-running task has more journal than one response should carry. */
+const MAX_ENTRIES = 2_000;
 
 interface SealedTimeline {
   task: AuditTimeline['task'];
@@ -111,8 +114,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tas
         transitions: proposal.transitions,
       })),
     ].sort((a, b) => a.at - b.at);
-    const timeline: AuditTimeline = { task: sealed.task, entries };
-    return NextResponse.json(timeline, { headers: { 'Cache-Control': 'private, no-store' } });
+    return jsonOk({
+      task: sealed.task,
+      entries: entries.slice(-MAX_ENTRIES),
+      truncated: entries.length > MAX_ENTRIES,
+    } satisfies AuditResponse);
   } catch (error) {
     return failure(error);
   }

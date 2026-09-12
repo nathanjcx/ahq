@@ -4,7 +4,7 @@ import { useQuery } from 'convex/react';
 import { ArrowUpRight, LoaderCircle, MessagesSquare, Send, UserPlus, X } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import type { Employee, ProjectPost } from '@/lib/contracts';
-import { uiApi } from '@/lib/ui-api';
+import { asId, uiApi } from '@/lib/ui-api';
 import { EmptyPane } from '../shared/empty';
 import { relativeTime, safeHttpsUrl } from '../shared/format';
 
@@ -26,7 +26,7 @@ export function LiveFloorBoard({
   projectId,
   ...props
 }: { projectId: string } & Omit<FloorBoardProps, 'posts'>) {
-  const posts = useQuery(uiApi.projectBoard, { projectId });
+  const posts = useQuery(uiApi.projectBoard, { projectId: asId<'projects'>(projectId) });
   return <FloorBoard posts={posts} {...props} />;
 }
 

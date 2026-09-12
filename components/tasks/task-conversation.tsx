@@ -4,7 +4,7 @@ import { useQuery } from 'convex/react';
 import { LoaderCircle, Send } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import type { Task } from '@/lib/contracts';
-import { uiApi } from '@/lib/ui-api';
+import { asId, uiApi } from '@/lib/ui-api';
 import { MessageBubble } from './message-bubble';
 
 export function TaskConversation({
@@ -14,7 +14,7 @@ export function TaskConversation({
   task: Task;
   onSend: (taskId: string, text: string) => void;
 }) {
-  const messages = useQuery(uiApi.messages, { taskId: task.id });
+  const messages = useQuery(uiApi.messages, { taskId: asId<'tasks'>(task.id) });
   const [text, setText] = useState('');
   function submit(event: FormEvent) {
     event.preventDefault();

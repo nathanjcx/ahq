@@ -180,7 +180,7 @@ export const dashboard = query({
       },
       viewer,
       isPlatformAdmin: isPlatformAdmin(actor.subject),
-      employees: employees.filter(Boolean),
+      employees: employees.filter((employee) => employee !== null),
       connections: connections.map((connection) => ({
         id: connection._id,
         provider: connection.provider,

@@ -1,6 +1,6 @@
 import type { OAuthClientConfig, ProviderConfig, ProviderId, ProviderReadiness } from '@/lib/contracts';
 import { providers, type ProviderDefinition } from '@/lib/providers';
-import { webApi } from '@/lib/ui-api';
+import { webClient } from '@/lib/api/client';
 
 /** A provider delivers events by webhook exactly when it has inbox resources to follow. */
 export function hasNativeInbox(provider: ProviderDefinition) {
@@ -9,25 +9,19 @@ export function hasNativeInbox(provider: ProviderDefinition) {
 
 export type OAuthClientInput = Omit<OAuthClientConfig, 'hasClientSecret'> & { clientSecret?: string };
 
-async function send(url: string, method: 'POST' | 'DELETE', body: Record<string, unknown>) {
-  const response = await fetch(url, {
-    method,
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const payload = (await response.json().catch(() => ({}))) as { error?: string };
-  if (!response.ok) throw new Error(payload.error || 'The web service rejected that change.');
+/** Secrets go to the web service, the only part that can seal them. The acknowledgement carries nothing. */
+export async function saveOAuthClient(provider: ProviderId, client: OAuthClientInput) {
+  await webClient.admin.setOAuthClient({ provider, ...client });
 }
-
-/** Secrets go to the web service, the only part that can seal them. */
-export const saveOAuthClient = (provider: ProviderId, client: OAuthClientInput) =>
-  send(webApi.adminOAuthClient, 'POST', { provider, ...client });
-export const removeOAuthClient = (provider: ProviderId, serverUrl?: string) =>
-  send(webApi.adminOAuthClient, 'DELETE', { provider, serverUrl });
-export const setInboxSecret = (provider: ProviderId, inboxSecret: string) =>
-  send(webApi.adminInboxSecret, 'POST', { provider, inboxSecret });
-export const clearInboxSecret = (provider: ProviderId) =>
-  send(webApi.adminInboxSecret, 'DELETE', { provider });
+export async function removeOAuthClient(provider: ProviderId, serverUrl?: string) {
+  await webClient.admin.removeOAuthClient({ provider, serverUrl });
+}
+export async function setInboxSecret(provider: ProviderId, inboxSecret: string) {
+  await webClient.admin.setInboxSecret({ provider, inboxSecret });
+}
+export async function clearInboxSecret(provider: ProviderId) {
+  await webClient.admin.clearInboxSecret({ provider });
+}
 
 export type OperationsStatus = {
   level: 'ready' | 'partial' | 'blocked';

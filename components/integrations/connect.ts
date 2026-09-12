@@ -1,5 +1,5 @@
 import type { Connection, ProviderId, ProviderReadiness } from '@/lib/contracts';
-import { webApi } from '@/lib/ui-api';
+import { webClient } from '@/lib/api/client';
 import { providerServerUrls, type ProviderDefinition } from '@/lib/providers';
 
 export type ProviderSetup = {
@@ -28,14 +28,8 @@ export function providerSetup(provider: ProviderDefinition, readiness: ProviderR
 }
 
 export async function startConnect(provider: ProviderId, serverUrls?: string[]) {
-  const response = await fetch(webApi.connect, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ provider, serverUrls }),
-  });
-  const body = (await response.json()) as { authorizationUrl?: string; error?: string };
-  if (!response.ok || !body.authorizationUrl) throw new Error(body.error || 'Connection failed');
-  window.location.assign(body.authorizationUrl);
+  const { authorizationUrl } = await webClient.connect({ provider, serverUrls });
+  window.location.assign(authorizationUrl);
 }
 
 /** Who the owner is sharing a connection with. */

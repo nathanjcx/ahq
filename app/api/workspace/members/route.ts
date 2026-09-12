@@ -1,10 +1,9 @@
 import { clerkClient } from '@clerk/nextjs/server';
-import { NextResponse } from 'next/server';
-import { actor, displayName, failure } from '@/lib/server/http';
-import type { Member } from '@/lib/contracts';
+import { actor, displayName, failure, jsonOk } from '@/lib/server/http';
+import type { MembersResponse } from '@/lib/api/schemas';
 export const runtime = 'nodejs';
 
-function role(clerkRole: string): Member['role'] {
+function role(clerkRole: string): MembersResponse[number]['role'] {
   return clerkRole === 'org:admin' || clerkRole === 'admin' ? 'admin' : 'member';
 }
 
@@ -13,16 +12,16 @@ export async function GET() {
   try {
     const identity = await actor();
     if (!identity.authOrgId)
-      return NextResponse.json([
+      return jsonOk([
         { subject: identity.authSubject, name: await displayName(identity.authSubject), role: 'owner' },
-      ] satisfies Member[]);
+      ] satisfies MembersResponse);
     const { data } = await (
       await clerkClient()
     ).organizations.getOrganizationMembershipList({
       organizationId: identity.authOrgId,
       limit: 200,
     });
-    const members: Member[] = data.flatMap((membership) => {
+    const members: MembersResponse = data.flatMap((membership) => {
       const user = membership.publicUserData;
       if (!user) return [];
       const name = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.identifier;
@@ -36,7 +35,7 @@ export async function GET() {
         },
       ];
     });
-    return NextResponse.json(members, { headers: { 'Cache-Control': 'private, no-store' } });
+    return jsonOk(members);
   } catch (error) {
     return failure(error);
   }

@@ -1,21 +1,14 @@
-import { NextResponse } from 'next/server';
-import { z } from 'zod';
-import { failure, jsonBody, platformAdmin } from '@/lib/server/http';
+import { failure, jsonOk, parseBody, platformAdmin } from '@/lib/server/http';
+import {
+  oauthClientRequest,
+  removeOAuthClientRequest,
+  type RemovedResponse,
+  type SavedResponse,
+} from '@/lib/api/schemas';
 import { mutate } from '@/lib/server/backend';
 import { seal } from '@/lib/server/secrets';
 import { getProvider, providerServerUrls } from '@/lib/providers';
 export const runtime = 'nodejs';
-
-const input = z.object({
-  provider: z.string(),
-  serverUrl: z.string().max(2048).optional(),
-  clientId: z.string().min(1).max(500),
-  clientSecret: z.string().max(2000).optional(),
-  scopes: z.string().max(2000).optional(),
-  authorizationUrl: z.string().url().optional(),
-  tokenUrl: z.string().url().optional(),
-  tokenAuthMethod: z.enum(['client_secret_basic', 'client_secret_post', 'none']).optional(),
-});
 
 function serverUrl(provider: string, url?: string) {
   if (url && !providerServerUrls(getProvider(provider)).includes(url))
@@ -23,11 +16,11 @@ function serverUrl(provider: string, url?: string) {
   return url;
 }
 
-/** The browser sends the client secret once; only this route can seal it for Convex. */
+/** The browser sends the client secret once; only this route can seal it for Convex. It is never read back. */
 export async function POST(request: Request) {
   try {
     const identity = await platformAdmin(request);
-    const body = input.parse(await jsonBody(request));
+    const body = await parseBody(request, oauthClientRequest);
     await mutate('services/config:setOAuthClient', {
       actorSubject: identity.authSubject,
       provider: getProvider(body.provider).id,
@@ -39,7 +32,7 @@ export async function POST(request: Request) {
       tokenUrl: body.tokenUrl,
       tokenAuthMethod: body.tokenAuthMethod,
     });
-    return NextResponse.json({ saved: true });
+    return jsonOk({ saved: true } satisfies SavedResponse);
   } catch (error) {
     return failure(error);
   }
@@ -48,13 +41,13 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const identity = await platformAdmin(request);
-    const body = input.pick({ provider: true, serverUrl: true }).parse(await jsonBody(request));
+    const body = await parseBody(request, removeOAuthClientRequest);
     await mutate('services/config:removeOAuthClient', {
       actorSubject: identity.authSubject,
       provider: getProvider(body.provider).id,
       serverUrl: body.serverUrl,
     });
-    return NextResponse.json({ removed: true });
+    return jsonOk({ removed: true } satisfies RemovedResponse);
   } catch (error) {
     return failure(error);
   }

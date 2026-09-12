@@ -2,9 +2,10 @@
 
 import { Check, Copy, Eye, LoaderCircle, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
-import { webApi } from '@/lib/ui-api';
+import type { RelaySecretResponse } from '@/lib/api/schemas';
+import { webClient } from '@/lib/api/client';
 
-type Relay = { url: string; secret: string };
+type Relay = RelaySecretResponse;
 
 function CopyField({ label, value }: { label: string; value: string }) {
   const [state, setState] = useState<'idle' | 'copied' | 'blocked'>('idle');
@@ -44,15 +45,11 @@ export function RelaySecret({ connectionId }: { connectionId: string }) {
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function load(method: 'GET' | 'POST') {
-    setBusy(method === 'GET' ? 'reveal' : 'rotate');
+  async function load(action: 'reveal' | 'rotate') {
+    setBusy(action);
     setError(null);
     try {
-      const response = await fetch(webApi.relaySecret(connectionId), { method });
-      const body = (await response.json()) as Partial<Relay> & { error?: string };
-      if (!response.ok || !body.url || !body.secret)
-        throw new Error(body.error || 'Could not read the relay secret.');
-      setRelay({ url: body.url, secret: body.secret });
+      setRelay(await webClient.relaySecret[action](connectionId));
       setConfirming(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not read the relay secret.');
@@ -81,7 +78,7 @@ export function RelaySecret({ connectionId }: { connectionId: string }) {
           type="button"
           className="secondary-button"
           disabled={busy !== null}
-          onClick={() => load('GET')}
+          onClick={() => void load('reveal')}
         >
           {busy === 'reveal' ? <LoaderCircle className="spin" size={15} /> : <Eye size={15} />}
           Reveal
@@ -103,7 +100,7 @@ export function RelaySecret({ connectionId }: { connectionId: string }) {
               type="button"
               className="primary-button"
               disabled={busy !== null}
-              onClick={() => load('POST')}
+              onClick={() => void load('rotate')}
             >
               {busy === 'rotate' && <LoaderCircle className="spin" size={15} />}
               Rotate now

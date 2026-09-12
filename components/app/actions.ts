@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation } from 'convex/react';
-import { uiApi } from '@/lib/ui-api';
+import { asId, uiApi } from '@/lib/ui-api';
 import type {
   ConnectionVisibility,
   CorrectionDescriptor,
@@ -135,35 +135,62 @@ export function useWorkspaceActions(): Actions {
   return {
     bootstrap: (name) => bootstrap({ name }),
     setTokenCap: (monthlyTokenCap) => setTokenCap({ monthlyTokenCap }),
-    hire: (versionId) => hire({ versionId }),
+    hire: (versionId) => hire({ versionId: asId(versionId) }),
     createTask: (employeeId, prompt, title, projectId) =>
-      createTask({ employeeId, prompt, title, projectId }),
-    createProject: (name, brief, employeeIds) => createProject({ name, brief, employeeIds }),
+      createTask({
+        employeeId: asId(employeeId),
+        prompt,
+        title,
+        projectId: projectId ? asId<'projects'>(projectId) : undefined,
+      }),
+    createProject: (name, brief, employeeIds) =>
+      createProject({ name, brief, employeeIds: employeeIds.map((id) => asId<'installations'>(id)) }),
     updateProject: (projectId, name, brief, employeeIds) =>
-      updateProject({ projectId, name, brief, employeeIds }),
-    setProjectArchived: (projectId, archived) => setProjectArchived({ projectId, archived }),
-    sendMessage: (taskId, text) => sendMessage({ taskId, text }),
-    cancelTask: (taskId) => cancelTask({ taskId }),
-    decide: (proposalId, approved) => decide({ proposalId, approved }),
-    correct: (proposalId) => correct({ proposalId }),
-    disconnect: (connectionId) => disconnect({ connectionId }),
+      updateProject({
+        projectId: asId(projectId),
+        name,
+        brief,
+        employeeIds: employeeIds.map((id) => asId<'installations'>(id)),
+      }),
+    setProjectArchived: (projectId, archived) => setProjectArchived({ projectId: asId(projectId), archived }),
+    sendMessage: (taskId, text) => sendMessage({ taskId: asId(taskId), text }),
+    cancelTask: (taskId) => cancelTask({ taskId: asId(taskId) }),
+    decide: (proposalId, approved) => decide({ proposalId: asId(proposalId), approved }),
+    correct: (proposalId) => correct({ proposalId: asId(proposalId) }),
+    disconnect: (connectionId) => disconnect({ connectionId: asId(connectionId) }),
     updateConnectionAccess: (connectionId, allowedTools, resourceScope, inboxResources) =>
-      updateConnectionAccess({ connectionId, allowedTools, resourceScope, inboxResources }),
-    markRead: (itemId) => markRead({ itemId }),
-    assign: (itemId, employeeId, projectId) => assign({ itemId, employeeId, projectId }),
-    saveDraft: (draft) => saveDraft(draft),
-    publish: (draftId) => publish({ draftId }),
-    retire: (versionId) => retire({ versionId }),
-    setTaskVisibility: (taskId, visibility) => setTaskVisibility({ taskId, visibility }),
+      updateConnectionAccess({
+        connectionId: asId(connectionId),
+        allowedTools,
+        resourceScope,
+        inboxResources,
+      }),
+    markRead: (itemId) => markRead({ itemId: asId(itemId) }),
+    assign: (itemId, employeeId, projectId) =>
+      assign({
+        itemId: asId(itemId),
+        employeeId: asId(employeeId),
+        projectId: projectId ? asId<'projects'>(projectId) : undefined,
+      }),
+    // The employee editor still builds an untyped record; Convex validates every field on arrival.
+    saveDraft: (draft) => saveDraft(draft as Parameters<typeof saveDraft>[0]),
+    publish: (draftId) => publish({ draftId: asId(draftId) }),
+    retire: (versionId) => retire({ versionId: asId(versionId) }),
+    setTaskVisibility: (taskId, visibility) => setTaskVisibility({ taskId: asId(taskId), visibility }),
     setConnectionSharing: (connectionId, visibility, visibleToSubjects) =>
-      setConnectionSharing({ connectionId, visibility, visibleToSubjects }),
-    postToBoard: (projectId, text) => postToBoard({ projectId, text }),
+      setConnectionSharing({ connectionId: asId(connectionId), visibility, visibleToSubjects }),
+    postToBoard: (projectId, text) => postToBoard({ projectId: asId(projectId), text }),
     requestHandoff: (projectId, toEmployeeId, brief, sourceTaskId) =>
-      requestHandoff({ projectId, toEmployeeId, brief, sourceTaskId }),
-    decideHandoff: (postId, accepted) => decideHandoff({ postId, accepted }),
+      requestHandoff({
+        projectId: asId(projectId),
+        toEmployeeId: asId(toEmployeeId),
+        brief,
+        sourceTaskId: sourceTaskId ? asId<'tasks'>(sourceTaskId) : undefined,
+      }),
+    decideHandoff: (postId, accepted) => decideHandoff({ postId: asId(postId), accepted }),
     setEnabledUrls: (provider, enabledUrls) => setEnabledUrls({ provider, enabledUrls }),
     saveRegistryTool: (tool) => saveRegistryTool(tool),
     deleteRegistryTool: (provider, name) => deleteRegistryTool({ provider, name }),
-    importDiscoveredTools: (connectionId) => importDiscoveredTools({ connectionId }),
+    importDiscoveredTools: (connectionId) => importDiscoveredTools({ connectionId: asId(connectionId) }),
   };
 }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { mutate } from '../../../../../lib/server/backend';
 import { failure, HttpError, rawBody } from '../../../../../lib/server/http';
 import { isNativeProvider, nativeSecret, parseNativeDelivery } from '../../../../../lib/server/native-inbox';
+import { withinRateLimit } from '../../../../../lib/server/rate-limit';
 
 export const runtime = 'nodejs';
 
@@ -9,6 +10,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
   try {
     const { provider } = await params;
     if (!isNativeProvider(provider)) throw new HttpError(404, 'Unknown native inbox provider.');
+    if (!withinRateLimit(`native-inbox:${provider}`, 600))
+      throw new HttpError(429, 'Too many deliveries for this provider.', 'rate_limited');
     const secret = await nativeSecret(provider);
     if (!secret) throw new HttpError(404, 'Native inbox delivery is not configured for this provider.');
     const body = await rawBody(request, 1_000_000);

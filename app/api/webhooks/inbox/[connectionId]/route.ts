@@ -3,12 +3,15 @@ import { rawBody, HttpError, failure } from '@/lib/server/http';
 import { mutate, query } from '@/lib/server/backend';
 import { inboxPayload, verifyInboxSignature } from '@/lib/server/inbox-events';
 import { unseal } from '@/lib/server/secrets';
+import { withinRateLimit } from '@/lib/server/rate-limit';
 export const runtime = 'nodejs';
 
 /** Normalized relay deliveries are signed with the connection's own sealed relay secret. */
 export async function POST(request: Request, { params }: { params: Promise<{ connectionId: string }> }) {
   try {
     const { connectionId } = await params;
+    if (!withinRateLimit(`relay-inbox:${connectionId}`, 600))
+      throw new HttpError(429, 'Too many deliveries for this connection.', 'rate_limited');
     const context = await query<{ inboxRelaySecretCiphertext?: string }>(
       'services/integrations:connectionContext',
       { connectionId },

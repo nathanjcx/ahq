@@ -16,7 +16,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       headers: {
         'Content-Type': 'application/octet-stream',
         'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(artifact.name)}`,
-        'Cache-Control': 'private, no-store',
+        'Cache-Control': 'no-store',
         'X-Content-Type-Options': 'nosniff',
       },
     });
