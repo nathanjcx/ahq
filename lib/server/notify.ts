@@ -45,10 +45,10 @@ function pushConfigured() {
  */
 const pushAgent = new Agent({ lookup: publicOnlyLookup });
 
-function requireSafeEndpoint(endpoint: string) {
+export function requireSafeEndpoint(endpoint: string) {
   const url = new URL(endpoint);
   if (url.protocol !== 'https:' || isIP(url.hostname.replace(/^\[|\]$/g, '')))
-    throw new Error('Unsafe push endpoint');
+    throw new Error('A push endpoint must be an HTTPS hostname, not an address.');
 }
 
 /** A push service saying the endpoint is gone. The subscription is dead and is pruned, not retried. */

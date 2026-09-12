@@ -373,7 +373,7 @@ async function hasIncidentReport(ctx: Ctx, task: Doc<'tasks'>, since: number) {
   return posts.some(
     (post) =>
       post.taskId === task._id &&
-      post._creationTime >= since &&
+      post.createdAt >= since &&
       (post.flag === 'incident' || post.flag === 'missing'),
   );
 }

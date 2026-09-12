@@ -19,7 +19,7 @@ const monitorable = ['queued', 'running', 'awaiting_approval'] as const;
  * `execute_action` is the other case and is handled separately: an approved action executes against a
  * task that really did finish while it waited for approval, and leaves it finished.
  */
-const REOPENS_TASK: JobKind[] = [
+const REOPENS_TASK: readonly string[] = [
   'start_shift',
   'review_shift',
   'meeting_prep',
@@ -29,16 +29,16 @@ const REOPENS_TASK: JobKind[] = [
   'audit_run',
   'triage_run',
   'email_classify',
-];
+] satisfies readonly JobKind[];
 
 function reopensTask(job: Doc<'jobs'>, task: Doc<'tasks'>) {
-  return task.status === 'completed' && REOPENS_TASK.includes(job.kind as JobKind);
+  return task.status === 'completed' && REOPENS_TASK.includes(job.kind);
 }
 
 /** Whether this job has outlived the task it belongs to and should be failed rather than run. */
 function taskIsPast(job: Doc<'jobs'>, task: Doc<'tasks'>) {
-  if (job.kind === 'cancel_task') return false;
-  if (task.status === 'completed') return job.kind !== 'execute_action' && !reopensTask(job, task);
+  if (job.kind === 'cancel_task' || reopensTask(job, task)) return false;
+  if (task.status === 'completed') return job.kind !== 'execute_action';
   return isTerminal(task.status);
 }
 

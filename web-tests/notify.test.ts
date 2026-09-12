@@ -4,7 +4,7 @@ import { api } from '../convex/_generated/api';
 import type { Id } from '../convex/_generated/dataModel';
 import { defaultWorkspaceSettings } from '../lib/contracts';
 import { installBackend } from '../lib/server/backend';
-import { deliverNotifications } from '../lib/server/notify';
+import { deliverNotifications, requireSafeEndpoint } from '../lib/server/notify';
 import { seal } from '../lib/server/secrets';
 import { harness, identity, secret, testBackend, type Harness } from './support';
 
@@ -185,6 +185,11 @@ describe('notification delivery', () => {
       lookup?.('localhost', { all: true }, (error) => resolve(error)),
     );
     expect(refused?.message).toMatch(/Private and reserved/);
+    // The subscribe route refuses the same endpoint outright, so a browser is told rather than left
+    // with a subscription that can never deliver.
+    expect(() => requireSafeEndpoint(internal)).toThrow('HTTPS hostname');
+    expect(() => requireSafeEndpoint('http://push.example/hook')).toThrow('HTTPS hostname');
+    expect(() => requireSafeEndpoint('https://push.example/hook')).not.toThrow();
   });
 
   it('caps the browsers one person can register', async () => {
