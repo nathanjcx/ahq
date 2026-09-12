@@ -6,7 +6,7 @@ import type { ActionProposal } from '@/lib/contracts';
 import { providerName, relativeTime } from '../shared/format';
 import { JsonView } from '../shared/json-view';
 import { ProviderMark } from '../shared/marks';
-import { StateDiff, stateFields } from '../shared/state-diff';
+import { StateDiff, changedFields } from '../shared/state-diff';
 
 const CANNOT_DECIDE = 'Only the connection owner or a workspace admin can decide';
 
@@ -35,13 +35,13 @@ function CorrectionFooter({
   );
 
   if (proposal.correction === 'supported') {
-    const fields = stateFields(proposal.beforeState);
+    const fields = changedFields(proposal.beforeState, proposal.afterState);
     return (
       <>
         <p className="correction-note">
           <RotateCcw size={14} />
           <span>
-            Restores {fields.length ? fields.join(', ') : 'the captured fields'} to their captured values,
+            Restores {fields.length ? fields.join(', ') : 'the changed fields'} to their captured values,
             conditioned on the current version. Downstream effects such as notifications remain.
           </span>
         </p>

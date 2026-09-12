@@ -21,6 +21,14 @@ export function stateFields(value: unknown): string[] {
   return Object.keys(asFields(value) ?? {});
 }
 
+/** Fields whose value differs between two captured states; every field when the second is unknown. */
+export function changedFields(before: unknown, after: unknown): string[] {
+  const previous = asFields(before) ?? {};
+  const next = asFields(after);
+  if (!next) return Object.keys(previous);
+  return Object.keys(previous).filter((key) => jsonText(previous[key]) !== jsonText(next[key]));
+}
+
 function cell(value: unknown) {
   if (value === undefined) return 'not set';
   return typeof value === 'string' ? value : jsonText(value);
