@@ -8,8 +8,9 @@ import {
   requireProject,
   type FloorCapacity,
 } from '../lib/projects';
-import { requireFloor } from '../lib/tasks';
+import { insertJob, openSessionTask, requireFloor } from '../lib/tasks';
 import { requireService } from '../shared';
+import { ensureJanitorFor } from './memory';
 
 /** Active memory claims the planner should know about, newest first. */
 const MEMORY_SAMPLE = 40;
@@ -133,6 +134,49 @@ export const recordProposal = mutation({
       updatedAt: Date.now(),
     });
     return null;
+  },
+});
+
+/**
+ * Opens the planner turn for a project.
+ *
+ * The planner has no tools and no floor of its own, so it runs as a turn inside the workspace
+ * janitor's standing session: the one reserved employee that belongs to the whole workspace rather
+ * than to an audit night or an incident. Creating a project does not call this yet — `projects:create`
+ * belongs to the projects workstream — so planning is started explicitly.
+ */
+export const enqueuePlanning = mutation({
+  args: { secret: v.string(), projectId: v.id('projects') },
+  returns: v.object({ taskId: v.id('tasks'), jobId: v.union(v.id('jobs'), v.null()) }),
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const project = await ctx.db.get(args.projectId);
+    if (!project) throw new Error('Project not found');
+    const workspace = await ctx.db.get(project.workspaceId);
+    if (!workspace) throw new Error('Workspace not found');
+    const { installation, version } = await ensureJanitorFor(ctx, workspace._id);
+    const taskId = await openSessionTask(ctx, {
+      workspace,
+      employeeId: installation._id,
+      version,
+      kind: 'standing',
+      key: `plan:${project._id}`,
+      title: `Plan ${project.name}`,
+      prompt: 'You plan this project. Wait for the planner run; do nothing until one arrives.',
+      project: project._id,
+    });
+    const jobId = await insertJob(ctx, {
+      workspaceId: workspace._id,
+      taskId,
+      uniqueKey: `plan_project:${project._id}:${project.updatedAt}`,
+      kind: 'plan_project',
+      payload: JSON.stringify({
+        workspaceId: workspace._id,
+        projectId: project._id,
+        model: version.model,
+      }),
+    });
+    return { taskId, jobId: jobId ?? null };
   },
 });
 

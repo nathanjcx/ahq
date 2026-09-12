@@ -19,6 +19,8 @@ export const gatewayContext = query({
     requireService(args.secret);
     const task = await taskForRunToken(ctx, args.runToken);
     const { version, connections, policies } = await activeTaskContext(ctx, task);
+    // The gateway's role check reads these two: which run this is, and what kind of employee it is.
+    const installation = await ctx.db.get(task.employeeId);
     return {
       task: {
         id: task._id,
@@ -26,6 +28,13 @@ export const gatewayContext = query({
         status: task.status,
         createdBy: task.createdBy,
         floorId: task.floorId,
+        projectId: task.projectId,
+        kind: task.kind ?? 'work',
+      },
+      employee: {
+        id: task.employeeId,
+        name: task.employeeName,
+        kind: installation?.kind ?? 'worker',
       },
       employeeVersion: { id: version._id, capabilities: version.capabilities },
       connections: connections.map(privateConnection),

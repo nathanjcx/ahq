@@ -56,7 +56,7 @@ export function safeError(error: unknown): string {
         .replace(/Bearer\s+[^\s]+/gi, 'Bearer [redacted]')
         .replace(/sk-[A-Za-z0-9_-]+/g, '[redacted]')
         .replace(
-          /((?:access_token|refresh_token|client_secret|api_key)[\"'\s]*[:=][\"'\s]*)[^\"'\s,&}]+/gi,
+          /((?:access_token|refresh_token|client_secret|api_key)["'\s]*[:=]["'\s]*)[^"'\s,&}]+/gi,
           '$1[redacted]',
         )
     : 'The request failed';

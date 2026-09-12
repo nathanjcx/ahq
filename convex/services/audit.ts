@@ -17,6 +17,9 @@ import { severity } from '../schema';
 import { requireService, untrustedBlock, type Ctx } from '../shared';
 import { taskForRunToken } from './context';
 
+/** Journal rows one audit read returns per task. */
+const JOURNAL_LIMIT = 500;
+
 /** Audit functions run only under a run token belonging to the workspace's reserved auditor. */
 async function requireAuditorRun(ctx: Ctx, runToken: string, workspaceId: Id<'workspaces'>) {
   const task = await taskForRunToken(ctx, runToken);
@@ -159,6 +162,52 @@ export const auditInputs = query({
           .filter((finding) => finding.status !== 'verified')
           .map((finding) => publicFinding(ctx, finding)),
       ),
+    };
+  },
+});
+
+/**
+ * One task's journal as the auditor reads it: the events, the assistant messages, and the tool calls
+ * with their outcomes. Rows come back verbatim; the gateway fences them on the way into a model.
+ */
+export const readJournal = query({
+  args: { secret: v.string(), runToken: v.string(), taskId: v.id('tasks') },
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new Error('Task not found');
+    await requireAuditorRun(ctx, args.runToken, task.workspaceId);
+    const [events, messages, toolCalls] = await Promise.all([
+      ctx.db
+        .query('events')
+        .withIndex('by_task', (q) => q.eq('taskId', task._id))
+        .take(JOURNAL_LIMIT),
+      ctx.db
+        .query('messages')
+        .withIndex('by_task', (q) => q.eq('taskId', task._id))
+        .take(JOURNAL_LIMIT),
+      ctx.db
+        .query('toolCalls')
+        .withIndex('by_task', (q) => q.eq('taskId', task._id))
+        .take(JOURNAL_LIMIT),
+    ]);
+    return {
+      taskId: task._id,
+      title: task.title,
+      status: task.status,
+      events: events.map((event) => ({ type: event.type, text: event.text, createdAt: event.createdAt })),
+      messages: messages.map((message) => ({
+        role: message.role,
+        text: message.text,
+        createdAt: message.createdAt,
+      })),
+      toolCalls: toolCalls.map((call) => ({
+        tool: call.tool,
+        outcome: call.outcome,
+        reason: call.reason,
+        durationMs: call.durationMs,
+        createdAt: call.createdAt,
+      })),
     };
   },
 });

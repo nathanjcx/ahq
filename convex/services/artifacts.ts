@@ -1,7 +1,7 @@
 import { v } from 'convex/values';
 import { mutation, query } from '../_generated/server';
 import { canSeeTask, requireService } from '../shared';
-import { workspaceForActor } from './context';
+import { taskForRunToken, workspaceForActor } from './context';
 
 export const recordArtifact = mutation({
   args: {
@@ -46,6 +46,29 @@ export const recordArtifact = mutation({
       createdAt: Date.now(),
     });
     return { artifactId };
+  },
+});
+
+/**
+ * One archived artifact, for a run rather than a person: the auditor's code reader. Scoped to the
+ * run token's own workspace, and metadata only — the gateway fetches the bytes under its own cap.
+ */
+export const artifactForRun = query({
+  args: { secret: v.string(), runToken: v.string(), artifactId: v.id('artifacts') },
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const task = await taskForRunToken(ctx, args.runToken);
+    const artifact = await ctx.db.get(args.artifactId);
+    if (!artifact || artifact.workspaceId !== task.workspaceId) throw new Error('Artifact not found');
+    return {
+      id: artifact._id,
+      taskId: artifact.taskId,
+      name: artifact.name,
+      mediaType: artifact.mediaType,
+      size: artifact.size,
+      storageKey: artifact.storageKey,
+      sha256: artifact.sha256,
+    };
   },
 });
 

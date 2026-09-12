@@ -1,4 +1,4 @@
-import { v } from 'convex/values';
+import { v, type Infer } from 'convex/values';
 import type { WorkspaceSettings } from '../../lib/contracts';
 import type { Doc, Id } from '../_generated/dataModel';
 import { internalMutation, mutation, query, type MutationCtx } from '../_generated/server';
@@ -25,6 +25,7 @@ import { isWorkingTime, workingHoursBetween } from '../lib/time';
 import { ensureTriageStaff } from '../lib/triage';
 import { model } from '../schema';
 import { requireService } from '../shared';
+import { taskForRunToken } from './context';
 import { ensureJanitorFor } from './memory';
 
 /** How far ahead the tick looks for meetings that may need preparation. */
@@ -292,62 +293,89 @@ export const startShift = mutation({
   },
 });
 
-/**
- * Closes a shift with its report and posts it to the task's channels. A shift that ends without a
- * report gets one inferred from the journal, marked as inferred.
- */
+const reportBody = v.object({
+  done: v.array(v.string()),
+  inProgress: v.array(v.string()),
+  blockedOn: v.array(v.string()),
+  next: v.array(v.string()),
+  risks: v.array(v.string()),
+  deadlineConfidence: v.optional(v.number()),
+});
+type ReportBody = Infer<typeof reportBody>;
+
 export const endShift = mutation({
-  args: {
-    secret: v.string(),
-    shiftId: v.id('shifts'),
-    report: v.optional(
-      v.object({
-        done: v.array(v.string()),
-        inProgress: v.array(v.string()),
-        blockedOn: v.array(v.string()),
-        next: v.array(v.string()),
-        risks: v.array(v.string()),
-        deadlineConfidence: v.optional(v.number()),
-      }),
-    ),
-  },
+  args: { secret: v.string(), shiftId: v.id('shifts'), report: v.optional(reportBody) },
   handler: async (ctx, args) => {
     requireService(args.secret);
     const shift = await ctx.db.get(args.shiftId);
     if (!shift) throw new Error('Shift not found');
-    if (shift.endedAt !== undefined) return { reportId: shift.reportId ?? null };
-    const task = await ctx.db.get(shift.taskId);
-    if (!task) throw new Error('Task not found');
-    const closing = args.report ?? {
-      done: [(await finalAssistantMessage(ctx, shift.taskId))?.slice(0, REPORT_LINE_LIMIT)].filter(
-        (line): line is string => Boolean(line),
-      ),
-      inProgress: [],
-      blockedOn: [],
-      next: [],
-      risks: [],
-    };
-    const now = Date.now();
-    const reportId = await ctx.db.insert('reports', {
-      workspaceId: shift.workspaceId,
-      taskId: shift.taskId,
-      employeeId: shift.employeeId,
-      shiftId: shift._id,
-      done: closing.done.map((line) => line.slice(0, REPORT_LINE_LIMIT)),
-      inProgress: closing.inProgress.map((line) => line.slice(0, REPORT_LINE_LIMIT)),
-      blockedOn: closing.blockedOn.map((line) => line.slice(0, REPORT_LINE_LIMIT)),
-      next: closing.next.map((line) => line.slice(0, REPORT_LINE_LIMIT)),
-      risks: closing.risks.map((line) => line.slice(0, REPORT_LINE_LIMIT)),
-      deadlineConfidence: args.report?.deadlineConfidence,
-      inferred: !args.report,
-      createdAt: now,
-    });
-    await ctx.db.patch(shift._id, { endedAt: now, reportId });
-    const report = await ctx.db.get(reportId);
-    if (report) await postShiftReport(ctx, task, report);
-    return { reportId };
+    return closeShift(ctx, shift, args.report);
   },
 });
+
+/**
+ * The report an employee files through the `astra_shift` tool server, against whichever of its
+ * shifts is still open. The gateway holds a run token rather than a shift id, and a shift is the
+ * only thing a report can close, so the open shift is found here instead of being passed in.
+ */
+export const submitReport = mutation({
+  args: { secret: v.string(), runToken: v.string(), report: reportBody },
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const task = await taskForRunToken(ctx, args.runToken);
+    const shift = await openShiftFor(ctx, task._id);
+    if (!shift) throw new Error('This task has no open shift to report on');
+    return closeShift(ctx, shift, args.report);
+  },
+});
+
+/** The task's shift that has not ended yet, newest first. */
+async function openShiftFor(ctx: MutationCtx, taskId: Id<'tasks'>) {
+  const shifts = await ctx.db
+    .query('shifts')
+    .withIndex('by_task_date', (q) => q.eq('taskId', taskId))
+    .order('desc')
+    .take(20);
+  return shifts.find((shift) => shift.endedAt === undefined) ?? null;
+}
+
+/**
+ * Closes a shift with its report and posts it to the task's channels. A shift that ends without a
+ * report gets one inferred from the journal, marked as inferred.
+ */
+async function closeShift(ctx: MutationCtx, shift: Doc<'shifts'>, filed?: ReportBody) {
+  if (shift.endedAt !== undefined) return { reportId: shift.reportId ?? null };
+  const task = await ctx.db.get(shift.taskId);
+  if (!task) throw new Error('Task not found');
+  const closing = filed ?? {
+    done: [(await finalAssistantMessage(ctx, shift.taskId))?.slice(0, REPORT_LINE_LIMIT)].filter(
+      (line): line is string => Boolean(line),
+    ),
+    inProgress: [],
+    blockedOn: [],
+    next: [],
+    risks: [],
+  };
+  const now = Date.now();
+  const reportId = await ctx.db.insert('reports', {
+    workspaceId: shift.workspaceId,
+    taskId: shift.taskId,
+    employeeId: shift.employeeId,
+    shiftId: shift._id,
+    done: closing.done.map((line) => line.slice(0, REPORT_LINE_LIMIT)),
+    inProgress: closing.inProgress.map((line) => line.slice(0, REPORT_LINE_LIMIT)),
+    blockedOn: closing.blockedOn.map((line) => line.slice(0, REPORT_LINE_LIMIT)),
+    next: closing.next.map((line) => line.slice(0, REPORT_LINE_LIMIT)),
+    risks: closing.risks.map((line) => line.slice(0, REPORT_LINE_LIMIT)),
+    deadlineConfidence: filed?.deadlineConfidence,
+    inferred: !filed,
+    createdAt: now,
+  });
+  await ctx.db.patch(shift._id, { endedAt: now, reportId });
+  const report = await ctx.db.get(reportId);
+  if (report) await postShiftReport(ctx, task, report);
+  return { reportId };
+}
 
 /** Whether a task is ahead, on track, or behind, from its own last report and the hours left. */
 export const pacing = query({
