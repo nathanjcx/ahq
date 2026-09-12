@@ -1,11 +1,13 @@
 'use client';
 
 import { Archive, Building2, ChevronRight } from 'lucide-react';
-import type { Project } from '@/lib/contracts';
+import { relativeTime } from '../shared/format';
+import { countsLabel, type FloorEntry } from './floor-stats';
 
 export function FloorDirectory({
   workspaceName,
-  orderedProjects,
+  activeFloors,
+  archivedFloors,
   selectedProjectId,
   unassignedTaskCount,
   canCreate,
@@ -13,18 +15,15 @@ export function FloorDirectory({
   onNewProject,
 }: {
   workspaceName?: string;
-  orderedProjects: Project[];
+  /** Active floors, most recently active first. */
+  activeFloors: FloorEntry[];
+  archivedFloors: FloorEntry[];
   selectedProjectId: string | null;
   unassignedTaskCount: number;
   canCreate: boolean;
   onSelectProject: (id: string | null) => void;
   onNewProject: () => void;
 }) {
-  const activeProjects = orderedProjects.filter((project) => !project.archivedAt);
-  const archivedProjects = orderedProjects.filter((project) => project.archivedAt);
-  const floorNumber = (project: Project) =>
-    String(orderedProjects.findIndex((entry) => entry.id === project.id) + 1).padStart(2, '0');
-
   return (
     <aside className="floor-directory card" aria-label="Building directory">
       <div className="directory-head">
@@ -44,30 +43,38 @@ export function FloorDirectory({
         >
           <span className="floor-number">L</span>
           <span>
-            <strong>Lobby</strong>
+            <strong>
+              <span>Lobby</span>
+            </strong>
             <small>{unassignedTaskCount} unassigned tasks</small>
           </span>
           <ChevronRight size={14} />
         </button>
-        {activeProjects.map((project) => (
+        {activeFloors.map(({ project, number, summary }) => (
           <button
             key={project.id}
             data-active={selectedProjectId === project.id}
             aria-pressed={selectedProjectId === project.id}
             onClick={() => onSelectProject(project.id)}
           >
-            <span className="floor-number">{floorNumber(project)}</span>
+            <span className="floor-number">{number}</span>
             <span>
-              <strong>{project.name}</strong>
-              <small>
-                {project.employeeIds.length} {project.employeeIds.length === 1 ? 'employee' : 'employees'}
-              </small>
+              <strong>
+                <span>{project.name}</span>
+                {project.openHandoffs > 0 && (
+                  <em className="handoff-badge" title={`${project.openHandoffs} open handoffs`}>
+                    {project.openHandoffs}
+                  </em>
+                )}
+              </strong>
+              <small>{countsLabel(summary)}</small>
+              <small>{relativeTime(summary.lastActivity)}</small>
             </span>
             <ChevronRight size={14} />
           </button>
         ))}
       </div>
-      {!activeProjects.length && (
+      {!activeFloors.length && (
         <div className="directory-empty">
           <p>Create a floor for each project, then staff it with the employees it needs.</p>
           <button className="text-button" onClick={onNewProject} disabled={!canCreate}>
@@ -75,10 +82,10 @@ export function FloorDirectory({
           </button>
         </div>
       )}
-      {archivedProjects.length > 0 && (
+      {archivedFloors.length > 0 && (
         <div className="directory-archive">
           <span>ARCHIVED</span>
-          {archivedProjects.map((project) => (
+          {archivedFloors.map(({ project, number }) => (
             <button
               key={project.id}
               data-active={selectedProjectId === project.id}
@@ -87,15 +94,15 @@ export function FloorDirectory({
             >
               <Archive size={13} />
               <span>
-                {floorNumber(project)} · {project.name}
+                {number} · {project.name}
               </span>
             </button>
           ))}
         </div>
       )}
       <div className="directory-footer">
-        <span>{activeProjects.length}</span>
-        <p>active project {activeProjects.length === 1 ? 'floor' : 'floors'}</p>
+        <span>{activeFloors.length}</span>
+        <p>active project {activeFloors.length === 1 ? 'floor' : 'floors'}</p>
       </div>
     </aside>
   );

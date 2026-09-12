@@ -55,6 +55,8 @@ export function PageContent(props: PageContentProps) {
       <FloorPage
         dashboard={dashboard}
         configured={props.configured}
+        actions={actions}
+        run={run}
         onPage={go}
         onEmployee={(id) => {
           props.onSelectEmployee(id);
@@ -68,7 +70,7 @@ export function PageContent(props: PageContentProps) {
         onSelectProject={props.onSelectProject}
         onNewProject={() => props.onProjectEditor('new')}
         onEditProject={props.onProjectEditor}
-        onNewTask={(projectId) => props.onNewTask(projectId)}
+        onNewTask={props.onNewTask}
       />
     );
 
