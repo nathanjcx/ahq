@@ -1,4 +1,4 @@
-import { v } from 'convex/values';
+import { v, type Infer } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import {
@@ -318,5 +318,74 @@ export const taskSummary = query({
       inferred: summary.inferred,
       createdAt: summary.createdAt,
     };
+  },
+});
+
+const janitorLogView = v.object({
+  id: v.id('memories'),
+  action: v.union(v.literal('merged'), v.literal('promoted'), v.literal('contested')),
+  at: v.number(),
+  scope: memoryScope,
+  scopeId: v.string(),
+  text: v.string(),
+  detail: v.string(),
+  authorName: v.string(),
+});
+
+/**
+ * The janitor's log. Curation leaves its record on the claims themselves — a merge is a janitor's
+ * claim with the ones it replaced pointing at it, a promotion is a workspace claim naming its
+ * source, a contest is a reason written across a pair — so the log is read back off those rather
+ * than kept twice. An archive the janitor performed is indistinguishable from a person's and is not
+ * claimed here.
+ */
+export const janitorLog = query({
+  args: {},
+  returns: v.array(janitorLogView),
+  handler: async (ctx) => {
+    const { workspace, actor, role } = await requireWorkspace(ctx);
+    const rows = await ctx.db
+      .query('memories')
+      .withIndex('by_workspace_status', (q) => q.eq('workspaceId', workspace._id))
+      .collect();
+    const readable = await readableBy(ctx, workspace._id, actor, role);
+    const replaced = new Map<string, number>();
+    for (const row of rows)
+      if (row.supersedesId) replaced.set(row.supersedesId, (replaced.get(row.supersedesId) ?? 0) + 1);
+    const entries: Infer<typeof janitorLogView>[] = [];
+    // A contest marks both sides with the same reason, so the pair is one line in the log.
+    const pairs = new Set<string>();
+    for (const row of rows) {
+      if (!(await readable(row))) continue;
+      const common = {
+        id: row._id,
+        scope: row.scope,
+        scopeId: row.scopeId,
+        text: row.text,
+        authorName: row.authorName,
+      };
+      if (row.author === 'janitor') {
+        const count = replaced.get(row._id) ?? 0;
+        entries.push(
+          row.sourceMemoryId
+            ? { ...common, action: 'promoted', at: row.createdAt, detail: 'Proposed for the whole workspace' }
+            : {
+                ...common,
+                action: 'merged',
+                at: row.createdAt,
+                detail: count
+                  ? `Replaced ${count} overlapping ${count === 1 ? 'claim' : 'claims'}`
+                  : 'Written during curation',
+              },
+        );
+      }
+      if (row.status === 'contested' && row.contestReason) {
+        const pair = [String(row._id), String(row.contestedWithId ?? '')].sort().join('|');
+        if (pairs.has(pair)) continue;
+        pairs.add(pair);
+        entries.push({ ...common, action: 'contested', at: row.updatedAt, detail: row.contestReason });
+      }
+    }
+    return entries.sort((a, b) => b.at - a.at).slice(0, 100);
   },
 });

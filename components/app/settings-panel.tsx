@@ -1,192 +1,106 @@
 'use client';
 
-import { CheckCircle2, Cloud, LockKeyhole } from 'lucide-react';
 import { useState } from 'react';
-import { modelName } from '../shared/format';
 import { Sheet } from '../shared/sheet';
-import type { Dashboard, ModelUsage } from '@/lib/contracts';
+import { SkeletonList } from '../shared/skeleton';
+import { useUiQuery } from '../shared/use-ui-query';
+import type { Actions } from './actions';
+import { PlanSection } from './settings/plan-section';
+import { PoliciesSection } from './settings/policies-section';
+import { ScheduleSection } from './settings/schedule-section';
+import { formId, sections, type SectionId, type SectionProps } from './settings/sections';
+import { StandardsSection } from './settings/standards-section';
+import { WorkspaceSection } from './settings/workspace-section';
+import type { Dashboard } from '@/lib/contracts';
+import { uiApi } from '@/lib/ui-api';
 
-/** Cached tokens as a share of input tokens, the practical cache hit rate. */
-function cacheHitRate(usage: ModelUsage) {
-  return usage.input === 0 ? 'n/a' : `${Math.round((usage.cached / usage.input) * 100)}%`;
-}
-
+/**
+ * Everything a workspace decides about itself, in five sections. Settings are stored whole, so each
+ * section saves the object it was given with its own fields changed.
+ */
 export function SettingsPanel({
   dashboard,
   configured,
+  canManageWorkspace,
+  actions,
+  run,
   onClose,
-  onBootstrap,
-  onTokenCap,
 }: {
   dashboard: Dashboard;
   configured: boolean;
+  canManageWorkspace: boolean;
+  actions: Actions;
+  run: (work: () => Promise<unknown>, success: string) => Promise<boolean>;
   onClose: () => void;
-  onBootstrap: (name: string) => void;
-  onTokenCap: (monthlyTokenCap: number) => void;
 }) {
   const workspace = dashboard.workspace;
-  const [name, setName] = useState(workspace?.name ?? '');
-  const [tokenCap, setTokenCap] = useState(String(workspace?.monthlyTokenCap ?? 0));
-  const canManage = workspace?.role === 'owner' || workspace?.role === 'admin';
+  const [active, setActive] = useState<SectionId>('workspace');
+  const settings = useUiQuery(uiApi.workspaceSettings, workspace ? {} : 'skip');
+
+  // Before the workspace exists there is nothing for the other sections to read or save.
+  const available = workspace ? sections : sections.slice(0, 1);
+  const section = available.find((entry) => entry.id === active) ?? available[0];
+  const props: SectionProps | null = settings
+    ? {
+        settings,
+        canManage: canManageWorkspace,
+        save: (next, success) => run(() => actions.saveWorkspaceSettings(next), success),
+      }
+    : null;
+
   return (
     <Sheet
+      wide
       title="Workspace settings"
-      subtitle="Identity, token usage, and environment status for this workspace."
+      subtitle="The hours the tower keeps, what it may spend, who decides what, and the standard it is held to."
       onClose={onClose}
       footer={
         !workspace ? (
-          <button className="primary-button full" type="submit" form="bootstrap-form" disabled={!configured}>
+          <button className="primary-button full" type="submit" form={formId('workspace')} disabled={!configured}>
             Create workspace
           </button>
-        ) : canManage ? (
-          <button className="primary-button full" type="submit" form="token-cap-form">
-            Save token cap
+        ) : canManageWorkspace && (section.id === 'workspace' || props) ? (
+          <button className="primary-button full" type="submit" form={formId(section.id)}>
+            {section.save}
           </button>
         ) : undefined
       }
     >
-      <div className="settings-stack">
-        {configured ? (
-          <div className="settings-status good">
-            <CheckCircle2 size={18} />
-            <span>
-              <strong>Application connected</strong>
-              <small>
-                {dashboard.viewer.name
-                  ? `Signed in as ${dashboard.viewer.name}.`
-                  : 'Clerk and Convex are configured.'}
-              </small>
-            </span>
-          </div>
-        ) : (
-          <div className="settings-status">
-            <Cloud size={18} />
-            <span>
-              <strong>Preview mode</strong>
-              <small>Server environment variables are not available yet.</small>
-            </span>
-          </div>
-        )}
-        {!workspace ? (
-          <form
-            id="bootstrap-form"
-            className="form-stack"
-            onSubmit={(event) => {
-              event.preventDefault();
-              onBootstrap(name.trim());
-            }}
-          >
-            <label>
-              Workspace name
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Acme Operations"
-                required
-              />
-            </label>
-          </form>
-        ) : (
-          <>
-            <section className="usage-summary">
-              <span className="eyebrow">TOKEN USAGE · {workspace.usage.period.toUpperCase()}</span>
-              {workspace.usage.byModel.length ? (
-                <table className="usage-table">
-                  <thead>
-                    <tr>
-                      <th>Model</th>
-                      <th>Input</th>
-                      <th>Cached</th>
-                      <th>Output</th>
-                      <th>Cache hits</th>
-                      <th>Tasks</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {workspace.usage.byModel.map((usage) => (
-                      <tr key={usage.model}>
-                        <th scope="row">{modelName(usage.model)}</th>
-                        <td data-label="Input">{usage.input.toLocaleString()}</td>
-                        <td data-label="Cached">{usage.cached.toLocaleString()}</td>
-                        <td data-label="Output">{usage.output.toLocaleString()}</td>
-                        <td data-label="Cache hits">{cacheHitRate(usage)}</td>
-                        <td data-label="Tasks">{usage.tasks.toLocaleString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p>No tokens recorded in this period yet.</p>
-              )}
-            </section>
-            {canManage ? (
-              <form
-                id="token-cap-form"
-                className="form-stack"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  onTokenCap(Number(tokenCap));
-                }}
-              >
-                <label>
-                  Monthly token cap
-                  <input
-                    type="number"
-                    min="0"
-                    step="1000"
-                    value={tokenCap}
-                    onChange={(e) => setTokenCap(e.target.value)}
-                  />
-                  <small>
-                    Counted against input plus output tokens for the period. Use 0 for no limit. New tasks and
-                    follow-up messages are refused once the cap is reached.
-                  </small>
-                </label>
-              </form>
-            ) : (
-              <div className="settings-status">
-                <LockKeyhole size={18} />
-                <span>
-                  <strong>Usage limits managed by an administrator</strong>
-                  <small>Your workspace owner controls the monthly token cap.</small>
-                </span>
-              </div>
-            )}
-          </>
-        )}
-        <div id="setup" className="setup-list">
-          <span className="eyebrow">SETUP CHECKLIST</span>
-          <h3>Before the first real task</h3>
-          <ol>
-            <li>
-              <span>1</span>
-              <div>
-                <strong>Connect authentication</strong>
-                <small>Add the Clerk publishable and secret keys.</small>
-              </div>
-            </li>
-            <li>
-              <span>2</span>
-              <div>
-                <strong>Deploy application data</strong>
-                <small>Set the Convex deployment URL and deploy functions.</small>
-              </div>
-            </li>
-            <li>
-              <span>3</span>
-              <div>
-                <strong>Start the worker and gateway</strong>
-                <small>Add the OpenAI key and shared service secret on Railway.</small>
-              </div>
-            </li>
-            <li>
-              <span>4</span>
-              <div>
-                <strong>Connect one MCP provider</strong>
-                <small>Grant the smallest useful set of tools and resources.</small>
-              </div>
-            </li>
-          </ol>
+      <div className="settings-shell">
+        <nav className="settings-sections" aria-label="Settings sections">
+          {available.map((entry) => (
+            <button
+              key={entry.id}
+              data-active={entry.id === active}
+              aria-current={entry.id === active}
+              onClick={() => setActive(entry.id)}
+            >
+              <strong>{entry.label}</strong>
+              <small>{entry.hint}</small>
+            </button>
+          ))}
+        </nav>
+        <div className="settings-section">
+          <h3>{section.label}</h3>
+          {section.id === 'workspace' ? (
+            <WorkspaceSection
+              dashboard={dashboard}
+              configured={configured}
+              canManage={canManageWorkspace}
+              onBootstrap={(name) => void run(() => actions.bootstrap(name), 'Workspace created')}
+              onTokenCap={(cap) => void run(() => actions.setTokenCap(cap), 'Token cap updated')}
+            />
+          ) : !props ? (
+            <SkeletonList kind="entry" rows={4} label="Loading settings" />
+          ) : active === 'schedule' ? (
+            <ScheduleSection key={props.settings.updatedAt} {...props} />
+          ) : active === 'plan' ? (
+            <PlanSection key={props.settings.updatedAt} {...props} />
+          ) : active === 'policies' ? (
+            <PoliciesSection key={props.settings.updatedAt} {...props} />
+          ) : (
+            <StandardsSection key={props.settings.updatedAt} {...props} />
+          )}
         </div>
       </div>
     </Sheet>
