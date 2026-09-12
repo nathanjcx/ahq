@@ -270,6 +270,11 @@
   min-height: 280px;
 }
 .floor-canvas-compact .office-legend {
+  /* The compact chrome keeps only the sound toggle; the legend belongs to the lobby. */
+  min-height: 33px;
+  justify-content: flex-end;
+}
+.floor-canvas-compact .office-legend > span {
   display: none;
 }
 .region-team .floor-team {
@@ -448,5 +453,101 @@
   .handoff-form select,
   .handoff-form textarea {
     font-size: 16px;
+  }
+}
+
+/* Replay: the toggle sits in the office toolbar, its bar overlays the stage. */
+.floor-canvas {
+  position: relative;
+}
+.floor-replay-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 10px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.55px;
+  cursor: pointer;
+}
+.floor-replay-toggle:hover:not(:disabled) {
+  border-color: #b8c8a8;
+  color: #5d7050;
+}
+.floor-replay-toggle[aria-pressed='true'] {
+  border-color: #aec1a2;
+  background: #eef3e8;
+  color: #4f6644;
+}
+.floor-replay-toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.floor-replay {
+  /* Sits over the stage; the office's own controls step up to make room. */
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 44px;
+  z-index: 42;
+  display: grid;
+  gap: 6px;
+  padding: 9px 11px;
+  border: 1px solid #dce4d4;
+  border-radius: 8px;
+  background: #fbfcf6f2;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 14px #4b645514;
+}
+.floor-canvas:has(.floor-replay) .office-view-controls {
+  bottom: 106px;
+}
+.floor-replay-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.floor-replay-controls select {
+  flex: 0 1 210px;
+  min-width: 0;
+  font-size: 11px;
+}
+.floor-replay-controls input[type='range'] {
+  flex: 1;
+  min-width: 60px;
+  accent-color: #7d9476;
+}
+.floor-replay-speed {
+  color: #7d8c7a;
+  font-size: 10px;
+  font-weight: 700;
+}
+.floor-replay-entry {
+  margin: 0;
+  color: #6a7a68;
+  font-size: 11px;
+  line-height: 1.35;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+@media (max-width: 720px) {
+  /* A narrow stage cannot hold both; replay is a mode you leave to zoom. */
+  .floor-canvas:has(.floor-replay) .office-view-controls {
+    display: none;
+  }
+  .floor-replay-controls {
+    flex-wrap: wrap;
+  }
+  .floor-replay-controls select {
+    flex: 1 1 100%;
   }
 }

@@ -35,6 +35,7 @@ export function FloorView({
   onNewTask,
   onEditProject,
   onArchive,
+  replay,
 }: {
   project: Project;
   floorLabel: string;
@@ -51,6 +52,8 @@ export function FloorView({
   onNewTask: (employeeId?: string) => void;
   onEditProject: () => void;
   onArchive: (archived: boolean) => void;
+  /** An optional control for this floor's scene, shown beside Edit and Archive. */
+  replay?: ReactNode;
 }) {
   const [region, setRegion] = useState<Region>('board');
   const [briefOpen, setBriefOpen] = useState(false);
@@ -88,6 +91,7 @@ export function FloorView({
           </div>
         </div>
         <div className="floor-heading-actions">
+          {replay}
           <button className="secondary-button compact" onClick={onEditProject}>
             <Pencil size={14} /> Edit
           </button>
@@ -122,6 +126,8 @@ export function FloorView({
         <section className="floor-region region-team" aria-label="Floor team">
           <FloorTeam
             floorName={`${floorLabel} · ${project.name}`}
+            projectId={project.id}
+            configured={configured}
             archived={archived}
             staff={staff}
             officeEmployees={officeEmployees}

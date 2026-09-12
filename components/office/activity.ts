@@ -131,7 +131,13 @@ export function deriveActivities(input: ActivityInput): Map<string, EmployeeActi
       employeeByName,
       now,
     });
-    const bubble = bubbleFor(active, state.activity, handoff, now);
+    // The bubble belongs to whichever task explains the activity, not only a live one.
+    const bubble = bubbleFor(
+      own.find((task) => task.id === state.taskId),
+      state.activity,
+      handoff,
+      now,
+    );
     const attention = attentionFor(own, proposals, tasksById, now);
     result.set(employee.id, {
       ...state,
@@ -217,12 +223,12 @@ function activityFor({
 }
 
 function bubbleFor(
-  active: Task | undefined,
+  task: Task | undefined,
   activity: Activity,
   handoff: ProjectPost | undefined,
   now: number,
 ): string | undefined {
-  const message = active?.lastMessage;
+  const message = task?.lastMessage;
   if (message?.text.trim() && now - message.createdAt < BUBBLE_MS) return firstSentence(message.text);
   if (activity === 'talking' && handoff?.handoff?.brief) return firstSentence(handoff.handoff.brief);
   return undefined;

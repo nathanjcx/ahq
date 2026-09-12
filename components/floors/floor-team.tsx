@@ -1,14 +1,19 @@
 'use client';
 
 import { Pencil, Plus, Users } from 'lucide-react';
+import { useState } from 'react';
 import type { Employee } from '@/lib/contracts';
+import type { OfficeSceneData } from '../office/office-stage';
 import type { OfficeEmployee } from '../office/office-view';
 import { EmptyMini } from '../shared/empty';
 import { Avatar } from '../shared/marks';
+import { FloorReplay } from './floor-replay';
 import { FloorScene } from './floor-scene';
 
 export function FloorTeam({
   floorName,
+  projectId,
+  configured,
   archived,
   staff,
   officeEmployees,
@@ -18,6 +23,10 @@ export function FloorTeam({
   onEditProject,
 }: {
   floorName: string;
+  /** This floor, so the office can read its board and replay its finished tasks. */
+  projectId: string;
+  /** Whether a Convex client exists. */
+  configured: boolean;
   archived: boolean;
   staff: Employee[];
   officeEmployees: OfficeEmployee[];
@@ -26,12 +35,24 @@ export function FloorTeam({
   onNewTask: (employeeId: string) => void;
   onEditProject: () => void;
 }) {
+  const [replay, setReplay] = useState<OfficeSceneData | undefined>(undefined);
   return (
     <>
       <FloorScene
         label={floorName}
         archived={archived}
         compact
+        projectId={projectId}
+        live={configured}
+        scene={replay}
+        controls={
+          <FloorReplay
+            projectId={projectId}
+            live={configured && !archived}
+            employeeIds={staff.map((employee) => employee.id)}
+            onScene={setReplay}
+          />
+        }
         employeeCount={staff.length}
         officeEmployees={officeEmployees}
         emptyMessage={

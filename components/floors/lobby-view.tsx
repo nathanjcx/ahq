@@ -52,6 +52,7 @@ export function LobbyView({
       <div className="floor-overview">
         <FloorScene
           label="Lobby"
+          live={configured}
           employeeCount={lobbyEmployees.length}
           officeEmployees={officeEmployees}
           emptyMessage={

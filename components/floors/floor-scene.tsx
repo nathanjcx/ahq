@@ -1,9 +1,10 @@
 'use client';
 
-import dynamic from 'next/dynamic';
+import { Volume2, VolumeX } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { OfficeStage, type OfficeSceneData } from '../office/office-stage';
 import type { OfficeEmployee } from '../office/office-view';
-
-const OfficeView = dynamic(() => import('../office/office-view'), { ssr: false });
+import { useSound } from '../office/sound';
 
 /** The 3D office, framed by its toolbar and legend. Used by the lobby and by a floor's team rail. */
 export function FloorScene({
@@ -13,6 +14,10 @@ export function FloorScene({
   employeeCount,
   officeEmployees,
   emptyMessage,
+  projectId,
+  live = false,
+  scene,
+  controls,
   onEmployee,
 }: {
   label: string;
@@ -21,24 +26,39 @@ export function FloorScene({
   employeeCount: number;
   officeEmployees: OfficeEmployee[];
   emptyMessage: string;
+  /** The floor on show. Omit for the lobby. */
+  projectId?: string;
+  /** Whether a Convex client exists, so the office may subscribe for live work. */
+  live?: boolean;
+  /** Replaces live work, so replay never touches the subscription. */
+  scene?: OfficeSceneData;
+  /** A control for this scene, such as replay. Sits in the toolbar; its own bar overlays the stage. */
+  controls?: ReactNode;
   onEmployee: (id: string) => void;
 }) {
+  const sound = useSound();
   return (
     <div className={`office-canvas floor-canvas ${compact ? 'floor-canvas-compact' : ''}`}>
       <div className="office-toolbar">
         <span>
-          <span className="live-dot" /> {archived ? 'ARCHIVED OFFICE' : 'LIVE OFFICE'}
+          <span className="live-dot" />{' '}
+          {archived ? 'ARCHIVED OFFICE' : !live ? 'OFFICE' : scene ? 'REPLAY' : 'LIVE OFFICE'}
         </span>
         <span>
+          {controls}
           {employeeCount} {employeeCount === 1 ? 'employee' : 'employees'}
         </span>
       </div>
       <div className="office-stage floor-stage">
-        <OfficeView
+        <OfficeStage
           employees={officeEmployees}
           onSelect={onEmployee}
           label={label}
           emptyMessage={emptyMessage}
+          archived={archived}
+          projectId={projectId}
+          live={live && !archived}
+          scene={scene}
         />
       </div>
       <div className="office-legend">
@@ -51,6 +71,16 @@ export function FloorScene({
         <span>
           <i className="status-dot idle" /> Available
         </span>
+        <button
+          type="button"
+          className="office-sound"
+          aria-pressed={sound.on}
+          title={sound.on ? 'Turn office sound off' : 'Turn office sound on'}
+          onClick={sound.toggle}
+        >
+          {sound.on ? <Volume2 size={12} /> : <VolumeX size={12} />}
+          {sound.on ? 'Sound on' : 'Sound off'}
+        </button>
       </div>
     </div>
   );
