@@ -2,10 +2,11 @@
 
 import { Check, RotateCcw, ShieldCheck, Wrench } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { providerName, relativeTime } from '../shared/format';
+import { providerName } from '../shared/format';
 import { JsonView } from '../shared/json-view';
 import { ProviderMark } from '../shared/marks';
 import { StateDiff, changedFields } from '../shared/state-diff';
+import { relativeTime } from '../shared/time';
 import type { ActionProposal } from '@/lib/contracts';
 
 const CANNOT_DECIDE = 'Only the connection owner or a workspace admin can decide';

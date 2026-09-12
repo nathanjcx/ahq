@@ -3,12 +3,15 @@
 import { BadgeCheck, Bot, FileText, LockKeyhole, Plus, Store } from 'lucide-react';
 import { useState } from 'react';
 import { EmptyMini } from '../shared/empty';
-import { modelName, relativeTime } from '../shared/format';
+import { modelName } from '../shared/format';
 import { PageIntro } from '../shared/page-intro';
+import { relativeTime } from '../shared/time';
+import type { DraftInput } from './draft-input';
 import { draftPublishIssues, type EditorDraft } from './draft-issues';
 import { EmployeeEditor } from './employee-editor';
 import { groupRegistryTools } from './registry';
 import type { Listing, RegistryTool } from '@/lib/contracts';
+import './admin.css';
 
 export function MarketplaceStudioPage({
   drafts,
@@ -21,7 +24,7 @@ export function MarketplaceStudioPage({
   drafts: EditorDraft[];
   listings: Listing[];
   registryTools: RegistryTool[];
-  onSave: (draft: Record<string, unknown>) => Promise<boolean>;
+  onSave: (draft: DraftInput) => Promise<boolean>;
   onPublish: (id: string) => void;
   onRetire: (id: string) => void;
 }) {

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { nav } from '../components/app/nav';
+import { slug } from '../lib/text';
 
 /**
  * Photographs the whole interface against the /qa fixture at both viewports and checks the two
@@ -74,7 +75,7 @@ for (const viewport of viewports) {
         await page.waitForTimeout(4000);
       }
       await expectNoOverflow(page, viewport.width);
-      await shoot(page, viewport.name, label.toLowerCase().replace(/\s+/g, '-'));
+      await shoot(page, viewport.name, slug(label));
     }
     expect(errors).toEqual([]);
   });
@@ -95,7 +96,7 @@ for (const viewport of viewports) {
     for (const tab of ['Actions', 'Audit', 'Conversation']) {
       await page.getByRole('tab', { name: new RegExp(`^${tab}`) }).click();
       await expectNoOverflow(page, viewport.width);
-      await shoot(page, viewport.name, `task-${tab.toLowerCase()}`);
+      await shoot(page, viewport.name, `task-${slug(tab)}`);
     }
     await page.getByRole('button', { name: 'Hand off…' }).click();
     await expect(page.getByRole('dialog', { name: 'Hand off this task' })).toBeVisible();
@@ -151,7 +152,7 @@ for (const viewport of viewports) {
         await regionSwitch.getByRole('button', { name: region, exact: true }).click();
       await expect(page.locator(`.region-${region.toLowerCase()}`)).toBeVisible();
       await expectNoOverflow(page, viewport.width);
-      await shoot(page, viewport.name, `floor-${region.toLowerCase()}`);
+      await shoot(page, viewport.name, `floor-${slug(region)}`);
     }
 
     if (mobile) {

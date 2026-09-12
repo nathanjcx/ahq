@@ -2,6 +2,7 @@
 
 import { SignInButton } from '@clerk/nextjs';
 import { ArrowRight, LoaderCircle, ShieldCheck, Sparkles } from 'lucide-react';
+import './app.css';
 
 export function SignInScreen() {
   return (

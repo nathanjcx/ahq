@@ -1,11 +1,11 @@
 'use client';
 
 import { Check, Copy } from 'lucide-react';
-import { useState } from 'react';
+import { useCopy } from '../shared/use-copy';
 
 /** A URL an administrator has to paste into a provider console, with a copy button. */
 export function CopyLine({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false);
+  const { state, copy } = useCopy();
   return (
     <div className="ops-copy">
       <span>
@@ -16,18 +16,10 @@ export function CopyLine({ label, value }: { label: string; value: string }) {
         type="button"
         className="secondary-button compact"
         disabled={!value}
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(value);
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1800);
-          } catch {
-            setCopied(false);
-          }
-        }}
+        onClick={() => copy(value)}
       >
-        {copied ? <Check size={13} /> : <Copy size={13} />}
-        {copied ? 'Copied' : 'Copy'}
+        {state === 'copied' ? <Check size={13} /> : <Copy size={13} />}
+        {state === 'copied' ? 'Copied' : 'Copy'}
       </button>
     </div>
   );

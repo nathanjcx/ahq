@@ -47,7 +47,7 @@ export function FloorSwitcher({
       {open && (
         <Sheet
           title="Building directory"
-          subtitle="Every floor floor, and the lobby for work with no floor of its own."
+          subtitle="Every floor, and the lobby for work with no floor of its own."
           onClose={() => setOpen(false)}
           footer={
             <button
@@ -58,7 +58,7 @@ export function FloorSwitcher({
                 onNewFloor();
               }}
             >
-              <Plus size={16} /> New floor floor
+              <Plus size={16} /> New floor
             </button>
           }
         >

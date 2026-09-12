@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { PageIntro } from '../shared/page-intro';
 import { providerRows } from './operations-api';
 import { OperationsOverview } from './operations-status';
@@ -14,7 +14,12 @@ import type {
   ProviderReadiness,
   RegistryTool,
 } from '@/lib/contracts';
-import './operations.css';
+import './admin.css';
+
+/** The origin never changes while the page is open, so there is nothing to subscribe to. */
+const subscribeToNothing = () => () => {};
+const readOrigin = () => window.location.origin;
+const readNoOrigin = () => '';
 
 export function OperationsPage({
   configs,
@@ -39,9 +44,9 @@ export function OperationsPage({
   onImportTools: (connectionId: string) => Promise<number | null>;
   onNotice: (text: string) => void;
 }) {
-  // The URLs an administrator registers with a provider depend on where the app is served from.
-  const [origin, setOrigin] = useState('');
-  useEffect(() => setOrigin(window.location.origin), []);
+  // The URLs an administrator registers with a provider depend on where the app is served from,
+  // which the server cannot know: it is empty until the browser takes over.
+  const origin = useSyncExternalStore(subscribeToNothing, readOrigin, readNoOrigin);
   const rows = providerRows(configs, readiness);
 
   return (

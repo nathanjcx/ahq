@@ -2,26 +2,29 @@
 
 import { useQuery } from 'convex/react';
 import { History, Pause, Play, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { deriveActivities, providerForTool } from '../office/activity';
 import type { OfficeSceneData } from '../office/office-stage';
 import type { OfficeProvider } from '../office/office-view';
 import { webClient } from '@/lib/api/client';
 import type { ActionProposal, ActivityEvent, AuditTimeline, Task } from '@/lib/contracts';
 import { providers as providerCatalog } from '@/lib/providers';
+import { clip, normalizeWhitespace } from '@/lib/text';
 import { uiApi } from '@/lib/ui-api';
 
 /** Replay runs at ten times the recorded pace. */
 const SPEED = 10;
 const TICK_MS = 100;
 const REPLAYABLE: Task['status'][] = ['completed', 'failed', 'cancelled', 'uncertain'];
+/** How much of an entry fits under the scrubber. */
+const CAPTION_CHARS = 180;
 
 export type FloorReplayProps = {
   floorId: string;
   /** Whether a Convex client exists. Without one there is nothing to replay. */
   live: boolean;
-  /** The employee ids on this floor, so replay only dresses people who are here. */
-  employeeIds: string[];
+  /** Who to dress when the replayed task names no employee: the first person on this floor. */
+  defaultEmployeeId: string | undefined;
   /** The scene to show, or undefined to hand the floor back to live work. */
   onScene: (scene: OfficeSceneData | undefined) => void;
 };
@@ -146,19 +149,25 @@ export function entryAt(timeline: AuditTimeline, at: number): string {
             ? `${entry.tool}: ${entry.outcome}`
             : `Proposed ${entry.tool}: ${entry.summary}`;
   }
-  return text.replace(/\s+/g, ' ').slice(0, 180);
+  return clip(normalizeWhitespace(text), CAPTION_CHARS);
 }
 
-function LiveReplay({ floorId, employeeIds, onScene }: FloorReplayProps) {
+function LiveReplay({ floorId, defaultEmployeeId, onScene }: FloorReplayProps) {
   const dashboard = useQuery(uiApi.dashboard, {});
   const [open, setOpen] = useState(false);
   const [taskId, setTaskId] = useState('');
-  const [timeline, setTimeline] = useState<AuditTimeline | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // The loaded trail names the task it belongs to, so choosing another one reads as loading
+  // without an effect that clears state first.
+  const [loaded, setLoaded] = useState<{
+    taskId: string;
+    timeline: AuditTimeline | null;
+    error: string | null;
+  } | null>(null);
   const [at, setAt] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const onSceneRef = useRef(onScene);
-  onSceneRef.current = onScene;
+  const current = loaded?.taskId === taskId ? loaded : null;
+  const timeline = current?.timeline ?? null;
+  const error = current?.error ?? null;
 
   const finished = useMemo(
     () =>
@@ -169,24 +178,28 @@ function LiveReplay({ floorId, employeeIds, onScene }: FloorReplayProps) {
     [dashboard, floorId],
   );
   const task = finished.find((item) => item.id === taskId);
-  const span = timeline?.entries.length
-    ? { from: timeline.entries[0].at, to: timeline.entries[timeline.entries.length - 1].at }
-    : null;
+  const span = useMemo(
+    () =>
+      timeline?.entries.length
+        ? { from: timeline.entries[0].at, to: timeline.entries[timeline.entries.length - 1].at }
+        : null,
+    [timeline],
+  );
 
   useEffect(() => {
     if (!open || !taskId) return;
     let cancelled = false;
-    setError(null);
-    setTimeline(null);
     webClient
       .audit(taskId)
       .then((data) => {
         if (cancelled) return;
-        setTimeline(data);
+        setLoaded({ taskId, timeline: data, error: null });
         setAt(data.entries[0]?.at ?? 0);
         setPlaying(true);
       })
-      .catch(() => !cancelled && setError('This timeline could not be loaded.'));
+      .catch(() => {
+        if (!cancelled) setLoaded({ taskId, timeline: null, error: 'This timeline could not be loaded.' });
+      });
     return () => {
       cancelled = true;
     };
@@ -195,8 +208,8 @@ function LiveReplay({ floorId, employeeIds, onScene }: FloorReplayProps) {
   useEffect(() => {
     if (!playing || !span) return;
     const timer = setInterval(() => {
-      setAt((current) => {
-        const next = current + TICK_MS * SPEED;
+      setAt((position) => {
+        const next = position + TICK_MS * SPEED;
         if (next >= span.to) {
           setPlaying(false);
           return span.to;
@@ -205,19 +218,19 @@ function LiveReplay({ floorId, employeeIds, onScene }: FloorReplayProps) {
       });
     }, TICK_MS);
     return () => clearInterval(timer);
-  }, [playing, span?.from, span?.to]);
+  }, [playing, span]);
 
   // The floor above owns the override, so it always learns when replay ends.
+  const employeeId = task?.employeeId ?? defaultEmployeeId;
   useEffect(() => {
     if (!open || !timeline) {
-      onSceneRef.current(undefined);
+      onScene(undefined);
       return;
     }
-    const employeeId = task?.employeeId ?? employeeIds[0];
-    onSceneRef.current(sceneAt(timeline, employeeId, at));
-  }, [open, timeline, at, task?.employeeId, employeeIds]);
+    onScene(sceneAt(timeline, employeeId, at));
+  }, [open, timeline, at, employeeId, onScene]);
 
-  useEffect(() => () => onSceneRef.current(undefined), []);
+  useEffect(() => () => onScene(undefined), [onScene]);
 
   return (
     <>

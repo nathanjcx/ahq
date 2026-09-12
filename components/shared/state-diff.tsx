@@ -1,6 +1,7 @@
 'use client';
 
 import { JsonView, jsonText } from './json-view';
+import { pluralize } from '@/lib/text';
 
 /** States arrive parsed from the audit timeline and as JSON text on a proposal. */
 function asFields(value: unknown): Record<string, unknown> | null {
@@ -99,9 +100,7 @@ export function StateDiff({ before, after }: { before: unknown; after?: unknown 
       )}
       {unchanged.length > 0 && (
         <details className="diff-unchanged">
-          <summary>
-            {unchanged.length} unchanged {unchanged.length === 1 ? 'field' : 'fields'}
-          </summary>
+          <summary>{pluralize(unchanged.length, 'unchanged field')}</summary>
           {unchanged.map((field) => (
             <FieldRow key={field} field={field} values={[beforeFields[field]]} />
           ))}

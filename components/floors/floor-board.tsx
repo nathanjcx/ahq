@@ -4,8 +4,9 @@ import { useQuery } from 'convex/react';
 import { ArrowUpRight, MessagesSquare, Send, UserPlus, X } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { EmptyPane } from '../shared/empty';
-import { relativeTime, safeHttpsUrl } from '../shared/format';
+import { safeHttpsUrl } from '../shared/format';
 import { SkeletonList } from '../shared/skeleton';
+import { relativeTime } from '../shared/time';
 import type { Employee, FloorPost } from '@/lib/contracts';
 import { asId, uiApi } from '@/lib/ui-api';
 

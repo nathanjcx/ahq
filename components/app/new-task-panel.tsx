@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowRight, ShieldCheck } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Sheet } from '../shared/sheet';
 import type { Employee, Floor } from '@/lib/contracts';
 
@@ -23,7 +23,7 @@ export function NewTaskPanel({
   onCreate: (employeeId: string, title: string, prompt: string, floorId?: string) => Promise<void>;
 }) {
   const activeFloors = floors.filter((floor) => !floor.archivedAt);
-  const [floorId, setProjectId] = useState(
+  const [floorId, setFloorId] = useState(
     defaultFloorId && activeFloors.some((floor) => floor.id === defaultFloorId) ? defaultFloorId : '',
   );
   const selectedFloor = activeFloors.find((floor) => floor.id === floorId);
@@ -31,16 +31,15 @@ export function NewTaskPanel({
     (employee) =>
       employee.status === 'ready' && (!selectedFloor || selectedFloor.employeeIds.includes(employee.id)),
   );
-  const [employeeId, setEmployeeId] = useState(
-    defaultEmployee && ready.some((e) => e.id === defaultEmployee) ? defaultEmployee : (ready[0]?.id ?? ''),
+  const [chosen, setChosen] = useState(
+    defaultEmployee && ready.some((e) => e.id === defaultEmployee) ? defaultEmployee : '',
   );
+  // Changing floor narrows the list, so the choice falls back to the first person still on it.
+  const employeeId = ready.some((employee) => employee.id === chosen) ? chosen : (ready[0]?.id ?? '');
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const unavailableFloor = Boolean(floorId && !selectedFloor);
-  useEffect(() => {
-    if (!ready.some((employee) => employee.id === employeeId)) setEmployeeId(ready[0]?.id ?? '');
-  }, [employeeId, ready]);
   return (
     <Sheet
       title="Assign new work"
@@ -81,8 +80,8 @@ export function NewTaskPanel({
         }}
       >
         <label>
-          Floor floor
-          <select value={floorId} onChange={(event) => setProjectId(event.target.value)}>
+          Floor
+          <select value={floorId} onChange={(event) => setFloorId(event.target.value)}>
             <option value="">Lobby · Unassigned</option>
             {activeFloors.map((floor) => (
               <option key={floor.id} value={floor.id}>
@@ -100,7 +99,7 @@ export function NewTaskPanel({
         </label>
         <label>
           Employee
-          <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} required>
+          <select value={employeeId} onChange={(e) => setChosen(e.target.value)} required>
             <option value="" disabled>
               Select an employee
             </option>

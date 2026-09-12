@@ -3,8 +3,8 @@
 import { KeyRound, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { EmptyMini } from '../shared/empty';
-import { relativeTime } from '../shared/format';
 import { ProviderLogo } from '../shared/marks';
+import { relativeTime } from '../shared/time';
 import { CopyLine } from './copy-line';
 import { OAuthClientForm } from './oauth-client-form';
 import {
@@ -20,6 +20,7 @@ import {
 import { ReadinessMark } from './operations-status';
 import type { OAuthClientConfig, ProviderConfig } from '@/lib/contracts';
 import { providerServerUrls, type ProviderDefinition } from '@/lib/providers';
+import { pluralize } from '@/lib/text';
 
 export function ProviderOperationsCard({
   provider,
@@ -71,8 +72,8 @@ export function ProviderOperationsCard({
         <span>
           <strong>{provider.name}</strong>
           <small>
-            {config.enabledUrls.length} of {urls.length} servers enabled · {config.oauthClients.length} OAuth{' '}
-            {config.oauthClients.length === 1 ? 'client' : 'clients'}
+            {config.enabledUrls.length} of {urls.length} servers enabled ·{' '}
+            {pluralize(config.oauthClients.length, 'OAuth client')}
             {config.updatedAt ? ` · changed ${relativeTime(config.updatedAt)}` : ''}
           </small>
         </span>

@@ -1,8 +1,8 @@
 import js from '@eslint/js';
-import tseslint from 'typescript-eslint';
-import reactHooks from 'eslint-plugin-react-hooks';
 import importX from 'eslint-plugin-import-x';
+import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
+import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
@@ -23,12 +23,8 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: [
-            'vitest.config.ts',
-            'playwright.config.ts',
-            'eslint.config.mjs',
-            'next.config.ts',
-          ],
+          // `next.config.ts` is in tsconfig's include, so it must not be listed here.
+          allowDefaultProject: ['vitest.config.ts', 'playwright.config.ts', 'eslint.config.mjs'],
         },
         tsconfigRootDir: import.meta.dirname,
       },
@@ -37,11 +33,6 @@ export default tseslint.config(
     plugins: { 'react-hooks': reactHooks, 'import-x': importX },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      // The React compiler rules below are warnings until the code-quality workstream clears them;
-      // they must return to errors before that workstream merges.
-      'react-hooks/set-state-in-effect': 'warn',
-      'react-hooks/refs': 'warn',
-      'react-hooks/immutability': 'warn',
       'import-x/no-duplicates': 'error',
       'import-x/order': [
         'warn',

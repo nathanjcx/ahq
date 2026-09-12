@@ -21,6 +21,7 @@ import type {
   ProviderReadiness,
   RegistryTool,
 } from '@/lib/contracts';
+import './app.css';
 
 export function WorkspaceShell({
   configured,
@@ -56,8 +57,8 @@ export function WorkspaceShell({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [floorEditor, setFloorEditor] = useState<Floor | 'new' | null>(null);
-  const [selectedFloorId, setSelectedProjectId] = useState<string | null>(null);
-  const [taskProjectId, setTaskProjectId] = useState<string | null>(null);
+  const [selectedFloorId, setSelectedFloorId] = useState<string | null>(null);
+  const [taskFloorId, setTaskFloorId] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -78,7 +79,7 @@ export function WorkspaceShell({
   }
 
   function openNewTask(floorId: string | null = null, employeeId: string | null = null) {
-    setTaskProjectId(floorId);
+    setTaskFloorId(floorId);
     setSelectedEmployee(employeeId);
     setNewTaskOpen(true);
   }
@@ -171,7 +172,7 @@ export function WorkspaceShell({
             go={go}
             onNotice={setNotice}
             selectedFloorId={selectedFloorId}
-            onSelectFloor={setSelectedProjectId}
+            onSelectFloor={setSelectedFloorId}
             selectedEmployee={selectedEmployee}
             onSelectEmployee={setSelectedEmployee}
             selectedTask={selectedTask}
@@ -200,7 +201,7 @@ export function WorkspaceShell({
           employees={dashboard.employees}
           floors={dashboard.floors}
           defaultEmployee={selectedEmployee}
-          defaultFloorId={taskProjectId}
+          defaultFloorId={taskFloorId}
           configured={configured}
           onClose={() => setNewTaskOpen(false)}
           onCreate={async (employeeId, title, prompt, floorId) => {
@@ -222,12 +223,11 @@ export function WorkspaceShell({
           configured={configured && Boolean(workspace)}
           onClose={() => setFloorEditor(null)}
           onSave={async (name, brief, employeeIds) => {
-            let createdProjectId: string | undefined;
+            let createdFloorId: string | undefined;
             const saved = await run(
               async () => {
                 if (floorEditor === 'new') {
-                  const result = await actions.createFloor(name, brief, employeeIds);
-                  createdProjectId = (result as { floorId: string }).floorId;
+                  createdFloorId = (await actions.createFloor(name, brief, employeeIds))?.floorId;
                 } else {
                   await actions.updateFloor(floorEditor.id, name, brief, employeeIds);
                 }
@@ -235,7 +235,7 @@ export function WorkspaceShell({
               floorEditor === 'new' ? 'Floor created' : 'Floor updated',
             );
             if (saved) {
-              if (createdProjectId) setSelectedProjectId(createdProjectId);
+              if (createdFloorId) setSelectedFloorId(createdFloorId);
               setFloorEditor(null);
             }
           }}
@@ -245,7 +245,7 @@ export function WorkspaceShell({
               archived ? 'Floor archived' : 'Floor restored',
             );
             if (saved) {
-              if (archived) setSelectedProjectId(null);
+              if (archived) setSelectedFloorId(null);
               setFloorEditor(null);
             }
           }}

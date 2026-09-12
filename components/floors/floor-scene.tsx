@@ -6,6 +6,7 @@ import { OfficeStage, type OfficeSceneData } from '../office/office-stage';
 import type { OfficeEmployee } from '../office/office-view';
 import { useSound } from '../office/sound';
 import { useLabelMode } from '../office/use-labels';
+import { pluralize } from '@/lib/text';
 
 const LABEL_TITLE = {
   names: 'Labels: names. Show status dots only.',
@@ -52,9 +53,7 @@ export function FloorScene({
           <span className="live-dot" />{' '}
           {archived ? 'ARCHIVED OFFICE' : !live ? 'OFFICE' : scene ? 'REPLAY' : 'LIVE OFFICE'}
         </span>
-        <span>
-          {employeeCount} {employeeCount === 1 ? 'employee' : 'employees'}
-        </span>
+        <span>{pluralize(employeeCount, 'employee')}</span>
       </div>
       <div className="office-stage floor-stage">
         <OfficeStage

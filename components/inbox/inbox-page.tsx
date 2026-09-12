@@ -1,13 +1,15 @@
 'use client';
 
 import { ArrowRight, ExternalLink, Inbox, MessageSquareText, RefreshCw } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { EmptyPane } from '../shared/empty';
-import { providerName, relativeTime } from '../shared/format';
+import { providerName } from '../shared/format';
 import { ProviderMark } from '../shared/marks';
 import { MasterDetail, useMasterDetail } from '../shared/master-detail';
 import { PageIntro } from '../shared/page-intro';
+import { relativeTime } from '../shared/time';
 import type { Employee, InboxItem, Floor } from '@/lib/contracts';
+import './inbox.css';
 
 export function InboxPage({
   items,
@@ -28,21 +30,19 @@ export function InboxPage({
   const { open, openDetail, closeDetail } = useMasterDetail();
   const item = items.find((entry) => entry.id === selected);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
-  const [floorId, setProjectId] = useState('');
-  const [employeeId, setEmployeeId] = useState('');
+  // The assignment draft names the item it belongs to, so opening another starts it empty.
+  const [draft, setDraft] = useState({ itemId: selected, floorId: '', employeeId: '' });
+  const mine = draft.itemId === selected;
+  const floorId = mine ? draft.floorId : '';
   const shown = filter === 'unread' ? items.filter((entry) => entry.status === 'unread') : items;
   const activeFloors = floors.filter((floor) => !floor.archivedAt);
   const selectedFloor = activeFloors.find((floor) => floor.id === floorId);
   const eligibleEmployees = selectedFloor
     ? employees.filter((employee) => selectedFloor.employeeIds.includes(employee.id))
     : employees;
-  useEffect(() => {
-    if (employeeId && !eligibleEmployees.some((employee) => employee.id === employeeId)) setEmployeeId('');
-  }, [eligibleEmployees, employeeId]);
-  useEffect(() => {
-    setProjectId('');
-    setEmployeeId('');
-  }, [selected]);
+  // Narrowing to a floor drops a person who is not on it.
+  const employeeId =
+    mine && eligibleEmployees.some((employee) => employee.id === draft.employeeId) ? draft.employeeId : '';
   return (
     <div>
       <PageIntro
@@ -126,8 +126,13 @@ export function InboxPage({
                   ) : (
                     <>
                       <label>
-                        Floor floor
-                        <select value={floorId} onChange={(event) => setProjectId(event.target.value)}>
+                        Floor
+                        <select
+                          value={floorId}
+                          onChange={(event) =>
+                            setDraft({ itemId: selected, floorId: event.target.value, employeeId })
+                          }
+                        >
                           <option value="">Lobby · Unassigned</option>
                           {activeFloors.map((floor) => (
                             <option key={floor.id} value={floor.id}>
@@ -138,7 +143,12 @@ export function InboxPage({
                       </label>
                       <label>
                         Employee
-                        <select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>
+                        <select
+                          value={employeeId}
+                          onChange={(event) =>
+                            setDraft({ itemId: selected, floorId, employeeId: event.target.value })
+                          }
+                        >
                           <option value="">Choose an employee</option>
                           {eligibleEmployees.map((employee) => (
                             <option key={employee.id} value={employee.id}>

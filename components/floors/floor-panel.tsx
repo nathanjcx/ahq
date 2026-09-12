@@ -37,8 +37,8 @@ export function FloorPanel({
 
   return (
     <Sheet
-      title={floor ? `Edit ${floor.name}` : 'Create floor floor'}
-      subtitle="A floor floor groups its shared brief, staffing, and your private task queue."
+      title={floor ? `Edit ${floor.name}` : 'Create floor'}
+      subtitle="A floor groups its shared brief, staffing, and your private task queue."
       onClose={onClose}
       footer={
         <button

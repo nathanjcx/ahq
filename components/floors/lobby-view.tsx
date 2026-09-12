@@ -3,12 +3,14 @@
 import { ArrowRight, ChevronRight, Clock3, Plus, Users } from 'lucide-react';
 import type { OfficeEmployee } from '../office/office-view';
 import { EmptyMini } from '../shared/empty';
-import { relativeTime, statusLabel } from '../shared/format';
+import { statusLabel } from '../shared/format';
 import { Avatar, StatusMark } from '../shared/marks';
+import { relativeTime } from '../shared/time';
 import { FloorScene } from './floor-scene';
 import type { Employee, Task } from '@/lib/contracts';
+import { pluralize } from '@/lib/text';
 
-/** The ground floor: the office scene plus whoever and whatever is not on a floor floor. */
+/** The ground floor: the office scene plus whoever and whatever is not on a floor. */
 export function LobbyView({
   configured,
   lobbyEmployees,
@@ -59,7 +61,7 @@ export function LobbyView({
             lobbyEmployees.length
               ? 'This team needs its connections set up. Select an employee to review access.'
               : hasEmployees
-                ? 'The lobby is clear. Employees staffed on floor floors appear there.'
+                ? 'The lobby is clear. Employees staffed on floors appear there.'
                 : 'Your office is ready. Hire your first employee to get started.'
           }
           onEmployee={onEmployee}
@@ -102,11 +104,7 @@ export function LobbyView({
         <div className="section-title">
           <div>
             <span className="eyebrow">UNASSIGNED WORK</span>
-            <h3>
-              {activeTasks.length
-                ? `${activeTasks.length} active ${activeTasks.length === 1 ? 'task' : 'tasks'}`
-                : 'Nothing in motion'}
-            </h3>
+            <h3>{activeTasks.length ? pluralize(activeTasks.length, 'active task') : 'Nothing in motion'}</h3>
           </div>
           <button className="text-button" onClick={onAllTasks}>
             All tasks <ArrowRight size={14} />

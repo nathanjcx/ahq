@@ -2,13 +2,14 @@
 
 import { Check, Copy, Eye, LoaderCircle, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
+import { useCopy } from '../shared/use-copy';
 import { webClient } from '@/lib/api/client';
 import type { RelaySecretResponse } from '@/lib/api/schemas';
 
 type Relay = RelaySecretResponse;
 
 function CopyField({ label, value }: { label: string; value: string }) {
-  const [state, setState] = useState<'idle' | 'copied' | 'blocked'>('idle');
+  const { state, copy } = useCopy();
   return (
     <label>
       {label}
@@ -18,15 +19,7 @@ function CopyField({ label, value }: { label: string; value: string }) {
           type="button"
           className="icon-button"
           aria-label={`Copy ${label.toLowerCase()}`}
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(value);
-              setState('copied');
-              window.setTimeout(() => setState('idle'), 1500);
-            } catch {
-              setState('blocked');
-            }
-          }}
+          onClick={() => copy(value)}
         >
           {state === 'copied' ? <Check size={14} /> : <Copy size={14} />}
         </button>

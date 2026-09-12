@@ -4,8 +4,8 @@ import { Plus } from 'lucide-react';
 import type { Actions } from '../app/actions';
 import type { Page } from '../app/nav';
 import type { OfficeEmployee } from '../office/office-view';
-import { timeGreeting } from '../shared/format';
 import { PageIntro } from '../shared/page-intro';
+import { timeGreeting } from '../shared/time';
 import { FloorBoard, LiveFloorBoard } from './floor-board';
 import { FloorDirectory } from './floor-directory';
 import { ACTIVE_TASK_STATUSES, summarizeFloor, type FloorEntry } from './floor-stats';
@@ -97,12 +97,12 @@ export function FloorPage({
         }
         description={
           dashboard.workspace
-            ? 'Move between floor floors, see who is staffed, and keep unassigned work in the lobby.'
+            ? 'Move between floors, see who is staffed, and keep unassigned work in the lobby.'
             : 'Connect your workspace, hire your first employee, and give them a clear assignment.'
         }
         action={
           <button className="primary-button" disabled={!workspaceReady} onClick={onNewFloor}>
-            <Plus size={17} /> New floor floor
+            <Plus size={17} /> New floor
           </button>
         }
       />

@@ -49,7 +49,7 @@ export function FloorTeam({
           <FloorReplay
             floorId={floorId}
             live={configured && !archived}
-            employeeIds={staff.map((employee) => employee.id)}
+            defaultEmployeeId={staff[0]?.id}
             onScene={setReplay}
           />
         }

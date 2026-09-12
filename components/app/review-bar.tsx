@@ -1,10 +1,11 @@
 'use client';
 
 import { ArrowUpRight, ShieldCheck } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Sheet } from '../shared/sheet';
 import { DecideButtons, ProposalEvidence, ProposalHeading } from '../tasks/proposal-card';
 import type { ActionProposal } from '@/lib/contracts';
+import { pluralize } from '@/lib/text';
 
 /** Proposals this viewer is the one to decide. */
 export function reviewable(proposals: ActionProposal[]) {
@@ -26,11 +27,11 @@ export function ReviewBar({
 }) {
   const [open, setOpen] = useState(false);
   const pending = reviewable(proposals);
-  // Decisions land while the sheet is open; the last one closes it.
-  useEffect(() => {
-    if (!pending.length) setOpen(false);
-  }, [pending.length]);
-  if (!pending.length) return null;
+  if (!pending.length) {
+    // The bar and its sheet leave together, and a proposal arriving later starts closed.
+    if (open) setOpen(false);
+    return null;
+  }
   return (
     <>
       <div className="review-bar" role="status">
@@ -39,7 +40,7 @@ export function ReviewBar({
         </span>
         <span>
           <strong>
-            {pending.length} {pending.length === 1 ? 'action needs' : 'actions need'} your review
+            {pluralize(pending.length, 'action')} {pending.length === 1 ? 'needs' : 'need'} your review
           </strong>
           <small>Nothing is written to a connected service until you approve it.</small>
         </span>
@@ -79,7 +80,9 @@ function ReviewSheet({
   return (
     <Sheet
       title="Actions to review"
-      subtitle={`${proposals.length} external ${proposals.length === 1 ? 'write is' : 'writes are'} waiting on your decision.`}
+      subtitle={`${pluralize(proposals.length, 'external write')} ${
+        proposals.length === 1 ? 'is' : 'are'
+      } waiting on your decision.`}
       onClose={onClose}
       footer={
         <>

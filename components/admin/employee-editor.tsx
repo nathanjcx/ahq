@@ -5,6 +5,7 @@ import { useState, type FormEvent } from 'react';
 import { lines } from '../shared/format';
 import { Sheet } from '../shared/sheet';
 import { CapabilityRows, type CapabilityRow } from './capability-rows';
+import type { DraftInput } from './draft-input';
 import { editorRowId, sha256, type EditorDraft } from './draft-issues';
 import { MediaRows, type MediaRow } from './media-rows';
 import type { RegistryByProvider } from './registry';
@@ -21,7 +22,7 @@ export function EmployeeEditor({
   draft?: EditorDraft;
   registry: RegistryByProvider;
   onClose: () => void;
-  onSave: (value: Record<string, unknown>) => Promise<void>;
+  onSave: (value: DraftInput) => Promise<void>;
 }) {
   const [name, setName] = useState(draft?.name ?? '');
   const [role, setRole] = useState(draft?.role ?? '');
