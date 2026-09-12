@@ -16,7 +16,6 @@ export interface NotificationAttempt {
 
 /** A stored browser endpoint, with its keys still sealed. */
 interface PushTarget {
-  id: string;
   endpoint: string;
   keysCiphertext: string;
 }

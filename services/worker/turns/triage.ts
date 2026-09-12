@@ -1,4 +1,5 @@
 import { mutate, query } from '../../../lib/server/backend';
+import { safeError } from '../../../lib/server/secrets';
 import { untrustedJson } from '../../../lib/server/untrusted';
 import type { Job } from '../../types';
 import type { WorkerRuntime } from '../state';
@@ -52,7 +53,10 @@ export async function triageRun(runtime: WorkerRuntime, job: Job) {
     });
   } finally {
     // Whether the turn finished or failed, an emergency action owes a report; this is where the
-    // platform files the gap in its place and escalates it.
-    await mutate('services/triage:closeRun', { taskId: job.taskId });
+    // platform files the gap in its place and escalates it. A failure here is logged rather than
+    // thrown, so it cannot replace the reason the turn itself stopped.
+    await mutate('services/triage:closeRun', { taskId: job.taskId }).catch((error: unknown) =>
+      console.error(`triage run close failed reason=${safeError(error)}`),
+    );
   }
 }
