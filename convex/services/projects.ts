@@ -137,7 +137,9 @@ export const recordProposal = mutation({
     const seen = new Set(proposal.prompts.map((prompt) => prompt.text));
     const prompts = [
       ...proposal.prompts,
-      ...bottleneckPrompts(proposal, capacity, project.deadlineAt).filter((prompt) => !seen.has(prompt.text)),
+      ...bottleneckPrompts(proposal, capacity, project.deadlineAt).filter(
+        (prompt) => !seen.has(prompt.text),
+      ),
     ];
     await ctx.db.patch(project._id, {
       proposal: JSON.stringify({ ...proposal, prompts }),
