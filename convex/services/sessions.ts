@@ -4,7 +4,7 @@ import { mutation, query } from '../_generated/server';
 import type { MutationCtx } from '../_generated/server';
 import { taskStatus, tokenUsage } from '../schema';
 import { requireService, usagePeriod } from '../shared';
-import { finalAssistantMessage } from '../lib/tasks';
+import { finalAssistantMessage, releaseDependents } from '../lib/tasks';
 import { systemPost } from '../lib/posts';
 import { activeTaskContext, isTerminal, privateConnection, taskInputState } from './context';
 
@@ -334,6 +334,9 @@ export const recordEvents = mutation({
         `${task.employeeName} ${status}: ${task.title}${closing ? `\n${closing.slice(0, 500)}` : ''}`,
       );
     }
+    // Dependency release, owned by the projects workstream: a task that just finished either frees
+    // the tasks waiting on it or blocks them with the reason. Nothing else here reads the graph.
+    if (becameTerminal) await releaseDependents(ctx, task, status);
     return { inserted, lastSequence: sequence, status };
   },
 });

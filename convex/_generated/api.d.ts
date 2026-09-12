@@ -28,7 +28,9 @@ import type * as services_queue from "../services/queue.js";
 import type * as services_sessions from "../services/sessions.js";
 import type * as shared from "../shared.js";
 import type * as tasks from "../tasks.js";
+import type * as lib_dependencies from "../lib/dependencies.js";
 import type * as lib_posts from "../lib/posts.js";
+import type * as lib_projects from "../lib/projects.js";
 import type * as lib_tasks from "../lib/tasks.js";
 import type * as workspace from "../workspace.js";
 
@@ -59,7 +61,9 @@ declare const fullApi: ApiFromModules<{
   "services/sessions": typeof services_sessions;
   shared: typeof shared;
   tasks: typeof tasks;
+  "lib/dependencies": typeof lib_dependencies;
   "lib/posts": typeof lib_posts;
+  "lib/projects": typeof lib_projects;
   "lib/tasks": typeof lib_tasks;
   workspace: typeof workspace;
 }>;
