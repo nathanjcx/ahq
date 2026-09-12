@@ -7,6 +7,7 @@ import { installBackend } from '../lib/server/backend';
 import { resetRateLimits } from '../lib/server/rate-limit';
 import { seal } from '../lib/server/secrets';
 import {
+  connectLinear,
   harness,
   hireOne,
   identity as orgIdentity,
@@ -375,5 +376,141 @@ describe('the signed alert route', () => {
     const bad = await call(malformed, { ...signed, 'x-astra-signature': sign(timestamp, malformed) });
     expect(bad.status).toBe(400);
     expect(await t.run((ctx) => ctx.db.query('alerts').collect())).toHaveLength(1);
+  });
+});
+
+describe('what the Triage page reads', () => {
+  it('reports paging state, the timeline, and acknowledgement across the whole incident', async () => {
+    const { t, user, workspaceId, floorId } = await workspace();
+    await user.mutation(api.triage.setRules, { rules: ['sev1'] });
+    await t.run(async (ctx) => {
+      const settings = await ctx.db
+        .query('workspaceSettings')
+        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspaceId))
+        .unique();
+      if (!settings) throw new Error('Expected settings');
+      await ctx.db.patch(settings._id, {
+        triageAllowList: ['create_pull_request'],
+        emergencyAllowList: ['merge_pull_request'],
+      });
+    });
+    const { alertId } = await t.mutation(api.services.triage.ingest, { secret, workspaceId, ...incident });
+
+    vi.useFakeTimers();
+    vi.setSystemTime(unattendedNow);
+
+    // A fresh alert has paged nobody, so the emergency window has not started.
+    const fresh = await user.query(api.triage.alerts, {});
+    expect(fresh).toHaveLength(1);
+    expect(fresh[0].paging).toMatchObject({ attempts: 0, required: 3, acknowledged: false });
+
+    // Two delivered pages: the count rises and the interface is told when the list would open.
+    for (const _ of [1, 2]) {
+      const [attempt] = await t.mutation(api.services.notifications.attempt, {
+        secret,
+        workspaceId,
+        kind: 'triage',
+        title: incident.title,
+        text: incident.detail,
+        alertId,
+      });
+      await t.mutation(api.services.notifications.markDelivered, {
+        secret,
+        id: attempt.id,
+        channel: 'in_app',
+      });
+    }
+    const paged = (await user.query(api.triage.alerts, {}))[0].paging;
+    expect(paged).toMatchObject({ attempts: 2, required: 3, acknowledged: false });
+    expect(paged.opensAt).toBe(unattendedNow + 20 * 60_000);
+
+    // Acknowledging the alert answers every page it sent this viewer at once.
+    expect(await user.mutation(api.triage.acknowledgeAlert, { alertId })).toEqual({ acknowledged: 2 });
+    expect((await user.query(api.triage.alerts, {}))[0].paging).toMatchObject({
+      attempts: 0,
+      acknowledged: true,
+    });
+
+    // The affected floors are the person's to correct, and the timeline carries every step.
+    await user.mutation(api.triage.assignFloors, { alertId, floorIds: [floorId] });
+    const timeline = await user.query(api.triage.timeline, { alertId });
+    expect(timeline.map((entry) => entry.kind)).toEqual(['intake', 'run', 'post', 'page', 'page']);
+    expect(timeline[0]).toMatchObject({ title: 'webhook alert received' });
+    expect(timeline.every((entry, index) => index === 0 || entry.at >= timeline[index - 1].at)).toBe(true);
+    expect((await user.query(api.triage.alerts, {}))[0].affectedFloorIds).toEqual([floorId]);
+  });
+
+  it('names the incident reports and says which of them acted without permission', async () => {
+    const { t, user, workspaceId } = await workspace();
+    await user.mutation(api.triage.setRules, { rules: ['sev1'] });
+    await connectLinear(t, { subject: 'owner', orgId: 'acme' });
+    const connectionId = await t.run(async (ctx) => {
+      const settings = await ctx.db
+        .query('workspaceSettings')
+        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspaceId))
+        .unique();
+      if (!settings) throw new Error('Expected settings');
+      await ctx.db.patch(settings._id, {
+        triageAllowList: ['create_pull_request'],
+        emergencyAllowList: ['merge_pull_request'],
+      });
+      const connection = await ctx.db.query('connections').first();
+      if (!connection) throw new Error('Expected a connection');
+      return connection._id;
+    });
+    const { taskId } = await t.mutation(api.services.triage.ingest, { secret, workspaceId, ...incident });
+    if (!taskId) throw new Error('Expected a triage task');
+
+    // Intake alone files nothing; the post-mortem is what becomes a report.
+    expect(await user.query(api.triage.incidentReports, {})).toEqual([]);
+    await t.mutation(api.services.triage.resolve, {
+      secret,
+      taskId,
+      cause: 'The connection pool cap stayed at 20.',
+      fix: 'Raised it to 60.',
+      prevention: 'Pin the pool cap to the worker count.',
+      regressionRef: 'web-tests/pool.test.ts',
+    });
+    const [ordinary] = await user.query(api.triage.incidentReports, {});
+    expect(ordinary).toMatchObject({ emergency: false, alertTitle: incident.title, taskId });
+
+    // One succeeded call on the emergency list is what makes it an emergency report.
+    await t.run((ctx) =>
+      ctx.db.insert('toolCalls', {
+        workspaceId,
+        taskId,
+        connectionId,
+        operationId: 'op_merge',
+        outcome: 'succeeded',
+        tool: 'merge_pull_request',
+        argumentsCiphertext: 'sealed',
+        createdAt: Date.now(),
+      }),
+    );
+    expect((await user.query(api.triage.incidentReports, {}))[0].emergency).toBe(true);
+    const timeline = await user.query(api.triage.timeline, { alertId: ordinary.alertId! });
+    expect(timeline.find((entry) => entry.kind === 'tool')).toMatchObject({
+      title: 'merge_pull_request',
+      authority: 'emergency',
+      outcome: 'succeeded',
+    });
+  });
+
+  it('describes intake without ever handing back the signing secret', async () => {
+    const { t, user, workspaceId } = await workspace();
+    expect(await user.query(api.triage.intake, {})).toMatchObject({
+      signedEndpointReady: false,
+      rules: [],
+      emailClassification: false,
+    });
+    await user.mutation(api.triage.setRules, { rules: ['SEV1', 'sev1', 'outage'] });
+    await t.mutation(api.services.triage.setAlertSecret, {
+      secret,
+      workspaceId,
+      alertSecretCiphertext: seal(alertSecret),
+    });
+    const intake = await user.query(api.triage.intake, {});
+    expect(intake).toMatchObject({ signedEndpointReady: true, rules: ['sev1', 'outage'] });
+    expect(JSON.stringify(intake)).not.toContain(alertSecret);
   });
 });

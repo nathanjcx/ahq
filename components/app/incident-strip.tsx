@@ -16,8 +16,9 @@ export function IncidentStrip(props: Pick<PageProps, 'dashboard' | 'actions' | '
 }
 
 function OpenIncident({ actions, run, go }: Pick<PageProps, 'actions' | 'run' | 'go'>) {
-  const alerts = useUiQuery(uiApi.alerts, { status: 'open' });
-  const open = alerts?.filter((alert) => alert.status === 'open') ?? [];
+  const alerts = useUiQuery(uiApi.alerts, {});
+  // An incident is live until a person has confirmed the fix, so a run already under way still shows.
+  const open = alerts?.filter((alert) => alert.status === 'open' || alert.status === 'triaging') ?? [];
   // The incident asking for an answer leads; otherwise the newest open one does.
   const alert = open.find((row) => row.paging.attempts && !row.paging.acknowledged) ?? open[0];
   if (!alert) return null;
