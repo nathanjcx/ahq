@@ -4,7 +4,14 @@ import { mutation, query } from './_generated/server';
 import type { MutationCtx } from './_generated/server';
 import { createMeetingEntry } from './lib/calendar';
 import { assertAcyclic, topologicalOrder } from './lib/dependencies';
-import { meetingRequests, parseProposal, projectView, requireProject, storedProposal } from './lib/projects';
+import {
+  meetingRequests,
+  parseProposal,
+  projectTaskView,
+  projectView,
+  requireProject,
+  storedProposal,
+} from './lib/projects';
 import {
   assertEmployeeReady,
   assertTokenCap,
@@ -13,7 +20,7 @@ import {
   startTask,
 } from './lib/tasks';
 import { enqueuePlanningFor } from './services/projects';
-import { cleanText, requireWorkspace } from './shared';
+import { canSeeTask, cleanText, requireWorkspace } from './shared';
 
 const projectStatus = v.union(
   v.literal('planning'),
@@ -59,6 +66,23 @@ export const get = query({
     const { workspace } = await requireWorkspace(ctx);
     const project = await requireProject(ctx, workspace._id, args.projectId);
     return { ...(await projectView(ctx, project)), proposal: storedProposal(project) };
+  },
+});
+
+/** The project's work, in the order it was planned. Session tasks belong to the session that opened them. */
+export const tasks = query({
+  args: { projectId: v.id('projects') },
+  handler: async (ctx, args) => {
+    const { workspace, actor } = await requireWorkspace(ctx);
+    const project = await requireProject(ctx, workspace._id, args.projectId);
+    const rows = await ctx.db
+      .query('tasks')
+      .withIndex('by_project', (q) => q.eq('projectId', project._id))
+      .collect();
+    return rows
+      .filter((task) => (task.kind ?? 'work') === 'work' && canSeeTask(task, actor.subject))
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .map(projectTaskView);
   },
 });
 

@@ -1,4 +1,4 @@
-import type { ModelId } from './core';
+import type { ModelId, TaskStatus } from './core';
 
 export type ProjectStatus = 'planning' | 'active' | 'done' | 'archived';
 export type MilestoneStatus = 'planned' | 'active' | 'done';
@@ -28,6 +28,25 @@ export interface Project {
   /** Counts the project page shows without loading tasks. */
   openTasks: number;
   behindMilestones: number;
+  /** The project's channel, once anything has been posted to it. */
+  channelId?: string;
+}
+/** One task of a project, as the project page lists it. */
+export interface ProjectTask {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  employeeId: string;
+  employeeName: string;
+  floorId?: string;
+  milestoneId?: string;
+  cadence: 'once' | 'daily';
+  deadlineAt?: number;
+  dependsOn: string[];
+  createdAt: number;
+  updatedAt: number;
+  /** Why the task stopped, for a blocked or failed one. */
+  error?: string;
 }
 /** A planner turn's proposal for a project. Nothing in it exists until a person confirms it. */
 export interface RoadmapProposal {
