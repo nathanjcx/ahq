@@ -46,6 +46,7 @@ User-facing modules take Clerk identity. Service modules take the service secret
 | `admin`                 | Provider configuration and tool registry, platform admins only                   |
 | `registry`              | Pure helpers over `registryTools` and `providerConfigs`                          |
 | `shared`                | Identity, roles, visibility, text limits                                         |
+| `work`                  | Task creation, employee readiness, token cap, board posts, sealed timeline       |
 | `services/config`       | Provider configuration and policies for web, worker, gateway                     |
 | `services/queue`        | Worker state, claim, renew, complete, fail                                       |
 | `services/sessions`     | Task context, session context, stream leases, session and event recording, usage |
@@ -64,6 +65,8 @@ Every shareable record carries `visibility` and `visibleToSubjects`.
 - Connections: `private`, `members` (listed subjects), or `workspace`. A shared connection lets other members' tasks use it. Only the owner edits access or sharing.
 - Tasks: `private` or `workspace`. Tasks on a floor default to `workspace` because floors are shared. Messages, events, proposals, artifacts, and the audit timeline follow the task.
 - Inbox items follow their connection.
+- A pending proposal also appears for the owner of the connection that would execute it, even when the
+  task is private, because only that owner or a workspace owner or admin can decide it.
 
 Approving, rejecting, or correcting an external action requires being the owner of the connection that will execute it, or a workspace owner or admin. A task creator using someone else's shared connection cannot approve writes through it.
 
@@ -109,7 +112,7 @@ The audit timeline for a task merges events, messages, tool calls, proposals, an
 The worker is replica-safe by construction. All coordination is through Convex leases:
 
 - Jobs are claimed with `claimJobs(workerId, limit)` where the limit is the worker's free job slots.
-- Session monitors are claimed with `claimStreams(workerId, limit)` which returns tasks whose stream lease is free or expired. Leases renew on a heartbeat and release on shutdown.
+- Session monitors are claimed with `claimStreams(workerId, limit)` which returns tasks whose stream lease is free or expired. Leases renew on a heartbeat and release on shutdown. The worker still claims one task at a time with `services/queue:claimStream(taskId, workerId)`; the batched form arrives with the worker workstream.
 - The subscription carries counts and a wake revision only. Workers pull; they do not receive lists.
 - Shutdown stops claiming, waits for in-flight jobs up to a deadline, and releases stream leases so another replica takes over.
 - Health reports connection state, in-flight jobs, active monitors, free slots, and last claim time.

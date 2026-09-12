@@ -10,7 +10,6 @@ import {
   toolPolicy,
   correctionPolicy,
   resultObject,
-  canonical,
 } from '../lib/server/tool-policy';
 import { auditedRead, journalDenied } from '../lib/server/audit-mcp';
 import type { TaskContext } from './types';

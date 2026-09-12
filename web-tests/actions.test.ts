@@ -1,4 +1,4 @@
-import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   mutate: vi.fn(),
@@ -12,9 +12,25 @@ vi.mock('../lib/server/backend', () => ({
 }));
 vi.mock('../lib/server/mcp', () => ({ connectedMcp: mocks.connectedMcp }));
 import { executeAction } from '../services/actions';
-const job = {
+import type { Job, ToolPolicy } from '../services/types';
+const policies: ToolPolicy[] = [{ provider: 'linear', name: 'update_issue', mode: 'write' }];
+const correctable: ToolPolicy[] = [
+  {
+    provider: 'linear',
+    name: 'update_issue',
+    mode: 'write',
+    correction: {
+      readTool: 'get_issue',
+      idArgument: 'id',
+      versionField: 'version',
+      expectedVersionArgument: 'expectedVersion',
+      fields: ['title'],
+    },
+  },
+];
+const job: Job = {
   id: 'job',
-  kind: 'execute_action',
+  kind: 'execute_action' as const,
   taskId: 'task',
   payload: { proposalId: 'proposal' },
   leaseToken: 'lease',
@@ -24,6 +40,7 @@ const context = () => ({
   action: { id: 'proposal', tool: 'update_issue', arguments: '{"id":"issue","title":"Corrected"}' },
   connection: { id: 'connection', provider: 'linear', resourceScope: '', allowedTools: ['update_issue'] },
   task: { id: 'task', runToken: 'run' },
+  policies,
 });
 beforeEach(() => {
   process.env.CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
@@ -33,15 +50,12 @@ beforeEach(() => {
   mocks.connectedMcp.mockImplementation(async (_connection, run) => run({ callTool: mocks.callTool }));
   mocks.callTool.mockResolvedValue({ content: [{ type: 'text', text: 'Updated' }] });
 });
-afterEach(() => {
-  delete process.env.MCP_TOOL_POLICIES_JSON;
-});
 it('checks authorization again after connecting and before dispatch', async () => {
   mocks.query.mockResolvedValueOnce(context()).mockRejectedValueOnce(new Error('Grant revoked'));
   await executeAction(job);
   expect(mocks.callTool).not.toHaveBeenCalled();
   expect(mocks.mutate).toHaveBeenCalledWith(
-    'services:recordActionResult',
+    'services/actions:recordActionResult',
     expect.objectContaining({ status: 'failed' }),
   );
 });
@@ -50,7 +64,7 @@ it('never retries a write with an unknown network outcome', async () => {
   await executeAction(job);
   expect(mocks.callTool).toHaveBeenCalledTimes(1);
   expect(mocks.mutate).toHaveBeenCalledWith(
-    'services:recordActionResult',
+    'services/actions:recordActionResult',
     expect.objectContaining({ status: 'uncertain' }),
   );
 });
@@ -58,25 +72,14 @@ it('does not mistake an upstream tool error for proof that no write happened', a
   mocks.callTool.mockResolvedValue({ isError: true, content: [] });
   await executeAction(job);
   expect(mocks.mutate).toHaveBeenCalledWith(
-    'services:recordActionResult',
+    'services/actions:recordActionResult',
     expect.objectContaining({ status: 'uncertain' }),
   );
 });
 it('sends only configured restoration fields with a provider version precondition', async () => {
-  process.env.MCP_TOOL_POLICIES_JSON = JSON.stringify({
-    'linear:update_issue': {
-      mode: 'write',
-      correction: {
-        readTool: 'get_issue',
-        idArgument: 'id',
-        versionField: 'version',
-        expectedVersionArgument: 'expectedVersion',
-        fields: ['title'],
-      },
-    },
-  });
   const value = {
     ...context(),
+    policies: correctable,
     action: { ...context().action, originalActionId: 'original' },
     original: {
       tool: 'update_issue',

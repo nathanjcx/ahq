@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
-import type { Doc, Id } from './_generated/dataModel';
+import type { Id } from './_generated/dataModel';
 import { registryToolsFor } from './registry';
 import {
   authKey,
@@ -249,7 +249,12 @@ export const dashboard = query({
           gap: event.gap,
         })),
       proposals: proposals
-        .filter((proposal) => visibleTaskIds.has(proposal.taskId))
+        // A pending write on your own connection is yours to decide even on a private task.
+        .filter(
+          (proposal) =>
+            visibleTaskIds.has(proposal.taskId) ||
+            connectionsById.get(proposal.connectionId)?.ownerSubject === actor.subject,
+        )
         .map((proposal) => ({
           id: proposal._id,
           taskId: proposal.taskId,

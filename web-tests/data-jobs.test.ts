@@ -1,13 +1,18 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { convexTest } from 'convex-test';
+import { describe, expect, it } from 'vitest';
 import { api } from '../convex/_generated/api';
-import schema from '../convex/schema';
+import {
+  adminIdentity,
+  connectLinear,
+  harness,
+  identity,
+  linearWorkspace,
+  secret,
+  type Harness,
+} from './support';
 
-const modules = import.meta.glob('../convex/**/*.ts');
-const adminIdentity = { subject: 'platform-admin', tokenIdentifier: 'test|platform-admin', issuer: 'test' };
-const userIdentity = { subject: 'user-a', tokenIdentifier: 'test|user-a', issuer: 'test' };
+const userIdentity = identity('user-a');
 
-async function setupEmployee(t: ReturnType<typeof convexTest>, tools: string[] = []) {
+async function setupEmployee(t: Harness, tools: string[] = []) {
   const admin = t.withIdentity(adminIdentity);
   const user = t.withIdentity(userIdentity);
   const { draftId } = await admin.mutation(api.marketplace.saveDraft, {
@@ -26,46 +31,34 @@ async function setupEmployee(t: ReturnType<typeof convexTest>, tools: string[] =
   });
   const { versionId } = await admin.mutation(api.marketplace.publish, { draftId });
   await user.mutation(api.workspace.bootstrap, { name: 'Acme' });
-  if (tools.length) {
-    await t.mutation(api.services.connectIntegration, {
-      secret: 'service-test-secret',
-      authSubject: 'user-a',
-      provider: 'linear',
-      name: 'Linear',
-      account: 'acme',
-      tools: ['get_issue', 'update_issue'],
-      serverUrl: 'https://mcp.linear.example',
-      credentialCiphertext: 'encrypted-token',
-      credentialKeyVersion: 'v1',
-    });
-  }
+  if (tools.length) await connectLinear(t, { subject: 'user-a' });
   const { employeeId } = await user.mutation(api.marketplace.hire, { versionId });
   return { admin, user, employeeId };
 }
 
-async function createAction(t: ReturnType<typeof convexTest>) {
+async function createAction(t: Harness) {
   const { user, employeeId } = await setupEmployee(t, ['update_issue']);
   const { taskId } = await user.mutation(api.tasks.create, {
     employeeId,
     title: 'Update issue',
     prompt: 'Mark OPS-7 done.',
   });
-  const [start] = await t.mutation(api.services.claimJobs, {
-    secret: 'service-test-secret',
+  const [start] = await t.mutation(api.services.queue.claimJobs, {
+    secret,
     workerId: 'worker-1',
     limit: 10,
   });
   if (!start) throw new Error('Expected start job');
-  await t.mutation(api.services.completeJob, {
-    secret: 'service-test-secret',
+  await t.mutation(api.services.queue.completeJob, {
+    secret,
     jobId: start.id,
     leaseToken: start.leaseToken,
   });
-  const context = await t.query(api.services.taskContext, { secret: 'service-test-secret', taskId });
+  const context = await t.query(api.services.sessions.taskContext, { secret, taskId });
   const connectionId = context.connections[0]?.id;
   if (!connectionId) throw new Error('Expected connection');
-  const { proposalId } = await t.mutation(api.services.proposeAction, {
-    secret: 'service-test-secret',
+  const { proposalId } = await t.mutation(api.services.actions.proposeAction, {
+    secret,
     runToken: context.runToken,
     connectionId,
     tool: 'update_issue',
@@ -78,20 +71,9 @@ async function createAction(t: ReturnType<typeof convexTest>) {
 }
 
 describe('Convex job and audit invariants', () => {
-  beforeEach(() => {
-    process.env.AHQ_SERVICE_SECRET = 'service-test-secret';
-    process.env.PLATFORM_ADMIN_USER_IDS = 'platform-admin';
-    process.env.MCP_SERVER_URLS_JSON = JSON.stringify({ linear: ['https://mcp.linear.example/'] });
-    process.env.MCP_TOOL_REGISTRY_JSON = JSON.stringify({
-      linear: [
-        { name: 'get_issue', description: 'Read one issue', mode: 'read' },
-        { name: 'update_issue', description: 'Update one issue', mode: 'write' },
-      ],
-    });
-  });
-
   it('leases at most one command for a task and waits for its active lease', async () => {
-    const t = convexTest(schema, modules);
+    const t = harness();
+    await linearWorkspace(t);
     const { user, employeeId } = await setupEmployee(t);
     const { taskId } = await user.mutation(api.tasks.create, {
       employeeId,
@@ -100,25 +82,25 @@ describe('Convex job and audit invariants', () => {
     });
     await user.mutation(api.tasks.send, { taskId, text: 'Second turn.' });
 
-    const first = await t.mutation(api.services.claimJobs, {
-      secret: 'service-test-secret',
+    const first = await t.mutation(api.services.queue.claimJobs, {
+      secret,
       workerId: 'worker-1',
       limit: 10,
     });
     expect(first).toHaveLength(1);
-    const blocked = await t.mutation(api.services.claimJobs, {
-      secret: 'service-test-secret',
+    const blocked = await t.mutation(api.services.queue.claimJobs, {
+      secret,
       workerId: 'worker-2',
       limit: 10,
     });
     expect(blocked).toEqual([]);
-    await t.mutation(api.services.completeJob, {
-      secret: 'service-test-secret',
+    await t.mutation(api.services.queue.completeJob, {
+      secret,
       jobId: first[0].id,
       leaseToken: first[0].leaseToken,
     });
-    const second = await t.mutation(api.services.claimJobs, {
-      secret: 'service-test-secret',
+    const second = await t.mutation(api.services.queue.claimJobs, {
+      secret,
       workerId: 'worker-2',
       limit: 10,
     });
@@ -127,60 +109,61 @@ describe('Convex job and audit invariants', () => {
   });
 
   it('binds terminal stream events to the input revision they monitored', async () => {
-    const t = convexTest(schema, modules);
+    const t = harness();
+    await linearWorkspace(t);
     const { user, employeeId } = await setupEmployee(t);
     const { taskId } = await user.mutation(api.tasks.create, {
       employeeId,
       title: 'Revision task',
       prompt: 'First turn.',
     });
-    const [start] = await t.mutation(api.services.claimJobs, {
-      secret: 'service-test-secret',
+    const [start] = await t.mutation(api.services.queue.claimJobs, {
+      secret,
       workerId: 'worker-1',
       limit: 1,
     });
     if (!start) throw new Error('Expected start job');
-    await t.mutation(api.services.recordSession, {
-      secret: 'service-test-secret',
+    await t.mutation(api.services.sessions.recordSession, {
+      secret,
       taskId,
       sessionId: 'session-1',
       leaseToken: start.leaseToken,
     });
-    const starting = await t.query(api.services.sessionContext, {
-      secret: 'service-test-secret',
+    const starting = await t.query(api.services.sessions.sessionContext, {
+      secret,
       taskId,
     });
     expect(starting).toMatchObject({ inputRevision: String(start.id), pendingInput: true });
-    const workerState = await t.query(api.services.workerState, { secret: 'service-test-secret' });
+    const workerState = await t.query(api.services.queue.workerState, { secret: 'service-test-secret' });
     expect(workerState.activeTaskIds).not.toContain(String(taskId));
-    await t.mutation(api.services.completeJob, {
-      secret: 'service-test-secret',
+    await t.mutation(api.services.queue.completeJob, {
+      secret,
       jobId: start.id,
       leaseToken: start.leaseToken,
     });
     await user.mutation(api.tasks.send, { taskId, text: 'Second turn.' });
 
-    await t.mutation(api.services.recordEvents, {
-      secret: 'service-test-secret',
+    await t.mutation(api.services.sessions.recordEvents, {
+      secret,
       taskId,
       events: [],
       status: 'completed',
       inputRevision: starting.inputRevision,
     });
     expect((await t.run((ctx) => ctx.db.get(taskId)))?.status).toBe('queued');
-    const [send] = await t.mutation(api.services.claimJobs, {
-      secret: 'service-test-secret',
+    const [send] = await t.mutation(api.services.queue.claimJobs, {
+      secret,
       workerId: 'worker-1',
       limit: 1,
     });
     if (!send || send.kind !== 'send_message') throw new Error('Expected message job');
-    await t.mutation(api.services.completeJob, {
-      secret: 'service-test-secret',
+    await t.mutation(api.services.queue.completeJob, {
+      secret,
       jobId: send.id,
       leaseToken: send.leaseToken,
     });
-    await t.mutation(api.services.recordEvents, {
-      secret: 'service-test-secret',
+    await t.mutation(api.services.sessions.recordEvents, {
+      secret,
       taskId,
       events: [],
       status: 'completed',
@@ -188,14 +171,14 @@ describe('Convex job and audit invariants', () => {
     });
     expect((await t.run((ctx) => ctx.db.get(taskId)))?.status).toBe('running');
 
-    const current = await t.query(api.services.sessionContext, {
-      secret: 'service-test-secret',
+    const current = await t.query(api.services.sessions.sessionContext, {
+      secret,
       taskId,
     });
     expect(current.pendingInput).toBe(false);
     expect(current.inputRevision).toBe(String(send.id));
-    await t.mutation(api.services.recordEvents, {
-      secret: 'service-test-secret',
+    await t.mutation(api.services.sessions.recordEvents, {
+      secret,
       taskId,
       events: [],
       status: 'completed',
@@ -205,7 +188,8 @@ describe('Convex job and audit invariants', () => {
   });
 
   it('moves commands behind active leases out of the claim window', async () => {
-    const t = convexTest(schema, modules);
+    const t = harness();
+    await linearWorkspace(t);
     const { user, employeeId } = await setupEmployee(t);
     const { taskId: seedTaskId } = await user.mutation(api.tasks.create, {
       employeeId,
@@ -282,14 +266,14 @@ describe('Convex job and audit invariants', () => {
       return runnableTaskId;
     });
 
-    const first = await t.mutation(api.services.claimJobs, {
-      secret: 'service-test-secret',
+    const first = await t.mutation(api.services.queue.claimJobs, {
+      secret,
       workerId: 'worker-1',
       limit: 1,
     });
     expect(first).toEqual([]);
-    const second = await t.mutation(api.services.claimJobs, {
-      secret: 'service-test-secret',
+    const second = await t.mutation(api.services.queue.claimJobs, {
+      secret,
       workerId: 'worker-1',
       limit: 1,
     });
@@ -298,15 +282,16 @@ describe('Convex job and audit invariants', () => {
   });
 
   it('prioritizes cancellation and never recovers stale work into a cancelled task', async () => {
-    const t = convexTest(schema, modules);
+    const t = harness();
+    await linearWorkspace(t);
     const { user, employeeId } = await setupEmployee(t);
     const { taskId } = await user.mutation(api.tasks.create, {
       employeeId,
       title: 'Cancel task',
       prompt: 'Start this.',
     });
-    const [leased] = await t.mutation(api.services.claimJobs, {
-      secret: 'service-test-secret',
+    const [leased] = await t.mutation(api.services.queue.claimJobs, {
+      secret,
       workerId: 'worker-1',
       limit: 1,
     });
@@ -314,8 +299,8 @@ describe('Convex job and audit invariants', () => {
     await user.mutation(api.tasks.cancel, { taskId });
     await t.run((ctx) => ctx.db.patch(leased.id, { leaseExpiresAt: Date.now() - 1 }));
 
-    const recovered = await t.mutation(api.services.claimJobs, {
-      secret: 'service-test-secret',
+    const recovered = await t.mutation(api.services.queue.claimJobs, {
+      secret,
       workerId: 'worker-2',
       limit: 10,
     });
@@ -329,7 +314,8 @@ describe('Convex job and audit invariants', () => {
   });
 
   it('rejects an approval after cancellation', async () => {
-    const t = convexTest(schema, modules);
+    const t = harness();
+    await linearWorkspace(t);
     const { user, taskId, proposalId } = await createAction(t);
     await user.mutation(api.tasks.cancel, { taskId });
     await expect(user.mutation(api.actions.decide, { proposalId, approved: true })).rejects.toThrow(
@@ -338,13 +324,14 @@ describe('Convex job and audit invariants', () => {
   });
 
   it('refuses to lease an approved action after its task becomes terminal', async () => {
-    const t = convexTest(schema, modules);
+    const t = harness();
+    await linearWorkspace(t);
     const { user, taskId, proposalId } = await createAction(t);
     await user.mutation(api.actions.decide, { proposalId, approved: true });
     await t.run((ctx) => ctx.db.patch(taskId, { status: 'cancelled', updatedAt: Date.now() }));
 
-    const claimed = await t.mutation(api.services.claimJobs, {
-      secret: 'service-test-secret',
+    const claimed = await t.mutation(api.services.queue.claimJobs, {
+      secret,
       workerId: 'worker-1',
       limit: 10,
     });
@@ -361,13 +348,14 @@ describe('Convex job and audit invariants', () => {
   });
 
   it('does not lease an approved action after the task becomes terminal', async () => {
-    const t = convexTest(schema, modules);
+    const t = harness();
+    await linearWorkspace(t);
     const { user, taskId, proposalId } = await createAction(t);
     await user.mutation(api.actions.decide, { proposalId, approved: true });
     await t.run((ctx) => ctx.db.patch(taskId, { status: 'cancelled', updatedAt: Date.now() }));
 
-    const claimed = await t.mutation(api.services.claimJobs, {
-      secret: 'service-test-secret',
+    const claimed = await t.mutation(api.services.queue.claimJobs, {
+      secret,
       workerId: 'worker-1',
       limit: 10,
     });
@@ -377,17 +365,18 @@ describe('Convex job and audit invariants', () => {
   });
 
   it('records a known action result after revocation without reviving a cancelled task', async () => {
-    const t = convexTest(schema, modules);
+    const t = harness();
+    await linearWorkspace(t);
     const { user, taskId, proposalId, connectionId, runToken } = await createAction(t);
     await user.mutation(api.actions.decide, { proposalId, approved: true });
-    const [action] = await t.mutation(api.services.claimJobs, {
-      secret: 'service-test-secret',
+    const [action] = await t.mutation(api.services.queue.claimJobs, {
+      secret,
       workerId: 'worker-1',
       limit: 10,
     });
     if (!action || action.kind !== 'execute_action') throw new Error('Expected action job');
     const audit = {
-      secret: 'service-test-secret',
+      secret,
       runToken,
       connectionId,
       tool: 'update_issue',
@@ -396,27 +385,27 @@ describe('Convex job and audit invariants', () => {
       proposalId,
       leaseToken: action.leaseToken,
     };
-    await t.mutation(api.services.recordToolCall, { ...audit, outcome: 'started' });
+    await t.mutation(api.services.actions.recordToolCall, { ...audit, outcome: 'started' });
     await user.mutation(api.integrations.disconnect, { connectionId });
     await user.mutation(api.tasks.cancel, { taskId });
-    await t.mutation(api.services.recordToolCall, {
+    await t.mutation(api.services.actions.recordToolCall, {
       ...audit,
       outcome: 'succeeded',
       resultCiphertext: 'sealed-result',
       sha256: 'result-digest',
     });
     const result = {
-      secret: 'service-test-secret',
+      secret,
       proposalId,
       leaseToken: action.leaseToken,
       status: 'succeeded' as const,
       result: 'Updated OPS-7',
       afterState: { id: 'OPS-7', status: 'Done' },
     };
-    await t.mutation(api.services.recordActionResult, result);
-    await t.mutation(api.services.recordActionResult, result);
+    await t.mutation(api.services.actions.recordActionResult, result);
+    await t.mutation(api.services.actions.recordActionResult, result);
     await expect(
-      t.mutation(api.services.recordActionResult, { ...result, status: 'uncertain' }),
+      t.mutation(api.services.actions.recordActionResult, { ...result, status: 'uncertain' }),
     ).rejects.toThrow('already final');
 
     const state = await t.run(async (ctx) => ({

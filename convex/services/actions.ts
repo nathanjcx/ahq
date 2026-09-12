@@ -339,6 +339,9 @@ export const recordToolCall = mutation({
       )
       .unique();
     if (existing) return { toolCallId: existing._id };
+    const connection = await ctx.db.get(args.connectionId);
+    if (!connection || connection.workspaceId !== task.workspaceId)
+      throw new Error('Connection does not belong to this task');
     if (args.outcome === 'started') {
       if (args.proposalId) {
         if (!args.leaseToken || args.operationId !== `action:${args.proposalId}`)
@@ -375,11 +378,11 @@ export const recordToolCall = mutation({
         throw new Error('Task authorization is inactive');
       }
       const { version, connections } = await activeTaskContext(ctx, task);
-      const connection = connections.find((item) => item._id === args.connectionId);
+      const active = connections.find((item) => item._id === args.connectionId);
       if (
-        !connection ||
-        !connection.allowedTools.includes(args.tool) ||
-        !versionAllows(version, connection.provider, args.tool)
+        !active ||
+        !active.allowedTools.includes(args.tool) ||
+        !versionAllows(version, active.provider, args.tool)
       )
         throw new Error('Tool is not authorized for this task');
     } else if (args.outcome !== 'denied') {

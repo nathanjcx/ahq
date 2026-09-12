@@ -1,52 +1,18 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { convexTest } from 'convex-test';
+import { describe, expect, it } from 'vitest';
 import { api } from '../convex/_generated/api';
-import schema from '../convex/schema';
-
-const modules = import.meta.glob('../convex/**/*.ts');
-const adminIdentity = { subject: 'platform-admin', tokenIdentifier: 'test|platform-admin', issuer: 'test' };
-
-async function publishEmployee(t: ReturnType<typeof convexTest>, name = 'Operations analyst') {
-  const admin = t.withIdentity(adminIdentity);
-  const { draftId } = await admin.mutation(api.marketplace.saveDraft, {
-    name,
-    role: 'Analyst',
-    description: 'Reviews operating work and prepares updates.',
-    category: 'Operations',
-    strengths: ['Careful review'],
-    limitations: ['External writes require approval'],
-    capabilities: [],
-    model: 'gpt-5.6-terra',
-    color: '#6757d9',
-    media: [],
-    instructions: 'Follow the approved task.',
-    skills: [],
-  });
-  return admin.mutation(api.marketplace.publish, { draftId });
-}
-
-function orgIdentity(subject: string, orgId: string) {
-  return {
-    subject,
-    tokenIdentifier: `test|${subject}`,
-    issuer: 'test',
-    org_id: orgId,
-    org_role: 'org:member',
-  } as any;
-}
+import {
+  connectLinear,
+  harness,
+  identity as orgIdentity,
+  linearWorkspace,
+  publishEmployee,
+  secret,
+} from './support';
 
 describe('workspace projects', () => {
-  beforeEach(() => {
-    process.env.AHQ_SERVICE_SECRET = 'service-test-secret';
-    process.env.PLATFORM_ADMIN_USER_IDS = 'platform-admin';
-    process.env.MCP_SERVER_URLS_JSON = JSON.stringify({ linear: ['https://mcp.linear.example/'] });
-    process.env.MCP_TOOL_REGISTRY_JSON = JSON.stringify({
-      linear: [{ name: 'get_issue', description: 'Read one issue', mode: 'read' }],
-    });
-  });
-
-  it('shares floor metadata in one workspace while preserving task and tenant privacy', async () => {
-    const t = convexTest(schema, modules);
+  it('shares floor tasks in one workspace while keeping private tasks and tenants apart', async () => {
+    const t = harness();
+    await linearWorkspace(t);
     const { versionId } = await publishEmployee(t);
     const owner = t.withIdentity(orgIdentity('owner', 'acme'));
     const colleague = t.withIdentity(orgIdentity('colleague', 'acme'));
@@ -73,20 +39,33 @@ describe('workspace projects', () => {
       'Project not found',
     );
 
-    await owner.mutation(api.tasks.create, {
+    const { taskId } = await owner.mutation(api.tasks.create, {
       projectId,
       employeeId,
-      title: 'Private launch task',
-      prompt: 'Review private launch records.',
+      title: 'Floor launch task',
+      prompt: 'Review the launch records.',
     });
-    expect((await colleague.query(api.workspace.dashboard, {})).tasks).toEqual([]);
+    await owner.mutation(api.tasks.create, {
+      employeeId,
+      title: 'Private task',
+      prompt: 'Review my own queue.',
+    });
+    // A task on a floor is shared because the floor is; a task outside one is not.
+    expect((await colleague.query(api.workspace.dashboard, {})).tasks).toEqual([
+      expect.objectContaining({ id: taskId, visibility: 'workspace', isOwner: false }),
+    ]);
+    expect((await colleague.query(api.projects.board, { projectId })).map((post) => post.text)).toEqual([
+      'Operations analyst started: Floor launch task',
+    ]);
+    await expect(outsider.query(api.projects.board, { projectId })).rejects.toThrow('Project not found');
   });
 
   it('validates staffing and blocks new project work after archive', async () => {
-    const t = convexTest(schema, modules);
+    const t = harness();
+    await linearWorkspace(t);
     const [{ versionId }, { versionId: secondVersionId }] = await Promise.all([
       publishEmployee(t),
-      publishEmployee(t, 'Writer'),
+      publishEmployee(t, { name: 'Writer' }),
     ]);
     const user = t.withIdentity(orgIdentity('owner', 'acme'));
     const outsider = t.withIdentity(orgIdentity('outsider', 'other'));
@@ -156,20 +135,9 @@ describe('workspace projects', () => {
     });
     expect((await t.run((ctx) => ctx.db.get(unassignedTaskId)))?.projectId).toBeUndefined();
 
-    const { connectionId } = await t.mutation(api.services.connectIntegration, {
-      secret: 'service-test-secret',
-      authSubject: 'owner',
-      authOrgId: 'acme',
-      provider: 'linear',
-      name: 'Linear',
-      account: 'acme',
-      tools: ['get_issue'],
-      serverUrl: 'https://mcp.linear.example',
-      credentialCiphertext: 'encrypted-token',
-      credentialKeyVersion: 'v1',
-    });
-    await t.mutation(api.services.ingestInbox, {
-      secret: 'service-test-secret',
+    const { connectionId } = await connectLinear(t, { subject: 'owner', orgId: 'acme' });
+    await t.mutation(api.services.inbox.ingestInbox, {
+      secret,
       connectionId,
       items: [{ externalId: 'issue-1', title: 'New issue', preview: 'Review it.', createdAt: 1 }],
     });
@@ -190,8 +158,8 @@ describe('workspace projects', () => {
     const { taskId: inboxTaskId } = await user.mutation(api.inbox.assign, { itemId, employeeId });
     expect((await t.run((ctx) => ctx.db.get(inboxTaskId)))?.projectId).toBeUndefined();
 
-    await t.mutation(api.services.ingestInbox, {
-      secret: 'service-test-secret',
+    await t.mutation(api.services.inbox.ingestInbox, {
+      secret,
       connectionId,
       items: [{ externalId: 'issue-2', title: 'Project issue', preview: 'Assign it.', createdAt: 2 }],
     });
@@ -212,7 +180,8 @@ describe('workspace projects', () => {
   });
 
   it('keeps the original project context on correction tasks after edits and archive', async () => {
-    const t = convexTest(schema, modules);
+    const t = harness();
+    await linearWorkspace(t);
     const { versionId } = await publishEmployee(t);
     const user = t.withIdentity(orgIdentity('owner', 'acme'));
     await user.mutation(api.workspace.bootstrap, { name: 'Acme' });
@@ -228,18 +197,7 @@ describe('workspace projects', () => {
       title: 'Original task',
       prompt: 'Make the reviewed change.',
     });
-    const { connectionId } = await t.mutation(api.services.connectIntegration, {
-      secret: 'service-test-secret',
-      authSubject: 'owner',
-      authOrgId: 'acme',
-      provider: 'linear',
-      name: 'Linear',
-      account: 'acme',
-      tools: ['get_issue'],
-      serverUrl: 'https://mcp.linear.example',
-      credentialCiphertext: 'encrypted-token',
-      credentialKeyVersion: 'v1',
-    });
+    const { connectionId } = await connectLinear(t, { subject: 'owner', orgId: 'acme' });
     const proposalId = await t.run(async (ctx) => {
       const task = await ctx.db.get(taskId);
       if (!task) throw new Error('Expected task');
@@ -277,8 +235,8 @@ describe('workspace projects', () => {
     });
     const correction = await user.mutation(api.actions.requestCorrection, { proposalId });
     if (correction.kind !== 'task') throw new Error('Expected correction task');
-    const context = await t.query(api.services.taskContext, {
-      secret: 'service-test-secret',
+    const context = await t.query(api.services.sessions.taskContext, {
+      secret,
       taskId: correction.taskId,
     });
     expect(context.project).toEqual({

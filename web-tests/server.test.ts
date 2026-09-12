@@ -1,16 +1,20 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createHmac, randomBytes } from 'node:crypto';
 import { unzipSync, strFromU8 } from 'fflate';
 import { seal, unseal } from '../lib/server/secrets';
 import { publicAddress, approvedMcpUrl } from '../lib/server/network';
 import { toolPolicy, checkResourceScope, canonical } from '../lib/server/tool-policy';
 import { verifyInboxSignature, inboxPayload } from '../lib/server/inbox-events';
-import { sessionConfiguration, estimateUsage } from '../lib/server/agents';
-import type { TaskContext } from '../services/types';
+import { sessionConfiguration, sessionUsage } from '../lib/server/agents';
+import type { TaskContext, ToolPolicy } from '../services/types';
 import { initialTaskInput } from '../services/task-input';
-afterEach(() => {
-  delete process.env.MCP_TOOL_POLICIES_JSON;
-});
+
+const policies: ToolPolicy[] = [
+  { provider: 'github', name: 'get_me', mode: 'read' },
+  { provider: 'github', name: 'create_issue', mode: 'write' },
+  { provider: 'github', name: 'delete_repository', mode: 'blocked' },
+];
+
 describe('credential and integration boundaries', () => {
   it('encrypts secrets with authenticated randomized encryption', () => {
     process.env.CREDENTIAL_ENCRYPTION_KEY = randomBytes(32).toString('base64');
@@ -41,13 +45,12 @@ describe('credential and integration boundaries', () => {
     expect(() => approvedMcpUrl('slack', 'http://mcp.slack.com/mcp')).toThrow();
     expect(approvedMcpUrl('slack', 'https://mcp.slack.com/mcp').hostname).toBe('mcp.slack.com');
   });
-  it('requires approval for unknown tools and blocks destructive tools', () => {
-    expect(toolPolicy('github', 'unknownOperation').mode).toBe('write');
-    for (const tool of ['delete_repository', 'deleteRepository', 'bulkDeleteRecords', 'purge-record'])
-      expect(toolPolicy('github', tool).mode).toBe('blocked');
-    process.env.MCP_TOOL_POLICIES_JSON = JSON.stringify({ 'github:delete_repository': { mode: 'read' } });
-    for (const tool of ['delete_repository', 'deleteRepository', 'bulkDeleteRecords', 'purge-record'])
-      expect(toolPolicy('github', tool).mode).toBe('blocked');
+  it('grants only tools the administrator registered, and nothing else', () => {
+    expect(toolPolicy(policies, 'github', 'get_me').mode).toBe('read');
+    expect(toolPolicy(policies, 'github', 'create_issue').mode).toBe('write');
+    expect(toolPolicy(policies, 'github', 'delete_repository').mode).toBe('blocked');
+    expect(toolPolicy(policies, 'github', 'unknownOperation').mode).toBe('blocked');
+    expect(toolPolicy(policies, 'linear', 'get_me').mode).toBe('blocked');
   });
   it('rejects searches and different resources on restricted grants', () => {
     expect(() => checkResourceScope('allowed', { query: 'everything' })).toThrow();
@@ -95,6 +98,7 @@ it('builds an isolated hosted session with only the employee/tool grant intersec
         status: 'connected',
       },
     ],
+    policies,
     runToken: 'private-run-token',
   } as TaskContext;
   const config = sessionConfiguration(context);
@@ -113,13 +117,14 @@ it('builds an isolated hosted session with only the employee/tool grant intersec
   expect(strFromU8(files['employee/skills/skill-1/SKILL.md'])).toContain('Private skill');
   expect(Object.keys(files).some((name) => name.includes('mcp.json'))).toBe(false);
 });
-it('estimates cumulative token spend using the selected model', () => {
-  const result = estimateUsage('gpt-5.6-terra', {
-    input_tokens: 1_000_000,
-    output_tokens: 100_000,
-    total_tokens: 1_100_000,
-    input_tokens_details: { cached_tokens: 500_000 },
-    output_tokens_details: { reasoning_tokens: 0 },
-  });
-  expect(result.estimatedCost).toBeCloseTo(2.55);
+it('reports token usage without pricing it', () => {
+  expect(
+    sessionUsage({
+      input_tokens: 1_000_000,
+      output_tokens: 100_000,
+      total_tokens: 1_100_000,
+      input_tokens_details: { cached_tokens: 500_000 },
+      output_tokens_details: { reasoning_tokens: 0 },
+    }),
+  ).toEqual({ input: 1_000_000, cached: 500_000, output: 100_000 });
 });

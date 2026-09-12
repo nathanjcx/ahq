@@ -141,7 +141,7 @@ async function recordUsage(
     output: next.output - current.output,
   };
   const values = { input: usage.input, cached: usage.cached, output: usage.output };
-  if (prior) await ctx.db.patch(prior._id, { ...values, createdAt: recordedAt });
+  if (prior) await ctx.db.patch(prior._id, { ...values, period, createdAt: recordedAt });
   else
     await ctx.db.insert('usageReports', {
       workspaceId: task.workspaceId,
