@@ -1,3 +1,4 @@
+import type { LookupFunction } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../convex/_generated/api';
 import type { Id } from '../convex/_generated/dataModel';
@@ -12,7 +13,12 @@ import { harness, identity, secret, testBackend, type Harness } from './support'
  * here is everything this application decides: which channel is tried, what the payload says, what
  * the ledger records, and what happens to a subscription the endpoint says is gone.
  */
-const sent: { endpoint: string; payload: string }[] = [];
+interface Sent {
+  endpoint: string;
+  payload: string;
+  agent?: { options: { lookup?: LookupFunction } };
+}
+const sent: Sent[] = [];
 let refuse: ((endpoint: string) => Error | undefined) | undefined;
 
 vi.mock('web-push', () => {
@@ -24,10 +30,14 @@ vi.mock('web-push', () => {
   return {
     default: {
       setVapidDetails: () => {},
-      sendNotification: async (subscription: { endpoint: string }, payload: string) => {
+      sendNotification: async (
+        subscription: { endpoint: string },
+        payload: string,
+        options?: { agent?: Sent['agent'] },
+      ) => {
         const failure = refuse?.(subscription.endpoint);
         if (failure) throw failure;
-        sent.push({ endpoint: subscription.endpoint, payload });
+        sent.push({ endpoint: subscription.endpoint, payload, agent: options?.agent });
       },
     },
     WebPushError,
@@ -50,16 +60,25 @@ async function workspace() {
   await user.mutation(api.floors.create, { name: 'Platform', brief: 'The floor.', employeeIds: [] });
   const workspaceId = String(await t.run(async (ctx) => (await ctx.db.query('workspaces').first())?._id));
   for (const endpoint of ['https://push.example/live', 'https://push.example/stale'])
-    await t.mutation(api.services.notifications.subscribePush, {
-      secret,
-      authSubject: subject,
-      endpoint,
-      keysCiphertext: seal({ p256dh: 'key', auth: 'auth' }),
-    });
+    await subscribe(t, endpoint);
   return { t, workspaceId };
 }
 
-async function attempts(t: Harness, workspaceId: string, channels: string[]) {
+async function subscribe(t: Harness, endpoint: string) {
+  return t.mutation(api.services.notifications.subscribePush, {
+    secret,
+    authSubject: subject,
+    endpoint,
+    keysCiphertext: seal({ p256dh: 'key', auth: 'auth' }),
+  });
+}
+
+async function attempts(
+  t: Harness,
+  workspaceId: string,
+  channels: string[],
+  message: { title?: string; text?: string } = {},
+) {
   await t.run(async (ctx) => {
     const settings = await ctx.db
       .query('workspaceSettings')
@@ -79,8 +98,8 @@ async function attempts(t: Harness, workspaceId: string, channels: string[]) {
     secret,
     workspaceId: workspaceId as Id<'workspaces'>,
     kind: 'triage',
-    title: 'Payments are down',
-    text: 'Nobody has answered.',
+    title: message.title ?? 'Payments are down',
+    text: message.text ?? 'Nobody has answered.',
   });
 }
 
@@ -136,6 +155,48 @@ describe('notification delivery', () => {
         (row) => row.endpoint,
       ),
     ).toEqual(['https://push.example/live']);
+  });
+
+  it('truncates an alert title too long for a notification row instead of paging nobody', async () => {
+    configureVapid();
+    const { t, workspaceId } = harnessState;
+    // An alert title may be 300 characters. The row holds 200, and the page must still go out.
+    const rows = await attempts(t, workspaceId, ['push'], { title: 'A'.repeat(300) });
+
+    expect(rows[0].title).toBe('A'.repeat(200));
+    expect(await deliverNotifications(rows)).toEqual({ delivered: 1, undelivered: 0 });
+    expect(JSON.parse(sent[0].payload).title).toBe('A'.repeat(200));
+  });
+
+  it('keeps push inside the public internet', async () => {
+    configureVapid();
+    const { t, workspaceId } = harnessState;
+    const internal = 'https://10.0.0.5:8443/hook';
+    await subscribe(t, internal);
+    const rows = await attempts(t, workspaceId, ['push']);
+
+    expect(await deliverNotifications(rows)).toEqual({ delivered: 1, undelivered: 0 });
+    // web-push speaks plain Node HTTPS, so a literal address never reaches DNS and is refused here.
+    expect(sent.map((row) => row.endpoint)).not.toContain(internal);
+    // A hostname is resolved through the rule that refuses every non-public address.
+    const lookup = sent[0].agent?.options.lookup;
+    expect(lookup).toBeTypeOf('function');
+    const refused = await new Promise<Error | null>((resolve) =>
+      lookup?.('localhost', { all: true }, (error) => resolve(error)),
+    );
+    expect(refused?.message).toMatch(/Private and reserved/);
+  });
+
+  it('caps the browsers one person can register', async () => {
+    const { t } = harnessState;
+    for (let index = 0; index < 8; index++) await subscribe(t, `https://push.example/browser-${index}`);
+
+    await expect(subscribe(t, 'https://push.example/eleventh')).rejects.toThrow(
+      'Too many push subscriptions',
+    );
+    // Re-registering a browser already on the list still refreshes its keys.
+    await subscribe(t, 'https://push.example/live');
+    expect(await t.run(async (ctx) => ctx.db.query('pushSubscriptions').collect())).toHaveLength(10);
   });
 
   it('falls back to the in-app row when no VAPID key pair is configured', async () => {

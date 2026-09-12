@@ -1,5 +1,9 @@
+import { lookup } from 'node:dns';
+import { Agent } from 'node:https';
+import { isIP } from 'node:net';
 import webpush, { WebPushError } from 'web-push';
 import { mutate, query } from './backend';
+import { publicAddress } from './network';
 import { safeError, unseal } from './secrets';
 
 /** One recorded attempt to reach one person, exactly as `services/notifications:attempt` returns it. */
@@ -34,6 +38,30 @@ function pushConfigured() {
   return true;
 }
 
+/**
+ * Push is the one outbound path that does not go through `safeFetch`: `web-push` signs and sends over
+ * plain Node HTTPS. The endpoint is a URL a member registered, so it gets the same treatment a
+ * provider URL gets — resolution refuses any non-public address, and a literal IP, which never
+ * reaches DNS, is refused before the request is made.
+ */
+const pushAgent = new Agent({
+  lookup: (hostname, options, callback) => {
+    lookup(hostname, { ...options, all: true }, (error, addresses) => {
+      if (error) return callback(error, '', 4);
+      if (!addresses.length || addresses.some((a) => !publicAddress(a.address)))
+        return callback(new Error('Private and reserved network destinations are blocked'), '', 4);
+      if (options.all) return callback(null, addresses);
+      callback(null, addresses[0].address, addresses[0].family);
+    });
+  },
+});
+
+function requireSafeEndpoint(endpoint: string) {
+  const url = new URL(endpoint);
+  if (url.protocol !== 'https:' || isIP(url.hostname.replace(/^\[|\]$/g, '')))
+    throw new Error('Unsafe push endpoint');
+}
+
 /** A push service saying the endpoint is gone. The subscription is dead and is pruned, not retried. */
 function subscriptionGone(error: unknown) {
   return error instanceof WebPushError && (error.statusCode === 404 || error.statusCode === 410);
@@ -54,6 +82,7 @@ async function sendPush(attempt: NotificationAttempt) {
   let delivered = false;
   for (const target of targets) {
     try {
+      requireSafeEndpoint(target.endpoint);
       const keys = unseal<{ p256dh: string; auth: string }>(target.keysCiphertext);
       await webpush.sendNotification(
         { endpoint: target.endpoint, keys },
@@ -64,7 +93,7 @@ async function sendPush(attempt: NotificationAttempt) {
           body: attempt.text,
           ...(attempt.alertId ? { alertId: attempt.alertId } : {}),
         }),
-        { TTL: 600 },
+        { TTL: 600, agent: pushAgent },
       );
       delivered = true;
     } catch (error) {
