@@ -123,6 +123,9 @@ export interface HireRequest {
   listingName: string;
   floorId?: string;
   count: number;
+  /** What the member asked the instances to be called, and the model they run on after hours. */
+  names?: string[];
+  overnightModel?: ModelId;
   requestedBy: string;
   requestedByName: string;
   status: 'pending' | 'approved' | 'declined';

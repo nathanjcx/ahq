@@ -330,3 +330,45 @@ describe('audit findings', () => {
     expect((await owner.query(api.audit.findings, { status: 'addressed' }))[0].id).toBe(ignored.id);
   });
 });
+
+describe('a hard audit policy', () => {
+  it('refuses new work for an instance with open findings, and lets it through once they are addressed', async () => {
+    const t = harness();
+    const { owner, workspaceId, employeeId, runToken } = await auditedDay(t);
+    await t.run(async (ctx) => {
+      const settings = await ctx.db
+        .query('workspaceSettings')
+        .filter((q) => q.eq(q.field('workspaceId'), workspaceId))
+        .unique();
+      if (settings) await ctx.db.patch(settings._id, { auditPolicy: 'hard' });
+    });
+    await t.mutation(api.services.audit.recordFindings, {
+      secret,
+      runToken,
+      workspaceId,
+      date,
+      findings: [
+        {
+          employeeId,
+          severity: 'high' as const,
+          claim: 'The report names no file.',
+          evidence: 'The journal shows none.',
+          requiredAction: 'Name the files or withdraw the claim.',
+        },
+      ],
+    });
+
+    const newWork = () =>
+      owner.mutation(api.tasks.create, {
+        employeeId,
+        title: 'Start the next draft',
+        prompt: 'Draft it.',
+      });
+    await expect(newWork()).rejects.toThrow('audit policy holds its other work');
+
+    const finding = (await owner.query(api.audit.findings, { status: 'open' }))[0];
+    const boss = t.withIdentity(orgIdentity('boss', 'acme', 'org:admin'));
+    await boss.mutation(api.audit.markAddressed, { id: finding.id as Id<'auditFindings'> });
+    expect(await newWork()).toMatchObject({ taskId: expect.anything() });
+  });
+});

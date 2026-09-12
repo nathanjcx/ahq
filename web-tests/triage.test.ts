@@ -527,7 +527,45 @@ describe('what the Triage page reads', () => {
       alertSecretCiphertext: seal(alertSecret),
     });
     const intake = await user.query(api.triage.intake, {});
-    expect(intake).toMatchObject({ signedEndpointReady: true, rules: ['sev1', 'outage'] });
+    expect(intake).toMatchObject({
+      signedEndpointReady: true,
+      rules: ['sev1', 'outage'],
+      secretUpdatedAt: expect.any(Number),
+    });
     expect(JSON.stringify(intake)).not.toContain(alertSecret);
+  });
+
+  it('lets a workspace administrator set and clear the signing secret, and nobody else', async () => {
+    const { t, user } = await workspace();
+    const rotate = (subject: string, orgRole: string, ciphertext?: string) =>
+      t.mutation(api.services.triage.setAlertSecretForActor, {
+        secret,
+        authSubject: subject,
+        authOrgId: 'acme',
+        authOrgRole: orgRole,
+        ...(ciphertext ? { alertSecretCiphertext: ciphertext } : {}),
+      });
+
+    await expect(rotate('member', 'org:member', seal(alertSecret))).rejects.toThrow(
+      'administrator access required',
+    );
+    expect(await user.query(api.triage.intake, {})).toMatchObject({ signedEndpointReady: false });
+
+    const { updatedAt } = await rotate('owner', 'org:admin', seal(alertSecret));
+    expect(await user.query(api.triage.intake, {})).toMatchObject({
+      signedEndpointReady: true,
+      secretUpdatedAt: updatedAt,
+    });
+    // The sealed secret is still only readable by the service that verifies a signature.
+    expect(
+      await t.query(api.services.triage.alertSecret, {
+        secret,
+        workspaceId: (await user.query(api.workspace.dashboard, {})).workspace!.id,
+      }),
+    ).toContain('.');
+
+    // Writing no ciphertext clears it, which closes the signed endpoint.
+    await rotate('owner', 'org:admin');
+    expect(await user.query(api.triage.intake, {})).toMatchObject({ signedEndpointReady: false });
   });
 });
