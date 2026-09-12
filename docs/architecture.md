@@ -348,9 +348,17 @@ under the fixture route, so a page can be photographed without a deployment. `/q
 `QA_FIXTURE=1`; every other build answers 404 there. `/office-lab` is guarded the same way and
 renders deterministic office scenes for the pixel baselines.
 
-Pages that exist today: Office, Inbox, Employees, Tasks, Files, Activity, Marketplace, Integrations,
-Marketplace admin, Operations. Projects, Calendar, Records, Audit, and Triage are registered in the
-navigation and render a placeholder (page lands with phase four), as do the per-domain action files.
+Every page in the plan is built. Alongside the original Office, Inbox, Employees, Tasks, Files,
+Activity, Marketplace, Integrations, Marketplace admin, and Operations pages: **Projects**
+(`components/projects/`) is the roadmap — a list, a new-project sheet, a proposal review that answers
+the planner's bottleneck questions, and a timeline with floor lanes and dependency strings.
+**Calendar** (`components/calendar/`, rendering `components/meetings/`) is the week and day board with
+instance and tower rows, the scheduling sheet, and the boardroom behind a meeting. **Records**
+(`components/records/`) is the basement: scope shelves, the conflicts queue, chains, budgets, and the
+janitor log. **Audit** (`components/audit/`) is the nightly documents per instance with their statuses
+and escalations. **Triage** (`components/triage/`) is the alert inbox, the paging timeline, incident
+reports, and intake setup, with the incident strip above every page. Settings is a panel over any
+page, in five sections. Every per-domain action file under `components/app/actions/` is wired.
 
 ## One day
 
@@ -407,15 +415,6 @@ navigation and render a placeholder (page lands with phase four), as do the per-
 
 - **Slack and email deliver nothing.** `lib/server/notify.ts` sends `in_app` and `push`; the two
   connector channels log that they are not configured and report no delivery.
-- **The v4 interface is not built yet.** Projects, Calendar, Records, Audit, and Triage are
-  placeholders, and every per-domain action file except `core.ts` is an empty stub, so nothing in the
-  browser yet edits the schedule, the policies, a roadmap, a meeting, or memory.
-- **The office activity model is unchanged.** `components/office/activity.ts` still has the nine
-  original activities; none of the v4 states (`waiting`, `auditing`, `triaging`, `off_shift`, and the
-  rest) exist, and replay covers no memory, meeting, audit, or triage event.
-- **`capacity.instances` counts reserved instances** (`convex/plan.ts`) while the hiring cap counts
-  worker instances only (`convex/lib/marketplace.ts`), so the projection and the cap disagree by
-  three.
 - **No calendar or transcript export route.** The plan names both; `lib/api/routes.ts` has neither.
 - **A task-scoped claim is not injected.** `remember` accepts the `task` scope and `recall` searches
   it, but `compileInputs` builds the Working memory block from the workspace, project, floor, and
