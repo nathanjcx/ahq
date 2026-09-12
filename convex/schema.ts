@@ -566,6 +566,8 @@ export default defineSchema({
   taskSummaries: defineTable({
     workspaceId: v.id('workspaces'),
     taskId: v.id('tasks'),
+    /** Copied from the task so working memory can read a floor's recent summaries in one query. */
+    floorId: v.optional(v.id('floors')),
     outcome: v.string(),
     decisions: v.array(v.string()),
     openQuestions: v.array(v.string()),
@@ -573,7 +575,9 @@ export default defineSchema({
     text: v.string(),
     inferred: v.boolean(),
     createdAt: v.number(),
-  }).index('by_task', ['taskId']),
+  })
+    .index('by_task', ['taskId'])
+    .index('by_floor', ['floorId', 'createdAt']),
   memories: defineTable({
     workspaceId: v.id('workspaces'),
     scope: memoryScope,
@@ -586,7 +590,10 @@ export default defineSchema({
     authorName: v.string(),
     confidence: v.number(),
     status: memoryStatus,
+    /** Set on an archived entry: the entry that replaced it, so a chain reads forward in time. */
     supersedesId: v.optional(v.id('memories')),
+    /** Set on a promoted workspace copy: the scoped entry it was promoted from. */
+    sourceMemoryId: v.optional(v.id('memories')),
     contestReason: v.optional(v.string()),
     expiresAt: v.optional(v.number()),
     lastUsedAt: v.optional(v.number()),
