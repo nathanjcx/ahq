@@ -24,8 +24,20 @@ export function HandoffSheet({
       title="Hand off this task"
       subtitle="The employee you choose picks up on the same floor once someone accepts the handoff."
       onClose={onClose}
+      footer={
+        <button
+          className="primary-button full"
+          type="submit"
+          form="handoff-form"
+          disabled={!toEmployeeId || !brief.trim()}
+        >
+          Request handoff
+          <ArrowRight size={16} />
+        </button>
+      }
     >
       <form
+        id="handoff-form"
         className="form-stack task-form"
         onSubmit={(event) => {
           event.preventDefault();
@@ -63,10 +75,6 @@ export function HandoffSheet({
           />
           <small>Say what is done, what is left, and anything the next employee should not repeat.</small>
         </label>
-        <button className="primary-button full" disabled={!toEmployeeId || !brief.trim()}>
-          Request handoff
-          <ArrowRight size={16} />
-        </button>
       </form>
     </Sheet>
   );

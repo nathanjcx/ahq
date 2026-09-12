@@ -17,6 +17,7 @@ import { nav, pageTitle, type Page } from './nav';
 import { NewTaskPanel } from './new-task-panel';
 import { SetupBanner, Toast } from './notices';
 import { PageContent } from './page-content';
+import { ReviewBar } from './review-bar';
 import { SettingsPanel } from './settings-panel';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
@@ -112,7 +113,6 @@ export function WorkspaceShell({
     <div className="app-frame">
       <Sidebar
         dashboard={dashboard}
-        configured={configured}
         page={page}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -136,7 +136,19 @@ export function WorkspaceShell({
           canCreateTask={Boolean(workspace) && hasReadyEmployee}
           onOpenNavigation={() => setSidebarOpen(true)}
           onNewTask={() => openNewTask()}
+          onSettings={() => setSettingsOpen(true)}
           onReview={(taskId) => {
+            setSelectedTask(taskId);
+            go('tasks');
+          }}
+        />
+
+        <ReviewBar
+          proposals={dashboard.proposals}
+          onDecide={(id, approved) =>
+            void run(() => actions.decide(id, approved), approved ? 'Action approved' : 'Action rejected')
+          }
+          onOpenTask={(taskId) => {
             setSelectedTask(taskId);
             go('tasks');
           }}

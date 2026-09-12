@@ -1,7 +1,7 @@
 'use client';
 
 import { OrganizationSwitcher, UserButton } from '@clerk/nextjs';
-import { Bell, Menu, Plus } from 'lucide-react';
+import { Bell, Menu, Plus, Settings } from 'lucide-react';
 import type { ActionProposal } from '@/lib/contracts';
 
 export function Topbar({
@@ -11,6 +11,7 @@ export function Topbar({
   canCreateTask,
   onOpenNavigation,
   onNewTask,
+  onSettings,
   onReview,
 }: {
   title: string;
@@ -19,6 +20,7 @@ export function Topbar({
   canCreateTask: boolean;
   onOpenNavigation: () => void;
   onNewTask: () => void;
+  onSettings: () => void;
   onReview: (taskId: string) => void;
 }) {
   const pending = proposals.find((proposal) => proposal.status === 'pending');
@@ -52,6 +54,14 @@ export function Topbar({
             <OrganizationSwitcher afterSelectOrganizationUrl="/" />
           </div>
         )}
+        <button
+          className="icon-button topbar-settings"
+          aria-label="Settings"
+          disabled={!configured}
+          onClick={onSettings}
+        >
+          <Settings size={18} />
+        </button>
         {configured && (
           <div className="clerk-user">
             <UserButton />

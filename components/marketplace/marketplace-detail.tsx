@@ -38,7 +38,35 @@ export function MarketplaceDetail({
   const canHire = configured && !hired && missing.length === 0;
   useEffect(() => setMediaFailed(false), [mediaIndex]);
   return (
-    <Sheet wide title={listing.name} subtitle={listing.role} onClose={onClose}>
+    <Sheet
+      wide
+      title={listing.name}
+      subtitle={listing.role}
+      onClose={onClose}
+      footer={
+        <div className="market-hire-bar">
+          <span>
+            <strong>Free</strong>
+            <small>OpenAI and provider usage billed separately</small>
+          </span>
+          <button
+            className={hired ? 'secondary-button' : 'primary-button'}
+            disabled={!canHire}
+            onClick={onHire}
+          >
+            {hired ? (
+              <>
+                <Check size={15} /> Already hired
+              </>
+            ) : (
+              <>
+                Hire employee <ArrowRight size={15} />
+              </>
+            )}
+          </button>
+        </div>
+      }
+    >
       <div className="market-detail">
         <div className="market-gallery" style={{ '--listing-color': listing.color } as CSSProperties}>
           <div className="market-gallery-stage">
@@ -156,27 +184,6 @@ export function MarketplaceDetail({
               </span>
             </div>
           )}
-          <div className="market-hire-bar">
-            <span>
-              <strong>Free</strong>
-              <small>OpenAI and provider usage billed separately</small>
-            </span>
-            <button
-              className={hired ? 'secondary-button' : 'primary-button'}
-              disabled={!canHire}
-              onClick={onHire}
-            >
-              {hired ? (
-                <>
-                  <Check size={15} /> Already hired
-                </>
-              ) : (
-                <>
-                  Hire employee <ArrowRight size={15} />
-                </>
-              )}
-            </button>
-          </div>
         </div>
       </div>
     </Sheet>

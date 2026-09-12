@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { Connection, ConnectionVisibility } from '@/lib/contracts';
 import { useMembers } from '../shared/members';
+import { SkeletonList } from '../shared/skeleton';
 import { Sheet } from '../shared/sheet';
 
 const choices: { value: ConnectionVisibility; title: string; detail: string }[] = [
@@ -31,6 +32,15 @@ export function SharePanel({
       title={`Sharing for ${connection.name}`}
       subtitle="You stay the owner of this account. Sharing only decides who may use it."
       onClose={onClose}
+      footer={
+        <button
+          className="primary-button full"
+          disabled={visibility === 'members' && subjects.length === 0}
+          onClick={() => onSave(visibility, visibility === 'members' ? subjects : [])}
+        >
+          Save sharing
+        </button>
+      }
     >
       <div className="form-stack">
         <p className="form-note">
@@ -55,7 +65,7 @@ export function SharePanel({
         </div>
         {visibility === 'members' &&
           (loading ? (
-            <p className="field-hint">Loading workspace members.</p>
+            <SkeletonList kind="member" rows={3} label="Loading workspace members" />
           ) : error ? (
             <p className="field-hint">{error}</p>
           ) : candidates.length === 0 ? (
@@ -86,13 +96,6 @@ export function SharePanel({
               })}
             </div>
           ))}
-        <button
-          className="primary-button full"
-          disabled={visibility === 'members' && subjects.length === 0}
-          onClick={() => onSave(visibility, visibility === 'members' ? subjects : [])}
-        >
-          Save sharing
-        </button>
       </div>
     </Sheet>
   );

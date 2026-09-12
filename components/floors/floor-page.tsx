@@ -9,6 +9,7 @@ import { PageIntro } from '../shared/page-intro';
 import { timeGreeting } from '../shared/format';
 import { FloorBoard, LiveFloorBoard } from './floor-board';
 import { FloorDirectory } from './floor-directory';
+import { FloorSwitcher } from './floor-switcher';
 import { FloorView } from './floor-view';
 import { LobbyView } from './lobby-view';
 import { ACTIVE_TASK_STATUSES, summarizeFloor, type FloorEntry } from './floor-stats';
@@ -105,6 +106,15 @@ export function FloorPage({
             <Plus size={17} /> New project floor
           </button>
         }
+      />
+      <FloorSwitcher
+        activeFloors={activeFloors}
+        archivedFloors={archivedFloors}
+        selected={selected}
+        unassignedTaskCount={dashboard.tasks.filter((task) => !task.projectId).length}
+        canCreate={workspaceReady}
+        onSelectProject={onSelectProject}
+        onNewProject={onNewProject}
       />
       <div className="building-layout">
         <FloorDirectory

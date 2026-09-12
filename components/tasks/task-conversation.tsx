@@ -1,10 +1,11 @@
 'use client';
 
 import { useQuery } from 'convex/react';
-import { LoaderCircle, Send } from 'lucide-react';
+import { Send } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import type { Task } from '@/lib/contracts';
 import { asId, uiApi } from '@/lib/ui-api';
+import { SkeletonList } from '../shared/skeleton';
 import { MessageBubble } from './message-bubble';
 
 export function TaskConversation({
@@ -45,10 +46,7 @@ export function TaskConversation({
             />
           )}
         {messages === undefined ? (
-          <div className="messages-loading">
-            <LoaderCircle size={17} className="spin" />
-            Loading conversation
-          </div>
+          <SkeletonList kind="message" rows={3} label="Loading conversation" />
         ) : (
           messages.map((message) => <MessageBubble key={message.id} message={message} />)
         )}

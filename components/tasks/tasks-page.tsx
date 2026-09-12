@@ -6,6 +6,7 @@ import type { ActionProposal, Employee, Project, Task, TaskVisibility } from '@/
 import { EmptyPane, EmptySection } from '../shared/empty';
 import { relativeTime } from '../shared/format';
 import { StatusMark } from '../shared/marks';
+import { MasterDetail, useMasterDetail } from '../shared/master-detail';
 import { PageIntro } from '../shared/page-intro';
 import { TaskDetail } from './task-detail';
 import './tasks.css';
@@ -49,6 +50,7 @@ export function TasksPage({
   onRequestHandoff?: (projectId: string, toEmployeeId: string, brief: string, taskId: string) => void;
 }) {
   const [projectFilter, setProjectFilter] = useState('all');
+  const { open, openDetail, closeDetail } = useMasterDetail();
   const shownTasks = tasks.filter((task) =>
     projectFilter === 'all'
       ? true
@@ -73,67 +75,82 @@ export function TasksPage({
         }
       />
       {tasks.length ? (
-        <div className="task-layout card">
-          <div className="task-list">
-            <div className="pane-toolbar">
-              <strong>
-                {shownTasks.length} {shownTasks.length === 1 ? 'task' : 'tasks'}
-              </strong>
-              <label className="task-floor-filter">
-                <span className="sr-only">Filter by project floor</span>
-                <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
-                  <option value="all">All floors</option>
-                  <option value="lobby">Lobby</option>
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                      {project.archivedAt ? ' · Archived' : ''}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            {shownTasks.map((task) => (
-              <button key={task.id} data-active={selected?.id === task.id} onClick={() => onSelect(task.id)}>
-                <StatusMark status={task.status} />
-                <span>
-                  <strong>{task.title}</strong>
-                  <small>
-                    {task.employeeName} · {relativeTime(task.updatedAt)}
-                  </small>
-                  {task.visibility === 'workspace' && (
-                    <small className="task-shared">
-                      {task.isOwner ? 'Shared with the workspace' : `Shared by ${task.createdByName}`}
+        <MasterDetail
+          className="task-layout card"
+          open={open}
+          backLabel="Tasks"
+          onBack={closeDetail}
+          list={
+            <div className="task-list">
+              <div className="pane-toolbar">
+                <strong>
+                  {shownTasks.length} {shownTasks.length === 1 ? 'task' : 'tasks'}
+                </strong>
+                <label className="task-floor-filter">
+                  <span className="sr-only">Filter by project floor</span>
+                  <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
+                    <option value="all">All floors</option>
+                    <option value="lobby">Lobby</option>
+                    {projects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.name}
+                        {project.archivedAt ? ' · Archived' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {shownTasks.map((task) => (
+                <button
+                  key={task.id}
+                  data-active={selected?.id === task.id}
+                  onClick={() => {
+                    onSelect(task.id);
+                    openDetail();
+                  }}
+                >
+                  <StatusMark status={task.status} />
+                  <span>
+                    <strong>{task.title}</strong>
+                    <small>
+                      {task.employeeName} · {relativeTime(task.updatedAt)}
                     </small>
-                  )}
-                  <span className="task-floor-label">{taskFloorName(task, projects)}</span>
-                </span>
-              </button>
-            ))}
-            {!shownTasks.length && (
-              <EmptyPane
-                icon={<ListTodo size={22} />}
-                title="No tasks on this floor"
-                text="Choose another floor or create a task."
+                    {task.visibility === 'workspace' && (
+                      <small className="task-shared">
+                        {task.isOwner ? 'Shared with the workspace' : `Shared by ${task.createdByName}`}
+                      </small>
+                    )}
+                    <span className="task-floor-label">{taskFloorName(task, projects)}</span>
+                  </span>
+                </button>
+              ))}
+              {!shownTasks.length && (
+                <EmptyPane
+                  icon={<ListTodo size={22} />}
+                  title="No tasks on this floor"
+                  text="Choose another floor or create a task."
+                />
+              )}
+            </div>
+          }
+          detail={
+            selected && (
+              <TaskDetail
+                key={selected.id}
+                task={selected}
+                floorName={taskFloorName(selected, projects)}
+                proposals={proposals.filter((proposal) => proposal.taskId === selected.id)}
+                floorEmployees={floorEmployees}
+                onSend={onSend}
+                onCancel={onCancel}
+                onDecide={onDecide}
+                onCorrect={onCorrect}
+                onSetVisibility={onSetVisibility}
+                onRequestHandoff={onRequestHandoff}
               />
-            )}
-          </div>
-          {selected && (
-            <TaskDetail
-              key={selected.id}
-              task={selected}
-              floorName={taskFloorName(selected, projects)}
-              proposals={proposals.filter((proposal) => proposal.taskId === selected.id)}
-              floorEmployees={floorEmployees}
-              onSend={onSend}
-              onCancel={onCancel}
-              onDecide={onDecide}
-              onCorrect={onCorrect}
-              onSetVisibility={onSetVisibility}
-              onRequestHandoff={onRequestHandoff}
-            />
-          )}
-        </div>
+            )
+          }
+        />
       ) : (
         <EmptySection
           icon={<ListTodo size={28} />}

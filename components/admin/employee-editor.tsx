@@ -132,8 +132,24 @@ export function EmployeeEditor({
       title={draft ? `Edit ${draft.name || 'draft'}` : 'Create employee'}
       subtitle="Public listing details are separated from private instructions and skill files."
       onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="secondary-button" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className="primary-button"
+            type="submit"
+            form="employee-editor-form"
+            disabled={saving || Boolean(skillLimitError)}
+          >
+            <Check size={15} />
+            {saving ? 'Saving…' : 'Save draft'}
+          </button>
+        </>
+      }
     >
-      <form className="editor-form" onSubmit={submit}>
+      <form id="employee-editor-form" className="editor-form" onSubmit={submit}>
         <section>
           <span className="editor-step">01</span>
           <div>
@@ -330,13 +346,6 @@ export function EmployeeEditor({
               Instructions and skills are never returned by public marketplace APIs.
             </p>
           </div>
-          <button type="button" className="secondary-button" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="primary-button" disabled={saving || Boolean(skillLimitError)}>
-            <Check size={15} />
-            {saving ? 'Saving…' : 'Save draft'}
-          </button>
         </div>
       </form>
     </Sheet>

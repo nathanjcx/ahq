@@ -40,8 +40,19 @@ export function ProjectPanel({
       title={project ? `Edit ${project.name}` : 'Create project floor'}
       subtitle="A project floor groups its shared brief, staffing, and your private task queue."
       onClose={onClose}
+      footer={
+        <button
+          className="primary-button full"
+          type="submit"
+          form="project-form"
+          disabled={!configured || busy || !name.trim() || !brief.trim()}
+        >
+          {busy ? <LoaderCircle size={16} className="spin" /> : <Check size={16} />}
+          {project ? 'Save floor' : 'Create floor'}
+        </button>
+      }
     >
-      <form className="form-stack project-form" onSubmit={save}>
+      <form id="project-form" className="form-stack project-form" onSubmit={save}>
         <label>
           Project name
           <input
@@ -98,13 +109,6 @@ export function ProjectPanel({
             </div>
           )}
         </fieldset>
-        <button
-          className="primary-button full"
-          disabled={!configured || busy || !name.trim() || !brief.trim()}
-        >
-          {busy ? <LoaderCircle size={16} className="spin" /> : <Check size={16} />}
-          {project ? 'Save floor' : 'Create floor'}
-        </button>
       </form>
       {project && (
         <div className="project-archive-control">

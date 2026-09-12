@@ -104,9 +104,16 @@ export function MarketplacePage({
                   )}
                 </button>
                 <div className="listing-copy">
-                  <span className="category-pill">{listing.category}</span>
-                  <h2>{listing.name}</h2>
-                  <p className="listing-role">{listing.role}</p>
+                  <div className="listing-head">
+                    <span className="listing-mark" aria-hidden="true" style={{ background: listing.color }}>
+                      <Bot size={20} />
+                    </span>
+                    <div>
+                      <span className="category-pill">{listing.category}</span>
+                      <h2>{listing.name}</h2>
+                      <p className="listing-role">{listing.role}</p>
+                    </div>
+                  </div>
                   <p className="listing-description">{listing.description}</p>
                   <div className="capability-row">
                     {listing.capabilities.slice(0, 4).map((capability) => (

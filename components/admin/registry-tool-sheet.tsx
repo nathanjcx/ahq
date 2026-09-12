@@ -68,8 +68,18 @@ export function RegistryToolSheet({
       title={tool ? `Edit ${tool.name}` : 'Add tool'}
       subtitle="A tool exists for agents only while this row exists and is not blocked."
       onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="secondary-button" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="primary-button" type="submit" form="registry-tool-form" disabled={saving}>
+            {saving ? 'Saving…' : 'Save tool'}
+          </button>
+        </>
+      }
     >
-      <form className="form-stack" onSubmit={submit}>
+      <form id="registry-tool-form" className="form-stack" onSubmit={submit}>
         <div className="form-grid">
           <label>
             Provider
@@ -207,15 +217,6 @@ export function RegistryToolSheet({
             </label>
           </div>
         )}
-
-        <div className="ops-form-actions">
-          <button type="button" className="secondary-button" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="primary-button" disabled={saving}>
-            {saving ? 'Saving…' : 'Save tool'}
-          </button>
-        </div>
       </form>
     </Sheet>
   );

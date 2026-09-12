@@ -5,6 +5,7 @@ import type { Connection, Employee, ProviderId } from '@/lib/contracts';
 import { EmptySection } from '../shared/empty';
 import { modelName, providerName } from '../shared/format';
 import { Avatar, ProviderMark } from '../shared/marks';
+import { MasterDetail, useMasterDetail } from '../shared/master-detail';
 import { PageIntro } from '../shared/page-intro';
 
 /**
@@ -38,6 +39,7 @@ export function EmployeesPage({
   onTask: (id: string) => void;
 }) {
   const selected = employees.find((employee) => employee.id === selectedId) ?? employees[0];
+  const { open, openDetail, closeDetail } = useMasterDetail();
   return (
     <div>
       <PageIntro
@@ -52,99 +54,110 @@ export function EmployeesPage({
         }
       />
       {employees.length ? (
-        <div className="employee-layout">
-          <div className="employee-grid">
-            {employees.map((employee) => (
-              <button
-                className="employee-card card"
-                key={employee.id}
-                data-active={selected?.id === employee.id}
-                onClick={() => onSelect(employee.id)}
-              >
-                <Avatar employee={employee} large />
-                <span
-                  className={`availability ${employee.status.toLowerCase().includes('work') ? 'busy' : ''}`}
-                />
-                <div>
-                  <h3>{employee.name}</h3>
-                  <p>{employee.role}</p>
+        <MasterDetail
+          className="employee-layout"
+          open={open}
+          backLabel="Employees"
+          onBack={closeDetail}
+          list={
+            <div className="employee-grid">
+              {employees.map((employee) => (
+                <button
+                  className="employee-card card"
+                  key={employee.id}
+                  data-active={selected?.id === employee.id}
+                  onClick={() => {
+                    onSelect(employee.id);
+                    openDetail();
+                  }}
+                >
+                  <Avatar employee={employee} large />
+                  <span
+                    className={`availability ${employee.status.toLowerCase().includes('work') ? 'busy' : ''}`}
+                  />
+                  <div>
+                    <h3>{employee.name}</h3>
+                    <p>{employee.role}</p>
+                  </div>
+                  <span className="model-pill">{modelName(employee.model)}</span>
+                </button>
+              ))}
+            </div>
+          }
+          detail={
+            selected && (
+              <aside className="employee-profile card">
+                <div className="profile-top">
+                  <Avatar employee={selected} large />
+                  <div>
+                    <span className="eyebrow">EMPLOYEE PROFILE</span>
+                    <h2>{selected.name}</h2>
+                    <p>{selected.role}</p>
+                  </div>
                 </div>
-                <span className="model-pill">{modelName(employee.model)}</span>
-              </button>
-            ))}
-          </div>
-          {selected && (
-            <aside className="employee-profile card">
-              <div className="profile-top">
-                <Avatar employee={selected} large />
-                <div>
-                  <span className="eyebrow">EMPLOYEE PROFILE</span>
-                  <h2>{selected.name}</h2>
-                  <p>{selected.role}</p>
-                </div>
-              </div>
-              <dl className="profile-facts">
-                <div>
-                  <dt>Status</dt>
-                  <dd>
-                    <i className="status-dot working" />
-                    {selected.status}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Model</dt>
-                  <dd>{modelName(selected.model)}</dd>
-                </div>
-                <div>
-                  <dt>Version</dt>
-                  <dd>{selected.versionId.slice(0, 8)}</dd>
-                </div>
-              </dl>
-              <div className="profile-section">
-                <h3>Readiness</h3>
-                {selected.status === 'retired' ? (
-                  <p className="readiness-warn">
-                    <Archive size={14} />
-                    This employee version is retired
-                  </p>
-                ) : selected.missingCapabilities.length ? (
-                  selected.missingCapabilities.map((capability) => (
-                    <p className="readiness-warn" key={capability}>
-                      <Link2 size={14} />
-                      {missingNote(capability, connections)}
+                <dl className="profile-facts">
+                  <div>
+                    <dt>Status</dt>
+                    <dd>
+                      <i className="status-dot working" />
+                      {selected.status}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Model</dt>
+                    <dd>{modelName(selected.model)}</dd>
+                  </div>
+                  <div>
+                    <dt>Version</dt>
+                    <dd>{selected.versionId.slice(0, 8)}</dd>
+                  </div>
+                </dl>
+                <div className="profile-section">
+                  <h3>Readiness</h3>
+                  {selected.status === 'retired' ? (
+                    <p className="readiness-warn">
+                      <Archive size={14} />
+                      This employee version is retired
                     </p>
-                  ))
-                ) : (
-                  <p className="readiness-ok">
-                    <BadgeCheck size={15} />
-                    All required connections are ready
-                  </p>
-                )}
-              </div>
-              <div className="profile-connections">
-                <h3>Available connections</h3>
-                <div>
-                  {connections
-                    .filter((connection) => connection.status === 'connected')
-                    .map((connection) => (
-                      <span key={connection.id}>
-                        <ProviderMark provider={connection.provider} small />
-                        {connection.name}
-                      </span>
-                    ))}
+                  ) : selected.missingCapabilities.length ? (
+                    selected.missingCapabilities.map((capability) => (
+                      <p className="readiness-warn" key={capability}>
+                        <Link2 size={14} />
+                        {missingNote(capability, connections)}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="readiness-ok">
+                      <BadgeCheck size={15} />
+                      All required connections are ready
+                    </p>
+                  )}
                 </div>
-              </div>
-              <button
-                className="primary-button full"
-                disabled={selected.status !== 'ready'}
-                onClick={() => onTask(selected.id)}
-              >
-                <Play size={15} />
-                Assign new task
-              </button>
-            </aside>
-          )}
-        </div>
+                <div className="profile-connections">
+                  <h3>Available connections</h3>
+                  <div>
+                    {connections
+                      .filter((connection) => connection.status === 'connected')
+                      .map((connection) => (
+                        <span key={connection.id}>
+                          <ProviderMark provider={connection.provider} small />
+                          {connection.name}
+                        </span>
+                      ))}
+                  </div>
+                </div>
+                <button
+                  className="primary-button full"
+                  disabled={selected.status !== 'ready'}
+                  onClick={() => onTask(selected.id)}
+                >
+                  <Play size={15} />
+                  Assign new task
+                </button>
+              </aside>
+            )
+          }
+        />
       ) : (
         <EmptySection
           icon={<Users size={28} />}
