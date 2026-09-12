@@ -5,6 +5,9 @@ import { executeAction } from '../actions';
 import { initialTaskInput } from '../task-input';
 import type { Job, TaskContext } from '../types';
 import type { WorkerRuntime } from './state';
+import { turnFor } from './turns';
+import { text } from './turns/context';
+import { taskSummary } from './turns/summary';
 
 const leaseRenewalMs = 20_000;
 const recoveryScanLimit = 200;
@@ -51,7 +54,7 @@ async function sendInput(runtime: WorkerRuntime, job: Job) {
             content: [
               {
                 type: 'input_text',
-                text: job.kind === 'start_task' ? initialTaskInput(context) : String(job.payload.text || ''),
+                text: job.kind === 'start_task' ? initialTaskInput(context) : text(job.payload.text),
               },
             ],
           },
@@ -60,6 +63,25 @@ async function sendInput(runtime: WorkerRuntime, job: Job) {
     ],
     'Idempotency-Key': job.id,
   });
+  await mutate('services/queue:completeJob', { jobId: job.id, leaseToken: job.leaseToken });
+}
+
+/**
+ * Runs one turn job to completion, then closes the task if the turn finished it.
+ *
+ * A work task that ends leaves behind a session that still knows what it did, so one bounded wrap-up
+ * turn writes the summary later shifts read before the session is let go.
+ */
+async function runTurnJob(runtime: WorkerRuntime, job: Job) {
+  const turn = turnFor(job.kind);
+  if (!turn) throw new Error(`Unsupported queue job: ${job.kind}`);
+  await turn(runtime, job);
+  // Only a shift can leave a work task finished; every other turn kind runs on a session task.
+  if (job.kind === 'start_shift' || job.kind === 'review_shift') {
+    const context = await query<TaskContext>('services/sessions:taskContext', { taskId: job.taskId });
+    if (['completed', 'failed', 'cancelled'].includes(context.task.status))
+      await taskSummary(runtime, job, context);
+  }
   await mutate('services/queue:completeJob', { jobId: job.id, leaseToken: job.leaseToken });
 }
 
@@ -74,7 +96,7 @@ export async function runJob(runtime: WorkerRuntime, job: Job) {
     if (job.kind === 'execute_action') {
       await executeAction(job);
     } else if (job.kind === 'cancel_task') {
-      const sessionId = String(job.payload.sessionId || '');
+      const sessionId = text(job.payload.sessionId);
       if (sessionId)
         await runtime.api.beta.agents.sessions.events.create(sessionId, {
           events: [{ type: 'agent.session.input.cancel' }],
@@ -84,7 +106,7 @@ export async function runJob(runtime: WorkerRuntime, job: Job) {
       await mutate('services/queue:completeJob', { jobId: job.id, leaseToken: job.leaseToken });
     } else if (job.kind === 'start_task' || job.kind === 'send_message') {
       await sendInput(runtime, job);
-    } else throw new Error(`Unsupported queue job: ${job.kind}`);
+    } else await runTurnJob(runtime, job);
   } catch (error) {
     console.error('Job failed:', safeError(error));
     // A dispatched external write is never retried: its outcome is unknown, not failed.

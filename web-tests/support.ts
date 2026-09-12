@@ -1,8 +1,10 @@
+import { makeFunctionReference } from 'convex/server';
 import { convexTest } from 'convex-test';
 import { api } from '../convex/_generated/api';
 import type { Id } from '../convex/_generated/dataModel';
 import schema from '../convex/schema';
 import type { ProviderId, ToolMode } from '../lib/contracts';
+import type { Backend } from '../lib/server/backend';
 
 const modules = import.meta.glob('../convex/**/*.ts');
 export const secret = 'service-test-secret';
@@ -30,6 +32,22 @@ export function harness() {
 }
 
 export const adminIdentity = identity('platform-admin');
+
+/** Routes the service call names the worker and the gateway use into convex-test. */
+export function testBackend(t: Harness): Backend {
+  const run = <T>(kind: 'query' | 'mutation', name: string, args: Record<string, unknown> = {}) => {
+    const reference = makeFunctionReference<'query' & 'mutation'>(name);
+    const withSecret = { ...args, secret };
+    return (
+      kind === 'query' ? t.query(reference, withSecret) : t.mutation(reference, withSecret)
+    ) as Promise<T>;
+  };
+  return {
+    query: (name, args) => run('query', name, args),
+    mutate: (name, args) => run('mutation', name, args),
+    journalMutation: (name, args) => run('mutation', name, args),
+  };
+}
 
 /** Seeds the operational configuration that used to live in environment variables. */
 export async function configureProvider(

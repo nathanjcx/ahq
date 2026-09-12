@@ -5,12 +5,13 @@ import type { MutationCtx } from '../_generated/server';
 import { MEMORY_LIMITS, proposeMemory } from '../lib/memory';
 import { channelFor, insertPost } from '../lib/posts';
 import { ensureSettings, settingsFor } from '../lib/schedule';
-import { assignmentForFloor, startTask } from '../lib/tasks';
+import { assignmentForFloor, insertJob, openSessionTask, startTask } from '../lib/tasks';
 import { isAttendedTime } from '../lib/time';
 import { ensureTriageStaff, matchesTriageRules } from '../lib/triage';
+import { policiesFor } from '../registry';
 import { severity as severityValidator } from '../schema';
 import { cleanText, requireService, untrustedBlock, type Ctx } from '../shared';
-import { taskForRunToken } from './context';
+import { privateConnection, taskForRunToken } from './context';
 
 /** Attempts stop counting past this window, so an old unanswered page cannot authorize anything. */
 const ATTEMPT_WINDOW_MS = 20 * 60 * 1_000;
@@ -370,6 +371,74 @@ export const authority = query({
       emergencyAllowList: settings.emergencyAllowList,
       unattendedAttempts: attempts.length,
     };
+  },
+});
+
+/**
+ * The connections a triage run may write through, and the policies for them.
+ *
+ * Triage authority comes from the workspace's allow-list, not from a marketplace capability: the
+ * reserved triage employee has none, so `activeTaskContext` would hand it nothing. The intersection
+ * that matters here is the allow-list against what the connection was actually granted, and the
+ * gateway still re-checks `authority` on every call before it dispatches one of these.
+ */
+export const writeConnections = query({
+  args: { secret: v.string(), runToken: v.string() },
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const task = await taskForRunToken(ctx, args.runToken);
+    const installation = await ctx.db.get(task.employeeId);
+    if (!installation || installation.kind !== 'triage') throw new Error('Triage access required');
+    const settings = await settingsFor(ctx, task.workspaceId);
+    const admitted = new Set([...settings.triageAllowList, ...settings.emergencyAllowList]);
+    const rows = await ctx.db
+      .query('connections')
+      .withIndex('by_workspace', (q) => q.eq('workspaceId', task.workspaceId))
+      .collect();
+    const connections = rows
+      .filter((row) => row.status === 'connected')
+      .map((row) => ({ ...row, allowedTools: row.allowedTools.filter((tool) => admitted.has(tool)) }))
+      .filter((row) => row.allowedTools.length > 0);
+    return {
+      connections: connections.map(privateConnection),
+      policies: await policiesFor(
+        ctx,
+        connections.map((connection) => connection.provider),
+      ),
+    };
+  },
+});
+
+/**
+ * Opens the classifier turn over the workspace's unchecked email. The triage instance's standing
+ * session runs it, because a classification is triage work with no incident of its own yet.
+ */
+export const enqueueEmailClassification = mutation({
+  args: { secret: v.string(), workspaceId: v.id('workspaces') },
+  returns: v.object({ taskId: v.id('tasks'), jobId: v.union(v.id('jobs'), v.null()) }),
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const workspace = await ctx.db.get(args.workspaceId);
+    if (!workspace) throw new Error('Workspace not found');
+    const { floor, installation, version } = await ensureTriageStaff(ctx, workspace, 'system');
+    const taskId = await openSessionTask(ctx, {
+      workspace,
+      employeeId: installation._id,
+      version,
+      kind: 'standing',
+      key: 'standing',
+      title: `${installation.name ?? version.name} standing session`,
+      prompt: 'You answer this workspace’s incidents. Wait for a triage run; do nothing until one arrives.',
+      floor: await assignmentForFloor(ctx, workspace._id, floor._id, installation._id),
+    });
+    const jobId = await insertJob(ctx, {
+      workspaceId: workspace._id,
+      taskId,
+      uniqueKey: `email_classify:${workspace._id}:${Math.floor(Date.now() / 3_600_000)}`,
+      kind: 'email_classify',
+      payload: JSON.stringify({ workspaceId: workspace._id, model: version.model }),
+    });
+    return { taskId, jobId: jobId ?? null };
   },
 });
 

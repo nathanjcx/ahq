@@ -16,8 +16,15 @@ export const taskContext = query({
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error('Task not found');
     const { version, connections, policies } = await activeTaskContext(ctx, task);
+    const installation = await ctx.db.get(task.employeeId);
     return {
       task: publicTask(task),
+      // The worker picks a turn's tool set from the employee kind, and reserved kinds get none.
+      employee: {
+        id: task.employeeId,
+        name: task.employeeName,
+        kind: installation?.kind ?? 'worker',
+      },
       floor:
         task.floorId && task.floorContext
           ? { id: task.floorId, name: task.floorContext.name, brief: task.floorContext.brief }
@@ -45,6 +52,8 @@ function publicTask(task: Doc<'tasks'>) {
     title: task.title,
     prompt: task.prompt,
     status: task.status,
+    kind: task.kind ?? 'work',
+    projectId: task.projectId,
     sessionId: task.sessionId,
     model: task.model,
     createdBy: task.createdBy,

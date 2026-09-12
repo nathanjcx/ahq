@@ -44,17 +44,28 @@ function verifyFreshness(timestamp: number, now: number, maxAgeMs: number) {
     throw new Error('Webhook timestamp is stale');
 }
 
-function parseJson(body: string): Record<string, any> {
+/**
+ * Untyped provider JSON. Webhook bodies are nested documents whose shape differs per provider and
+ * per event, and every leaf this file reads is narrowed at the point of use by `clip`, `httpsUrl`,
+ * or an explicit `typeof` check. Spelling out four providers' payload types would not make those
+ * checks any safer, so the tree stays untyped and the narrowing stays where the value is read.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type WebhookJson = Record<string, any>;
+
+function parseJson(body: string): WebhookJson {
   const value: unknown = JSON.parse(body);
   if (!value || typeof value !== 'object' || Array.isArray(value))
     throw new Error('Webhook payload must be an object');
-  return value as Record<string, any>;
+  return value;
 }
 
+/** Webhook fields are untyped provider input: only a scalar is worth reading as text. */
 function clip(value: unknown, max: number) {
-  return String(value ?? '')
-    .trim()
-    .slice(0, max);
+  if (typeof value === 'string') return value.trim().slice(0, max);
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint')
+    return String(value).slice(0, max);
+  return '';
 }
 
 function httpsUrl(value: unknown) {

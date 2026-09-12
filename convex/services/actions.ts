@@ -1,5 +1,7 @@
 import { v } from 'convex/values';
-import { mutation, query } from '../_generated/server';
+import type { Doc, Id } from '../_generated/dataModel';
+import { mutation, query, type MutationCtx, type QueryCtx } from '../_generated/server';
+import { settingsFor } from '../lib/schedule';
 import { taskTimeline } from '../lib/tasks';
 import { registryToolsFor } from '../registry';
 import { correctionKind } from '../schema';
@@ -19,6 +21,8 @@ export const gatewayContext = query({
     requireService(args.secret);
     const task = await taskForRunToken(ctx, args.runToken);
     const { version, connections, policies } = await activeTaskContext(ctx, task);
+    // The gateway's role check reads these two: which run this is, and what kind of employee it is.
+    const installation = await ctx.db.get(task.employeeId);
     return {
       task: {
         id: task._id,
@@ -26,6 +30,13 @@ export const gatewayContext = query({
         status: task.status,
         createdBy: task.createdBy,
         floorId: task.floorId,
+        projectId: task.projectId,
+        kind: task.kind ?? 'work',
+      },
+      employee: {
+        id: task.employeeId,
+        name: task.employeeName,
+        kind: installation?.kind ?? 'worker',
       },
       employeeVersion: { id: version._id, capabilities: version.capabilities },
       connections: connections.map(privateConnection),
@@ -295,6 +306,30 @@ export const recordActionResult = mutation({
   },
 });
 
+/**
+ * Whether a triage run may write through this connection with this tool: the instance is the
+ * workspace's reserved triage employee, the workspace named the tool on one of its allow-lists, and
+ * the connection was actually granted it. Whether the emergency list is open right now is the
+ * gateway's decision, re-checked per call; this only decides what may be journaled.
+ */
+async function triageMayWrite(
+  ctx: QueryCtx | MutationCtx,
+  task: Doc<'tasks'>,
+  connectionId: Id<'connections'>,
+  tool: string,
+) {
+  const installation = await ctx.db.get(task.employeeId);
+  if (installation?.kind !== 'triage') return false;
+  const settings = await settingsFor(ctx, task.workspaceId);
+  if (![...settings.triageAllowList, ...settings.emergencyAllowList].includes(tool)) return false;
+  const connection = await ctx.db.get(connectionId);
+  return (
+    connection?.workspaceId === task.workspaceId &&
+    connection.status === 'connected' &&
+    connection.allowedTools.includes(tool)
+  );
+}
+
 export const recordToolCall = mutation({
   args: {
     secret: v.string(),
@@ -397,11 +432,14 @@ export const recordToolCall = mutation({
       }
       const { version, connections } = await activeTaskContext(ctx, task);
       const active = connections.find((item) => item._id === args.connectionId);
-      if (
-        !active ||
-        !active.allowedTools.includes(args.tool) ||
-        !versionAllows(version, active.provider, args.tool)
-      )
+      const authorized =
+        active &&
+        active.allowedTools.includes(args.tool) &&
+        versionAllows(version, active.provider, args.tool);
+      // Triage authority comes from the workspace's allow-list rather than from a marketplace
+      // capability — the reserved triage employee has none — so the journal has to admit the one
+      // write path the workspace granted, or the action it gates would go unrecorded.
+      if (!authorized && !(await triageMayWrite(ctx, task, args.connectionId, args.tool)))
         throw new Error('Tool is not authorized for this task');
     } else if (args.outcome !== 'denied') {
       if (!started) throw new Error('Journal the tool call before executing it');

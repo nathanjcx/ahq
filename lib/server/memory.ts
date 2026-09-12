@@ -21,6 +21,8 @@ export interface WorkingMemory {
   text: string;
   tokens: number;
   omitted: { scope: WorkingMemorySection; count: number }[];
+  /** The claims that actually reached the block. Only these count as used for the agent budget. */
+  usedIds: string[];
 }
 
 // A decision binds the work, a procedure tells it how, a preference shapes it; status ages fastest.
@@ -59,16 +61,18 @@ function summaryLine(summary: TaskSummary) {
 }
 
 /** Fills one section up to its budget in priority order and reports what did not fit. */
-function fill(lines: string[], budget: number) {
+function fill(rows: { id?: string; line: string }[], budget: number) {
   const kept: string[] = [];
+  const usedIds: string[] = [];
   let tokens = 0;
-  for (const [index, line] of lines.entries()) {
-    const cost = tokenEstimate(line);
-    if (tokens + cost > budget) return { kept, omitted: lines.length - index };
-    kept.push(line);
+  for (const [index, row] of rows.entries()) {
+    const cost = tokenEstimate(row.line);
+    if (tokens + cost > budget) return { kept, usedIds, omitted: rows.length - index };
+    kept.push(row.line);
+    if (row.id) usedIds.push(row.id);
     tokens += cost;
   }
-  return { kept, omitted: 0 };
+  return { kept, usedIds, omitted: 0 };
 }
 
 /**
@@ -82,16 +86,24 @@ export function compileWorkingMemory(
   const order = ['workspace', 'project', 'floor', 'agent'] as const;
   const blocks: string[] = [];
   const omitted: { scope: WorkingMemorySection; count: number }[] = [];
+  const usedIds: string[] = [];
   for (const scope of order) {
     const active = inputs.entries[scope].filter((entry) => entry.status === 'active');
     if (!active.length) continue;
-    const section = fill([...active].sort(byImportance).map(entryLine), inputs.budgets[scope]);
+    const section = fill(
+      [...active].sort(byImportance).map((entry) => ({ id: entry.id, line: entryLine(entry) })),
+      inputs.budgets[scope],
+    );
     if (section.kept.length) blocks.push([headings[scope], ...section.kept].join('\n'));
+    usedIds.push(...section.usedIds);
     if (section.omitted) omitted.push({ scope, count: section.omitted });
   }
   if (inputs.summaries.length) {
     const recent = [...inputs.summaries].sort((a, b) => b.createdAt - a.createdAt);
-    const section = fill(recent.map(summaryLine), inputs.budgets.summaries);
+    const section = fill(
+      recent.map((summary) => ({ line: summaryLine(summary) })),
+      inputs.budgets.summaries,
+    );
     if (section.kept.length) blocks.push([headings.summaries, ...section.kept].join('\n'));
     if (section.omitted) omitted.push({ scope: 'summaries', count: section.omitted });
   }
@@ -102,5 +114,5 @@ export function compileWorkingMemory(
       `Omitted over budget: ${omitted.map(({ scope, count }) => `${count} ${headings[scope].toLowerCase()}`).join(', ')}.`,
     );
   const text = blocks.length ? [options.title ?? 'Working memory', ...blocks].join('\n\n') : '';
-  return { text, tokens: tokenEstimate(text), omitted };
+  return { text, tokens: tokenEstimate(text), omitted, usedIds };
 }

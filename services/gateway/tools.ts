@@ -1,6 +1,6 @@
-import { randomUUID } from 'node:crypto';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListToolsRequestSchema, McpError } from '@modelcontextprotocol/sdk/types.js';
+import type { InternalServer } from '../../lib/server/agents';
 import { auditedRead, journalDenied } from '../../lib/server/audit-mcp';
 import type { Backend } from '../../lib/server/backend';
 import { connectedMcp } from '../../lib/server/mcp';
@@ -8,6 +8,13 @@ import { safeError } from '../../lib/server/secrets';
 import { checkResourceScope, correctionPolicy, resultObject, toolPolicy } from '../../lib/server/tool-policy';
 import type { GatewayContext, PrivateConnection } from '../types';
 import { GatewayError, toolFailure, upstreamFailure } from './errors';
+import { auditTools } from './servers/audit';
+import { floorTools } from './servers/floor';
+import { janitorTools } from './servers/janitor';
+import { memoryTools } from './servers/memory';
+import { internalServer, jsonResult } from './servers/shared';
+import { shiftTools } from './servers/shift';
+import { dispatchTriageWrite, triageProviderTools, triageTools } from './servers/triage';
 
 export interface GatewayRequest {
   backend: Backend;
@@ -35,17 +42,6 @@ export function permittedTools(context: GatewayContext, connection: PrivateConne
       capabilities.some((capability) => capability.tools.includes(tool)) &&
       toolPolicy(context.policies, connection.provider, tool).mode !== 'blocked',
   );
-}
-
-function jsonResult(value: Record<string, unknown>) {
-  return { structuredContent: value, content: [{ type: 'text' as const, text: JSON.stringify(value) }] };
-}
-
-function requireString(args: Record<string, unknown>, field: string): string {
-  const value = args[field];
-  if (typeof value !== 'string' || !value.trim())
-    throw new GatewayError('invalid_arguments', `${field} must be a non-empty string.`);
-  return value;
 }
 
 /** The MCP server one connection exposes: the reviewed provider tools, audited and policy-checked. */
@@ -201,79 +197,17 @@ async function propose(
 }
 
 /**
- * The internal floor board. These are not provider tools: no policy row, no proposal, no upstream
- * call. They are journaled as task events because a tool call requires a connection.
+ * The internal tool servers, one per path segment. Which of them a run token may reach is the role
+ * matrix in `lib/server/agents.ts`; each server re-checks it on every request of its own.
  */
-export function floorServer(request: GatewayRequest, taskId: string): Server {
-  const mcp = new Server({ name: 'astra-hq-floor', version: '1.0.0' }, { capabilities: { tools: {} } });
-  mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [
-      {
-        name: 'floor_post',
-        description: 'Post a short note on this floor board. Use it when you finish a milestone.',
-        inputSchema: {
-          type: 'object' as const,
-          properties: { text: { type: 'string', description: 'The note to post.' } },
-          required: ['text'],
-          additionalProperties: false,
-        },
-      },
-      {
-        name: 'floor_handoff',
-        description:
-          'Request a handoff to another employee on this floor. A person accepts or declines it; requesting is not accepting.',
-        inputSchema: {
-          type: 'object' as const,
-          properties: {
-            toEmployeeId: { type: 'string', description: 'The employee id to hand off to.' },
-            brief: { type: 'string', description: 'What the next employee should do.' },
-          },
-          required: ['toEmployeeId', 'brief'],
-          additionalProperties: false,
-        },
-      },
-    ],
-  }));
-  mcp.setRequestHandler(CallToolRequestSchema, async (call) => {
-    const args = call.params.arguments || {};
-    try {
-      if (call.params.name === 'floor_post') {
-        await request.backend.mutate('services/floors:post', {
-          runToken: request.runToken,
-          text: requireString(args, 'text'),
-        });
-        await journalFloorEvent(request, taskId, 'floor.post', 'Posted a note on the floor board.');
-        return jsonResult({ posted: true, requestId: request.requestId });
-      }
-      if (call.params.name === 'floor_handoff') {
-        await request.backend.mutate('services/floors:requestHandoff', {
-          runToken: request.runToken,
-          toEmployeeId: requireString(args, 'toEmployeeId'),
-          brief: requireString(args, 'brief'),
-        });
-        await journalFloorEvent(request, taskId, 'floor.handoff', 'Requested a handoff on the floor board.');
-        return jsonResult({
-          requested: true,
-          status: 'pending',
-          instruction: 'A person decides this handoff. Do not claim it was accepted and do not wait for it.',
-          requestId: request.requestId,
-        });
-      }
-      throw new GatewayError('policy_denied', 'That floor tool does not exist.');
-    } catch (error) {
-      // The only failures are authorization and shape: not on a floor, unknown employee, bad text.
-      const failure =
-        error instanceof GatewayError ? error : new GatewayError('policy_denied', safeError(error));
-      log(request, failure.reason);
-      return toolFailure(failure, request.requestId);
-    }
-  });
-  return mcp;
-}
-
-async function journalFloorEvent(request: GatewayRequest, taskId: string, type: string, text: string) {
-  await request.backend.journalMutation('services/sessions:recordEvents', {
-    taskId,
-    events: [{ externalId: `${type}:${randomUUID()}`, type, text, createdAt: Date.now() }],
+export function internalMcp(request: GatewayRequest, server: InternalServer): Server {
+  if (server === 'floor') return internalServer(request, 'floor', floorTools);
+  if (server === 'memory') return internalServer(request, 'memory', memoryTools);
+  if (server === 'shift') return internalServer(request, 'shift', shiftTools);
+  if (server === 'audit') return internalServer(request, 'audit', auditTools);
+  if (server === 'janitor') return internalServer(request, 'janitor', janitorTools);
+  return internalServer(request, 'triage', triageTools, {
+    list: triageProviderTools,
+    run: dispatchTriageWrite,
   });
 }

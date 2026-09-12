@@ -6,15 +6,13 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { Server as UpstreamServer } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { makeFunctionReference } from 'convex/server';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { api } from '../convex/_generated/api';
-import type { Backend } from '../lib/server/backend';
 import { seal, unseal } from '../lib/server/secrets';
 import { executeAction } from '../services/actions';
 import { createGateway } from '../services/gateway/create';
 import type { Job } from '../services/types';
-import { harness, hireOne, identity, publishEmployee, secret, type Harness } from './support';
+import { harness, hireOne, identity, publishEmployee, secret, testBackend, type Harness } from './support';
 
 // The fake upstream runs on loopback HTTP, which every production network rule rejects.
 process.env.ALLOW_INSECURE_MCP_FOR_TESTS = '1';
@@ -117,22 +115,6 @@ function upstream() {
     });
   });
   return { server, issues };
-}
-
-/** Routes the service call names the gateway and executor use into convex-test. */
-function testBackend(t: Harness): Backend {
-  const run = async <T>(kind: 'query' | 'mutation', name: string, args: Record<string, unknown> = {}) => {
-    const reference = makeFunctionReference<'query' & 'mutation'>(name);
-    const withSecret = { ...args, secret };
-    return (
-      kind === 'query' ? t.query(reference, withSecret) : t.mutation(reference, withSecret)
-    ) as Promise<T>;
-  };
-  return {
-    query: (name, args) => run('query', name, args),
-    mutate: (name, args) => run('mutation', name, args),
-    journalMutation: (name, args) => run('mutation', name, args),
-  };
 }
 
 async function mcpClient(url: string, token: string) {

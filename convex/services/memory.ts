@@ -18,6 +18,7 @@ import {
 } from '../lib/memory';
 import { channelFor, insertPost, type ChannelScope } from '../lib/posts';
 import { ensureReservedInstance } from '../lib/reserved';
+import { finalAssistantMessage } from '../lib/tasks';
 import { memoryKind, memoryScope } from '../schema';
 import { cleanText, requireService, type Ctx } from '../shared';
 import { taskForRunToken } from './context';
@@ -270,6 +271,34 @@ export const recordSummary = mutation({
       createdAt: Date.now(),
     });
     return { summaryId };
+  },
+});
+
+/**
+ * What the wrap-up turn of a finished task needs: whether it already has a summary, what it
+ * archived, and its final message, which is what an inferred summary is built from.
+ */
+export const summaryInputs = query({
+  args: { secret: v.string(), taskId: v.id('tasks') },
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new Error('Task not found');
+    const [existing, artifacts] = await Promise.all([
+      ctx.db
+        .query('taskSummaries')
+        .withIndex('by_task', (q) => q.eq('taskId', task._id))
+        .unique(),
+      ctx.db
+        .query('artifacts')
+        .withIndex('by_task', (q) => q.eq('taskId', task._id))
+        .take(100),
+    ]);
+    return {
+      hasSummary: Boolean(existing),
+      artifacts: artifacts.map((artifact) => ({ id: artifact._id, name: artifact.name })),
+      finalMessage: await finalAssistantMessage(ctx, task._id),
+    };
   },
 });
 

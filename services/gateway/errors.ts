@@ -48,10 +48,13 @@ export class GatewayError extends Error {
   }
 }
 
+// `McpError.code` is a plain number, so the enum member is read as one rather than compared as an enum.
+const REQUEST_TIMEOUT: number = ErrorCode.RequestTimeout;
+
 /** An upstream MCP failure is a timeout or a provider error; nothing else is inferable from it. */
 export function upstreamFailure(error: unknown, message: string): GatewayError {
   const timedOut =
-    (error instanceof McpError && error.code === ErrorCode.RequestTimeout) ||
+    (error instanceof McpError && error.code === REQUEST_TIMEOUT) ||
     (error instanceof Error && error.name === 'TimeoutError');
   return new GatewayError(timedOut ? 'provider_timeout' : 'provider_error', message);
 }

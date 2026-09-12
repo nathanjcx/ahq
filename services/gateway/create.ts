@@ -6,10 +6,11 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { isInternalServer, serversFor } from '../../lib/server/agents';
 import { backend as processBackend, installBackend, type Backend } from '../../lib/server/backend';
 import type { GatewayContext } from '../types';
 import { GatewayError, protocolFailure } from './errors';
-import { floorServer, providerServer, type GatewayRequest } from './tools';
+import { internalMcp, providerServer, type GatewayRequest } from './tools';
 
 const maxBodyBytes = 1_000_000;
 const requestIdPattern = /^[A-Za-z0-9._:-]{1,200}$/;
@@ -74,10 +75,13 @@ export function createGateway(options: GatewayOptions = {}) {
         throw new GatewayError('unauthorized', 'This run token does not belong to an active task.');
       const request: GatewayRequest = { backend, requestId, runToken };
       let mcp;
-      if (target === 'floor') {
-        if (!context.task.floorId)
+      if (isInternalServer(target)) {
+        // Role first: a worker token never reaches audit, triage, or janitor, whatever it asks for.
+        if (!serversFor(context.employee.kind, context.task.kind).includes(target))
+          throw new GatewayError('policy_denied', 'This employee is not authorized to use those tools.');
+        if (target === 'floor' && !context.task.floorId)
           throw new GatewayError('revoked', 'This task is not on a floor, so it has no board.');
-        mcp = floorServer(request, context.task.id);
+        mcp = internalMcp(request, target);
       } else {
         const connection = context.connections.find((candidate) => candidate.id === target);
         if (!connection) throw new GatewayError('revoked', 'That integration is not available to this task.');

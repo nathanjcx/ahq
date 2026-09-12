@@ -1,9 +1,11 @@
 import type {
   Capability,
   CorrectionDescriptor,
+  EmployeeKind,
   ModelId,
   Persona,
   ProviderId,
+  TaskKind,
   TaskStatus,
   ToolMode,
 } from '../lib/contracts';
@@ -31,9 +33,26 @@ export interface PrivateConnection {
   credentialKeyVersion?: string;
 }
 
+/** Queue kinds the worker runs. The first four predate the schedule; the rest arrive from it. */
+export type JobKind =
+  | 'start_task'
+  | 'send_message'
+  | 'cancel_task'
+  | 'execute_action'
+  | 'start_shift'
+  | 'review_shift'
+  | 'meeting_prep'
+  | 'meeting_answer'
+  | 'meeting_wrapup'
+  | 'curation_run'
+  | 'audit_run'
+  | 'triage_run'
+  | 'email_classify'
+  | 'plan_project';
+
 export interface Job {
   id: string;
-  kind: 'start_task' | 'send_message' | 'cancel_task' | 'execute_action';
+  kind: JobKind;
   taskId: string;
   payload: Record<string, unknown>;
   leaseToken: string;
@@ -49,11 +68,14 @@ export interface TaskContext {
     title: string;
     prompt: string;
     status: TaskStatus;
+    kind: TaskKind;
+    projectId?: string;
     sessionId?: string;
     model: ModelId;
     createdBy: string;
     createdAt: number;
   };
+  employee: { id: string; name: string; kind: EmployeeKind };
   employeeVersion: {
     id: string;
     model: ModelId;
@@ -70,7 +92,17 @@ export interface TaskContext {
 
 /** What `services/actions:gatewayContext` returns: live authorization for one run token. */
 export interface GatewayContext {
-  task: { id: string; workspaceId: string; status: TaskStatus; createdBy: string; floorId?: string };
+  task: {
+    id: string;
+    workspaceId: string;
+    status: TaskStatus;
+    kind: TaskKind;
+    createdBy: string;
+    floorId?: string;
+    projectId?: string;
+  };
+  /** The instance the run belongs to. Its kind is what the gateway's role check turns on. */
+  employee: { id: string; name: string; kind: EmployeeKind };
   employeeVersion: { id: string; capabilities: Capability[] };
   connections: PrivateConnection[];
   policies: ToolPolicy[];
