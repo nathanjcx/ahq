@@ -126,10 +126,8 @@ export function RecordsPage({
           note: `${task.employeeName} · ${task.status.replace('_', ' ')}`,
         }));
 
-  const selectedId = targets.some((target) => target.id === chosen[scope])
-    ? (chosen[scope] as string)
-    : targets[0]?.id;
-  const target = targets.find((entry) => entry.id === selectedId);
+  const target = targets.find((entry) => entry.id === chosen[scope]) ?? targets[0];
+  const selectedId = target?.id;
 
   const claims: Memory[] =
     useUiQuery(uiApi.memories, selectedId ? { scope, scopeId: selectedId } : 'skip') ?? [];

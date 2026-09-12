@@ -10,7 +10,7 @@ export const severityLabels: Record<Severity, string> = {
   critical: 'Critical',
 };
 
-export const statusLabels: Record<FindingStatus, string> = {
+const statusLabels: Record<FindingStatus, string> = {
   open: 'Open',
   addressed: 'Addressed',
   verified: 'Verified',

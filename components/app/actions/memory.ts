@@ -12,7 +12,6 @@ export type ClaimDraft = {
   text: string;
   tags: string[];
   confidence: number;
-  expiresAt?: number;
 };
 
 export type MemoryActions = {

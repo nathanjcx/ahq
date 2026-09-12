@@ -2,7 +2,7 @@
 
 import { Archive, Check, History } from 'lucide-react';
 import { useState } from 'react';
-import { EmptyPane } from '../shared/empty';
+import { EmptyMini } from '../shared/empty';
 import { relativeTime, shortDate } from '../shared/time';
 import type { Memory, MemoryAuthor, MemoryKind, MemoryStatus } from '@/lib/contracts';
 
@@ -116,7 +116,7 @@ function ClaimCard({
               <span>{kindLabels[previous.kind]}</span>
               <p>{previous.text}</p>
               <small>
-                {previous.authorName} · {relativeTime(previous.createdAt)} · replaced
+                Replaced · {previous.authorName} · {relativeTime(previous.createdAt)}
               </small>
             </li>
           ))}
@@ -145,8 +145,8 @@ export function ClaimList({
 }) {
   if (!claims.length)
     return (
-      <EmptyPane
-        icon={<Archive size={22} />}
+      <EmptyMini
+        icon={<Archive size={18} />}
         title="Nothing on the shelf yet"
         text="Claims filed against this scope appear here as employees work and the janitor curates."
       />

@@ -63,7 +63,12 @@ for (const viewport of viewports) {
     await go(page, 'Records', mobile);
     for (const scope of ['Workspace', 'Projects', 'Floors', 'Notebooks', 'Task summaries']) {
       await page.getByRole('tab', { name: scope }).click();
-      if (mobile) await page.locator('.shelf-list > button').first().click();
+      // The task summaries tab is worth photographing on a task that actually has a dossier.
+      const shelf =
+        scope === 'Task summaries'
+          ? page.locator('.shelf-list > button').filter({ hasText: 'Write the customer announcement' })
+          : page.locator('.shelf-list > button').first();
+      if (scope === 'Task summaries' || mobile) await shelf.click();
       await expect(page.locator('.shelf-detail')).toBeVisible();
       await expectNoOverflow(page, viewport.width);
       await shoot(page, viewport.name, `records-${slug(scope)}`);

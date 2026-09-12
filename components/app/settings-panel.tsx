@@ -37,7 +37,9 @@ export function SettingsPanel({
   const [active, setActive] = useState<SectionId>('workspace');
   const settings = useUiQuery(uiApi.workspaceSettings, workspace ? {} : 'skip');
 
-  const section = sections.find((entry) => entry.id === active) ?? sections[0];
+  // Before the workspace exists there is nothing for the other sections to read or save.
+  const available = workspace ? sections : sections.slice(0, 1);
+  const section = available.find((entry) => entry.id === active) ?? available[0];
   const props: SectionProps | null = settings
     ? {
         settings,
@@ -57,8 +59,8 @@ export function SettingsPanel({
           <button className="primary-button full" type="submit" form={formId('workspace')} disabled={!configured}>
             Create workspace
           </button>
-        ) : canManageWorkspace && (active === 'workspace' || props) ? (
-          <button className="primary-button full" type="submit" form={formId(active)}>
+        ) : canManageWorkspace && (section.id === 'workspace' || props) ? (
+          <button className="primary-button full" type="submit" form={formId(section.id)}>
             {section.save}
           </button>
         ) : undefined
@@ -66,7 +68,7 @@ export function SettingsPanel({
     >
       <div className="settings-shell">
         <nav className="settings-sections" aria-label="Settings sections">
-          {sections.map((entry) => (
+          {available.map((entry) => (
             <button
               key={entry.id}
               data-active={entry.id === active}
@@ -80,7 +82,7 @@ export function SettingsPanel({
         </nav>
         <div className="settings-section">
           <h3>{section.label}</h3>
-          {active === 'workspace' ? (
+          {section.id === 'workspace' ? (
             <WorkspaceSection
               dashboard={dashboard}
               configured={configured}

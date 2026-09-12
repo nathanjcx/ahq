@@ -190,6 +190,7 @@
 }
 .claim-chain {
   margin-top: 10px;
+  list-style: none;
   padding-left: 14px;
   border-left: 2px solid var(--sage-200);
 }

@@ -75,13 +75,17 @@ export function AuditPage({
   const nightFindings = shown.filter((finding) => finding.auditDate === date);
 
   // One document per instance, the shape the auditor files and the employee reads.
-  const documents = [...new Map(nightFindings.map((finding) => [finding.employeeId, finding])).values()]
-    .map((first) => ({
-      employeeId: first.employeeId,
-      employeeName: first.employeeName,
-      findings: nightFindings.filter((finding) => finding.employeeId === first.employeeId),
-    }))
-    .sort((a, b) => a.employeeName.localeCompare(b.employeeName));
+  const byInstance = new Map<string, { employeeId: string; employeeName: string; findings: AuditFinding[] }>();
+  for (const finding of nightFindings) {
+    const document = byInstance.get(finding.employeeId) ?? {
+      employeeId: finding.employeeId,
+      employeeName: finding.employeeName,
+      findings: [],
+    };
+    document.findings.push(finding);
+    byInstance.set(finding.employeeId, document);
+  }
+  const documents = [...byInstance.values()].sort((a, b) => a.employeeName.localeCompare(b.employeeName));
 
   const canDecide = (finding: AuditFinding) =>
     canManageWorkspace || (finding.taskId !== undefined && ownedTasks.has(finding.taskId));
