@@ -51,3 +51,18 @@ export interface TaskSummary {
   inferred: boolean;
   createdAt: number;
 }
+/** What the janitor did to a claim during a curation run. */
+export type JanitorAction = 'merged' | 'promoted' | 'contested';
+/** One line of the janitor's log, read back off the claims its curation runs left behind. */
+export interface JanitorLogEntry {
+  id: string;
+  action: JanitorAction;
+  at: number;
+  scope: MemoryScope;
+  scopeId: string;
+  /** The claim the action produced or landed on. */
+  text: string;
+  /** Why, in the janitor's own terms: the contest reason, or what a merge or promotion replaced. */
+  detail: string;
+  authorName: string;
+}

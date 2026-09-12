@@ -10,4 +10,5 @@ export const memoryApi = {
   archiveMemory: api.memory.archive,
   resolveMemoryContest: api.memory.resolveContest,
   setMemoryBudgets: api.memory.setBudgets,
+  janitorLog: api.memory.janitorLog,
 } as const;
