@@ -60,6 +60,8 @@ export function ProjectsPage({
   const projectArgs = selectedId ? { projectId: asId<'projects'>(selectedId) } : 'skip';
   const project = useUiQuery(uiApi.project, projectArgs);
   const tasks = useUiQuery(uiApi.projectTasks, projectArgs);
+  // Hiring answers a capacity question, and the marketplace is what can be hired.
+  const listings = useUiQuery(uiApi.listings, {});
   const projection = useUiQuery(uiApi.planProjection, {
     projectedTokens: project?.proposal?.projectedTokens ?? 0,
   });
@@ -168,6 +170,7 @@ export function ProjectsPage({
                   proposal={project.proposal}
                   floors={dashboard.floors}
                   employees={dashboard.employees}
+                  listings={listings ?? []}
                   projection={projection}
                   busy={busy}
                   onSave={(proposal) =>

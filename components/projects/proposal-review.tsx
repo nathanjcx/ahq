@@ -18,7 +18,14 @@ import {
 import { ProposalQuestions, type HireSuggestion } from './proposal-questions';
 import { proposalTimeline } from './roadmap';
 import { RoadmapTimeline } from './roadmap-timeline';
-import type { Employee, Floor, PlanProjection, Project, RoadmapProposal } from '@/lib/contracts';
+import type {
+  Employee,
+  Floor,
+  Listing,
+  PlanProjection,
+  Project,
+  RoadmapProposal,
+} from '@/lib/contracts';
 import { pluralize } from '@/lib/text';
 
 /**
@@ -31,6 +38,7 @@ export function ProposalReview({
   proposal,
   floors,
   employees,
+  listings,
   projection,
   busy,
   onSave,
@@ -42,6 +50,8 @@ export function ProposalReview({
   /** Every floor of the workspace; the project's own are picked out of it. */
   floors: Floor[];
   employees: Employee[];
+  /** The marketplace, for the suggested hires a capacity question offers. */
+  listings: Listing[];
   projection?: PlanProjection;
   busy: boolean;
   onSave: (proposal: RoadmapProposal) => void;
@@ -70,15 +80,15 @@ export function ProposalReview({
     .flatMap((milestone) => milestone.tasks)
     .filter((task) => !task.employeeId).length;
 
-  // The planner names a version it wants more of; hiring needs the listing that version came from.
+  // The planner names the version it wants more of; hiring installs the listing that publishes it.
   const suggestions: HireSuggestion[] = draft.staffing.flatMap((entry) =>
     entry.suggestedHires.flatMap((hire) => {
-      const employee = employees.find((candidate) => candidate.versionId === hire.versionId);
-      if (!employee?.listingId) return [];
+      const listing = listings.find((candidate) => candidate.versionId === hire.versionId);
+      if (!listing) return [];
       return [
         {
-          listingId: employee.listingId,
-          name: employee.instanceOf,
+          listingId: listing.listingId,
+          name: listing.name,
           floorId: entry.floorId,
           count: hire.count,
           reason: hire.reason,

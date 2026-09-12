@@ -173,6 +173,28 @@ describe('projects and roadmaps', () => {
     expect((await user.query(api.projects.list, {}))[0]).toMatchObject({ id: projectId, openTasks: 2 });
   });
 
+  it('lists the project\'s own work and names its channel for the interface', async () => {
+    const { user, floorId, employeeId, projectId } = await setup();
+    const proposal = roadmap(floorId, employeeId);
+    const confirmed = await user.mutation(api.projects.confirmProposal, { projectId, proposal });
+
+    const tasks = await user.query(api.projects.tasks, { projectId });
+    expect(tasks.map((task) => [task.title, task.status, task.cadence])).toEqual([
+      ['Draft copy', 'queued', 'daily'],
+      ['Review copy', 'waiting', 'daily'],
+    ]);
+    expect(tasks[1]).toMatchObject({
+      milestoneId: confirmed.milestoneIds[1],
+      dependsOn: [confirmed.taskIds[0]],
+      employeeName: 'Operations analyst',
+      deadlineAt: 9 * DAY,
+    });
+
+    // Confirming the roadmap posted to the project channel, so the view can point the page at it.
+    const { channelId } = await user.mutation(api.channels.open, { kind: 'project', scopeId: projectId });
+    expect(await user.query(api.projects.get, { projectId })).toMatchObject({ channelId });
+  });
+
   it('refuses a roadmap whose tasks depend on each other', async () => {
     const { user, floorId, employeeId, projectId } = await setup();
     const proposal = roadmap(floorId, employeeId);
