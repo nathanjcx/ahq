@@ -77,7 +77,6 @@ Both suites are Playwright and need a browser, so neither is part of `npm test`.
 - [integration-access-desktop.png](screenshots/integration-access-desktop.png): Manage access for a GitHub connection: the reviewed tools that may be used, and the repositories to follow for the inbox.
 - [google-products-desktop.png](screenshots/google-products-desktop.png): the Google Workspace product picker, with its developer-preview notice.
 
-
 ## Not verified
 
 These paths have no automated coverage and no live run. Treat them as unproven until the acceptance steps in [deployment](deployment.md) are run with real accounts and the results recorded.
