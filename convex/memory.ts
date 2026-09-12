@@ -211,14 +211,30 @@ export const resolveContest = mutation({
     const entry = await requireEntry(ctx, workspace._id, args.id);
     requireWritable(entry, role);
     if (entry.status !== 'contested') throw new Error('That claim is not contested');
-    // The janitor contests one claim against what it read elsewhere, so only this claim is decided
-    // here; the person archives the competing claim from its own scope when they keep this one.
-    const resolution = {
-      this: { status: 'active' as const, contestReason: undefined },
-      other: { status: 'archived' as const, contestReason: 'Resolved: the competing claim stands' },
-      neither: { status: 'archived' as const, contestReason: 'Resolved: neither claim stands' },
-    }[args.keep];
-    await ctx.db.patch(entry._id, { ...resolution, updatedAt: Date.now() });
+    const other = entry.contestedWithId
+      ? await requireEntry(ctx, workspace._id, entry.contestedWithId)
+      : null;
+    if (other) requireWritable(other, role);
+    if (args.keep === 'other' && !other) throw new Error('No competing claim was recorded');
+    const now = Date.now();
+    const kept = args.keep === 'this' ? entry : args.keep === 'other' ? other : null;
+    // The kept claim comes back into service; the other is archived pointing at what replaced it,
+    // and the reason stays on the archived side as the record of the conflict.
+    if (kept)
+      await ctx.db.patch(kept._id, {
+        status: 'active',
+        contestReason: undefined,
+        contestedWithId: undefined,
+        updatedAt: now,
+      });
+    for (const loser of [entry, other])
+      if (loser && loser._id !== kept?._id)
+        await ctx.db.patch(loser._id, {
+          status: 'archived',
+          contestedWithId: undefined,
+          supersedesId: kept?._id,
+          updatedAt: now,
+        });
     return null;
   },
 });

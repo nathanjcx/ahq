@@ -62,9 +62,7 @@ describe('workspace memory', () => {
       claim(runToken, 'The launch moved to March 12.', { scope: 'floor', kind: 'decision' }),
     );
     expect(status).toBe('proposed');
-    expect((await t.query(api.services.memory.compileInputs, { secret, taskId })).entries.floor).toEqual(
-      [],
-    );
+    expect((await t.query(api.services.memory.compileInputs, { secret, taskId })).entries.floor).toEqual([]);
 
     await owner.mutation(api.memory.approve, { id: memoryId });
     const inputs = await t.query(api.services.memory.compileInputs, { secret, taskId });
@@ -91,9 +89,7 @@ describe('workspace memory', () => {
       claim(runToken, 'The staging key rotated on Monday.', { supersedesId: first.memoryId }),
     );
     const replaced = await t.run(async (ctx) => ctx.db.get(first.memoryId));
-    expect(replaced).toEqual(
-      expect.objectContaining({ status: 'archived', supersedesId: second.memoryId }),
-    );
+    expect(replaced).toEqual(expect.objectContaining({ status: 'archived', supersedesId: second.memoryId }));
 
     // The budget holds two six-token notes, so each new note evicts the least recently used one.
     await owner.mutation(api.memory.setBudgets, {
@@ -173,35 +169,70 @@ describe('workspace memory', () => {
     expect(await t.run(async (ctx) => (await ctx.db.get(promoted.memoryId))!.status)).toBe('active');
   });
 
-  it('keeps a contested claim out of working memory until a person resolves it', async () => {
+  it('contests both sides of a conflict and keeps them out of working memory until a person decides', async () => {
     const t = harness();
     const context = await tower(t);
     const { owner, taskId, floorId } = context;
     const { runToken: janitorToken } = await janitor(context);
-    const { memoryId } = await owner.mutation(api.memory.propose, {
-      scope: 'floor',
-      scopeId: floorId,
-      kind: 'decision',
-      text: 'We ship on Thursday.',
-    });
+    const claimOn = (text: string) =>
+      owner.mutation(api.memory.propose, { scope: 'floor', scopeId: floorId, kind: 'decision', text });
+    const thursday = await claimOn('We ship on Thursday.');
+    const friday = await claimOn('We ship on Friday.');
 
     const contested = await t.mutation(api.services.memory.contest, {
       secret,
       runToken: janitorToken,
-      id: memoryId,
-      reason: 'A report says Friday.',
+      id: thursday.memoryId,
+      reason: 'Two ship dates.',
+      otherId: friday.memoryId,
     });
     expect(contested).toEqual(
-      expect.objectContaining({ status: 'contested', contestReason: 'A report says Friday.' }),
+      expect.objectContaining({
+        status: 'contested',
+        contestReason: 'Two ship dates.',
+        contestedWithId: friday.memoryId,
+      }),
+    );
+    expect(await t.run(async (ctx) => ctx.db.get(friday.memoryId))).toEqual(
+      expect.objectContaining({ status: 'contested', contestedWithId: thursday.memoryId }),
     );
     const inputs = await t.query(api.services.memory.compileInputs, { secret, taskId });
     expect(inputs.entries.floor).toEqual([]);
-    expect(compileWorkingMemory(inputs).text).not.toContain('We ship on Thursday.');
+    expect(compileWorkingMemory(inputs).text).not.toContain('We ship on');
 
-    await owner.mutation(api.memory.resolveContest, { id: memoryId, keep: 'this' });
+    // Keeping the competing claim retires this one, pointing at what replaced it.
+    await owner.mutation(api.memory.resolveContest, { id: thursday.memoryId, keep: 'other' });
+    const [retired, kept] = await t.run(async (ctx) => [
+      await ctx.db.get(thursday.memoryId),
+      await ctx.db.get(friday.memoryId),
+    ]);
+    expect(retired).toEqual(expect.objectContaining({ status: 'archived', supersedesId: friday.memoryId }));
+    expect(kept).toEqual(expect.objectContaining({ status: 'active' }));
+    expect(kept).not.toHaveProperty('contestReason');
+    expect(kept).not.toHaveProperty('contestedWithId');
     expect(
-      (await t.query(api.services.memory.compileInputs, { secret, taskId })).entries.floor,
-    ).toHaveLength(1);
+      (await t.query(api.services.memory.compileInputs, { secret, taskId })).entries.floor.map(
+        (entry) => entry.text,
+      ),
+    ).toEqual(['We ship on Friday.']);
+
+    // When neither claim holds, both are retired and nothing replaces them.
+    const saturday = await claimOn('We ship on Saturday.');
+    await t.mutation(api.services.memory.contest, {
+      secret,
+      runToken: janitorToken,
+      id: friday.memoryId,
+      reason: 'A third date appeared.',
+      otherId: saturday.memoryId,
+    });
+    await owner.mutation(api.memory.resolveContest, { id: saturday.memoryId, keep: 'neither' });
+    const both = await t.run(async (ctx) => [
+      await ctx.db.get(friday.memoryId),
+      await ctx.db.get(saturday.memoryId),
+    ]);
+    expect(both.map((entry) => entry!.status)).toEqual(['archived', 'archived']);
+    for (const entry of both) expect(entry).not.toHaveProperty('supersedesId');
+    expect((await t.query(api.services.memory.compileInputs, { secret, taskId })).entries.floor).toEqual([]);
   });
 
   it('ranks recall by tags, then keywords, then recency, and keeps notebooks private', async () => {
