@@ -2,7 +2,7 @@
 .ops-lede {
   margin: -6px 0 14px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: var(--text-xs);
 }
 .ops-footnote {
   margin-top: 22px;
@@ -10,7 +10,7 @@
   color: #687769;
   border-radius: 7px;
   background: var(--sage-50);
-  font-size: 8px;
+  font-size: var(--text-2xs);
 }
 
 /* Overview strip */
@@ -33,7 +33,7 @@
   gap: 8px;
 }
 .ops-overview-card strong {
-  font-size: 11px;
+  font-size: var(--text-base);
 }
 .ops-overview-card dl {
   display: grid;
@@ -48,11 +48,11 @@
 }
 .ops-overview-card dt {
   color: var(--muted);
-  font-size: 8px;
+  font-size: var(--text-2xs);
 }
 .ops-overview-card dd {
   margin: 0;
-  font-size: 9px;
+  font-size: var(--text-xs);
   font-weight: 670;
 }
 .ops-overview-card > p {
@@ -60,7 +60,7 @@
   padding-top: 9px;
   color: var(--ink-soft);
   border-top: 1px solid var(--line);
-  font-size: 8px;
+  font-size: var(--text-2xs);
   overflow-wrap: anywhere;
 }
 
@@ -113,13 +113,13 @@
 }
 .ops-provider > summary strong {
   display: block;
-  font-size: 13px;
+  font-size: var(--text-lg);
 }
 .ops-provider > summary small {
   display: block;
   margin-top: 3px;
   color: var(--muted);
-  font-size: 8px;
+  font-size: var(--text-2xs);
 }
 .ops-provider .provider-logo {
   width: 40px;
@@ -134,12 +134,12 @@
 }
 .ops-block h4 {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--text-base);
 }
 .ops-block > p {
   margin: 4px 0 11px;
   color: var(--muted);
-  font-size: 8px;
+  font-size: var(--text-2xs);
 }
 .ops-block > .secondary-button {
   margin-top: 10px;
@@ -173,14 +173,14 @@
 }
 .ops-checklist strong {
   display: block;
-  font-size: 9px;
+  font-size: var(--text-xs);
 }
 .ops-checklist small {
   display: block;
   margin-top: 2px;
   overflow-wrap: anywhere;
   color: var(--muted);
-  font-size: 8px;
+  font-size: var(--text-2xs);
 }
 
 /* A URL to copy into a provider console */
@@ -198,17 +198,14 @@
 .ops-copy small {
   display: block;
   color: var(--muted);
-  font-size: 8px;
+  font-size: var(--text-2xs);
 }
 .ops-copy code {
   display: block;
   margin-top: 2px;
   overflow-wrap: anywhere;
-  font:
-    9px ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
+  font-family: var(--mono);
+  font-size: var(--text-xs);
 }
 
 /* Configured rows: OAuth clients and registry tools */
@@ -234,18 +231,15 @@
 .ops-row-main code {
   display: block;
   overflow-wrap: anywhere;
-  font:
-    10px ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
+  font-family: var(--mono);
+  font-size: var(--text-sm);
 }
 .ops-row-main small {
   display: block;
   margin-top: 3px;
   overflow-wrap: anywhere;
   color: var(--muted);
-  font-size: 8px;
+  font-size: var(--text-2xs);
 }
 .ops-row-actions,
 .ops-confirm {
@@ -255,7 +249,7 @@
 }
 .ops-confirm small {
   color: #8c5b4a;
-  font-size: 8px;
+  font-size: var(--text-2xs);
 }
 
 /* OAuth client form */
@@ -290,7 +284,7 @@
   border-radius: 7px;
   outline: 0;
   background: #fffef9;
-  font-size: 10px;
+  font-size: var(--text-sm);
 }
 .ops-secret input:focus {
   border-color: #9aad90;
@@ -303,7 +297,7 @@
   gap: 5px;
   padding: 5px 8px;
   border-radius: 999px;
-  font-size: 8px;
+  font-size: var(--text-2xs);
   font-weight: 670;
 }
 .ops-set {
@@ -326,7 +320,7 @@
 .ops-modes legend {
   padding: 0 0 7px;
   color: #5f6d61;
-  font-size: 9px;
+  font-size: var(--text-xs);
   font-weight: 670;
 }
 .ops-modes label,
@@ -357,14 +351,14 @@
 .ops-modes strong,
 .ops-toggle strong {
   display: block;
-  font-size: 10px;
+  font-size: var(--text-sm);
 }
 .ops-modes small,
 .ops-toggle small {
   display: block;
   margin-top: 2px;
   color: var(--muted);
-  font-size: 8px;
+  font-size: var(--text-2xs);
   font-weight: 450;
 }
 .ops-modes .field-hint {
@@ -395,7 +389,7 @@
   border: 0;
   outline: 0;
   background: transparent;
-  font-size: 10px;
+  font-size: var(--text-sm);
 }
 .ops-import {
   display: flex;
@@ -409,7 +403,7 @@
   border: 1px solid #d5ddd0;
   border-radius: 7px;
   background: var(--paper);
-  font-size: 9px;
+  font-size: var(--text-xs);
 }
 .ops-registry-group + .ops-registry-group {
   margin-top: 15px;
@@ -419,11 +413,11 @@
   align-items: baseline;
   gap: 7px;
   margin: 0 0 8px;
-  font-size: 10px;
+  font-size: var(--text-sm);
 }
 .ops-registry-group h4 small {
   color: var(--muted);
-  font-size: 8px;
+  font-size: var(--text-2xs);
   font-weight: 450;
 }
 .ops-tool-tags {
@@ -435,7 +429,7 @@
 .ops-mode {
   padding: 4px 8px;
   border-radius: 999px;
-  font-size: 8px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -457,14 +451,14 @@
   color: var(--muted);
   border: 1px solid var(--line);
   border-radius: 999px;
-  font-size: 8px;
+  font-size: var(--text-2xs);
 }
 .ops-hint-warn {
   color: #8c5b4a;
   border-color: #e2c9bf;
 }
 
-@media (max-width: 620px) {
+@media (max-width: 640px) {
   .ops-overview {
     grid-template-columns: 1fr;
   }

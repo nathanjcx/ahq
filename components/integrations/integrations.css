@@ -7,7 +7,7 @@
 .connection-sharing,
 .connection-reach {
   color: var(--muted);
-  font-size: 8px;
+  font-size: var(--text-2xs);
 }
 .connection-sharing,
 .connection-accounts .connection-shared {
@@ -45,18 +45,18 @@
 .share-choices strong {
   display: block;
   color: #3f4d3f;
-  font-size: 10px;
+  font-size: var(--text-sm);
 }
 .share-members strong {
   color: #3f4d3f;
   font-family: inherit;
-  font-size: 10px;
+  font-size: var(--text-sm);
 }
 .share-choices small {
   display: block;
   margin-top: 2px;
   color: var(--muted);
-  font-size: 8px;
+  font-size: var(--text-2xs);
   font-weight: 450;
 }
 
@@ -80,9 +80,8 @@
   align-items: center;
 }
 .copy-field input {
-  font:
-    9px ui-monospace,
-    monospace;
+  font-family: var(--mono);
+  font-size: var(--text-xs);
 }
 .relay-confirm {
   display: grid;
@@ -92,10 +91,27 @@
 .relay-confirm p {
   margin: 0;
   color: #7d6436;
-  font-size: 9px;
+  font-size: var(--text-xs);
 }
 .relay-confirm > div {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* === components/integrations/integration-card.tsx: administrator setup notes === */
+.setup-note details > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  color: #5d6b5b;
+  cursor: pointer;
+  font-weight: 700;
+}
+.setup-note details[open] > strong {
+  margin-top: 7px;
+}
+.connection-own-note {
+  margin-top: 9px;
 }

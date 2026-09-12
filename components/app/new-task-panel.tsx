@@ -48,8 +48,28 @@ export function NewTaskPanel({
       title="Assign new work"
       subtitle="Describe the outcome. Your employee will ask for review before sensitive external actions."
       onClose={onClose}
+      footer={
+        <button
+          className="primary-button full"
+          type="submit"
+          form="new-task-form"
+          disabled={
+            !configured ||
+            !employeeId ||
+            !ready.length ||
+            submitting ||
+            unavailableProject ||
+            !title.trim() ||
+            !prompt.trim()
+          }
+        >
+          {submitting ? 'Starting task…' : employees.length ? 'Start task' : 'Hire an employee first'}
+          <ArrowRight size={16} />
+        </button>
+      }
     >
       <form
+        id="new-task-form"
         className="form-stack task-form"
         onSubmit={async (event) => {
           event.preventDefault();
@@ -121,21 +141,6 @@ export function NewTaskPanel({
           <ShieldCheck size={16} />
           <span>External writes still follow workspace permissions and action review rules.</span>
         </div>
-        <button
-          className="primary-button full"
-          disabled={
-            !configured ||
-            !employeeId ||
-            !ready.length ||
-            submitting ||
-            unavailableProject ||
-            !title.trim() ||
-            !prompt.trim()
-          }
-        >
-          {submitting ? 'Starting task…' : employees.length ? 'Start task' : 'Hire an employee first'}
-          <ArrowRight size={16} />
-        </button>
       </form>
     </Sheet>
   );

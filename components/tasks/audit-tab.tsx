@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, LoaderCircle, RefreshCw, ScrollText } from 'lucide-react';
+import { Download, RefreshCw, ScrollText } from 'lucide-react';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { webClient, WebApiError } from '@/lib/api/client';
 import type { AuditResponse } from '@/lib/api/schemas';
@@ -9,6 +9,7 @@ import { EmptyPane } from '../shared/empty';
 import { correctionLabel, providerName } from '../shared/format';
 import { JsonView } from '../shared/json-view';
 import { ProviderMark } from '../shared/marks';
+import { SkeletonList } from '../shared/skeleton';
 import { StateDiff } from '../shared/state-diff';
 
 const NO_ACCESS = 'You need access to this task to read its audit trail.';
@@ -220,10 +221,7 @@ export function AuditTab({ taskId }: { taskId: string }) {
       </div>
       {error && <p className="audit-error">{error}</p>}
       {loading && !timeline ? (
-        <div className="messages-loading">
-          <LoaderCircle size={17} className="spin" />
-          Loading the audit trail
-        </div>
+        <SkeletonList kind="entry" rows={4} label="Loading the audit trail" />
       ) : timeline && !timeline.entries.length ? (
         <EmptyPane
           icon={<ScrollText size={22} />}

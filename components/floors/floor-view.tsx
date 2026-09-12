@@ -1,6 +1,6 @@
 'use client';
 
-import { Archive, Pencil, RotateCcw } from 'lucide-react';
+import { Archive, ChevronDown, Pencil, RotateCcw } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import type { ActionProposal, Employee, Project, Task } from '@/lib/contracts';
 import type { OfficeEmployee } from '../office/office-view';
@@ -57,6 +57,7 @@ export function FloorView({
 }) {
   const [region, setRegion] = useState<Region>('board');
   const [briefOpen, setBriefOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const archived = Boolean(project.archivedAt);
   const canAct = configured && !archived;
 
@@ -66,28 +67,39 @@ export function FloorView({
         <div>
           <span className="eyebrow">{archived ? 'ARCHIVED FLOOR' : floorLabel.toUpperCase()}</span>
           <h2>{project.name}</h2>
-          <p className={briefOpen ? 'brief-open' : undefined}>{project.brief}</p>
-          {project.brief.length > BRIEF_CLAMP && (
-            <button className="text-button" onClick={() => setBriefOpen((open) => !open)}>
-              {briefOpen ? 'Show less' : 'Show full brief'}
-            </button>
-          )}
-          <div className="floor-meta">
-            <span className="staff-avatars" aria-label={`${staff.length} staffed`}>
-              {staff.slice(0, 6).map((employee) => (
-                <Avatar key={employee.id} employee={employee} />
-              ))}
-              {staff.length > 6 && <em>+{staff.length - 6}</em>}
-            </span>
-            <small>
-              {staff.length} staffed · {summary.active} active · updated {relativeTime(summary.lastActivity)}
-            </small>
-            {project.openHandoffs > 0 && (
-              <span className="handoff-badge">
-                {project.openHandoffs} open {project.openHandoffs === 1 ? 'handoff' : 'handoffs'}
-              </span>
+          <button
+            className="floor-details-toggle"
+            aria-expanded={detailsOpen}
+            onClick={() => setDetailsOpen((open) => !open)}
+          >
+            Details
+            <ChevronDown size={14} />
+          </button>
+          <div className="floor-details-body" data-open={detailsOpen}>
+            <p className={briefOpen ? 'brief-open' : undefined}>{project.brief}</p>
+            {project.brief.length > BRIEF_CLAMP && (
+              <button className="text-button" onClick={() => setBriefOpen((open) => !open)}>
+                {briefOpen ? 'Show less' : 'Show full brief'}
+              </button>
             )}
-            {archived && <span className="archived-badge">Archived</span>}
+            <div className="floor-meta">
+              <span className="staff-avatars" aria-label={`${staff.length} staffed`}>
+                {staff.slice(0, 6).map((employee) => (
+                  <Avatar key={employee.id} employee={employee} />
+                ))}
+                {staff.length > 6 && <em>+{staff.length - 6}</em>}
+              </span>
+              <small>
+                {staff.length} staffed · {summary.active} active · updated{' '}
+                {relativeTime(summary.lastActivity)}
+              </small>
+              {project.openHandoffs > 0 && (
+                <span className="handoff-badge">
+                  {project.openHandoffs} open {project.openHandoffs === 1 ? 'handoff' : 'handoffs'}
+                </span>
+              )}
+              {archived && <span className="archived-badge">Archived</span>}
+            </div>
           </div>
         </div>
         <div className="floor-heading-actions">

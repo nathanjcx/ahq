@@ -14,6 +14,73 @@ function shortId(id: string) {
   return id.slice(-6);
 }
 
+/** Who proposed what, on which tool. Shared by the task card and the review sheet. */
+export function ProposalHeading({ proposal }: { proposal: ActionProposal }) {
+  return (
+    <div className="proposal-head">
+      <span className="proposal-icon">
+        <ShieldCheck size={18} />
+      </span>
+      <div>
+        <span className="eyebrow">ACTION REVIEW · {providerName(proposal.provider).toUpperCase()}</span>
+        <h3>{proposal.summary}</h3>
+        <p className="proposal-meta">
+          <ProviderMark provider={proposal.provider} small />
+          <code>{proposal.tool}</code>
+          <span>
+            {proposal.employeeName} · {relativeTime(proposal.createdAt)}
+          </span>
+        </p>
+      </div>
+      <span className={`proposal-status proposal-${proposal.status}`}>
+        {proposal.status.replace('_', ' ')}
+      </span>
+    </div>
+  );
+}
+
+/** The arguments and the captured state a decision rests on. */
+export function ProposalEvidence({ proposal }: { proposal: ActionProposal }) {
+  return (
+    <>
+      <JsonView label="Arguments" value={proposal.arguments} />
+      {proposal.beforeState !== undefined && (
+        <StateDiff before={proposal.beforeState} after={proposal.afterState} />
+      )}
+    </>
+  );
+}
+
+export function DecideButtons({
+  proposal,
+  onDecide,
+}: {
+  proposal: ActionProposal;
+  onDecide: (id: string, approved: boolean) => void;
+}) {
+  return (
+    <>
+      <button
+        className="secondary-button danger"
+        disabled={!proposal.canDecide}
+        title={proposal.canDecide ? undefined : CANNOT_DECIDE}
+        onClick={() => onDecide(proposal.id, false)}
+      >
+        Reject
+      </button>
+      <button
+        className="primary-button"
+        disabled={!proposal.canDecide}
+        title={proposal.canDecide ? undefined : CANNOT_DECIDE}
+        onClick={() => onDecide(proposal.id, true)}
+      >
+        <Check size={15} />
+        Approve action
+      </button>
+    </>
+  );
+}
+
 /** What the viewer can do about a write that already ran, in the words of this tool's correction level. */
 function CorrectionFooter({
   proposal,
@@ -84,35 +151,14 @@ export function ProposalCard({
 }) {
   return (
     <div className="proposal-card" id={`proposal-${proposal.id}`}>
-      <div className="proposal-head">
-        <span className="proposal-icon">
-          <ShieldCheck size={18} />
-        </span>
-        <div>
-          <span className="eyebrow">ACTION REVIEW · {providerName(proposal.provider).toUpperCase()}</span>
-          <h3>{proposal.summary}</h3>
-          <p className="proposal-meta">
-            <ProviderMark provider={proposal.provider} small />
-            <code>{proposal.tool}</code>
-            <span>
-              {proposal.employeeName} · {relativeTime(proposal.createdAt)}
-            </span>
-          </p>
-        </div>
-        <span className={`proposal-status proposal-${proposal.status}`}>
-          {proposal.status.replace('_', ' ')}
-        </span>
-      </div>
+      <ProposalHeading proposal={proposal} />
       {proposal.approvedByName && proposal.approvedAt && (
         <p className="proposal-decision">
           Approved by {proposal.approvedByName} {relativeTime(proposal.approvedAt)}
         </p>
       )}
       <div className="proposal-body">
-        <JsonView label="Arguments" value={proposal.arguments} />
-        {proposal.beforeState !== undefined && (
-          <StateDiff before={proposal.beforeState} after={proposal.afterState} />
-        )}
+        <ProposalEvidence proposal={proposal} />
         {proposal.originalActionId && (
           <p className="proposal-link">
             Corrects proposal{' '}
@@ -123,23 +169,7 @@ export function ProposalCard({
       {proposal.status === 'pending' ? (
         <div className="proposal-actions">
           {!proposal.canDecide && <p className="proposal-locked">{CANNOT_DECIDE}</p>}
-          <button
-            className="secondary-button danger"
-            disabled={!proposal.canDecide}
-            title={proposal.canDecide ? undefined : CANNOT_DECIDE}
-            onClick={() => onDecide(proposal.id, false)}
-          >
-            Reject
-          </button>
-          <button
-            className="primary-button"
-            disabled={!proposal.canDecide}
-            title={proposal.canDecide ? undefined : CANNOT_DECIDE}
-            onClick={() => onDecide(proposal.id, true)}
-          >
-            <Check size={15} />
-            Approve action
-          </button>
+          <DecideButtons proposal={proposal} onDecide={onDecide} />
         </div>
       ) : proposal.status === 'succeeded' ? (
         <CorrectionFooter proposal={proposal} onCorrect={onCorrect} />

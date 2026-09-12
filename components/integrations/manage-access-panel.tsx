@@ -29,6 +29,11 @@ export function ManageAccessPanel({
       title={`Manage ${connection.name}`}
       subtitle="Changes apply to new agent calls as soon as you save."
       onClose={onClose}
+      footer={
+        <button className="primary-button full" onClick={() => onSave(selected, scope, inboxResources)}>
+          Save access
+        </button>
+      }
     >
       <div className="form-stack">
         <div className="permission-heading">
@@ -70,9 +75,6 @@ export function ManageAccessPanel({
             </small>
           </label>
         )}
-        <button className="primary-button full" onClick={() => onSave(selected, scope, inboxResources)}>
-          Save access
-        </button>
       </div>
     </Sheet>
   );

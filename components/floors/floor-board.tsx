@@ -1,12 +1,13 @@
 'use client';
 
 import { useQuery } from 'convex/react';
-import { ArrowUpRight, LoaderCircle, MessagesSquare, Send, UserPlus, X } from 'lucide-react';
+import { ArrowUpRight, MessagesSquare, Send, UserPlus, X } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import type { Employee, ProjectPost } from '@/lib/contracts';
 import { asId, uiApi } from '@/lib/ui-api';
 import { EmptyPane } from '../shared/empty';
 import { relativeTime, safeHttpsUrl } from '../shared/format';
+import { SkeletonList } from '../shared/skeleton';
 
 export type FloorBoardProps = {
   /** Board posts oldest first, or undefined while the subscription loads. */
@@ -66,9 +67,7 @@ export function FloorBoard({
     <>
       <div className="board-stream" ref={streamRef}>
         {posts === undefined ? (
-          <div className="messages-loading">
-            <LoaderCircle size={17} className="spin" /> Loading the board
-          </div>
+          <SkeletonList kind="post" rows={3} label="Loading the board" />
         ) : postCount === 0 ? (
           <EmptyPane
             icon={<MessagesSquare size={19} />}

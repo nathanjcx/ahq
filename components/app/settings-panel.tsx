@@ -33,6 +33,17 @@ export function SettingsPanel({
       title="Workspace settings"
       subtitle="Identity, token usage, and environment status for this workspace."
       onClose={onClose}
+      footer={
+        !workspace ? (
+          <button className="primary-button full" type="submit" form="bootstrap-form" disabled={!configured}>
+            Create workspace
+          </button>
+        ) : canManage ? (
+          <button className="primary-button full" type="submit" form="token-cap-form">
+            Save token cap
+          </button>
+        ) : undefined
+      }
     >
       <div className="settings-stack">
         {configured ? (
@@ -58,6 +69,7 @@ export function SettingsPanel({
         )}
         {!workspace ? (
           <form
+            id="bootstrap-form"
             className="form-stack"
             onSubmit={(event) => {
               event.preventDefault();
@@ -73,9 +85,6 @@ export function SettingsPanel({
                 required
               />
             </label>
-            <button className="primary-button full" disabled={!configured}>
-              Create workspace
-            </button>
           </form>
         ) : (
           <>
@@ -97,11 +106,11 @@ export function SettingsPanel({
                     {workspace.usage.byModel.map((usage) => (
                       <tr key={usage.model}>
                         <th scope="row">{modelName(usage.model)}</th>
-                        <td>{usage.input.toLocaleString()}</td>
-                        <td>{usage.cached.toLocaleString()}</td>
-                        <td>{usage.output.toLocaleString()}</td>
-                        <td>{cacheHitRate(usage)}</td>
-                        <td>{usage.tasks.toLocaleString()}</td>
+                        <td data-label="Input">{usage.input.toLocaleString()}</td>
+                        <td data-label="Cached">{usage.cached.toLocaleString()}</td>
+                        <td data-label="Output">{usage.output.toLocaleString()}</td>
+                        <td data-label="Cache hits">{cacheHitRate(usage)}</td>
+                        <td data-label="Tasks">{usage.tasks.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -112,6 +121,7 @@ export function SettingsPanel({
             </section>
             {canManage ? (
               <form
+                id="token-cap-form"
                 className="form-stack"
                 onSubmit={(event) => {
                   event.preventDefault();
@@ -132,7 +142,6 @@ export function SettingsPanel({
                     follow-up messages are refused once the cap is reached.
                   </small>
                 </label>
-                <button className="primary-button full">Save token cap</button>
               </form>
             ) : (
               <div className="settings-status">

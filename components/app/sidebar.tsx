@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  ChevronDown,
   MoreHorizontal,
   PanelLeftClose,
   Settings,
@@ -9,12 +8,15 @@ import {
   SlidersHorizontal,
   Sparkles,
 } from 'lucide-react';
+import { useRef, type TouchEvent } from 'react';
 import type { Dashboard } from '@/lib/contracts';
 import { nav, type Page } from './nav';
 
+/** How far left a swipe has to travel before it closes the drawer. */
+const SWIPE_CLOSE = 60;
+
 export function Sidebar({
   dashboard,
-  configured,
   page,
   open,
   onClose,
@@ -22,7 +24,6 @@ export function Sidebar({
   onSettings,
 }: {
   dashboard: Dashboard;
-  configured: boolean;
   page: Page;
   open: boolean;
   onClose: () => void;
@@ -30,8 +31,22 @@ export function Sidebar({
   onSettings: () => void;
 }) {
   const workspace = dashboard.workspace;
+  const swipeFrom = useRef<number | null>(null);
+  const onTouchStart = (event: TouchEvent) => {
+    swipeFrom.current = event.touches[0].clientX;
+  };
+  const onTouchEnd = (event: TouchEvent) => {
+    const from = swipeFrom.current;
+    swipeFrom.current = null;
+    if (from !== null && event.changedTouches[0].clientX - from < -SWIPE_CLOSE) onClose();
+  };
+
   return (
-    <aside className={`sidebar ${open ? 'sidebar-open' : ''}`}>
+    <aside
+      className={`sidebar ${open ? 'sidebar-open' : ''}`}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
       <div className="brand-row">
         <button className="brand" onClick={() => onNavigate('office')} aria-label="Astra HQ home">
           <span className="brand-glyph" aria-hidden="true">
@@ -46,13 +61,23 @@ export function Sidebar({
         </button>
       </div>
 
-      <button className="workspace-chip" disabled={!configured} onClick={onSettings}>
+      <div className="workspace-chip">
         <span className="workspace-mark">{workspace?.name?.slice(0, 1).toUpperCase() || 'A'}</span>
         <span>
           <strong>{workspace?.name || 'Your workspace'}</strong>
           <small>{workspace ? `${dashboard.employees.length} employees` : 'Ready to set up'}</small>
         </span>
-        <ChevronDown size={14} />
+      </div>
+
+      <button className="account-row" onClick={onSettings}>
+        <span className="avatar avatar-user">
+          <Settings size={16} />
+        </span>
+        <span>
+          <strong>Workspace settings</strong>
+          <small>{workspace?.role || 'Configuration'}</small>
+        </span>
+        <MoreHorizontal size={16} />
       </button>
 
       <nav aria-label="Main navigation">
@@ -97,19 +122,6 @@ export function Sidebar({
           </>
         )}
       </nav>
-
-      <div className="sidebar-footer">
-        <button className="account-row" onClick={onSettings}>
-          <span className="avatar avatar-user">
-            <Settings size={16} />
-          </span>
-          <span>
-            <strong>Workspace settings</strong>
-            <small>{workspace?.role || 'Configuration'}</small>
-          </span>
-          <MoreHorizontal size={16} />
-        </button>
-      </div>
     </aside>
   );
 }

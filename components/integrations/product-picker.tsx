@@ -27,8 +27,20 @@ export function ProductPicker({
       title={`Connect ${provider.name}`}
       subtitle="Choose the products to connect, then sign in once."
       onClose={onClose}
+      footer={
+        <button
+          className="primary-button full"
+          type="submit"
+          form="product-picker-form"
+          disabled={busy || selected.length === 0}
+        >
+          {busy ? <LoaderCircle className="spin" size={16} /> : <Link2 size={16} />}
+          {busy ? 'Opening sign-in' : `Sign in with ${provider.name.split(' ')[0]}`}
+        </button>
+      }
     >
       <form
+        id="product-picker-form"
         className="form-stack"
         onSubmit={async (event) => {
           event.preventDefault();
@@ -62,10 +74,6 @@ export function ProductPicker({
           })}
         </div>
         <p className="form-note">{provider.note}</p>
-        <button className="primary-button full" disabled={busy || selected.length === 0}>
-          {busy ? <LoaderCircle className="spin" size={16} /> : <Link2 size={16} />}
-          {busy ? 'Opening sign-in' : `Sign in with ${provider.name.split(' ')[0]}`}
-        </button>
       </form>
     </Sheet>
   );

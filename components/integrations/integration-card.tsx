@@ -5,6 +5,8 @@ import type { ReactNode } from 'react';
 import type { Connection } from '@/lib/contracts';
 import type { ProviderDefinition } from '@/lib/providers';
 import { ProviderLogo } from '../shared/marks';
+import { OverflowMenu, type OverflowAction } from '../shared/overflow-menu';
+import { useIsNarrow } from '../shared/use-media';
 import { connectionLabel, sharedReach, sharingSummary, type ProviderSetup } from './connect';
 
 function accountDetail(connection: Connection) {
@@ -57,6 +59,7 @@ export function IntegrationCard({
   onShare: (connection: Connection) => void;
   onDisconnect: (connectionId: string) => void;
 }) {
+  const narrow = useIsNarrow();
   const active = connections.filter((item) => item.status !== 'disconnected');
   const connected = active.filter((item) => item.status === 'connected');
   const attention = active.some((item) => item.status !== 'connected');
@@ -77,6 +80,27 @@ export function IntegrationCard({
   );
   // Only your own accounts decide whether you can add one, so a shared account never hides Connect.
   const canAdd = ready && (provider.products ? (remainingProducts?.length ?? 0) > 0 : owned.length === 0);
+  // Connecting on top of someone else's shared account is about acting as yourself, not about access.
+  const onlyShared = owned.length === 0 && shared.length > 0;
+  const connectLabel = owned.length
+    ? `Connect more ${provider.name} products`
+    : onlyShared
+      ? 'Connect your own'
+      : `Connect ${provider.name}`;
+
+  function ownedActions(connection: Connection): OverflowAction[] {
+    return [
+      { label: 'Sharing', onSelect: () => onShare(connection) },
+      connection.status === 'connected'
+        ? { label: 'Manage access', onSelect: () => onManage(connection) }
+        : {
+            label: 'Reconnect',
+            disabled: busy || !state.connectable.includes(connection.serverUrl),
+            onSelect: () => onConnect([connection.serverUrl]),
+          },
+      { label: 'Disconnect', danger: true, onSelect: () => onDisconnect(connection.id) },
+    ];
+  }
 
   return (
     <article className="integration-card card">
@@ -94,25 +118,20 @@ export function IntegrationCard({
           {owned.map((connection) => (
             <AccountRow connection={connection} key={connection.id}>
               <span className="connection-sharing">{sharingSummary(connection)}</span>
-              <button className="text-button" onClick={() => onShare(connection)}>
-                Sharing
-              </button>
-              {connection.status === 'connected' ? (
-                <button className="text-button" onClick={() => onManage(connection)}>
-                  Manage access
-                </button>
+              {narrow ? (
+                <OverflowMenu label={`Actions for ${connection.name}`} actions={ownedActions(connection)} />
               ) : (
-                <button
-                  className="text-button"
-                  disabled={busy || !state.connectable.includes(connection.serverUrl)}
-                  onClick={() => onConnect([connection.serverUrl])}
-                >
-                  Reconnect
-                </button>
+                ownedActions(connection).map((action) => (
+                  <button
+                    key={action.label}
+                    className={`text-button ${action.danger ? 'danger-text' : ''}`}
+                    disabled={action.disabled}
+                    onClick={action.onSelect}
+                  >
+                    {action.label}
+                  </button>
+                ))
               )}
-              <button className="text-button danger-text" onClick={() => onDisconnect(connection.id)}>
-                Disconnect
-              </button>
             </AccountRow>
           ))}
           {shared.map((connection) => (
@@ -124,14 +143,21 @@ export function IntegrationCard({
         </div>
       )}
       {canAdd ? (
-        <button
-          className={`${owned.length ? 'secondary-button' : 'primary-button'} full`}
-          disabled={busy}
-          onClick={() => (provider.products ? onChooseProducts() : onConnect())}
-        >
-          {busy ? <LoaderCircle className="spin" size={15} /> : <Link2 size={15} />}
-          {owned.length ? `Connect more ${provider.name} products` : `Connect ${provider.name}`}
-        </button>
+        <>
+          <button
+            className={`${owned.length ? 'secondary-button' : 'primary-button'} full`}
+            disabled={busy}
+            onClick={() => (provider.products ? onChooseProducts() : onConnect())}
+          >
+            {busy ? <LoaderCircle className="spin" size={15} /> : <Link2 size={15} />}
+            {connectLabel}
+          </button>
+          {onlyShared && (
+            <p className="form-note connection-own-note">
+              You can already use {shared[0].ownerName}&rsquo;s account. Connect your own to act as yourself.
+            </p>
+          )}
+        </>
       ) : owned.length === 0 ? (
         <div className="setup-note">
           {!configured ? (
@@ -139,7 +165,8 @@ export function IntegrationCard({
           ) : checking ? (
             <p>Checking what your administrator has set up.</p>
           ) : canManage ? (
-            <>
+            <details>
+              <summary>Setup needed</summary>
               <strong>Before anyone can connect {provider.name}</strong>
               <ul>
                 {state.missing.map((item) => (
@@ -149,13 +176,13 @@ export function IntegrationCard({
               <a href={provider.documentation} target="_blank" rel="noreferrer">
                 Provider setup guide <ExternalLink size={11} />
               </a>
-            </>
+            </details>
           ) : (
             <p>{provider.name} is not available yet. Ask your workspace administrator.</p>
           )}
         </div>
       ) : null}
-      {owned.length === 0 && ready && <p className="form-note">{provider.note}</p>}
+      {owned.length === 0 && ready && !onlyShared && <p className="form-note">{provider.note}</p>}
     </article>
   );
 }
