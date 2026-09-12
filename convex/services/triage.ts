@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { emergencyOpen, pagingState } from '../../lib/paging';
+import { emergencyOpen, livePages, pagingState } from '../../lib/paging';
 import type { Doc, Id } from '../_generated/dataModel';
 import { mutation, query } from '../_generated/server';
 import type { MutationCtx } from '../_generated/server';
@@ -337,20 +337,32 @@ export const resolve = mutation({
   },
 });
 
-/** Whether this run reached a tool nothing but the emergency rule would have admitted. */
-async function usedEmergencyAuthority(ctx: Ctx, task: Doc<'tasks'>) {
+/**
+ * When this run last reached a tool nothing but the emergency rule would have admitted.
+ *
+ * Newest first, and only the calls that went through: an incident's task is reused for the whole
+ * lifetime of the alert and every dispatch writes a started row beside its terminal one, so reading
+ * the oldest rows would lose sight of the emergency call after a hundred ordinary ones.
+ */
+async function lastEmergencyCall(ctx: Ctx, task: Doc<'tasks'>) {
   const settings = await settingsFor(ctx, task.workspaceId);
   const emergencyOnly = emergencyOnlyTools(settings);
-  if (!emergencyOnly.size) return false;
+  if (!emergencyOnly.size) return undefined;
   const calls = await ctx.db
     .query('toolCalls')
     .withIndex('by_task', (q) => q.eq('taskId', task._id))
+    .filter((q) => q.eq(q.field('outcome'), 'succeeded'))
+    .order('desc')
     .take(200);
-  return calls.some((call) => call.outcome === 'succeeded' && emergencyOnly.has(call.tool));
+  return calls.find((call) => emergencyOnly.has(call.tool))?.createdAt;
 }
 
-/** Whether this run already has an incident report, its own or the placeholder filed for it. */
-async function hasIncidentReport(ctx: Ctx, task: Doc<'tasks'>) {
+/**
+ * Whether the run's latest emergency call has an incident report, its own or the placeholder filed
+ * for it. The report has to be newer than the call: the alert's task is reused across runs, so an
+ * earlier incident's report would otherwise stand in for every later emergency action on it.
+ */
+async function hasIncidentReport(ctx: Ctx, task: Doc<'tasks'>, since: number) {
   const channel = await findChannel(ctx, task.workspaceId, 'triage', '');
   if (!channel) return false;
   const posts = await ctx.db
@@ -359,7 +371,10 @@ async function hasIncidentReport(ctx: Ctx, task: Doc<'tasks'>) {
     .order('desc')
     .take(100);
   return posts.some(
-    (post) => post.taskId === task._id && (post.flag === 'incident' || post.flag === 'missing'),
+    (post) =>
+      post.taskId === task._id &&
+      post._creationTime >= since &&
+      (post.flag === 'incident' || post.flag === 'missing'),
   );
 }
 
@@ -430,8 +445,9 @@ export const closeRun = mutation({
     if (!task) throw new Error('Task not found');
     const workspace = await ctx.db.get(task.workspaceId);
     if (!workspace) throw new Error('Workspace not found');
-    if (!(await usedEmergencyAuthority(ctx, task))) return { emergency: false, reportMissing: false };
-    if (await hasIncidentReport(ctx, task)) return { emergency: true, reportMissing: false };
+    const emergencyAt = await lastEmergencyCall(ctx, task);
+    if (emergencyAt === undefined) return { emergency: false, reportMissing: false };
+    if (await hasIncidentReport(ctx, task, emergencyAt)) return { emergency: true, reportMissing: false };
     const alert = await alertForTask(ctx, task._id);
     const title = alert?.title ?? task.title;
     await postToChannels(ctx, workspace, alert?.affectedFloorIds ?? [], {
@@ -472,15 +488,14 @@ export const pageAlert = mutation({
     const workspace = await ctx.db.get(alert.workspaceId);
     if (!workspace) throw new Error('Workspace not found');
     const now = Date.now();
-    const paging = pagingState(
-      await ctx.db
-        .query('notifications')
-        .withIndex('by_alert', (q) => q.eq('alertId', alert._id))
-        .collect(),
-      now,
-    );
-    if (!isOpenAlert(alert) || paging.acknowledged || paging.attempts >= paging.required) return [];
-    const attempt = paging.attempts + 1;
+    const rows = await ctx.db
+      .query('notifications')
+      .withIndex('by_alert', (q) => q.eq('alertId', alert._id))
+      .collect();
+    const paging = pagingState(rows, now);
+    if (!isOpenAlert(alert) || paging.acknowledged || paging.nextAttemptAt === undefined) return [];
+    // One page reaches every subject at once, so the attempt is the page's number and not the row's.
+    const attempt = livePages(rows).pages.length + 1;
     const remaining = paging.required - attempt;
     return recordAttempts(ctx, workspace, {
       kind: 'triage',
@@ -561,7 +576,9 @@ export const writeConnections = query({
       .withIndex('by_workspace', (q) => q.eq('workspaceId', task.workspaceId))
       .collect();
     const connections = rows
-      .filter((row) => row.status === 'connected')
+      // A member's private connection is theirs; an unattended merge must not run on a credential
+      // nobody shared with the workspace. `activeTaskContext` holds the same line for ordinary work.
+      .filter((row) => row.status === 'connected' && row.visibility === 'workspace')
       .map((row) => ({ ...row, allowedTools: row.allowedTools.filter((tool) => admitted.has(tool)) }))
       .filter((row) => row.allowedTools.length > 0);
     return {

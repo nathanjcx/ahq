@@ -142,12 +142,11 @@ export async function estimateTask(
   if (!version) throw new Error('Employee version not found');
   const completed = await ctx.db
     .query('tasks')
-    .withIndex('by_status', (q) => q.eq('status', 'completed'))
+    .withIndex('by_workspace_status', (q) => q.eq('workspaceId', workspaceId).eq('status', 'completed'))
     .order('desc')
     .take(HISTORY_SAMPLE);
   const history = completed.filter(
-    (task) =>
-      task.workspaceId === workspaceId && task.versionId === versionId && (task.cadence ?? 'once') === kind,
+    (task) => task.versionId === versionId && (task.cadence ?? 'once') === kind,
   );
   if (!history.length) return { ...DEFAULT_ESTIMATES[version.model], confidence: 0.3, model: version.model };
   return {

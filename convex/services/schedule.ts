@@ -1,6 +1,7 @@
 import { v, type Infer } from 'convex/values';
 import type { WorkspaceSettings } from '../../lib/contracts';
 import { pagingState } from '../../lib/paging';
+import { internal } from '../_generated/api';
 import type { Doc, Id } from '../_generated/dataModel';
 import { internalMutation, mutation, query, type MutationCtx } from '../_generated/server';
 import { ensureAuditRun, ensureAuditor, openFindings } from '../lib/audit';
@@ -113,7 +114,7 @@ async function meetingsInLead(
 }
 
 /** Reads one workspace's scheduling inputs, runs the planner, and enqueues what it returns. */
-async function tickWorkspace(ctx: MutationCtx, workspace: Doc<'workspaces'>, now: number) {
+async function planWorkspace(ctx: MutationCtx, workspace: Doc<'workspaces'>, now: number) {
   const settings = await settingsFor(ctx, workspace._id);
   const date = shiftDate(now, settings);
   const working = isWorkingTime(now, settings);
@@ -121,7 +122,10 @@ async function tickWorkspace(ctx: MutationCtx, workspace: Doc<'workspaces'>, now
   // The auditor's night task exists before the planner runs, so the audit job can target it.
   const auditTaskId = working ? undefined : await ensureAuditRun(ctx, workspace._id, date);
 
-  const [installations, tasks, todaysShifts, entries, alerts, proposed] = await Promise.all([
+  // An overnight shift belongs to the previous working day, so both dates are read: a shift that
+  // opened before midnight and is still running holds its instance and its slot this morning too.
+  const shiftDates = [...new Set([date, shiftDate(now - 86_400_000, settings)])];
+  const [installations, tasks, shiftRows, entries, alerts, proposed] = await Promise.all([
     ctx.db
       .query('installations')
       .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
@@ -131,10 +135,14 @@ async function tickWorkspace(ctx: MutationCtx, workspace: Doc<'workspaces'>, now
       .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
       .order('desc')
       .take(SCAN_LIMIT),
-    ctx.db
-      .query('shifts')
-      .withIndex('by_workspace_date', (q) => q.eq('workspaceId', workspace._id).eq('date', date))
-      .collect(),
+    Promise.all(
+      shiftDates.map((day) =>
+        ctx.db
+          .query('shifts')
+          .withIndex('by_workspace_date', (q) => q.eq('workspaceId', workspace._id).eq('date', day))
+          .collect(),
+      ),
+    ).then((days) => days.flat()),
     ctx.db
       .query('calendarEntries')
       .withIndex('by_workspace_start', (q) =>
@@ -154,14 +162,14 @@ async function tickWorkspace(ctx: MutationCtx, workspace: Doc<'workspaces'>, now
       .take(SCAN_LIMIT),
   ]);
 
-  const statusById = new Map(tasks.map((task) => [task._id as string, task.status]));
+  const todaysShifts = shiftRows.filter((shift) => shift.date === date);
   const ranToday = new Set(
     todaysShifts.filter((shift) => shift.kind === 'work').map((shift) => shift.taskId),
   );
   const reviewedToday = new Set(
     todaysShifts.filter((shift) => shift.kind === 'review').map((shift) => shift.taskId),
   );
-  const running = todaysShifts.filter((shift) => shift.endedAt === undefined);
+  const running = shiftRows.filter((shift) => shift.endedAt === undefined);
 
   const plannerTasks: PlannerTask[] = tasks
     // Session tasks are driven by their own job kinds; only work tasks are scheduled into shifts.
@@ -172,8 +180,6 @@ async function tickWorkspace(ctx: MutationCtx, workspace: Doc<'workspaces'>, now
       status: task.status,
       cadence: task.cadence,
       deadlineAt: task.deadlineAt,
-      // A dependency outside the scanned window counts as unfinished, so a task waits rather than races.
-      unfinishedDependencies: (task.dependsOn ?? []).filter((id) => statusById.get(id) !== 'completed'),
       model: task.model,
       lastShiftDate: ranToday.has(task._id) ? date : undefined,
       lastReviewDate: reviewedToday.has(task._id) ? date : undefined,
@@ -212,17 +218,31 @@ async function tickWorkspace(ctx: MutationCtx, workspace: Doc<'workspaces'>, now
   // Each open incident carries its own notification ledger, which is what the planner re-pages from.
   const plannerAlerts: PlannerAlert[] = await Promise.all(
     alerts.map(async (alert) => {
-      const pages = await ctx.db
-        .query('notifications')
-        .withIndex('by_alert', (q) => q.eq('alertId', alert._id))
-        .collect();
+      const triageTaskId = alert.triageTaskId;
+      const [pages, runs] = await Promise.all([
+        ctx.db
+          .query('notifications')
+          .withIndex('by_alert', (q) => q.eq('alertId', alert._id))
+          .collect(),
+        triageTaskId
+          ? ctx.db
+              .query('jobs')
+              .withIndex('by_task_kind_created', (q) =>
+                q.eq('taskId', triageTaskId).eq('kind', JOB_KINDS.triage),
+              )
+              .collect()
+          : [],
+      ]);
       return {
         alertId: alert._id,
         severity: alert.severity,
         createdAt: alert.createdAt,
-        triageTaskId: alert.triageTaskId,
+        triageTaskId,
         paging: pagingState(pages, now),
-        pagesSent: pages.length,
+        // One page reaches every subject at once, so the rows of a batch share their `sentAt`.
+        pagesSent: new Set(pages.map((page) => page.sentAt)).size,
+        runLive: runs.some((run) => run.state === 'queued' || run.state === 'leased'),
+        runKeys: runs.map((run) => run.uniqueKey),
       };
     }),
   );
@@ -254,16 +274,35 @@ async function tickWorkspace(ctx: MutationCtx, workspace: Doc<'workspaces'>, now
   return planned.length;
 }
 
-/** The five-minute scheduler. Reads every workspace's clock and open work and enqueues the day's runs. */
+/**
+ * One workspace's turn of the scheduler, as its own transaction.
+ *
+ * A workspace's inputs run to hundreds of tasks, entries, alerts, and claims. Convex's read limits
+ * are per transaction, so planning every workspace in one mutation means a few busy workspaces stop
+ * the whole deployment from being scheduled at all.
+ */
+export const tickWorkspace = internalMutation({
+  args: { workspaceId: v.id('workspaces') },
+  handler: async (ctx, args) => {
+    const workspace = await ctx.db.get(args.workspaceId);
+    if (!workspace) return { enqueued: 0 };
+    return { enqueued: await planWorkspace(ctx, workspace, Date.now()) };
+  },
+});
+
+/** The five-minute scheduler. Hands every workspace to its own tick; the jobs are left behind there. */
 export const tick = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const now = Date.now();
-    let enqueued = 0;
-    // Workers are woken by their own one-minute cron, so the tick only has to leave the jobs behind.
-    for (const workspace of await ctx.db.query('workspaces').take(200))
-      enqueued += await tickWorkspace(ctx, workspace, now);
-    return { enqueued };
+    let workspaces = 0;
+    // Workers are woken by their own one-minute cron, so neither side waits on the other.
+    for await (const workspace of ctx.db.query('workspaces')) {
+      await ctx.scheduler.runAfter(0, internal.services.schedule.tickWorkspace, {
+        workspaceId: workspace._id,
+      });
+      workspaces += 1;
+    }
+    return { workspaces };
   },
 });
 
@@ -298,8 +337,6 @@ export const startShift = mutation({
       kind: args.kind,
       startedAt: now,
     });
-    // A daily task's session completes at the end of every shift; opening the next one reopens it.
-    if (task.status === 'completed') await ctx.db.patch(task._id, { status: 'running', updatedAt: now });
     return { shiftId, date };
   },
 });

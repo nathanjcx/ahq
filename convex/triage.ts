@@ -312,6 +312,8 @@ export const incidentReports = query({
           ? await ctx.db
               .query('toolCalls')
               .withIndex('by_task', (q) => q.eq('taskId', taskId))
+              .filter((q) => q.eq(q.field('outcome'), 'succeeded'))
+              .order('desc')
               .take(100)
           : [];
         return {
@@ -322,9 +324,7 @@ export const incidentReports = query({
           authorName: post.authorName,
           text: post.text,
           taskId,
-          emergency: calls.some(
-            (call) => emergencyOnly.has(call.tool) && call.outcome === 'succeeded',
-          ),
+          emergency: calls.some((call) => emergencyOnly.has(call.tool)),
           missing: post.flag === 'missing',
           createdAt: post._creationTime,
         };

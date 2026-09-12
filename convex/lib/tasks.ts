@@ -151,9 +151,13 @@ export async function insertJob(
  */
 export async function queueStartTask(
   ctx: MutationCtx,
-  task: Pick<Doc<'tasks'>, '_id' | 'workspaceId'>,
+  task: Pick<Doc<'tasks'>, '_id' | 'workspaceId' | 'cadence'>,
   payload: Record<string, unknown> = {},
 ) {
+  // A daily task's work arrives as a shift the planner schedules: inside working hours, against the
+  // day's caps and free slots, with a shift row and a report. Starting it as an ordinary session
+  // would run it at once outside all of that, and the shift brief already carries the prompt.
+  if (task.cadence === 'daily') return;
   await insertJob(ctx, {
     workspaceId: task.workspaceId,
     taskId: task._id,

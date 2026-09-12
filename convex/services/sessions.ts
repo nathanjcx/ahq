@@ -329,12 +329,16 @@ export const recordEvents = mutation({
     if (args.error !== undefined) patch.error = args.error.slice(0, 2_000);
     const status = patch.status ?? task.status;
     const becameTerminal = isTerminal(status) && !isTerminal(task.status);
+    // A daily task's session completes at the end of every shift and the next shift reopens it, so a
+    // `completed` daily task has finished a shift and not the work. Nothing that belongs to a task
+    // that is really over fires here: no closing post, no listing count, and no dependency release.
+    const finishedWork = becameTerminal && !(task.cadence === 'daily' && status === 'completed');
     if (becameTerminal) {
       patch.streamOwner = undefined;
       patch.streamLeaseExpiresAt = undefined;
     }
     await ctx.db.patch(task._id, patch);
-    if (becameTerminal && status !== 'uncertain') {
+    if (finishedWork && status !== 'uncertain') {
       const closing = status === 'completed' ? await finalAssistantMessage(ctx, task._id) : undefined;
       await systemPost(
         ctx,
@@ -344,10 +348,10 @@ export const recordEvents = mutation({
     }
     // Marketplace usage count, owned by the marketplace workstream: a completed task is the one
     // signal a listing reports beyond its hires.
-    if (becameTerminal && status === 'completed') await recordCompletedTask(ctx, task.employeeId);
+    if (finishedWork && status === 'completed') await recordCompletedTask(ctx, task.employeeId);
     // Dependency release, owned by the projects workstream: a task that just finished either frees
     // the tasks waiting on it or blocks them with the reason. Nothing else here reads the graph.
-    if (becameTerminal) await releaseDependents(ctx, task, status);
+    if (finishedWork) await releaseDependents(ctx, task, status);
     return { inserted, lastSequence: sequence, status };
   },
 });

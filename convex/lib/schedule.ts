@@ -10,7 +10,7 @@ import {
 } from '../../lib/contracts';
 import type { AlertPaging } from '../../lib/contracts/triage';
 import type { JobKind } from '../../lib/jobs';
-import { PAGING_SEVERITIES } from '../../lib/paging';
+import { PAGING_SEVERITIES, emergencyOpen } from '../../lib/paging';
 import type { Id } from '../_generated/dataModel';
 import type { MutationCtx } from '../_generated/server';
 import type { Ctx } from '../shared';
@@ -99,9 +99,11 @@ export async function scheduleSummaryFor(
 }
 
 /**
- * Today's recorded tokens for one workspace, and the share each task accounts for so the tick can
- * measure triage against its own allowance. The index covers the workspace and the day, so this
- * reads exactly the rows the day is made of.
+ * The recorded tokens of the working day a run belongs to, and the share each task accounts for so
+ * the tick can measure triage against its own allowance. The window opens at the start of the same
+ * day `shiftDate` names, so an overnight run counts against the cap of the day whose night it is
+ * rather than starting a fresh allowance at midnight. The index covers the workspace and the day, so
+ * this reads exactly the rows the day is made of.
  */
 export async function dailyUsageFor(
   ctx: Ctx,
@@ -109,7 +111,7 @@ export async function dailyUsageFor(
   settings: WorkspaceSettings,
   now: number,
 ) {
-  const since = startOfDay(now, settings.timezone);
+  const since = startOfDay(shiftDayAnchor(now, settings), settings.timezone);
   const usage = { input: 0, cached: 0, output: 0 };
   const tokensByTask = new Map<string, number>();
   for (const row of await ctx.db
@@ -125,14 +127,19 @@ export async function dailyUsageFor(
 }
 
 /**
- * The working day a run belongs to. Inside working hours that is today; outside them it is the day
- * whose close opened the current night, so an overnight run at one in the morning still counts as
- * the previous working day's shift rather than starting the next one early.
+ * An instant inside the working day a run belongs to. Inside working hours that is now; outside them
+ * it is the close that opened the current night, so an overnight run at one in the morning still
+ * counts as the previous working day rather than starting the next one early.
  */
-export function shiftDate(now: number, settings: WorkspaceSettings) {
-  if (isWorkingTime(now, settings)) return dateKey(now, settings.timezone);
+function shiftDayAnchor(now: number, settings: WorkspaceSettings) {
+  if (isWorkingTime(now, settings)) return now;
   const night = overnightWindow(now, settings);
-  return dateKey(night ? night.start : now, settings.timezone);
+  return night ? night.start : now;
+}
+
+/** The working day a run belongs to, as the date key shifts, audits, and curation are keyed by. */
+export function shiftDate(now: number, settings: WorkspaceSettings) {
+  return dateKey(shiftDayAnchor(now, settings), settings.timezone);
 }
 
 /** How a report's confidence and the hours left before the deadline read as one word. */
@@ -157,8 +164,6 @@ export interface PlannerTask {
   status: TaskStatus;
   cadence?: Cadence;
   deadlineAt?: number;
-  /** Dependencies that have not finished; a task with any of these reviews instead of working. */
-  unfinishedDependencies: string[];
   model: ModelId;
   /** Workspace-zone date of the last work shift. */
   lastShiftDate?: string;
@@ -190,8 +195,12 @@ export interface PlannerAlert {
   triageTaskId?: string;
   /** How far the emergency rule has run on this incident, from its notification ledger. */
   paging: AlertPaging;
-  /** Every page ever recorded for this incident, spent ones included, so a page has a stable key. */
+  /** Every page ever sent for this incident, spent ones included, so a page has a stable key. */
   pagesSent: number;
+  /** A triage run for this incident is queued or in flight, so a second one would only pile up. */
+  runLive: boolean;
+  /** The unique keys of the triage runs already enqueued for this incident. */
+  runKeys: string[];
 }
 export interface PlannerFinding {
   findingId: string;
@@ -302,13 +311,21 @@ export function planTick(input: PlannerInput): PlannedJob[] {
       (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.createdAt - b.createdAt,
     );
     for (const alert of alerts) {
+      // One run per state of the incident. A run's key carries the ledger it was briefed with and
+      // whether the emergency gate was open for it, so a page that lands or a gate that opens plans a
+      // fresh run with the tools and the brief that go with it; nothing else does. An incident whose
+      // run is already enqueued is skipped before it can take the responder, so one open alert waiting
+      // on a person cannot starve every other alert of triage.
+      const emergency = !attended && emergencyOpen(alert.paging, now);
+      const uniqueKey = `triage:${alert.alertId}:${alert.paging.attempts}${emergency ? ':e' : ''}`;
+      if (alert.runLive || alert.runKeys.includes(uniqueKey)) continue;
       const responder = responders.find((instance) => !unavailable.has(instance.employeeId));
       if (!responder) break;
       take({
         kind: 'triage',
         taskId: alert.triageTaskId ?? responder.standingTaskId,
         employeeId: responder.employeeId,
-        uniqueKey: `triage:${alert.alertId}`,
+        uniqueKey,
         date,
         // An incident is never run on the cheap model, whatever the hour.
         model: responder.model,
@@ -330,8 +347,11 @@ export function planTick(input: PlannerInput): PlannedJob[] {
     for (const alert of input.alerts) {
       const { paging } = alert;
       if (!PAGING_SEVERITIES.includes(alert.severity)) continue;
-      if (paging.acknowledged || paging.attempts >= paging.required) continue;
-      if ((paging.nextAttemptAt ?? now) > now) continue;
+      // No next page is due once three have been sent, answered or not: `nextAttemptAt` is the whole
+      // cadence, so a workspace whose channels deliver nothing stops at three rather than paging on
+      // every tick until the incident closes.
+      if (paging.acknowledged || paging.nextAttemptAt === undefined || paging.nextAttemptAt > now)
+        continue;
       const taskId = pager.standingTaskId ?? alert.triageTaskId;
       if (!taskId) continue;
       planned.push({
@@ -343,7 +363,7 @@ export function planTick(input: PlannerInput): PlannedJob[] {
         model: pager.model,
         findingIds: [],
         alertId: alert.alertId,
-        reason: `page ${paging.attempts + 1} of ${paging.required}: nobody has answered`,
+        reason: `page ${alert.pagesSent + 1}: nobody has answered`,
       });
     }
 
@@ -378,7 +398,6 @@ export function planTick(input: PlannerInput): PlannedJob[] {
         (task) =>
           task.cadence === 'daily' &&
           SHIFT_STATUSES.includes(task.status) &&
-          task.unfinishedDependencies.length === 0 &&
           task.lastShiftDate !== date &&
           instances.has(task.employeeId),
       )
@@ -407,9 +426,11 @@ export function planTick(input: PlannerInput): PlannedJob[] {
     });
   }
 
+  // Only a `waiting` task reviews its dependency. A `blocked` one is a person's decision to make, and
+  // one a person has unblocked is `queued` and shifts like any other.
   if (working)
     for (const task of open) {
-      if (task.unfinishedDependencies.length === 0 && task.status !== 'waiting') continue;
+      if (task.status !== 'waiting') continue;
       if (task.lastReviewDate === date || !instances.has(task.employeeId)) continue;
       candidates.push({
         kind: 'review_shift',
