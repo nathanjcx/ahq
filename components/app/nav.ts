@@ -9,7 +9,8 @@ export type Page =
   | 'activity'
   | 'marketplace'
   | 'integrations'
-  | 'admin';
+  | 'admin'
+  | 'operations';
 
 export const nav: Array<{ id: Page; label: string; icon: typeof LayoutGrid }> = [
   { id: 'office', label: 'Office', icon: LayoutGrid },
@@ -23,5 +24,7 @@ export const nav: Array<{ id: Page; label: string; icon: typeof LayoutGrid }> = 
 ];
 
 export function pageTitle(page: Page) {
-  return page === 'admin' ? 'Marketplace admin' : (nav.find((item) => item.id === page)?.label ?? 'Office');
+  if (page === 'admin') return 'Marketplace admin';
+  if (page === 'operations') return 'Operations';
+  return nav.find((item) => item.id === page)?.label ?? 'Office';
 }

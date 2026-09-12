@@ -41,7 +41,8 @@ export function WorkspaceShell({
   useEffect(() => {
     const sync = () => {
       const value = window.location.hash.slice(1);
-      if (nav.some((item) => item.id === value) || value === 'admin') setPage(value as Page);
+      if (nav.some((item) => item.id === value) || value === 'admin' || value === 'operations')
+        setPage(value as Page);
     };
     sync();
     window.addEventListener('hashchange', sync);

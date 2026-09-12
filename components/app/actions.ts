@@ -2,6 +2,13 @@
 
 import { useMutation } from 'convex/react';
 import { uiApi } from '@/lib/ui-api';
+import type {
+  ConnectionVisibility,
+  CorrectionDescriptor,
+  ProviderId,
+  TaskVisibility,
+  ToolMode,
+} from '@/lib/contracts';
 
 export type CorrectionResult = { kind: 'task'; taskId: string } | { kind: 'proposal'; proposalId: string };
 
@@ -30,6 +37,34 @@ export type Actions = {
   saveDraft: (draft: Record<string, unknown>) => Promise<unknown>;
   publish: (draftId: string) => Promise<unknown>;
   retire: (versionId: string) => Promise<unknown>;
+  // Sharing
+  setTaskVisibility: (taskId: string, visibility: TaskVisibility) => Promise<unknown>;
+  setConnectionSharing: (
+    connectionId: string,
+    visibility: ConnectionVisibility,
+    visibleToSubjects: string[],
+  ) => Promise<unknown>;
+  // Floors
+  postToBoard: (projectId: string, text: string) => Promise<unknown>;
+  requestHandoff: (
+    projectId: string,
+    toEmployeeId: string,
+    brief: string,
+    sourceTaskId?: string,
+  ) => Promise<unknown>;
+  decideHandoff: (postId: string, accepted: boolean) => Promise<{ taskId?: string } | undefined>;
+  // Operations (platform administrators)
+  setEnabledUrls: (provider: ProviderId, enabledUrls: string[]) => Promise<unknown>;
+  saveRegistryTool: (tool: {
+    provider: ProviderId;
+    name: string;
+    description: string;
+    mode: ToolMode;
+    resourceArgument?: string;
+    correction?: CorrectionDescriptor;
+  }) => Promise<unknown>;
+  deleteRegistryTool: (provider: ProviderId, name: string) => Promise<unknown>;
+  importDiscoveredTools: (connectionId: string) => Promise<{ imported: number } | undefined>;
 };
 
 const unavailable = async () => undefined;
@@ -57,6 +92,15 @@ export const offlineActions: Actions = {
   saveDraft: unavailable,
   publish: unavailable,
   retire: unavailable,
+  setTaskVisibility: unavailable,
+  setConnectionSharing: unavailable,
+  postToBoard: unavailable,
+  requestHandoff: unavailable,
+  decideHandoff: unavailable,
+  setEnabledUrls: unavailable,
+  saveRegistryTool: unavailable,
+  deleteRegistryTool: unavailable,
+  importDiscoveredTools: unavailable,
 };
 
 export function useWorkspaceActions(): Actions {
@@ -78,6 +122,15 @@ export function useWorkspaceActions(): Actions {
   const saveDraft = useMutation(uiApi.saveDraft);
   const publish = useMutation(uiApi.publishDraft);
   const retire = useMutation(uiApi.retireVersion);
+  const setTaskVisibility = useMutation(uiApi.setTaskVisibility);
+  const setConnectionSharing = useMutation(uiApi.setConnectionSharing);
+  const postToBoard = useMutation(uiApi.postToBoard);
+  const requestHandoff = useMutation(uiApi.requestHandoff);
+  const decideHandoff = useMutation(uiApi.decideHandoff);
+  const setEnabledUrls = useMutation(uiApi.setEnabledUrls);
+  const saveRegistryTool = useMutation(uiApi.saveRegistryTool);
+  const deleteRegistryTool = useMutation(uiApi.deleteRegistryTool);
+  const importDiscoveredTools = useMutation(uiApi.importDiscoveredTools);
 
   return {
     bootstrap: (name) => bootstrap({ name }),
@@ -101,5 +154,16 @@ export function useWorkspaceActions(): Actions {
     saveDraft: (draft) => saveDraft(draft),
     publish: (draftId) => publish({ draftId }),
     retire: (versionId) => retire({ versionId }),
+    setTaskVisibility: (taskId, visibility) => setTaskVisibility({ taskId, visibility }),
+    setConnectionSharing: (connectionId, visibility, visibleToSubjects) =>
+      setConnectionSharing({ connectionId, visibility, visibleToSubjects }),
+    postToBoard: (projectId, text) => postToBoard({ projectId, text }),
+    requestHandoff: (projectId, toEmployeeId, brief, sourceTaskId) =>
+      requestHandoff({ projectId, toEmployeeId, brief, sourceTaskId }),
+    decideHandoff: (postId, accepted) => decideHandoff({ postId, accepted }),
+    setEnabledUrls: (provider, enabledUrls) => setEnabledUrls({ provider, enabledUrls }),
+    saveRegistryTool: (tool) => saveRegistryTool(tool),
+    deleteRegistryTool: (provider, name) => deleteRegistryTool({ provider, name }),
+    importDiscoveredTools: (connectionId) => importDiscoveredTools({ connectionId }),
   };
 }
