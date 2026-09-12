@@ -8,10 +8,10 @@ import {
   GitBranch,
   Mail,
   MessageSquareText,
+  MoreHorizontal,
   ShieldCheck,
   X,
 } from 'lucide-react';
-import { MoreHorizontal } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import type { Employee, ProviderId, Task } from '@/lib/contracts';
 import { providers, type ProviderDefinition } from '@/lib/providers';
