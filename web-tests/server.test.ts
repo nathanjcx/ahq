@@ -43,9 +43,11 @@ describe('credential and integration boundaries', () => {
   });
   it('requires approval for unknown tools and blocks destructive tools', () => {
     expect(toolPolicy('github', 'unknownOperation').mode).toBe('write');
-    expect(toolPolicy('github', 'delete_repository').mode).toBe('blocked');
+    for (const tool of ['delete_repository', 'deleteRepository', 'bulkDeleteRecords', 'purge-record'])
+      expect(toolPolicy('github', tool).mode).toBe('blocked');
     process.env.MCP_TOOL_POLICIES_JSON = JSON.stringify({ 'github:delete_repository': { mode: 'read' } });
-    expect(toolPolicy('github', 'delete_repository').mode).toBe('blocked');
+    for (const tool of ['delete_repository', 'deleteRepository', 'bulkDeleteRecords', 'purge-record'])
+      expect(toolPolicy('github', tool).mode).toBe('blocked');
   });
   it('rejects searches and different resources on restricted grants', () => {
     expect(() => checkResourceScope('allowed', { query: 'everything' })).toThrow();

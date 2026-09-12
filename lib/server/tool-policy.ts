@@ -64,7 +64,8 @@ const policySchema = z.object({
 });
 export type ToolPolicy = z.infer<typeof policySchema>;
 export function toolPolicy(provider: string, tool: string): ToolPolicy {
-  if (/(^|[._])(?:delete|purge|destroy|permanently_delete)(?:[._]|$)/i.test(tool)) return { mode: 'blocked' };
+  const words = tool.replace(/([a-z0-9])([A-Z])/g, '$1_$2');
+  if (/(^|[._-])(?:delete|purge|destroy)(?:[._-]|$)/i.test(words)) return { mode: 'blocked' };
   const overrides = JSON.parse(process.env.MCP_TOOL_POLICIES_JSON || '{}') as Record<string, unknown>;
   if (overrides[`${provider}:${tool}`]) return policySchema.parse(overrides[`${provider}:${tool}`]);
   // Only explicitly reviewed tool names are reads. Server annotations cannot grant execution rights.
