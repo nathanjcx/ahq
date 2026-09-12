@@ -1,6 +1,6 @@
 import { connection } from 'next/server';
 import { ClientProviders, type PublicConfig } from '@/lib/client';
-import { AstraHq } from '@/components/astra-hq';
+import { AstraHq } from '@/components/app';
 import { webSetup } from '@/lib/server/setup';
 
 export default async function Home() {
