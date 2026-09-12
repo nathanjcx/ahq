@@ -46,6 +46,15 @@ export const employeeKind = v.union(
   v.literal('triage'),
 );
 export const cadence = v.union(v.literal('once'), v.literal('daily'));
+/** What a task is for. `work` is the default meaning and the only kind the dashboard lists. */
+export const taskKind = v.union(
+  v.literal('work'),
+  v.literal('meeting'),
+  v.literal('audit'),
+  v.literal('curation'),
+  v.literal('triage'),
+  v.literal('standing'),
+);
 export const memoryScope = v.union(
   v.literal('task'),
   v.literal('agent'),
@@ -194,7 +203,9 @@ export default defineSchema({
     output: v.number(),
     period: v.string(),
     createdAt: v.number(),
-  }).index('by_task_external', ['taskId', 'externalId']),
+  })
+    .index('by_task_external', ['taskId', 'externalId'])
+    .index('by_workspace_created', ['workspaceId', 'createdAt']),
 
   employeeDrafts: defineTable({
     createdBy: v.string(),
@@ -288,30 +299,6 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index('by_project', ['projectId', 'order']),
-  floorPosts: defineTable({
-    workspaceId: v.id('workspaces'),
-    floorId: v.id('floors'),
-    kind: v.union(v.literal('note'), v.literal('system'), v.literal('handoff')),
-    authorSubject: v.optional(v.string()),
-    authorName: v.string(),
-    text: v.string(),
-    taskId: v.optional(v.id('tasks')),
-    handoff: v.optional(
-      v.object({
-        toEmployeeId: v.id('installations'),
-        toEmployeeName: v.string(),
-        brief: v.string(),
-        status: v.union(v.literal('pending'), v.literal('accepted'), v.literal('declined')),
-        taskId: v.optional(v.id('tasks')),
-        decidedBy: v.optional(v.string()),
-        decidedAt: v.optional(v.number()),
-      }),
-    ),
-    createdAt: v.number(),
-  })
-    .index('by_floor', ['floorId', 'createdAt'])
-    .index('by_floor_kind', ['floorId', 'kind']),
-
   connections: defineTable({
     workspaceId: v.id('workspaces'),
     ownerSubject: v.string(),
@@ -363,6 +350,10 @@ export default defineSchema({
     projectId: v.optional(v.id('projects')),
     milestoneId: v.optional(v.id('milestones')),
     cadence: v.optional(cadence),
+    /** Undefined means `work`: the tasks a person asked for, and the only ones the dashboard lists. */
+    kind: v.optional(taskKind),
+    /** Caller key that keeps one session task per employee per kind, such as a date or a meeting id. */
+    sessionKey: v.optional(v.string()),
     deadlineAt: v.optional(v.number()),
     dependsOn: v.optional(v.array(v.id('tasks'))),
     sourceTaskId: v.optional(v.id('tasks')),
@@ -391,6 +382,8 @@ export default defineSchema({
     .index('by_project', ['projectId'])
     .index('by_run_token', ['runToken'])
     .index('by_status', ['status'])
+    .index('by_workspace_status', ['workspaceId', 'status'])
+    .index('by_session', ['employeeId', 'kind', 'sessionKey'])
     .index('by_source_proposal', ['sourceProposalId']),
   messages: defineTable({
     workspaceId: v.id('workspaces'),

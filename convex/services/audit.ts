@@ -5,6 +5,7 @@ import {
   dateRange,
   ensureAuditor,
   groupFindings,
+  openFindings,
   previousDate,
   publicFinding,
   validateFinding,
@@ -213,17 +214,8 @@ export const openFindingsFor = query({
   args: { secret: v.string(), employeeId: v.id('installations') },
   handler: async (ctx, args) => {
     requireService(args.secret);
-    const findings: Doc<'auditFindings'>[] = [];
-    for (const status of ['open', 'escalated'] as const)
-      findings.push(
-        ...(await ctx.db
-          .query('auditFindings')
-          .withIndex('by_employee_status', (q) => q.eq('employeeId', args.employeeId).eq('status', status))
-          .collect()),
-      );
-    const ordered = findings.sort((a, b) => a.createdAt - b.createdAt);
     return Promise.all(
-      ordered.map(async (finding) => ({
+      (await openFindings(ctx, args.employeeId)).map(async (finding) => ({
         ...(await publicFinding(ctx, finding)),
         // The claim and the required action were written by the auditor, another agent.
         prompt: untrustedBlock(`${finding.claim}\nRequired action: ${finding.requiredAction}`),
@@ -254,7 +246,7 @@ export const ensureAuditors = mutation({
     requireService(args.secret);
     const workspace = await ctx.db.get(args.workspaceId);
     if (!workspace) throw new Error('Workspace not found');
-    const auditor = await ensureAuditor(ctx, args.workspaceId);
-    return { employeeId: auditor._id };
+    const { installation } = await ensureAuditor(ctx, args.workspaceId);
+    return { employeeId: installation._id };
   },
 });

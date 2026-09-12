@@ -111,6 +111,45 @@ export async function systemPost(ctx: MutationCtx, task: Doc<'tasks'>, text: str
   }
 }
 
+function reportLines(label: string, items: string[]) {
+  return items.length ? [`${label}: ${items.join('; ')}`] : [];
+}
+
+/**
+ * One shift report, rendered into every channel the task belongs to: its floor and, when it has one,
+ * its project. Keyed on the report, so closing the same shift twice posts once.
+ */
+export async function postShiftReport(ctx: MutationCtx, task: Doc<'tasks'>, report: Doc<'reports'>) {
+  const existing = await ctx.db
+    .query('posts')
+    .withIndex('by_report', (q) => q.eq('reportId', report._id))
+    .collect();
+  if (existing.length) return existing.map((post) => post._id);
+  const text = [
+    `${task.employeeName} — ${task.title}`,
+    ...reportLines('Done', report.done),
+    ...reportLines('In progress', report.inProgress),
+    ...reportLines('Blocked on', report.blockedOn),
+    ...reportLines('Next', report.next),
+    ...reportLines('Risks', report.risks),
+    ...(report.inferred ? ['Inferred from the journal; no report was filed.'] : []),
+  ].join('\n');
+  const postIds = [];
+  for (const [kind, scopeId] of taskScopes(task)) {
+    const { postId } = await insertPost(ctx, {
+      channel: await channelFor(ctx, task.workspaceId, kind, scopeId),
+      kind: 'report',
+      authorEmployeeId: report.employeeId,
+      authorName: task.employeeName,
+      text,
+      taskId: task._id,
+      reportId: report._id,
+    });
+    postIds.push(postId);
+  }
+  return postIds;
+}
+
 export async function insertNote(
   ctx: MutationCtx,
   input: {

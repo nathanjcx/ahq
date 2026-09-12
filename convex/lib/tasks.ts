@@ -1,3 +1,4 @@
+import type { TaskKind } from '../../lib/contracts/core';
 import type { Doc, Id } from '../_generated/dataModel';
 import type { MutationCtx } from '../_generated/server';
 import {
@@ -183,14 +184,18 @@ export async function assertDependencies(
  */
 export async function releaseDependents(ctx: MutationCtx, task: Doc<'tasks'>, status: string) {
   if (!['completed', 'failed', 'cancelled'].includes(status)) return;
-  // Nothing indexes `dependsOn`, so the waiting set is scanned; waiting tasks are few by nature.
+  // Nothing indexes `dependsOn`, so the workspace's waiting set is scanned; those tasks are few.
   const waiting = await ctx.db
     .query('tasks')
-    .withIndex('by_status', (q) => q.eq('status', 'waiting'))
+    .withIndex('by_workspace_status', (q) =>
+      q.eq('workspaceId', task.workspaceId).eq('status', 'waiting'),
+    )
     .collect();
-  const candidates = waiting
-    .filter((doc) => doc.workspaceId === task.workspaceId)
-    .map((doc) => ({ id: String(doc._id), dependsOn: (doc.dependsOn ?? []).map(String), doc }));
+  const candidates = waiting.map((doc) => ({
+    id: String(doc._id),
+    dependsOn: (doc.dependsOn ?? []).map(String),
+    doc,
+  }));
   const now = Date.now();
   for (const { doc } of dependentsOf(String(task._id), candidates)) {
     if (status !== 'completed') {
@@ -290,6 +295,69 @@ export async function startTask(
     );
   }
   return taskId;
+}
+
+/** Who a session task is filed under, so the records still say what opened it. */
+const SESSION_AUTHORS: Record<SessionKind, string> = {
+  meeting: 'Meeting',
+  audit: 'Audit',
+  curation: 'Curation',
+  triage: 'Triage',
+  standing: 'Schedule',
+};
+/** The kinds of task that exist only to hold a session; `work` is what a person asked for. */
+type SessionKind = Exclude<TaskKind, 'work'>;
+
+/**
+ * A task that exists only to hold a session: meetings, audits, curation, triage, and the standing
+ * sessions reserved employees live in. It carries no `start_task` job, because the run arrives as its
+ * own job kind, and it is keyed so calling this again returns the session already open.
+ */
+export async function openSessionTask(
+  ctx: MutationCtx,
+  input: {
+    workspace: Doc<'workspaces'>;
+    employeeId: Id<'installations'>;
+    version: Doc<'employeeVersions'>;
+    kind: SessionKind;
+    /** Caller key that identifies this session, such as a date or a meeting id. */
+    key: string;
+    title: string;
+    prompt: string;
+    floor?: { floorId: Id<'floors'>; floorContext: { name: string; brief: string } };
+    project?: Id<'projects'>;
+  },
+) {
+  const existing = await ctx.db
+    .query('tasks')
+    .withIndex('by_session', (q) =>
+      q.eq('employeeId', input.employeeId).eq('kind', input.kind).eq('sessionKey', input.key),
+    )
+    .first();
+  if (existing) return existing._id;
+  const installation = await ctx.db.get(input.employeeId);
+  const now = Date.now();
+  return ctx.db.insert('tasks', {
+    workspaceId: input.workspace._id,
+    ...(input.floor ?? {}),
+    ...(input.project ? { projectId: input.project } : {}),
+    kind: input.kind,
+    sessionKey: input.key,
+    cadence: 'once',
+    createdBy: 'system',
+    createdByName: SESSION_AUTHORS[input.kind],
+    visibility: 'workspace',
+    employeeId: input.employeeId,
+    versionId: input.version._id,
+    employeeName: installation?.name ?? input.version.name,
+    title: cleanText(input.title, 'Title', 200),
+    prompt: cleanText(input.prompt, 'Prompt', 50_000),
+    status: 'queued',
+    model: input.version.model,
+    createdAt: now,
+    updatedAt: now,
+    runToken: randomToken(),
+  });
 }
 
 /** The sealed audit timeline for one task. Only the web service can unseal tool-call evidence. */

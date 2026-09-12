@@ -2,15 +2,12 @@ import { v } from 'convex/values';
 import type { Doc, Id } from '../_generated/dataModel';
 import { mutation, query } from '../_generated/server';
 import type { MutationCtx } from '../_generated/server';
+import { MEMORY_LIMITS, proposeMemory } from '../lib/memory';
 import { channelFor, insertPost } from '../lib/posts';
+import { ensureSettings, settingsFor } from '../lib/schedule';
 import { assignmentForFloor, startTask } from '../lib/tasks';
-import {
-  ensureSettings,
-  ensureTriageStaff,
-  isAttendedTime,
-  matchesTriageRules,
-  settingsFor,
-} from '../lib/triage';
+import { isAttendedTime } from '../lib/time';
+import { ensureTriageStaff, matchesTriageRules } from '../lib/triage';
 import { severity as severityValidator } from '../schema';
 import { cleanText, requireService, untrustedBlock, type Ctx } from '../shared';
 import { taskForRunToken } from './context';
@@ -322,20 +319,17 @@ export const resolve = mutation({
     });
     // The prevention is the claim worth keeping. It enters memory proposed; the janitor and an
     // administrator decide whether it becomes workspace memory.
-    await ctx.db.insert('memories', {
+    await proposeMemory(ctx, {
       workspaceId: workspace._id,
       scope: 'workspace',
-      scopeId: '',
+      scopeId: workspace._id,
       kind: 'procedure',
-      text: `${alert.title}: ${args.prevention}`.slice(0, 2_000),
+      text: `${alert.title}: ${args.prevention}`.slice(0, MEMORY_LIMITS.text),
       tags: ['triage', 'post-mortem'],
       sourceTaskId: task._id,
       author: 'agent',
       authorName: task.employeeName,
       confidence: 0.6,
-      status: 'proposed',
-      createdAt: now,
-      updatedAt: now,
     });
     await ctx.db.patch(alert._id, { status: 'fixed', updatedAt: now });
     return { alertId: alert._id };

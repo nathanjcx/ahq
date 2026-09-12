@@ -1,7 +1,8 @@
 import { v } from 'convex/values';
 import type { Doc } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
-import { ensureSettings, ensureTriageStaff, settingsFor } from './lib/triage';
+import { ensureSettings, settingsFor } from './lib/schedule';
+import { ensureTriageStaff } from './lib/triage';
 import { cleanText, requireWorkspace } from './shared';
 
 const MAX_RULES = 50;

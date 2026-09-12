@@ -29,33 +29,47 @@ const SHIFT_STATUSES: TaskStatus[] = ['queued', 'running', 'completed'];
 /** Statuses a task is past scheduling from altogether. */
 const CLOSED_STATUSES: TaskStatus[] = ['cancelled', 'failed'];
 
-function settingsValues(row: Doc<'workspaceSettings'>): WorkspaceSettings {
-  const { _id, _creationTime, workspaceId: _workspaceId, ...values } = row;
-  return values;
-}
+/** A workspace answers in UTC until an administrator picks its zone. */
+const DEFAULT_TIMEZONE = 'UTC';
 
-function isMutation(ctx: Ctx): ctx is MutationCtx {
-  return 'insert' in ctx.db;
-}
-
-/**
- * The workspace's settings, created from the defaults on first read inside a mutation and returned
- * unsaved from a query, so reading settings never depends on somebody having opened Settings first.
- */
-export async function settingsFor(ctx: Ctx, workspaceId: Id<'workspaces'>): Promise<WorkspaceSettings> {
-  const row = await ctx.db
+function settingsRow(ctx: Ctx, workspaceId: Id<'workspaces'>) {
+  return ctx.db
     .query('workspaceSettings')
     .withIndex('by_workspace', (q) => q.eq('workspaceId', workspaceId))
     .unique();
-  if (row) return settingsValues(row);
-  const values: WorkspaceSettings = {
-    ...defaultWorkspaceSettings,
-    // A workspace answers in UTC until an administrator picks its zone.
-    timezone: 'UTC',
-    updatedAt: Date.now(),
-  };
-  if (isMutation(ctx)) await ctx.db.insert('workspaceSettings', { workspaceId, ...values });
+}
+
+/**
+ * The workspace's settings, as every other module reads them: the saved row, or the fixed defaults
+ * when nobody has opened Settings yet. The sealed alert secret is deliberately dropped here; it
+ * leaves Convex only through its own service query.
+ */
+export async function settingsFor(ctx: Ctx, workspaceId: Id<'workspaces'>): Promise<WorkspaceSettings> {
+  const row = await settingsRow(ctx, workspaceId);
+  if (!row) return { ...defaultWorkspaceSettings, timezone: DEFAULT_TIMEZONE, updatedAt: 0 };
+  const {
+    _id: _rowId,
+    _creationTime: _createdAt,
+    workspaceId: _workspaceId,
+    alertSecretCiphertext: _secret,
+    ...values
+  } = row;
   return values;
+}
+
+/** The settings row itself, created from the defaults the first time a policy is written. */
+export async function ensureSettings(ctx: MutationCtx, workspaceId: Id<'workspaces'>) {
+  const existing = await settingsRow(ctx, workspaceId);
+  if (existing) return existing;
+  const id = await ctx.db.insert('workspaceSettings', {
+    workspaceId,
+    ...defaultWorkspaceSettings,
+    timezone: DEFAULT_TIMEZONE,
+    updatedAt: Date.now(),
+  });
+  const created = await ctx.db.get(id);
+  if (!created) throw new Error('Workspace settings not found');
+  return created;
 }
 
 /** The schedule as the office reads it: the hours, where the clock stands in them, today's tokens. */
@@ -80,13 +94,10 @@ export async function scheduleSummaryFor(
   };
 }
 
-/** Rows walked back through `usageReports` before a day's total is treated as good enough. */
-const USAGE_SCAN_LIMIT = 5_000;
-
 /**
  * Today's recorded tokens for one workspace, and the share each task accounts for so the tick can
- * measure triage against its own allowance. `usageReports` is indexed by task rather than by
- * workspace, so this reads back from the newest rows and stops after a bounded number of them.
+ * measure triage against its own allowance. The index covers the workspace and the day, so this
+ * reads exactly the rows the day is made of.
  */
 export async function dailyUsageFor(
   ctx: Ctx,
@@ -97,10 +108,10 @@ export async function dailyUsageFor(
   const since = startOfDay(now, settings.timezone);
   const usage = { input: 0, cached: 0, output: 0 };
   const tokensByTask = new Map<string, number>();
-  let examined = 0;
-  for await (const row of ctx.db.query('usageReports').order('desc')) {
-    if (++examined > USAGE_SCAN_LIMIT) break;
-    if (row.workspaceId !== workspaceId || row.createdAt < since) continue;
+  for (const row of await ctx.db
+    .query('usageReports')
+    .withIndex('by_workspace_created', (q) => q.eq('workspaceId', workspaceId).gte('createdAt', since))
+    .collect()) {
     usage.input += row.input;
     usage.cached += row.cached;
     usage.output += row.output;
@@ -157,10 +168,13 @@ export interface PlannerInstance {
   model: ModelId;
   overnightModel?: ModelId;
   standingTaskId?: string;
+  /** The auditor's task for tonight's pass, opened by `ensureAuditRun` before the tick plans. */
+  auditTaskId?: string;
 }
-/** A scheduled meeting and the task each attending instance prepares in. */
+/** A scheduled meeting and the hidden session task each attending instance prepares in. */
 export interface PlannerMeeting {
   entryId: string;
+  meetingId: string;
   startsAt: number;
   attendees: { employeeId: string; taskId: string }[];
 }
@@ -197,15 +211,15 @@ export interface PlannerInput {
   busyEmployeeIds: string[];
 }
 
-export type PlannedJobKind = 'shift' | 'review_shift' | 'prep_turn' | 'curation' | 'audit' | 'triage';
+export type PlannedJobKind = 'shift' | 'review_shift' | 'meeting_prep' | 'curation' | 'audit' | 'triage';
 /** The queue kinds the worker implements, beyond the ones it already handles. */
 export type JobKind =
-  'start_shift' | 'review_shift' | 'prep_turn' | 'curation_run' | 'audit_run' | 'triage_run';
+  'start_shift' | 'review_shift' | 'meeting_prep' | 'curation_run' | 'audit_run' | 'triage_run';
 /** The queue kind the worker implements for each planned kind. */
 export const JOB_KINDS: Record<PlannedJobKind, JobKind> = {
   shift: 'start_shift',
   review_shift: 'review_shift',
-  prep_turn: 'prep_turn',
+  meeting_prep: 'meeting_prep',
   curation: 'curation_run',
   audit: 'audit_run',
   triage: 'triage_run',
@@ -222,7 +236,8 @@ export interface PlannedJob {
   model: ModelId;
   /** Open findings this run clears before anything else. */
   findingIds: string[];
-  /** The meeting a prep turn prepares for. */
+  /** The meeting a preparation turn prepares for, and the entry it was booked as. */
+  meetingId?: string;
   entryId?: string;
   /** The alert a triage run answers. */
   alertId?: string;
@@ -297,13 +312,14 @@ export function planTick(input: PlannerInput): PlannedJob[] {
       const instance = instances.get(attendee.employeeId);
       if (!instance) continue;
       candidates.push({
-        kind: 'prep_turn',
+        kind: 'meeting_prep',
         taskId: attendee.taskId,
         employeeId: attendee.employeeId,
-        uniqueKey: `prep:${meeting.entryId}:${attendee.employeeId}`,
+        uniqueKey: `meeting_prep:${meeting.meetingId}:${attendee.employeeId}`,
         date,
         model: modelFor(working, instance),
         findingIds: [],
+        meetingId: meeting.meetingId,
         entryId: meeting.entryId,
         reason: 'meeting starts within the preparation lead',
       });
@@ -382,10 +398,10 @@ export function planTick(input: PlannerInput): PlannedJob[] {
 
   if (!working)
     for (const instance of input.instances) {
-      if (instance.kind !== 'auditor' || !instance.standingTaskId) continue;
+      if (instance.kind !== 'auditor' || !instance.auditTaskId) continue;
       candidates.push({
         kind: 'audit',
-        taskId: instance.standingTaskId,
+        taskId: instance.auditTaskId,
         employeeId: instance.employeeId,
         uniqueKey: `audit:${instance.employeeId}:${date}`,
         date,

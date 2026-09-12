@@ -112,6 +112,43 @@ export async function memoryBudgets(ctx: Ctx, workspaceId: Id<'workspaces'>): Pr
   return settings?.memoryBudgets ?? defaultWorkspaceSettings.memoryBudgets;
 }
 
+/**
+ * A claim filed for somebody else to decide: it is stored proposed, so it reaches no model until the
+ * janitor or an administrator activates it. The one path anything outside `memory` writes through.
+ */
+export async function proposeMemory(
+  ctx: MutationCtx,
+  input: {
+    workspaceId: Id<'workspaces'>;
+    scope: MemoryScope;
+    scopeId: string;
+    kind: Doc<'memories'>['kind'];
+    text: string;
+    tags?: string[];
+    sourceTaskId?: Id<'tasks'>;
+    author: Doc<'memories'>['author'];
+    authorName: string;
+    confidence?: number;
+  },
+) {
+  const now = Date.now();
+  return ctx.db.insert('memories', {
+    workspaceId: input.workspaceId,
+    scope: input.scope,
+    scopeId: input.scopeId,
+    kind: input.kind,
+    text: cleanClaim(input.text),
+    tags: cleanTags(input.tags),
+    sourceTaskId: input.sourceTaskId,
+    author: input.author,
+    authorName: input.authorName,
+    confidence: cleanConfidence(input.confidence),
+    status: 'proposed',
+    createdAt: now,
+    updatedAt: now,
+  });
+}
+
 /** Retires one entry in favour of another; the archived entry records what replaced it. */
 export async function supersede(ctx: MutationCtx, id: Id<'memories'>, by: Id<'memories'>) {
   await ctx.db.patch(id, { status: 'archived', supersedesId: by, updatedAt: Date.now() });

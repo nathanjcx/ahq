@@ -1,10 +1,10 @@
 import type { AuditDocument, AuditFinding, Severity } from '../../lib/contracts/audit';
-import type { Persona } from '../../lib/contracts/core';
 import type { Doc, Id } from '../_generated/dataModel';
 import type { MutationCtx } from '../_generated/server';
-import { cleanText, randomToken, type Ctx } from '../shared';
+import { cleanText, type Ctx } from '../shared';
 import { employeeName } from './meetings';
-import { insertJob } from './tasks';
+import { ensureReservedInstance } from './reserved';
+import { openSessionTask } from './tasks';
 
 /** One day back from an ISO date, in the same `YYYY-MM-DD` form the shifts and findings use. */
 export function previousDate(date: string) {
@@ -86,67 +86,6 @@ export function groupFindings(findings: AuditFinding[]): AuditDocument[] {
   return [...documents.values()].sort((a, b) => a.employeeName.localeCompare(b.employeeName));
 }
 
-/**
- * The single instance of a reserved kind in a workspace, created with its own employee version on
- * first use. Reserved employees are made by the workspace, never hired, and carry no capabilities.
- */
-export async function ensureReservedInstance(
-  ctx: MutationCtx,
-  workspaceId: Id<'workspaces'>,
-  kind: 'janitor' | 'auditor' | 'triage',
-  name: string,
-  persona: Persona,
-) {
-  const installations = await ctx.db
-    .query('installations')
-    .withIndex('by_workspace', (q) => q.eq('workspaceId', workspaceId))
-    .collect();
-  const existing = installations.find(
-    (installation) => installation.kind === kind && installation.status !== 'retired',
-  );
-  if (existing) return existing;
-  const now = Date.now();
-  const version = {
-    name,
-    role: 'Reserved',
-    description: `The workspace's ${kind}.`,
-    category: 'Reserved',
-    strengths: [],
-    limitations: [],
-    capabilities: [],
-    model: 'gpt-5.6-terra' as const,
-    color: '#4b5563',
-    media: [],
-    instructions: `You are ${name}, the ${kind} of this workspace. Work only from the records you are given and report exactly what they support.`,
-    skills: [],
-    persona,
-  };
-  const draftId = await ctx.db.insert('employeeDrafts', {
-    createdBy: 'system',
-    ...version,
-    updatedAt: now,
-  });
-  const versionId = await ctx.db.insert('employeeVersions', {
-    draftId,
-    version: 1,
-    ...version,
-    publishedBy: 'system',
-    publishedAt: now,
-  });
-  const employeeId = await ctx.db.insert('installations', {
-    workspaceId,
-    versionId,
-    hiredBy: 'system',
-    status: 'ready',
-    name,
-    kind,
-    createdAt: now,
-  });
-  const installation = await ctx.db.get(employeeId);
-  if (!installation) throw new Error('Reserved employee was not created');
-  return installation;
-}
-
 /** The stern reserved auditor of a workspace. */
 export async function ensureAuditor(ctx: MutationCtx, workspaceId: Id<'workspaces'>) {
   return ensureReservedInstance(ctx, workspaceId, 'auditor', 'The Auditor', {
@@ -155,45 +94,35 @@ export async function ensureAuditor(ctx: MutationCtx, workspaceId: Id<'workspace
   });
 }
 
+/** Findings an employee still owes work on, oldest first. These lead its next working day. */
+export async function openFindings(ctx: Ctx, employeeId: Id<'installations'>) {
+  const findings: Doc<'auditFindings'>[] = [];
+  for (const status of ['open', 'escalated'] as const)
+    findings.push(
+      ...(await ctx.db
+        .query('auditFindings')
+        .withIndex('by_employee_status', (q) => q.eq('employeeId', employeeId).eq('status', status))
+        .collect()),
+    );
+  return findings.sort((a, b) => a.createdAt - b.createdAt);
+}
+
 /**
- * The auditor's hidden task for one night, and its `audit_run` job. Like a meeting task it carries
- * no `start_task` job: the audit job is its input, and `recordFindings` completes it.
+ * The auditor's hidden task for one night. Like a meeting task it carries no `start_task` job: the
+ * scheduler's `audit_run` job is its input, and `recordFindings` completes it.
  */
 export async function ensureAuditRun(ctx: MutationCtx, workspaceId: Id<'workspaces'>, date: string) {
   dateRange(date);
-  const uniqueKey = `audit_run:${workspaceId}:${date}`;
-  const existing = await ctx.db
-    .query('jobs')
-    .withIndex('by_unique_key', (q) => q.eq('uniqueKey', uniqueKey))
-    .unique();
-  if (existing) return existing.taskId;
-  const auditor = await ensureAuditor(ctx, workspaceId);
-  const version = await ctx.db.get(auditor.versionId);
-  if (!version) throw new Error('Employee version not found');
-  const now = Date.now();
-  const taskId = await ctx.db.insert('tasks', {
-    workspaceId,
-    cadence: 'once',
-    createdBy: 'system',
-    createdByName: 'Audit',
-    visibility: 'workspace',
-    employeeId: auditor._id,
-    versionId: version._id,
-    employeeName: auditor.name || version.name,
+  const workspace = await ctx.db.get(workspaceId);
+  if (!workspace) throw new Error('Workspace not found');
+  const { installation, version } = await ensureAuditor(ctx, workspaceId);
+  return openSessionTask(ctx, {
+    workspace,
+    employeeId: installation._id,
+    version,
+    kind: 'audit',
+    key: date,
     title: `Audit: ${date}`,
     prompt: `Audit every shift of ${date} against the workspace standard. Report only what the records support.`,
-    status: 'queued',
-    model: version.model,
-    createdAt: now,
-    updatedAt: now,
-    runToken: randomToken(),
   });
-  await insertJob(ctx, {
-    workspaceId,
-    taskId,
-    uniqueKey,
-    kind: 'audit_run',
-    payload: JSON.stringify({ workspaceId, date }),
-  });
-  return taskId;
 }

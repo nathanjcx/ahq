@@ -3,12 +3,11 @@ import type { Doc, Id } from '../_generated/dataModel';
 import { mutation, query } from '../_generated/server';
 import type { MutationCtx } from '../_generated/server';
 import {
-  channelFor,
   channelName,
   findChannel,
   insertHandoff,
   insertNote,
-  insertPost,
+  postShiftReport,
   recentPosts,
   taskScopes,
   type ChannelScope,
@@ -111,42 +110,14 @@ export const requestHandoffFromAgent = mutation({
   },
 });
 
-function reportLines(label: string, items: string[]) {
-  return items.length ? [`${label}: ${items.join('; ')}`] : [];
-}
-
 /** One shift report rendered as a `report` post. Recording the same report twice posts once. */
 export const postReport = mutation({
   args: { secret: v.string(), taskId: v.id('tasks'), reportId: v.id('reports') },
-  returns: v.object({ postId: v.id('posts') }),
+  returns: v.object({ postIds: v.array(v.id('posts')) }),
   handler: async (ctx, args) => {
     requireService(args.secret);
-    const existing = await ctx.db
-      .query('posts')
-      .withIndex('by_report', (q) => q.eq('reportId', args.reportId))
-      .first();
-    if (existing) return { postId: existing._id };
     const [task, report] = await Promise.all([ctx.db.get(args.taskId), ctx.db.get(args.reportId)]);
     if (!task || !report || report.taskId !== task._id) throw new Error('Report not found');
-    if (!task.floorId) throw new Error('This task is not on a floor');
-    const text = [
-      `${task.employeeName} — ${task.title}`,
-      ...reportLines('Done', report.done),
-      ...reportLines('In progress', report.inProgress),
-      ...reportLines('Blocked on', report.blockedOn),
-      ...reportLines('Next', report.next),
-      ...reportLines('Risks', report.risks),
-      ...(report.inferred ? ['Inferred from the journal; no report was filed.'] : []),
-    ].join('\n');
-    const { postId } = await insertPost(ctx, {
-      channel: await channelFor(ctx, task.workspaceId, 'floor', task.floorId),
-      kind: 'report',
-      authorEmployeeId: report.employeeId,
-      authorName: task.employeeName,
-      text,
-      taskId: task._id,
-      reportId: report._id,
-    });
-    return { postId };
+    return { postIds: await postShiftReport(ctx, task, report) };
   },
 });

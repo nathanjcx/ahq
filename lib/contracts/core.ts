@@ -17,6 +17,11 @@ export type CorrectionKind = 'supported' | 'partial' | 'manual' | 'irreversible'
 export type ToolMode = 'read' | 'write' | 'blocked';
 export type ConnectionVisibility = 'private' | 'members' | 'workspace';
 export type TaskVisibility = 'private' | 'workspace';
+/**
+ * What a task is for. `work` is the default meaning and the only kind the dashboard lists; the rest
+ * are the hidden sessions meetings, audits, curation, triage, and reserved employees run in.
+ */
+export type TaskKind = 'work' | 'meeting' | 'audit' | 'curation' | 'triage' | 'standing';
 
 export interface Capability {
   provider: ProviderId;
@@ -135,6 +140,7 @@ export interface Task {
   projectId?: string;
   milestoneId?: string;
   cadence?: 'once' | 'daily';
+  kind?: TaskKind;
   deadlineAt?: number;
   dependsOn?: string[];
   employeeId: string;

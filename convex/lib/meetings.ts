@@ -1,8 +1,8 @@
 import type { OutcomeKind } from '../../lib/contracts/meetings';
 import type { Doc, Id } from '../_generated/dataModel';
 import type { MutationCtx } from '../_generated/server';
-import { cleanText, randomToken, untrustedBlock, type Ctx } from '../shared';
-import { insertJob } from './tasks';
+import { cleanText, untrustedBlock, type Ctx } from '../shared';
+import { openSessionTask } from './tasks';
 
 /** How many transcript turns a prompt carries by default. */
 export const TRANSCRIPT_LIMIT = 40;
@@ -80,48 +80,29 @@ export async function meetingTaskFor(
   entry: Doc<'calendarEntries'>,
   installation: Doc<'installations'>,
 ) {
-  const uniqueKey = `meeting_prep:${meeting._id}:${installation._id}`;
-  const existing = await ctx.db
-    .query('jobs')
-    .withIndex('by_unique_key', (q) => q.eq('uniqueKey', uniqueKey))
-    .unique();
-  if (existing) return existing.taskId;
-  const version = await ctx.db.get(installation.versionId);
+  const [workspace, version] = await Promise.all([
+    ctx.db.get(entry.workspaceId),
+    ctx.db.get(installation.versionId),
+  ]);
+  if (!workspace) throw new Error('Workspace not found');
   if (!version) throw new Error('Employee version not found');
   const floor = installation.floorId ? await ctx.db.get(installation.floorId) : null;
-  const now = Date.now();
-  const taskId = await ctx.db.insert('tasks', {
-    workspaceId: entry.workspaceId,
-    ...(floor ? { floorId: floor._id, floorContext: { name: floor.name, brief: floor.brief } } : {}),
-    ...(entry.projectId ? { projectId: entry.projectId } : {}),
-    cadence: 'once',
-    createdBy: entry.createdBy || 'system',
-    createdByName: 'Meeting',
-    visibility: 'workspace',
+  return openSessionTask(ctx, {
+    workspace,
     employeeId: installation._id,
-    versionId: version._id,
-    employeeName: installation.name || version.name,
+    version,
+    kind: 'meeting',
+    key: meeting._id,
     title: `Meeting: ${entry.title}`.slice(0, 200),
     prompt: meetingPrompt(entry),
-    status: 'queued',
-    model: version.model,
-    createdAt: now,
-    updatedAt: now,
-    runToken: randomToken(),
+    floor: floor ? { floorId: floor._id, floorContext: { name: floor.name, brief: floor.brief } } : undefined,
+    project: entry.projectId,
   });
-  await insertJob(ctx, {
-    workspaceId: entry.workspaceId,
-    taskId,
-    uniqueKey,
-    kind: 'meeting_prep',
-    payload: JSON.stringify({ meetingId: meeting._id, employeeId: installation._id }),
-  });
-  return taskId;
 }
 
 /**
- * The meeting for a calendar entry, created on first use with one hidden task and one prep job per
- * attendee. Safe to call again: the meeting, the tasks, and the jobs are all keyed.
+ * The meeting for a calendar entry, created on first use with one hidden task per attendee. The
+ * scheduler enqueues the preparation turns at the lead. Safe to call again: everything here is keyed.
  */
 export async function ensureMeeting(ctx: MutationCtx, entry: Doc<'calendarEntries'>) {
   if (entry.kind !== 'meeting') throw new Error('Calendar entry is not a meeting');

@@ -1,7 +1,7 @@
 import { v } from 'convex/values';
 import type { Doc } from '../_generated/dataModel';
 import { mutation, query } from '../_generated/server';
-import { settingsFor } from '../lib/triage';
+import { settingsFor } from '../lib/schedule';
 import { publicNotification } from '../notifications';
 import { cleanText, requireService, type Ctx } from '../shared';
 import { workspaceForActor } from './context';

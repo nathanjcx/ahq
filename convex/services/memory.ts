@@ -16,9 +16,17 @@ import {
   supersede,
   tokenEstimate,
 } from '../lib/memory';
+import { channelFor, insertPost, type ChannelScope } from '../lib/posts';
+import { ensureReservedInstance } from '../lib/reserved';
 import { memoryKind, memoryScope } from '../schema';
 import { cleanText, requireService, type Ctx } from '../shared';
 import { taskForRunToken } from './context';
+
+/** Where a contested claim is argued out: its own floor or project, otherwise the workspace. */
+function contestedChannel(entry: Doc<'memories'>): ChannelScope {
+  if (entry.scope === 'floor' || entry.scope === 'project') return [entry.scope, entry.scopeId];
+  return ['workspace', ''];
+}
 
 const RECALL_LIMIT = 20;
 const CURATION_LIMIT = 200;
@@ -367,8 +375,8 @@ export const merge = mutation({
 
 /**
  * Marks a claim as contested so it reaches no model. Naming the competing claim contests both sides
- * and links them, which is what lets a person resolve the conflict in one decision. The caller posts
- * the channel question, so the contested entry is returned.
+ * and links them, which is what lets a person resolve the conflict in one decision. The conflict is
+ * posted as a question in the channel of the scope it was filed against.
  */
 export const contest = mutation({
   args: {
@@ -404,6 +412,21 @@ export const contest = mutation({
       updatedAt: now,
     };
     await ctx.db.patch(entry._id, patch);
+    await insertPost(ctx, {
+      channel: await channelFor(ctx, task.workspaceId, ...contestedChannel(entry)),
+      kind: 'decision',
+      authorEmployeeId: task.employeeId,
+      authorName: task.employeeName,
+      text: [
+        `Contested: ${entry.text}`,
+        other ? `Against: ${other.text}` : '',
+        `Reason: ${reason}`,
+        'A person decides which claim stands; neither reaches a model until then.',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      taskId: task._id,
+    });
     return publicMemory({ ...entry, ...patch });
   },
 });
@@ -458,17 +481,23 @@ export const janitorFor = query({
   returns: v.union(v.object({ employeeId: v.id('installations'), name: v.string() }), v.null()),
   handler: async (ctx, args) => {
     requireService(args.secret);
-    const janitor = await findJanitor(ctx, args.workspaceId);
+    const installations = await ctx.db
+      .query('installations')
+      .withIndex('by_workspace', (q) => q.eq('workspaceId', args.workspaceId))
+      .collect();
+    const janitor = installations.find(
+      (installation) => installation.kind === 'janitor' && installation.status !== 'retired',
+    );
     return janitor ? { employeeId: janitor._id, name: janitor.name ?? JANITOR_NAME } : null;
   },
 });
 
-async function findJanitor(ctx: Ctx, workspaceId: Id<'workspaces'>) {
-  const installations = await ctx.db
-    .query('installations')
-    .withIndex('by_workspace', (q) => q.eq('workspaceId', workspaceId))
-    .collect();
-  return installations.find((installation) => installation.kind === 'janitor') ?? null;
+/** The workspace's one janitor, on its reserved employee version. Safe to call repeatedly. */
+export function ensureJanitorFor(ctx: MutationCtx, workspaceId: Id<'workspaces'>) {
+  return ensureReservedInstance(ctx, workspaceId, 'janitor', JANITOR_NAME, {
+    voice: 'Terse and methodical. You say what a claim is and what you did with it, and nothing else.',
+    traits: ['terse', 'methodical'],
+  });
 }
 
 /** Creates the workspace's one janitor on a reserved employee version. Safe to call repeatedly. */
@@ -479,58 +508,7 @@ export const ensureJanitor = mutation({
     requireService(args.secret);
     const workspace = await ctx.db.get(args.workspaceId);
     if (!workspace) throw new Error('Workspace not found');
-    const existing = await findJanitor(ctx, workspace._id);
-    if (existing) return { employeeId: existing._id };
-    const versionId = await reservedJanitorVersion(ctx);
-    const employeeId = await ctx.db.insert('installations', {
-      workspaceId: workspace._id,
-      versionId,
-      hiredBy: 'system',
-      status: 'ready',
-      name: JANITOR_NAME,
-      kind: 'janitor',
-      createdAt: Date.now(),
-    });
-    return { employeeId };
+    const { installation } = await ensureJanitorFor(ctx, workspace._id);
+    return { employeeId: installation._id };
   },
 });
-
-/** The single reserved janitor version every workspace's janitor runs, created on first use. */
-async function reservedJanitorVersion(ctx: MutationCtx) {
-  const drafts = await ctx.db.query('employeeDrafts').withIndex('by_updated').collect();
-  const reserved = drafts.find((draft) => draft.createdBy === 'system' && draft.name === JANITOR_NAME);
-  if (reserved) {
-    const version = await ctx.db
-      .query('employeeVersions')
-      .withIndex('by_draft', (q) => q.eq('draftId', reserved._id))
-      .first();
-    if (version) return version._id;
-  }
-  const now = Date.now();
-  const profile = {
-    name: JANITOR_NAME,
-    role: 'Records keeper',
-    description: 'Curates the workspace memory: merges, contests, archives, and promotes claims.',
-    category: 'Operations',
-    strengths: ['Keeps claims atomic and current'],
-    limitations: ['Memory tools only; never does project work'],
-    capabilities: [],
-    model: 'gpt-5.6-terra' as const,
-    color: '#5b6472',
-    media: [],
-    instructions:
-      'You keep this workspace’s memory. Merge claims that say the same thing, contest claims that conflict, archive claims that are stale, and propose claims that hold for the whole workspace. Change nothing outside memory.',
-    skills: [],
-    persona: { voice: 'Terse and methodical.', traits: ['terse', 'methodical'] },
-  };
-  const draftId =
-    reserved?._id ??
-    (await ctx.db.insert('employeeDrafts', { createdBy: 'system', ...profile, updatedAt: now }));
-  return ctx.db.insert('employeeVersions', {
-    draftId,
-    version: 1,
-    ...profile,
-    publishedBy: 'system',
-    publishedAt: now,
-  });
-}
