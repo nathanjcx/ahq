@@ -2,6 +2,7 @@ import { v } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import type { MutationCtx } from './_generated/server';
+import { createMeetingEntry } from './lib/calendar';
 import {
   ensureMeeting,
   meetingContext,
@@ -258,10 +259,20 @@ export const confirmOutcome = mutation({
       await ctx.db.patch(task._id, { deadlineAt: payload.deadlineAt, updatedAt: Date.now() });
       return { taskId: task._id };
     }
-    // The calendar workstream owns entry creation, so a meeting outcome comes back as a request.
+    // A confirmed next meeting is booked through the calendar, on the same floor or project.
     if (payload.kind === 'meeting') {
-      const { kind: _kind, ...request } = payload;
-      return { meetingRequest: request };
+      const { entry } = await meetingFor(ctx, workspace._id, turn.meetingId);
+      const entryId = await createMeetingEntry(ctx, workspace, actor, {
+        title: payload.title,
+        startsAt: payload.startsAt,
+        endsAt: payload.endsAt,
+        projectId: entry.projectId,
+        floorId: entry.floorId,
+        attendees: payload.attendees.map((id) => ({ kind: 'employee' as const, id, name: '' })),
+        agenda: payload.agenda,
+        purpose: payload.purpose,
+      });
+      return { entryId };
     }
     return {};
   },

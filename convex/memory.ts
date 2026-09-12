@@ -1,5 +1,4 @@
 import { v } from 'convex/values';
-import { defaultWorkspaceSettings } from '../lib/contracts';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import {
@@ -15,6 +14,7 @@ import {
   scopeTarget,
   tokenEstimate,
 } from './lib/memory';
+import { ensureSettings } from './lib/schedule';
 import { memoryKind, memoryScope, memoryStatus } from './schema';
 import { canSeeTask, requireWorkspace, type Actor, type Ctx, type WorkspaceRole } from './shared';
 
@@ -247,20 +247,8 @@ export const setBudgets = mutation({
     requireAdmin(role);
     if (Object.values(args.budgets).some((value) => !Number.isInteger(value) || value < 0))
       throw new Error('A budget is a whole number of tokens');
-    const now = Date.now();
-    const settings = await ctx.db
-      .query('workspaceSettings')
-      .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
-      .unique();
-    if (settings) await ctx.db.patch(settings._id, { memoryBudgets: args.budgets, updatedAt: now });
-    else
-      await ctx.db.insert('workspaceSettings', {
-        workspaceId: workspace._id,
-        ...defaultWorkspaceSettings,
-        timezone: 'UTC',
-        memoryBudgets: args.budgets,
-        updatedAt: now,
-      });
+    const settings = await ensureSettings(ctx, workspace._id);
+    await ctx.db.patch(settings._id, { memoryBudgets: args.budgets, updatedAt: Date.now() });
     return null;
   },
 });

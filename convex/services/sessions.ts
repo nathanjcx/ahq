@@ -2,10 +2,10 @@ import { v } from 'convex/values';
 import type { Doc } from '../_generated/dataModel';
 import { mutation, query } from '../_generated/server';
 import type { MutationCtx } from '../_generated/server';
+import { systemPost } from '../lib/posts';
+import { finalAssistantMessage, releaseDependents } from '../lib/tasks';
 import { taskStatus, tokenUsage } from '../schema';
 import { requireService, usagePeriod } from '../shared';
-import { finalAssistantMessage, releaseDependents } from '../lib/tasks';
-import { systemPost } from '../lib/posts';
 import { activeTaskContext, isTerminal, privateConnection, taskInputState } from './context';
 
 export const taskContext = query({

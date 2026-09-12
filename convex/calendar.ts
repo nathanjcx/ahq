@@ -3,19 +3,13 @@ import type { AgendaSuggestion, Attendee, CalendarEntry } from '../lib/contracts
 import { localParts, overnightWindow, startOfDay } from '../lib/time';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
+import { MAX_AGENDA_ITEMS, createMeetingEntry, meetingArgs, meetingFields } from './lib/calendar';
 import { settingsFor } from './lib/schedule';
-import { attendee as attendeeValidator } from './schema';
-import { cleanText, requireWorkspace, type Ctx } from './shared';
+import { requireWorkspace, type Ctx } from './shared';
 
 const DAY_MS = 86_400_000;
 /** Days one calendar read may span. A week or a month view fits; a year does not. */
 const MAX_RANGE_DAYS = 62;
-const MAX_ATTENDEES = 25;
-const MAX_AGENDA_ITEMS = 20;
-/** Longest meeting a person can book, in hours. */
-const MAX_MEETING_HOURS = 12;
-/** How far ahead or behind a meeting may be booked, in days. */
-const MAX_BOOKING_DAYS = 730;
 /** Reports at or below this confidence read as behind. */
 const BEHIND_CONFIDENCE = 0.5;
 const SUGGESTIONS_PER_REASON = 5;
@@ -193,102 +187,13 @@ export const entries = query({
   },
 });
 
-/** Checked meeting fields. Attendees must be real instances; people are named by their Clerk subject. */
-async function meetingFields(
-  ctx: Ctx,
-  workspaceId: Id<'workspaces'>,
-  input: {
-    title: string;
-    startsAt: number;
-    endsAt: number;
-    projectId?: Id<'projects'>;
-    floorId?: Id<'floors'>;
-    attendees: { kind: 'employee' | 'person'; id: string; name: string }[];
-    agenda: string[];
-    purpose?: string;
-  },
-) {
-  const now = Date.now();
-  if (!Number.isFinite(input.startsAt) || !Number.isFinite(input.endsAt))
-    throw new Error('A meeting needs a start and an end');
-  if (input.endsAt <= input.startsAt) throw new Error('A meeting must end after it starts');
-  if (input.endsAt - input.startsAt > MAX_MEETING_HOURS * 3_600_000)
-    throw new Error(`A meeting cannot run longer than ${MAX_MEETING_HOURS} hours`);
-  if (Math.abs(input.startsAt - now) > MAX_BOOKING_DAYS * DAY_MS)
-    throw new Error('That meeting time is too far from today');
-  if (input.attendees.length > MAX_ATTENDEES) throw new Error('That is too many attendees');
-  if (new Set(input.attendees.map((one) => one.id)).size !== input.attendees.length)
-    throw new Error('An attendee is listed twice');
-  if (input.agenda.length > MAX_AGENDA_ITEMS) throw new Error('That is too many agenda items');
-  if (input.projectId) {
-    const project = await ctx.db.get(input.projectId);
-    if (!project || project.workspaceId !== workspaceId) throw new Error('Project not found');
-  }
-  if (input.floorId) {
-    const floor = await ctx.db.get(input.floorId);
-    if (!floor || floor.workspaceId !== workspaceId) throw new Error('Floor not found');
-  }
-  const attendees: Attendee[] = [];
-  for (const one of input.attendees) {
-    if (one.kind === 'person') {
-      attendees.push({
-        kind: 'person',
-        id: cleanText(one.id, 'Attendee', 200),
-        name: cleanText(one.name, 'Attendee name', 200),
-      });
-      continue;
-    }
-    const installation = await ctx.db.get(one.id as Id<'installations'>);
-    if (!installation || installation.workspaceId !== workspaceId) throw new Error('Employee not found');
-    if (installation.status === 'retired') throw new Error('That employee has been retired');
-    const version = await ctx.db.get(installation.versionId);
-    attendees.push({
-      kind: 'employee',
-      id: installation._id,
-      name: installation.name ?? version?.name ?? 'Employee',
-    });
-  }
-  return {
-    title: cleanText(input.title, 'Meeting title', 200),
-    startsAt: input.startsAt,
-    endsAt: input.endsAt,
-    projectId: input.projectId,
-    floorId: input.floorId,
-    attendees,
-    agenda: input.agenda.map((item) => cleanText(item, 'Agenda item', 1_000)),
-    purpose: input.purpose?.trim() ? cleanText(input.purpose, 'Purpose', 5_000) : undefined,
-  };
-}
-
-const meetingArgs = {
-  title: v.string(),
-  startsAt: v.number(),
-  endsAt: v.number(),
-  projectId: v.optional(v.id('projects')),
-  floorId: v.optional(v.id('floors')),
-  attendees: v.array(attendeeValidator),
-  agenda: v.array(v.string()),
-  purpose: v.optional(v.string()),
-};
-
 /** Books a meeting. Only people create calendar entries; everything else on the calendar is derived. */
 export const createMeeting = mutation({
   args: meetingArgs,
   returns: v.object({ entryId: v.id('calendarEntries') }),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
-    const fields = await meetingFields(ctx, workspace._id, args);
-    const now = Date.now();
-    const entryId = await ctx.db.insert('calendarEntries', {
-      workspaceId: workspace._id,
-      kind: 'meeting',
-      ...fields,
-      status: 'scheduled',
-      createdBy: actor.subject,
-      createdAt: now,
-      updatedAt: now,
-    });
-    return { entryId };
+    return { entryId: await createMeetingEntry(ctx, workspace, actor, args) };
   },
 });
 

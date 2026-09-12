@@ -1,6 +1,7 @@
 import { v } from 'convex/values';
+import type { AuditDocument } from '../../lib/contracts';
 import type { Doc, Id } from '../_generated/dataModel';
-import { mutation, query } from '../_generated/server';
+import { mutation, query, type MutationCtx } from '../_generated/server';
 import {
   dateRange,
   ensureAuditor,
@@ -11,6 +12,7 @@ import {
   validateFinding,
 } from '../lib/audit';
 import { employeeName } from '../lib/meetings';
+import { channelFor, insertPost, type ChannelScope } from '../lib/posts';
 import { severity } from '../schema';
 import { requireService, untrustedBlock, type Ctx } from '../shared';
 import { taskForRunToken } from './context';
@@ -22,6 +24,35 @@ async function requireAuditorRun(ctx: Ctx, runToken: string, workspaceId: Id<'wo
   const installation = await ctx.db.get(task.employeeId);
   if (!installation || installation.kind !== 'auditor') throw new Error('Auditor access required');
   return task;
+}
+
+/**
+ * The night's findings for one instance, posted where they will be read: the audit channel, and the
+ * floor the instance works on, so the day opens with them.
+ */
+async function postFindings(
+  ctx: MutationCtx,
+  workspaceId: Id<'workspaces'>,
+  document: AuditDocument,
+  findings: Doc<'auditFindings'>[],
+) {
+  const installation = await ctx.db.get(document.employeeId as Id<'installations'>);
+  const scopes: ChannelScope[] = [['audit', '']];
+  if (installation?.floorId) scopes.push(['floor', installation.floorId]);
+  const text = [
+    `${document.employeeName} — audit of ${document.auditDate}`,
+    ...findings.map(
+      (finding) => `${finding.severity.toUpperCase()}: ${finding.claim} → ${finding.requiredAction}`,
+    ),
+  ].join('\n');
+  for (const [kind, scopeId] of scopes)
+    await insertPost(ctx, {
+      channel: await channelFor(ctx, workspaceId, kind, scopeId),
+      kind: 'finding',
+      authorEmployeeId: document.employeeId as Id<'installations'>,
+      authorName: document.employeeName,
+      text,
+    });
 }
 
 /** Findings of one day in the workspace, newest first. */
@@ -156,13 +187,14 @@ export const recordFindings = mutation({
     dateRange(args.date);
     const existing = await findingsOn(ctx, args.workspaceId, args.date);
     const seen = new Set(existing.map((finding) => `${finding.employeeId}:${finding.claim}`));
+    const added = new Map<string, Doc<'auditFindings'>[]>();
     for (const input of args.findings.slice(0, 200)) {
       const fields = await validateFinding(ctx, args.workspaceId, input);
       const key = `${fields.employeeId}:${fields.claim}`;
       if (seen.has(key)) continue;
       seen.add(key);
       const now = Date.now();
-      await ctx.db.insert('auditFindings', {
+      const findingId = await ctx.db.insert('auditFindings', {
         workspaceId: args.workspaceId,
         ...fields,
         auditDate: args.date,
@@ -170,11 +202,19 @@ export const recordFindings = mutation({
         createdAt: now,
         updatedAt: now,
       });
+      const inserted = await ctx.db.get(findingId);
+      if (inserted) added.set(fields.employeeId, [...(added.get(fields.employeeId) ?? []), inserted]);
     }
     const findings = await Promise.all(
       (await findingsOn(ctx, args.workspaceId, args.date)).map((finding) => publicFinding(ctx, finding)),
     );
-    return groupFindings(findings);
+    const documents = groupFindings(findings);
+    // Only what this run added is posted, so re-running the same audit does not repeat itself.
+    for (const document of documents) {
+      const fresh = added.get(document.employeeId);
+      if (fresh?.length) await postFindings(ctx, args.workspaceId, document, fresh);
+    }
+    return documents;
   },
 });
 

@@ -2,6 +2,7 @@ import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import type { MutationCtx } from './_generated/server';
+import { createMeetingEntry } from './lib/calendar';
 import { assertAcyclic, topologicalOrder } from './lib/dependencies';
 import { meetingRequests, parseProposal, projectView, requireProject, storedProposal } from './lib/projects';
 import {
@@ -131,8 +132,8 @@ export const saveProposal = mutation({
 
 /**
  * Turns a confirmed roadmap into real work: milestones, then tasks in dependency order so every task
- * can name the ids it waits for. Meetings are returned rather than inserted; the calendar workstream
- * creates them from these requests.
+ * can name the ids it waits for, then the roadmap's meeting points as calendar entries with the
+ * instances the plan staffs as their attendees.
  */
 export const confirmProposal = mutation({
   args: { projectId: v.id('projects'), proposal: v.any() },
@@ -141,10 +142,7 @@ export const confirmProposal = mutation({
     taskIds: v.array(v.id('tasks')),
     meetings: v.array(
       v.object({
-        title: v.string(),
-        startsAt: v.number(),
-        endsAt: v.number(),
-        purpose: v.string(),
+        entryId: v.id('calendarEntries'),
         milestoneId: v.optional(v.id('milestones')),
       }),
     ),
@@ -225,15 +223,30 @@ export const confirmProposal = mutation({
       );
     }
 
-    await ctx.db.patch(project._id, { status: 'active', proposal: undefined, updatedAt: Date.now() });
-    return {
-      milestoneIds: [...milestoneIds.values()],
-      taskIds: [...taskIds.values()],
-      meetings: meetingRequests(proposal).map(({ milestoneKey, ...meeting }) => ({
-        ...meeting,
+    // Everyone the roadmap staffs attends its meeting points; a person edits the list afterwards.
+    const attendees = await Promise.all(
+      [...new Set(tasks.map((task) => task.employeeId))]
+        .filter((id): id is string => Boolean(id))
+        .map(async (id) => {
+          const installation = await ctx.db.get(id as Id<'installations'>);
+          const version = installation ? await ctx.db.get(installation.versionId) : null;
+          return { kind: 'employee' as const, id, name: installation?.name ?? version?.name ?? 'Employee' };
+        }),
+    );
+    const meetings = [];
+    for (const { milestoneKey, ...meeting } of meetingRequests(proposal))
+      meetings.push({
+        entryId: await createMeetingEntry(ctx, workspace, actor, {
+          ...meeting,
+          projectId: project._id,
+          attendees,
+          agenda: [],
+        }),
         milestoneId: milestoneKey ? milestoneIds.get(milestoneKey) : undefined,
-      })),
-    };
+      });
+
+    await ctx.db.patch(project._id, { status: 'active', proposal: undefined, updatedAt: Date.now() });
+    return { milestoneIds: [...milestoneIds.values()], taskIds: [...taskIds.values()], meetings };
   },
 });
 

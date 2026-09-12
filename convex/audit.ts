@@ -2,6 +2,9 @@ import { v } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import { groupFindings, publicFinding } from './lib/audit';
+import { appendAgenda, nextScheduledMeeting } from './lib/calendar';
+import { employeeName } from './lib/meetings';
+import { channelFor, insertPost } from './lib/posts';
 import { requireWorkspace, type Ctx, type WorkspaceRole } from './shared';
 
 const findingStatus = v.union(
@@ -76,16 +79,31 @@ export const markAddressed = mutation({
   },
 });
 
-/** An administrator escalates an ignored finding to the workspace and the next meeting. */
+/**
+ * An administrator escalates an ignored finding. It goes on the record twice: as a post in the
+ * workspace channel, and as an item on the agenda of the next meeting already booked.
+ */
 export const escalate = mutation({
   args: { id: v.id('auditFindings') },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { workspace, role } = await requireWorkspace(ctx);
+    const { workspace, role, actor } = await requireWorkspace(ctx);
     if (role !== 'owner' && role !== 'admin') throw new Error('Only an administrator can escalate a finding');
     const finding = await decidableFinding(ctx, workspace._id, args.id);
-    if (finding.status !== 'verified' && finding.status !== 'escalated')
-      await ctx.db.patch(finding._id, { status: 'escalated', updatedAt: Date.now() });
+    if (finding.status === 'verified' || finding.status === 'escalated') return null;
+    await ctx.db.patch(finding._id, { status: 'escalated', updatedAt: Date.now() });
+    const employee = await ctx.db.get(finding.employeeId);
+    const who = employee ? await employeeName(ctx, employee) : 'An employee';
+    await insertPost(ctx, {
+      channel: await channelFor(ctx, workspace._id, 'workspace', ''),
+      kind: 'finding',
+      authorSubject: actor.subject,
+      authorName: actor.name,
+      text: `Escalated finding against ${who}: ${finding.claim}\nRequired action: ${finding.requiredAction}`,
+      taskId: finding.taskId,
+    });
+    const meeting = await nextScheduledMeeting(ctx, workspace._id);
+    if (meeting) await appendAgenda(ctx, meeting, [`Escalated finding: ${finding.claim}`]);
     return null;
   },
 });

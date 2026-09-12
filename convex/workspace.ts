@@ -2,7 +2,9 @@ import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import type { QueryCtx } from './_generated/server';
+import { findChannel } from './lib/posts';
 import { scheduleSummaryFor, settingsFor } from './lib/schedule';
+import { periodUsage } from './lib/tasks';
 import { registryToolsFor } from './registry';
 import {
   authKey,
@@ -16,8 +18,6 @@ import {
   usagePeriod,
   workspaceForIdentity,
 } from './shared';
-import { findChannel } from './lib/posts';
-import { periodUsage } from './lib/tasks';
 
 /** Statuses the workspace is still waiting on; only these carry a live message into the office. */
 const ACTIVE_TASK_STATUSES = ['queued', 'running', 'awaiting_approval'];
@@ -137,7 +137,11 @@ export const dashboard = query({
       ]);
     const connections = allConnections.filter((connection) => canSeeConnection(connection, actor.subject));
     const connectionsById = new Map(allConnections.map((connection) => [connection._id, connection]));
-    const visibleTasks = tasks.filter((task) => canSeeTask(task, actor.subject));
+    // Session tasks belong to the meeting, audit, or standing session that opened them; they are read
+    // through those, not from the dashboard.
+    const visibleTasks = tasks.filter(
+      (task) => (task.kind ?? 'work') === 'work' && canSeeTask(task, actor.subject),
+    );
     const visibleTaskIds = new Set(visibleTasks.map((task) => task._id));
     const reviewed = new Map<string, Set<string>>();
     for (const connection of connections) {
@@ -172,13 +176,17 @@ export const dashboard = query({
         return {
           id: installation._id,
           versionId: version._id,
-          name: version.name,
+          // The instance's own name when hiring a count or the workspace gave it one.
+          name: installation.name ?? version.name,
           role: version.role,
           color: version.color,
           model: version.model,
           status: version.retiredAt ? 'retired' : missingCapabilities.length ? 'blocked' : 'ready',
           missingCapabilities,
           persona: version.persona,
+          floorId: installation.floorId,
+          // Reserved instances are listed like any other; their kind is how the interface tells them apart.
+          kind: installation.kind,
         };
       }),
     );
@@ -252,6 +260,12 @@ export const dashboard = query({
           floorId: task.floorId,
           floorContext: task.floorContext,
           sourceTaskId: task.sourceTaskId,
+          projectId: task.projectId,
+          milestoneId: task.milestoneId,
+          cadence: task.cadence,
+          kind: task.kind,
+          deadlineAt: task.deadlineAt,
+          dependsOn: task.dependsOn,
           employeeId: task.employeeId,
           employeeName: task.employeeName,
           createdBy: task.createdBy,

@@ -3,6 +3,7 @@ import type { Persona, ProviderId } from '../lib/contracts';
 import { PERSONA_LIMITS, isPersonaTrait } from '../lib/personas';
 import type { Doc } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
+import { isReservedVersion } from './lib/reserved';
 import { registryToolsFor } from './registry';
 import { persona as personaValidator } from './schema';
 import { cleanText, identity, requirePlatformAdmin, requireWorkspace, sha256, type Ctx } from './shared';
@@ -122,7 +123,8 @@ export const list = query({
     await identity(ctx);
     const versions = await ctx.db.query('employeeVersions').withIndex('by_published').order('desc').take(500);
     return versions
-      .filter((version) => !version.retiredAt)
+      // Reserved employees are made by a workspace for itself and are never hired from here.
+      .filter((version) => !version.retiredAt && !isReservedVersion(version))
       .sort((a, b) => b.publishedAt - a.publishedAt)
       .map(publicListing);
   },
