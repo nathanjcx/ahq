@@ -230,6 +230,61 @@ describe('workspace memory', () => {
     expect(await t.run(async (ctx) => (await ctx.db.get(merged.memoryId))!.status)).toBe('proposed');
   });
 
+  it('keeps an archived claim out of recall and a summary inside its own task', async () => {
+    const t = harness();
+    const { owner, runToken, taskId, floorId, employeeId } = await tower(t);
+    const retired = await owner.mutation(api.memory.propose, {
+      scope: 'floor',
+      scopeId: floorId,
+      kind: 'fact',
+      text: 'The deploy window is on Wednesday.',
+      tags: ['deploy'],
+    });
+    await owner.mutation(api.memory.archive, { id: retired.memoryId });
+    await t.mutation(api.services.memory.remember, claim(runToken, 'The deploy runs from my notebook.'));
+
+    // A claim a person retired, or the loser of a contest, is not handed back to a model.
+    expect(
+      (await t.query(api.services.memory.recall, { secret, runToken, query: 'deploy' })).map(
+        (entry) => entry.text,
+      ),
+    ).toEqual(['The deploy runs from my notebook.']);
+
+    const { taskId: otherTaskId } = await owner.mutation(api.tasks.create, {
+      floorId,
+      employeeId,
+      title: 'Another task',
+      prompt: 'Do the other work.',
+    });
+    const [own, other] = await t.run(async (ctx) => {
+      const { workspaceId } = (await ctx.db.get(taskId))!;
+      const file = (id: typeof taskId, name: string) =>
+        ctx.db.insert('artifacts', {
+          workspaceId,
+          taskId: id,
+          name,
+          mediaType: 'text/plain',
+          size: 1,
+          storageKey: 'key',
+          sha256: 'sha',
+          createdAt: Date.now(),
+        });
+      return [await file(taskId, 'notes.md'), await file(otherTaskId, 'secret.md')];
+    });
+    const { summaryId } = await t.mutation(api.services.memory.recordSummary, {
+      secret,
+      taskId,
+      outcome: 'The launch shipped.',
+      decisions: [],
+      openQuestions: [],
+      artifactIds: [own, other],
+      text: 'The launch shipped.',
+      inferred: false,
+    });
+    // A summary names this task's deliverables; another task's artifact id is not one of them.
+    expect(await t.run(async (ctx) => (await ctx.db.get(summaryId))!.artifactIds)).toEqual([own]);
+  });
+
   it('contests both sides of a conflict and keeps them out of working memory until a person decides', async () => {
     const t = harness();
     const context = await tower(t);
