@@ -1,7 +1,8 @@
-import type { ModelId, Project, RoadmapProposal } from '../../lib/contracts';
+import type { ModelId, Project, ProjectTask, RoadmapProposal } from '../../lib/contracts';
 import type { Doc, Id } from '../_generated/dataModel';
 import type { Ctx } from '../shared';
 import { milestoneStatus } from './dependencies';
+import { findChannel } from './posts';
 
 /** Statuses that mean a task will not be worked on again. */
 const FINISHED = ['completed', 'cancelled'];
@@ -47,7 +48,7 @@ export async function requireProjectMilestone(
  * read from the row, so a milestone cannot claim to be planned while its work is running.
  */
 export async function projectView(ctx: Ctx, project: Doc<'projects'>): Promise<Project> {
-  const [milestones, tasks] = await Promise.all([
+  const [milestones, tasks, channel] = await Promise.all([
     ctx.db
       .query('milestones')
       .withIndex('by_project', (q) => q.eq('projectId', project._id))
@@ -56,6 +57,7 @@ export async function projectView(ctx: Ctx, project: Doc<'projects'>): Promise<P
       .query('tasks')
       .withIndex('by_project', (q) => q.eq('projectId', project._id))
       .collect(),
+    findChannel(ctx, project.workspaceId, 'project', project._id),
   ]);
   const statuses = tasks.map((task) => ({ id: String(task._id), status: task.status }));
   const now = Date.now();
@@ -95,6 +97,26 @@ export async function projectView(ctx: Ctx, project: Doc<'projects'>): Promise<P
       (milestone) =>
         milestone.status !== 'done' && milestone.deadlineAt !== undefined && milestone.deadlineAt < now,
     ).length,
+    channelId: channel ? String(channel._id) : undefined,
+  };
+}
+
+/** One task of a project as the project page lists it: who holds it, when it is due, what it waits for. */
+export function projectTaskView(task: Doc<'tasks'>): ProjectTask {
+  return {
+    id: String(task._id),
+    title: task.title,
+    status: task.status,
+    employeeId: String(task.employeeId),
+    employeeName: task.employeeName,
+    floorId: task.floorId ? String(task.floorId) : undefined,
+    milestoneId: task.milestoneId ? String(task.milestoneId) : undefined,
+    cadence: task.cadence ?? 'once',
+    deadlineAt: task.deadlineAt,
+    dependsOn: (task.dependsOn ?? []).map(String),
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+    error: task.error,
   };
 }
 

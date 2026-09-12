@@ -1,0 +1,753 @@
+/*
+ * The Projects page: the list of projects, a project as it runs, and a proposed roadmap under
+ * review. The timeline is the one piece that scrolls sideways, and it does so inside its own frame.
+ */
+
+/* === List === */
+.project-layout {
+  grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+  min-height: 560px;
+  overflow: hidden;
+}
+.project-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+  background: var(--cream);
+}
+.project-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px 13px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+}
+.project-card[data-active='true'] {
+  border-color: var(--sage-400);
+  box-shadow: var(--shadow-sm);
+}
+.project-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.project-card > header strong {
+  font-size: var(--text-lg);
+  color: var(--ink);
+}
+.project-card > p {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: var(--text-md);
+}
+.project-card-facts,
+.project-card-floors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.project-card-floors span {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sage-50);
+  color: var(--sage-800);
+}
+.project-card-behind {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  color: var(--red);
+  font-size: var(--text-sm);
+  font-weight: 660;
+}
+.project-status {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--sage-100);
+  color: var(--sage-800);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.project-status[data-status='planning'] {
+  background: #f2e7d6;
+  color: var(--amber);
+}
+.project-status[data-status='done'] {
+  background: var(--sage-200);
+}
+.project-status[data-status='archived'] {
+  background: var(--cream-deep);
+  color: var(--muted);
+}
+
+/* === Detail and proposal === */
+/* These section headings lead with an icon; the shared rule pushes a trailing action to the right. */
+.project-detail .section-title,
+.roadmap-review .section-title,
+.planner-working .section-title {
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+}
+.project-detail,
+.roadmap-review,
+.planner-working {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+.project-head,
+.roadmap-review-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.project-head > div:first-child,
+.roadmap-review-head > div:first-child {
+  flex: 1;
+  min-width: 240px;
+}
+.project-head h2,
+.roadmap-review-head h2 {
+  margin: 6px 0 4px;
+  font-size: 22px;
+  color: var(--ink);
+}
+.project-head p,
+.roadmap-review-head p {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--ink-soft);
+  font-size: var(--text-md);
+}
+.project-head-actions,
+.roadmap-review-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+.project-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.project-facts li {
+  display: grid;
+  gap: 2px;
+}
+.project-facts small {
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.project-facts strong {
+  color: var(--ink);
+  font-size: var(--text-md);
+}
+.project-behind,
+.roadmap-blocker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: var(--space-3) 0 0;
+  padding: 8px 11px;
+  border-radius: var(--radius);
+  background: #f8e9e6;
+  color: var(--red);
+  font-size: var(--text-md);
+  font-weight: 620;
+}
+
+/* === Plan projection === */
+.projection-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--sage-50);
+}
+.projection-note[data-over='true'] {
+  border-color: #e4c6c0;
+  background: #fbf1ef;
+}
+.projection-note > span {
+  display: grid;
+  gap: 2px;
+}
+.projection-note small {
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.projection-note strong {
+  color: var(--ink);
+  font-size: var(--text-md);
+}
+.projection-note .projection-warning {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--red);
+  font-size: var(--text-sm);
+  font-weight: 640;
+}
+
+/* === Roadmap timeline === */
+.roadmap {
+  --roadmap-head: 46px;
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+  overflow: hidden;
+}
+.roadmap-labels {
+  flex: none;
+  width: 128px;
+  padding-top: var(--roadmap-head);
+  border-right: 1px solid var(--line);
+  background: var(--cream);
+}
+.roadmap-label {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: var(--row-h);
+  padding: 0 9px;
+  overflow: hidden;
+}
+.roadmap-label[data-floor-start='true'] {
+  border-top: 1px solid var(--line);
+}
+.roadmap-label small {
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.roadmap-label strong {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.roadmap-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+.roadmap-track {
+  position: relative;
+  min-width: 560px;
+}
+.roadmap-head {
+  position: relative;
+  height: var(--roadmap-head);
+  border-bottom: 1px solid var(--line);
+}
+.roadmap-tick {
+  position: absolute;
+  top: 28px;
+  transform: translateX(-50%);
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+}
+.roadmap-flag {
+  position: absolute;
+  top: 5px;
+  max-width: 140px;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sage-100);
+  color: var(--sage-800);
+  font-size: var(--text-2xs);
+  font-weight: 680;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.roadmap-flag[data-status='done'] {
+  background: var(--sage-200);
+}
+.roadmap-flag[data-behind='true'] {
+  background: #f8e0dc;
+  color: var(--red);
+}
+.roadmap-rows {
+  position: relative;
+}
+.roadmap-guide,
+.roadmap-today {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--sage-200);
+}
+.roadmap-guide[data-behind='true'] {
+  background: #e0b6ae;
+}
+.roadmap-today {
+  background: var(--terra);
+  opacity: 0.55;
+}
+.roadmap-strings {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.roadmap-strings path {
+  fill: none;
+  stroke: var(--sage-400);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.roadmap-bar {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  /* Wide enough to read the task's name, however short the work itself is. */
+  min-width: 104px;
+  height: calc(var(--row-h) - 12px);
+  margin-top: 6px;
+  padding: 0 9px;
+  border: 1px solid var(--sage-200);
+  border-radius: 999px;
+  background: var(--sage-100);
+  color: var(--sage-800);
+  font-size: var(--text-2xs);
+  font-weight: 660;
+  overflow: hidden;
+}
+.roadmap-bar span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.roadmap-bar[data-status='proposed'] {
+  border-style: dashed;
+  background: var(--paper);
+}
+.roadmap-bar[data-status='running'] {
+  border-color: var(--terra);
+  background: #f6e3d9;
+  color: var(--terra-dark);
+}
+.roadmap-bar[data-status='completed'] {
+  background: var(--sage-200);
+}
+.roadmap-bar[data-status='waiting'] {
+  border-color: #e0c99b;
+  background: #f6ecd9;
+  color: var(--amber);
+}
+.roadmap-bar[data-status='blocked'],
+.roadmap-bar[data-status='failed'] {
+  border-color: #e0b6ae;
+  background: #f8e4e0;
+  color: var(--red);
+}
+
+/* === Milestones and tasks === */
+.project-milestones ol,
+.milestone-editors {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.project-milestones > ol > li,
+.milestone-editors > li {
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+}
+.project-milestones > ol > li > header,
+.milestone-editors > li > header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.project-milestones > ol > li > p,
+.milestone-editors > li > p {
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-size: var(--text-md);
+}
+.milestone-index {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--sage-100);
+  color: var(--sage-800);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+.project-milestones header strong {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink);
+  font-size: var(--text-lg);
+}
+.milestone-status {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sage-50);
+  color: var(--sage-800);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.project-milestones > ol > li[data-status='done'] .milestone-status {
+  background: var(--sage-200);
+}
+.milestone-deadline {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+.project-tasks {
+  display: grid;
+  gap: 6px;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.project-tasks:empty {
+  margin: 0;
+}
+.project-task {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--cream);
+}
+.project-task[data-status='blocked'] {
+  border-color: #e4c6c0;
+}
+.project-task-open {
+  display: flex;
+  flex: 1;
+  min-width: 180px;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: left;
+}
+.project-task-open strong {
+  display: block;
+  color: var(--ink);
+  font-size: var(--text-md);
+}
+.project-task-open small {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.project-task-controls {
+  display: flex;
+  gap: 6px;
+}
+.project-task-controls input,
+.project-task-controls select,
+.question-answer input,
+.question-answer select,
+.milestone-editors input,
+.milestone-editors select {
+  min-height: 30px;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--text-sm);
+}
+.project-task-waiting {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--amber);
+  font-size: var(--text-sm);
+}
+.project-task[data-status='blocked'] .project-task-waiting {
+  color: var(--red);
+}
+
+/* === Proposal editors === */
+.milestone-editors > li > header input[type='text'],
+.milestone-editors > li > header input:not([type]) {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-lg);
+  font-weight: 660;
+}
+.task-editors {
+  display: grid;
+  gap: 6px;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.task-editors > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--cream);
+}
+.task-editors > li[data-active='true'] {
+  border-color: var(--sage-400);
+  background: var(--sage-50);
+}
+.task-editors > li > input:first-child {
+  flex: 1;
+  min-width: 160px;
+}
+.task-editors small {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.roadmap-meetings ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.roadmap-meetings li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  font-size: var(--text-md);
+}
+.roadmap-meetings small {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+/* === Bottleneck questions === */
+.roadmap-questions {
+  display: grid;
+  gap: var(--space-2);
+}
+.question-card {
+  display: grid;
+  gap: var(--space-2);
+  padding: 12px 13px;
+  border: 1px solid #e6d8bd;
+  border-radius: var(--radius-lg);
+  background: #fbf6ea;
+}
+.question-card > header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+.question-card p {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-md);
+}
+.question-kind {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--amber);
+  color: var(--paper);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.question-kind[data-kind='capacity'] {
+  background: var(--sage-600);
+}
+.question-kind[data-kind='cost'] {
+  background: var(--terra);
+}
+.question-answer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-md);
+  color: var(--ink-soft);
+}
+.question-answer input[type='number'] {
+  width: 64px;
+}
+.question-answer small {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.question-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* === New project form === */
+.project-picker {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.project-picker legend {
+  padding: 0;
+  color: var(--ink);
+  font-size: var(--text-md);
+  font-weight: 660;
+}
+.project-picker > small {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.project-options {
+  display: grid;
+  gap: 6px;
+}
+.project-options label {
+  display: flex;
+  /* The shared form stack lays its labels out in a column; a checkbox row reads across. */
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.project-options input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  flex: none;
+  margin-top: 2px;
+  accent-color: var(--sage-800);
+}
+.project-options label > span {
+  min-width: 0;
+}
+.project-options label[data-checked='true'] {
+  border-color: var(--sage-400);
+  background: var(--sage-50);
+}
+.project-options strong {
+  display: block;
+  color: var(--ink);
+  font-size: var(--text-md);
+}
+.project-options small {
+  display: block;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+/* === Planner working === */
+.planner-working p {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--ink-soft);
+  font-size: var(--text-md);
+}
+
+@media (max-width: 640px) {
+  .project-layout {
+    min-height: 0;
+  }
+  .project-list {
+    border-right: 0;
+  }
+  .project-head,
+  .roadmap-review-head {
+    flex-direction: column;
+  }
+  .project-head-actions,
+  .roadmap-review-actions {
+    width: 100%;
+  }
+  .roadmap-review-actions .primary-button,
+  .roadmap-review-actions .secondary-button {
+    flex: 1;
+  }
+  .roadmap-labels {
+    width: 96px;
+  }
+  .roadmap-track {
+    min-width: 560px;
+  }
+  /* The editors fold: the title takes its own line, the pickers share the next. */
+  .milestone-editors > li > header {
+    flex-wrap: wrap;
+  }
+  .milestone-editors > li > header > input:first-of-type,
+  .task-editors > li > input:first-child {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .task-editors > li > select,
+  .task-editors > li > input[type='date'] {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .project-task-controls input,
+  .project-task-controls select,
+  .question-answer input,
+  .question-answer select,
+  .milestone-editors input,
+  .milestone-editors select {
+    min-height: 38px;
+  }
+}

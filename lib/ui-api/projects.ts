@@ -5,6 +5,7 @@ export const projectsApi = {
   // Projects and roadmaps
   projects: api.projects.list,
   project: api.projects.get,
+  projectTasks: api.projects.tasks,
   createProject: api.projects.create,
   updateProject: api.projects.update,
   setProjectStatus: api.projects.setStatus,
