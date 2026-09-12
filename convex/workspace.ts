@@ -3,7 +3,6 @@ import type { Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import type { QueryCtx } from './_generated/server';
 import { scheduleSummaryFor, settingsFor } from './lib/schedule';
-import { periodUsage } from './lib/tasks';
 import { registryToolsFor } from './registry';
 import {
   authKey,
