@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
 import type { Persona, ProviderId, TaskStatus } from '../lib/contracts';
-import { FLOOR_RULES, MEMORY_PLACEHOLDER, OPERATING_RULES, composeInstructions } from '../lib/instructions';
+import { MEMORY_PLACEHOLDER, WORKER_ROLE_RULES, composeInstructions } from '../lib/instructions';
 import { PERSONA_LIMITS, isPersonaTrait } from '../lib/personas';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
@@ -516,9 +516,8 @@ export const previewInstructions = query({
     const draft = await ctx.db.get(args.draftId);
     if (!draft) throw new Error('Draft not found');
     return composeInstructions({
-      operatingRules: OPERATING_RULES,
-      floorRules: FLOOR_RULES,
-      memoryPlaceholder: MEMORY_PLACEHOLDER,
+      roleRules: WORKER_ROLE_RULES,
+      memory: MEMORY_PLACEHOLDER,
       persona: draft.persona,
       instructions: draft.instructions,
     });

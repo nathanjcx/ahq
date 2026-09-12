@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { api } from '../convex/_generated/api';
 import type { Id } from '../convex/_generated/dataModel';
 import { defaultWorkspaceSettings, type Capability, type WorkspaceSettings } from '../lib/contracts';
-import { FLOOR_RULES, MEMORY_PLACEHOLDER, OPERATING_RULES, composeInstructions } from '../lib/instructions';
+import { MEMORY_PLACEHOLDER, WORKER_ROLE_RULES, composeInstructions } from '../lib/instructions';
 import {
   adminIdentity,
   connectLinear,
@@ -363,9 +363,8 @@ describe('studio', () => {
     const preview = await admin.query(api.marketplace.previewInstructions, { draftId });
     expect(preview).toBe(
       composeInstructions({
-        operatingRules: OPERATING_RULES,
-        floorRules: FLOOR_RULES,
-        memoryPlaceholder: MEMORY_PLACEHOLDER,
+        roleRules: WORKER_ROLE_RULES,
+        memory: MEMORY_PLACEHOLDER,
         persona,
         instructions: 'Follow the approved task and cite the records used.',
       }),
