@@ -29,7 +29,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ con
   try {
     const identity = await actor();
     const { connectionId } = await params;
-    if (!withinRateLimit(`relay-reveal:${connectionId}`, 10))
+    // Keyed by viewer as well as connection, so no one can exhaust the owner's budget for them.
+    if (!withinRateLimit(`relay-reveal:${identity.authSubject}:${connectionId}`, 10))
       throw new HttpError(429, 'Too many reveal requests. Try again in a minute.', 'rate_limited');
     const context = await ownedConnection(connectionId, identity.authSubject);
     if (!context.inboxRelaySecretCiphertext)

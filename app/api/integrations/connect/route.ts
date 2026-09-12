@@ -1,5 +1,4 @@
-import { NextResponse } from 'next/server';
-import { actor, failure, parseBody } from '@/lib/server/http';
+import { actor, failure, jsonOk, parseBody } from '@/lib/server/http';
 import { connectRequest, type ConnectResponse } from '@/lib/api/schemas';
 import { approvedMcpUrl } from '@/lib/server/network';
 import { oauthCookie, pickOAuthClient, startOAuth } from '@/lib/server/oauth';
@@ -36,12 +35,7 @@ export async function POST(request: Request) {
       serverUrl,
       queue,
     });
-    const response = NextResponse.json(
-      { authorizationUrl: flow.authorizationUrl } satisfies ConnectResponse,
-      {
-        headers: { 'Cache-Control': 'no-store' },
-      },
-    );
+    const response = jsonOk({ authorizationUrl: flow.authorizationUrl } satisfies ConnectResponse);
     response.cookies.set('ahq_oauth', seal(flow.state), oauthCookie(request.url));
     return response;
   } catch (error) {

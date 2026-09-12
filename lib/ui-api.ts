@@ -73,5 +73,3 @@ export function asId<Table extends TableNames>(value: string): Id<Table> {
 
 /** A marketplace draft exactly as Convex returns it. */
 export type AdminDraft = FunctionReturnType<typeof api.marketplace.adminList>[number];
-
-export type { AuditTimeline } from './contracts';

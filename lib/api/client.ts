@@ -8,6 +8,7 @@ import {
   relaySecretResponse,
   removedResponse,
   savedResponse,
+  type ClearInboxSecretRequest,
   type ConnectRequest,
   type InboxSecretRequest,
   type OAuthClientRequest,
@@ -84,7 +85,7 @@ export const webClient = {
       request({ path: webApi.adminOAuthClient, schema: removedResponse, method: 'DELETE', body: input }),
     setInboxSecret: (input: InboxSecretRequest) =>
       request({ path: webApi.adminInboxSecret, schema: savedResponse, method: 'POST', body: input }),
-    clearInboxSecret: (input: { provider: string }) =>
+    clearInboxSecret: (input: ClearInboxSecretRequest) =>
       request({ path: webApi.adminInboxSecret, schema: removedResponse, method: 'DELETE', body: input }),
   },
 };
