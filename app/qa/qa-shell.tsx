@@ -4,8 +4,10 @@ import { ClerkProvider } from '@clerk/nextjs';
 import { ConvexProvider, ConvexReactClient } from 'convex/react';
 import { useEffect, useState } from 'react';
 import { qaFixture, type QaFixture } from './fixture';
+import { fixtureQueries } from './fixtures';
 import { offlineActions } from '@/components/app/actions';
 import { WorkspaceShell } from '@/components/app/workspace-shell';
+import { FixtureQueriesContext } from '@/components/shared/use-ui-query';
 
 /** Syntactically valid but unreachable. Clerk's widgets render their signed-out state and stop. */
 const clerkKey = 'pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk';
@@ -30,16 +32,18 @@ export function QaWorkspace() {
   return (
     <ClerkProvider publishableKey={clerkKey}>
       <ConvexProvider client={convex}>
-        <WorkspaceShell
-          configured
-          dashboard={fixture.dashboard}
-          listings={fixture.listings}
-          drafts={fixture.drafts}
-          registryTools={fixture.registryTools}
-          providerConfigs={fixture.providerConfigs}
-          readiness={fixture.readiness}
-          actions={offlineActions}
-        />
+        <FixtureQueriesContext value={fixtureQueries}>
+          <WorkspaceShell
+            configured
+            dashboard={fixture.dashboard}
+            listings={fixture.listings}
+            drafts={fixture.drafts}
+            registryTools={fixture.registryTools}
+            providerConfigs={fixture.providerConfigs}
+            readiness={fixture.readiness}
+            actions={offlineActions}
+          />
+        </FixtureQueriesContext>
       </ConvexProvider>
     </ClerkProvider>
   );

@@ -4,45 +4,29 @@ import { ActivityPage } from '../activity/activity-page';
 import type { EditorDraft } from '../admin/draft-issues';
 import { MarketplaceStudioPage } from '../admin/marketplace-studio';
 import { OperationsPage } from '../admin/operations-page';
+import { AuditPage } from '../audit/audit-page';
+import { CalendarPage } from '../calendar/calendar-page';
 import { EmployeesPage } from '../employees/employees-page';
 import { FilesPage } from '../files/files-page';
 import { FloorPage } from '../floors/floor-page';
 import { InboxPage } from '../inbox/inbox-page';
 import { IntegrationsPage } from '../integrations/integrations-page';
 import { MarketplacePage } from '../marketplace/marketplace-page';
+import { ProjectsPage } from '../projects/projects-page';
+import { RecordsPage } from '../records/records-page';
 import { TasksPage } from '../tasks/tasks-page';
-import type { Actions } from './actions';
+import { TriagePage } from '../triage/triage-page';
 import type { Page } from './nav';
-import type {
-  Dashboard,
-  Listing,
-  Floor,
-  ProviderConfig,
-  ProviderReadiness,
-  RegistryTool,
-} from '@/lib/contracts';
+import type { PageProps } from './page-props';
+import type { Listing, Floor, ProviderConfig, ProviderReadiness, RegistryTool } from '@/lib/contracts';
 
-export type PageContentProps = {
+export type PageContentProps = PageProps & {
   page: Page;
-  dashboard: Dashboard;
   listings: Listing[];
   drafts: EditorDraft[];
   registryTools: RegistryTool[];
   providerConfigs?: ProviderConfig[];
   readiness: ProviderReadiness[];
-  configured: boolean;
-  canManageWorkspace: boolean;
-  actions: Actions;
-  run: (work: () => Promise<unknown>, success: string) => Promise<boolean>;
-  go: (page: Page) => void;
-  onNotice: (text: string) => void;
-  selectedFloorId: string | null;
-  onSelectFloor: (id: string | null) => void;
-  selectedEmployee: string | null;
-  onSelectEmployee: (id: string | null) => void;
-  selectedTask: string | null;
-  onSelectTask: (id: string | null) => void;
-  onNewTask: (floorId?: string | null, employeeId?: string | null) => void;
   onFloorEditor: (floor: Floor | 'new') => void;
   onCorrect: (proposalId: string) => void;
 };
@@ -73,6 +57,12 @@ export function PageContent(props: PageContentProps) {
         onNewTask={props.onNewTask}
       />
     );
+
+  if (page === 'projects') return <ProjectsPage {...props} />;
+  if (page === 'calendar') return <CalendarPage {...props} />;
+  if (page === 'records') return <RecordsPage {...props} />;
+  if (page === 'audit') return <AuditPage {...props} />;
+  if (page === 'triage') return <TriagePage {...props} />;
 
   if (page === 'inbox')
     return (

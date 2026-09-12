@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import type { EditorDraft } from '../admin/draft-issues';
 import { FloorPanel } from '../floors/floor-panel';
 import type { Actions } from './actions';
+import { IncidentStrip } from './incident-strip';
 import { nav, pageTitle, type Page } from './nav';
 import { NewTaskPanel } from './new-task-panel';
 import { SetupBanner, Toast } from './notices';
@@ -61,6 +62,8 @@ export function WorkspaceShell({
   const [taskFloorId, setTaskFloorId] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
+  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [selectedMeeting, setSelectedMeeting] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const workspace = dashboard.workspace;
   const canManageWorkspace = workspace?.role === 'owner' || workspace?.role === 'admin';
@@ -155,6 +158,8 @@ export function WorkspaceShell({
           }}
         />
 
+        <IncidentStrip dashboard={dashboard} actions={actions} run={run} go={go} />
+
         {!configured && <SetupBanner onSetup={() => setSettingsOpen(true)} />}
         <div className="page-wrap">
           <PageContent
@@ -177,6 +182,10 @@ export function WorkspaceShell({
             onSelectEmployee={setSelectedEmployee}
             selectedTask={selectedTask}
             onSelectTask={setSelectedTask}
+            selectedProject={selectedProject}
+            onSelectProject={setSelectedProject}
+            selectedMeeting={selectedMeeting}
+            onSelectMeeting={setSelectedMeeting}
             onNewTask={openNewTask}
             onFloorEditor={setFloorEditor}
             onCorrect={(id) => {

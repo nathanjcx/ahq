@@ -3,7 +3,6 @@ import type { Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import type { MutationCtx } from './_generated/server';
 import { createMeetingEntry } from './lib/calendar';
-import { enqueuePlanningFor } from './services/projects';
 import { assertAcyclic, topologicalOrder } from './lib/dependencies';
 import { meetingRequests, parseProposal, projectView, requireProject, storedProposal } from './lib/projects';
 import {
@@ -13,6 +12,7 @@ import {
   requireFloor,
   startTask,
 } from './lib/tasks';
+import { enqueuePlanningFor } from './services/projects';
 import { cleanText, requireWorkspace } from './shared';
 
 const projectStatus = v.union(
