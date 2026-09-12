@@ -14,6 +14,7 @@ import type {
   RegistryTool,
   Task,
 } from '@/lib/contracts';
+import { scheduleSummary } from './fixtures/schedule';
 import { asId } from '@/lib/ui-api';
 
 /**
@@ -25,6 +26,7 @@ import { asId } from '@/lib/ui-api';
 const hour = 3_600_000;
 /** A fixed clock so screenshots taken on different days are comparable. */
 const now = Date.UTC(2026, 2, 17, 14, 30);
+const day = 24 * hour;
 const ago = (hours: number) => now - hours * hour;
 
 const employees: Employee[] = [
@@ -366,6 +368,7 @@ const tasks: Task[] = [
     title: 'Summarise the open launch blockers',
     prompt: 'List every Linear issue blocking the March release and who owns it.',
     status: 'queued',
+    cadence: 'daily',
     createdAt: ago(0.2),
     updatedAt: ago(0.2),
     model: 'gpt-6-astra',
@@ -380,6 +383,10 @@ const tasks: Task[] = [
     createdByName: 'Dana Okoye',
     isOwner: true,
     visibility: 'workspace',
+    projectId: 'pr_launch',
+    milestoneId: 'ms_announce',
+    cadence: 'once',
+    deadlineAt: now + 2 * day,
     title: 'Draft the migration notes',
     prompt: 'Draft migration notes for the schema change in acme/platform#4120.',
     status: 'running',
@@ -438,6 +445,50 @@ const tasks: Task[] = [
     model: 'gpt-5.6-terra',
     usage: { input: 62_400, cached: 40_100, output: 9_800 },
     lastMessage: { text: 'Announcement written and saved to outputs/announcement.md.', createdAt: ago(24) },
+  },
+  {
+    id: 'task_waiting',
+    floorId: 'proj_launch',
+    floorContext: { name: 'Spring launch', brief: 'Ship the March release.' },
+    projectId: 'pr_launch',
+    milestoneId: 'ms_announce',
+    cadence: 'once',
+    deadlineAt: now + 3 * day,
+    dependsOn: ['task_running'],
+    employeeId: 'emp_emi',
+    employeeName: 'Emi',
+    createdBy: 'user_dana',
+    createdByName: 'Dana Okoye',
+    isOwner: true,
+    visibility: 'workspace',
+    title: 'Illustrate the migration path',
+    prompt: 'Draw the before and after of the schema change for the announcement.',
+    status: 'waiting',
+    createdAt: ago(3),
+    updatedAt: ago(3),
+    model: 'gpt-5.6-terra',
+  },
+  {
+    id: 'task_blocked',
+    floorId: 'proj_support',
+    floorContext: { name: 'Support backlog', brief: 'Triage the open support queue.' },
+    projectId: 'pr_launch',
+    cadence: 'once',
+    deadlineAt: now - 1 * day,
+    dependsOn: ['task_cancelled'],
+    employeeId: 'emp_cyrus',
+    employeeName: 'Cyrus',
+    createdBy: 'user_ivan',
+    createdByName: 'Ivan Petrov',
+    isOwner: false,
+    visibility: 'workspace',
+    title: 'Reconcile the quarter spend report',
+    prompt: 'Rebuild the spend report against the cap once the audit lands.',
+    status: 'blocked',
+    createdAt: ago(50),
+    updatedAt: ago(51),
+    model: 'gpt-5.6-sol',
+    error: 'Audit last quarter spend was cancelled, so nothing released this.',
   },
   {
     id: 'task_failed',
@@ -769,6 +820,7 @@ export const dashboard: Dashboard = {
   proposals,
   inbox,
   artifacts,
+  schedule: scheduleSummary,
 };
 
 export const listings: Listing[] = [

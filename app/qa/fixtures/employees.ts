@@ -76,6 +76,8 @@ const hireRequests: HireRequest[] = [
     listingName: 'Bruno',
     floorId: 'proj_launch',
     count: 2,
+    names: ['Bruno 3', 'Bruno 4'],
+    overnightModel: 'gpt-5.6-luna',
     requestedBy: 'user_ivan',
     requestedByName: 'Ivan Petrov',
     status: 'pending',

@@ -80,6 +80,7 @@ const launchPosts: Post[] = [
     id: 'post_7',
     channelId: 'chan_launch',
     kind: 'decision',
+    flag: 'contested',
     authorEmployeeId: 'emp_hana',
     authorName: 'Hana',
     text: 'Contested: The launch deadline is March 24.\nAgainst: The launch deadline is March 26.\nReason: two shift reports on the same day cite different dates, and neither names a source.\nA person decides which claim stands; neither reaches a model until then.',
