@@ -123,7 +123,7 @@ export async function providerReadiness(ctx: DbCtx): Promise<ProviderReadiness[]
 
 const destructive = /(^|[._-])(?:delete|purge|destroy|remove)(?:[._-]|$)/i;
 
-export function isDestructiveName(name: string) {
+function isDestructiveName(name: string) {
   return destructive.test(name.replace(/([a-z0-9])([A-Z])/g, '$1_$2'));
 }
 

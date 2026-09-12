@@ -3,7 +3,7 @@ import { api } from '../convex/_generated/api';
 import schema from '../convex/schema';
 import type { ProviderId, ToolMode } from '../lib/contracts';
 
-export const modules = import.meta.glob('../convex/**/*.ts');
+const modules = import.meta.glob('../convex/**/*.ts');
 export const secret = 'service-test-secret';
 export const linearUrl = 'https://mcp.linear.app/mcp';
 export const githubUrl = 'https://api.githubcopilot.com/mcp/';

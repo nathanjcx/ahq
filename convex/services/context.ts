@@ -3,10 +3,9 @@ import { policiesFor } from '../registry';
 import { authKey, canSeeConnection, type DbCtx } from '../shared';
 
 export type ReadCtx = DbCtx;
-export const terminalStatuses = ['completed', 'failed', 'cancelled', 'uncertain'];
 
 export function isTerminal(status: string) {
-  return terminalStatuses.includes(status);
+  return ['completed', 'failed', 'cancelled', 'uncertain'].includes(status);
 }
 
 export async function workspaceForActor(ctx: ReadCtx, subject: string, orgId?: string) {
