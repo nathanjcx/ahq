@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { shiftsFromCalendar } from './activity';
 import {
   DAY_MS,
   dateOf,
@@ -16,9 +15,8 @@ import type { LabelMode } from './office-labels';
 import type { SelectProp } from './office-props';
 import type { OfficeDressing, OfficeEmployee } from './office-scene';
 import { OfficeStage, type OfficeSceneData } from './office-stage';
+import { useDayQueries } from './use-day';
 import './office-view.css';
-import { useUiQuery } from '@/components/shared/use-ui-query';
-import { asId, uiApi } from '@/lib/ui-api';
 
 /** The scrubber runs in minutes, which is fine enough to land on any one moment. */
 const STEP_MS = 60_000;
@@ -149,47 +147,27 @@ function clock(at: number): string {
   return `${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}`;
 }
 
-const NOTHING: Omit<DayRecord, 'from' | 'to' | 'employees'> = {
-  tasks: [],
-  shifts: [],
-  meetings: [],
-  findings: [],
-  alerts: [],
-  notifications: [],
-};
 
-/**
- * A recorded day, from the same subscriptions the live office uses. Whatever the
- * backend has not answered simply leaves that part of the day empty.
- */
+/** A recorded day, from the same subscriptions the live office uses. */
 function useDayRecord(employees: OfficeEmployee[], from: number): DayRecord {
-  const to = from + DAY_MS;
-  const range = useMemo(() => ({ from, to }), [from, to]);
-  const entries = useUiQuery(uiApi.calendarEntries, range);
-  const findings = useUiQuery(uiApi.auditFindings, {});
-  const alerts = useUiQuery(uiApi.alerts, {});
-  const notifications = useUiQuery(uiApi.notifications, {});
-  const entry = (entries ?? []).find((item) => item.kind === 'meeting' && item.status !== 'cancelled');
-  const meeting = useUiQuery(
-    uiApi.meeting,
-    entry ? { calendarEntryId: asId<'calendarEntries'>(entry.id) } : 'skip',
-  );
+  const day = useDayQueries(from);
   const people = useMemo(
     () => employees.map((employee) => ({ id: employee.id, name: employee.name })),
     [employees],
   );
   return useMemo(
     () => ({
-      ...NOTHING,
       from,
-      to,
+      to: from + DAY_MS,
       employees: people,
-      shifts: shiftsFromCalendar(entries ?? []),
-      ...(entry ? { meetings: [{ entry, ...(meeting ? { meeting } : {}) }] } : {}),
-      findings: (findings ?? []).filter((item) => item.createdAt < to),
-      alerts: (alerts ?? []).filter((item) => item.createdAt < to),
-      notifications: (notifications ?? []).filter((item) => item.sentAt < to),
+      // The replay plays the day's shape; one task's journal is the other replay's job.
+      tasks: [],
+      shifts: day.shifts ?? [],
+      meetings: day.meetings ?? [],
+      findings: day.findings ?? [],
+      alerts: day.alerts ?? [],
+      notifications: day.notifications ?? [],
     }),
-    [from, to, people, entries, entry, meeting, findings, alerts, notifications],
+    [from, people, day],
   );
 }

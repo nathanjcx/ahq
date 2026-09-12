@@ -8,6 +8,7 @@ import {
   deriveActivities,
   deriveFloorSignals,
   firstSentence,
+  isWorking,
   providerForTool,
   shiftsFromCalendar,
   type ActivityInput,
@@ -479,6 +480,15 @@ describe('the day around the desk', () => {
     expect(shifts).toEqual([
       { employeeId: ada.id, taskId: 'tsk_1', startedAt: NOW, endedAt: NOW + 1_800_000 },
     ]);
+  });
+});
+
+describe('isWorking', () => {
+  it('separates the people a desk lamp belongs to from the ones it does not', () => {
+    for (const activity of ['thinking', 'auditing', 'triaging', 'filing', 'reporting'] as const)
+      expect(isWorking(activity), activity).toBe(true);
+    for (const activity of ['idle', 'off_shift', 'leaving', 'waiting', 'blocked', 'uneasy'] as const)
+      expect(isWorking(activity), activity).toBe(false);
   });
 });
 

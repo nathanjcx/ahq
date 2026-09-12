@@ -3,20 +3,14 @@
 import { useQuery } from 'convex/react';
 import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  deriveActivities,
-  deriveFloorSignals,
-  shiftsFromCalendar,
-  type DayInput,
-  type EmployeeActivity,
-} from './activity';
-import { DAY_MS, startOfDay } from './day-replay';
+import { deriveActivities, deriveFloorSignals, type DayInput, type EmployeeActivity } from './activity';
+import { startOfDay } from './day-replay';
 import type { LabelMode } from './office-labels';
 import type { SelectProp } from './office-props';
 import type { OfficeDressing, OfficeEmployee, OfficeProvider } from './office-scene';
 import type { RenderStats } from './office-view';
 import { useActivityCues } from './sound';
-import { useUiQuery } from '@/components/shared/use-ui-query';
+import { useDayQueries } from './use-day';
 import type { Dashboard, FloorPost } from '@/lib/contracts';
 import { providers as providerCatalog } from '@/lib/providers';
 import { asId, uiApi } from '@/lib/ui-api';
@@ -128,36 +122,6 @@ export function deriveScene(
   };
 }
 
-/**
- * The rest of the day, live. Everything here is optional: a workspace whose
- * backend has not answered yet simply renders the office as it always was.
- */
-function useDay(now: number): DayInput {
-  const midnight = startOfDay(now);
-  const range = useMemo(() => ({ from: midnight, to: midnight + DAY_MS }), [midnight]);
-  const entries = useUiQuery(uiApi.calendarEntries, range);
-  const findings = useUiQuery(uiApi.auditFindings, {});
-  const alerts = useUiQuery(uiApi.alerts, {});
-  const notifications = useUiQuery(uiApi.notifications, {});
-  // One meeting at a time: whichever of today's is open or about to be.
-  const entry = (entries ?? []).find(
-    (item) => item.kind === 'meeting' && item.status !== 'cancelled' && now < item.endsAt,
-  );
-  const meeting = useUiQuery(
-    uiApi.meeting,
-    entry ? { calendarEntryId: asId<'calendarEntries'>(entry.id) } : 'skip',
-  );
-  return useMemo(
-    () => ({
-      shifts: shiftsFromCalendar(entries ?? []),
-      ...(entry ? { meetings: [{ entry, ...(meeting ? { meeting } : {}) }] } : {}),
-      findings: findings ?? [],
-      alerts: alerts ?? [],
-      notifications: notifications ?? [],
-    }),
-    [entries, entry, meeting, findings, alerts, notifications],
-  );
-}
 
 /**
  * The office, dressed by the journal. With a Convex client it subscribes for the
@@ -186,7 +150,7 @@ function LiveStage(props: Omit<OfficeStageProps, 'live' | 'scene'>) {
     props.floorId ? { floorId: asId<'floors'>(props.floorId) } : 'skip',
   );
   const now = useNow(5_000);
-  const day = useDay(now);
+  const day = useDayQueries(startOfDay(now));
   const scene = useMemo(
     () => (dashboard ? deriveScene(dashboard, posts ?? [], props.floorId, now, day) : emptyScene),
     [dashboard, posts, props.floorId, now, day],

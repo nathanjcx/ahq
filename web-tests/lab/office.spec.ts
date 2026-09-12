@@ -17,6 +17,12 @@ const scenes: { name: string; query: string }[] = [
   { name: 'records', query: 'preset=records&hour=11' },
   { name: 'boardroom', query: 'preset=boardroom&hour=15' },
   { name: 'triage', query: 'preset=triage&hour=14' },
+  { name: 'meeting-live', query: 'preset=meeting-live&hour=15' },
+  { name: 'audit-night', query: 'preset=audit-night&hour=23' },
+  { name: 'incident', query: 'preset=incident&hour=14' },
+  // The replayed day, stopped at three in the afternoon: the incident is open,
+  // triage is on it, and the notice from the unanswered pages is by the door.
+  { name: 'day-replay', query: 'preset=day-replay&at=15' },
 ];
 
 test.skip(process.env.QA_FIXTURE !== '1', 'needs QA_FIXTURE=1');

@@ -1,4 +1,5 @@
 import {
+  GATHER_MS,
   deriveActivities,
   deriveFloorSignals,
   type DayInput,
@@ -73,7 +74,7 @@ export function dayInputAt(record: DayRecord, at: number): DayInput {
     }));
 
   const meetings: MeetingInput[] = record.meetings
-    .filter((item) => at >= item.entry.startsAt - MEETING_LEAD)
+    .filter((item) => at >= item.entry.startsAt - GATHER_MS)
     .map(({ entry, meeting }) => {
       if (!meeting) return { entry };
       const turns = meeting.turns.filter((turn) => turn.createdAt <= at);
@@ -191,9 +192,6 @@ function taskAsOf(task: Task, at: number): Task | undefined {
   if (task.createdAt > at) return undefined;
   return task.updatedAt <= at ? task : { ...task, status: 'running', updatedAt: task.createdAt };
 }
-
-/** Meetings are prepared for an hour before they start, which is when the day first shows one. */
-const MEETING_LEAD = 3_600_000;
 
 /** Whether the workspace was inside its working hours at this instant, on the viewer's clock. */
 function isWorkingAt(schedule: ScheduleSummary, at: number): boolean {

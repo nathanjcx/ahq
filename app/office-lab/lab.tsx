@@ -181,16 +181,17 @@ const PRESETS: Record<string, Preset> = {
     roles: ['triaging', 'writing', 'waiting', 'blocked', 'thinking'],
     kinds: ['triage'],
     label: FLOOR_LABEL,
-    detail: (_ids, index) =>
+    // A chain the floor can read: Emi is blocked on Cyrus, Cyrus is waiting on
+    // Bruno, and Bruno is the one writing. The board card lives on `floor-props`.
+    detail: (ids, index) =>
       index === 0
-        ? { alertId: 'alr_1', bubble: 'Checkout is returning 500 on card payments.' }
+        ? { alertId: 'alr_1' }
         : index === 2
-          ? { waitingOn: 'c2' }
+          ? { waitingOn: 'c2', waitingOnId: ids[1] }
           : index === 3
-            ? { waitingOn: 'c3' }
+            ? { waitingOn: 'c3', waitingOnId: ids[2] }
             : {},
     dressing: () => ({
-      board: { cards: CARDS },
       incident: true,
       incidentCount: 2,
       emergency: { title: 'Deployed the checkout fix without approval.', since: NOW - 900_000 },

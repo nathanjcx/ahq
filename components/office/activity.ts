@@ -69,6 +69,8 @@ export interface EmployeeActivity {
   provider?: ProviderId;
   /** The task this figure is waiting on, so the floor can run a string to it. */
   waitingOn?: string;
+  /** Who owes that task, when it is somebody on this floor. The string goes to their desk. */
+  waitingOnId?: string;
   /** The employee whose desk an auditor is standing at. */
   visitingId?: string;
   /** The alert a triage figure is running to the console for. */
@@ -195,7 +197,7 @@ export function providerForTool(tool: string): ProviderId | undefined {
 }
 
 /** Internal memory tools arrive prefixed by their server: `astra_memory_remember`. */
-export function memoryActivityForTool(tool: string): Activity | undefined {
+function memoryActivityForTool(tool: string): Activity | undefined {
   const name = tool.toLowerCase().replace(/^astra_memory_/, '');
   return MEMORY_TOOLS[name];
 }
@@ -451,11 +453,13 @@ function dependencyActivity({ own, finishedById }: Context): EmployeeActivity | 
   );
   if (!held) return undefined;
   const unfinished = (held.dependsOn ?? []).find((id) => finishedById.get(id)?.status !== 'completed');
+  const owner = unfinished ? finishedById.get(unfinished)?.employeeId : undefined;
   return {
     activity: held.status === 'blocked' ? 'blocked' : 'waiting',
     since: held.updatedAt,
     taskId: held.id,
     ...(unfinished ? { waitingOn: unfinished } : {}),
+    ...(owner ? { waitingOnId: owner } : {}),
   };
 }
 

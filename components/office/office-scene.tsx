@@ -619,24 +619,30 @@ function FloorDressing({
         );
       })}
       {board && <TaskBoard position={TASK_BOARD} cards={board.cards} onSelectProp={onSelectProp} />}
-      {/* A task that cannot start yet is on a string to the card it is waiting for.
-          Board card ids are task ids, which is what makes the two ends meet. */}
-      {board &&
-        people.flatMap((person) => {
-          const { waitingOn, activity } = person.state;
-          if (!waitingOn) return [];
-          const pin = cardPin(board.cards, waitingOn);
-          if (!pin) return [];
-          const stand = person.station.at;
-          return [
-            <WaitingString
-              key={person.employee.id}
-              from={[stand[0], STRING_HEIGHT, stand[2]]}
-              to={[TASK_BOARD[0] + pin[0], pin[1], TASK_BOARD[2] + pin[2]]}
-              blocked={activity === 'blocked'}
-            />,
-          ];
-        })}
+      {/* A task that cannot start yet is on a string to whatever it is waiting
+          for: the desk of whoever owes it, or the card on the board when that
+          person is not on this floor. Board card ids are task ids, which is what
+          makes the second pair of ends meet. */}
+      {people.flatMap((person) => {
+        const { waitingOn, waitingOnId, activity } = person.state;
+        const owner = waitingOnId ? people.find((other) => other.employee.id === waitingOnId) : undefined;
+        const pin = waitingOn && board ? cardPin(board.cards, waitingOn) : undefined;
+        const to: Point | undefined = owner
+          ? [owner.station.at[0], STRING_HEIGHT, owner.station.at[2]]
+          : pin
+            ? [TASK_BOARD[0] + pin[0], pin[1], TASK_BOARD[2] + pin[2]]
+            : undefined;
+        if (!to) return [];
+        const stand = person.station.at;
+        return [
+          <WaitingString
+            key={person.employee.id}
+            from={[stand[0], STRING_HEIGHT, stand[2]]}
+            to={to}
+            blocked={activity === 'blocked'}
+          />,
+        ];
+      })}
       {emergency && (
         <EmergencyNotice position={NOTICE} rotation={[0, Math.PI / 2, 0]} onSelectProp={onSelectProp} />
       )}
