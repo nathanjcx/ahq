@@ -77,7 +77,6 @@ Both suites are Playwright and need a browser, so neither is part of `npm test`.
 - [integration-access-desktop.png](screenshots/integration-access-desktop.png): Manage access for a GitHub connection: the reviewed tools that may be used, and the repositories to follow for the inbox.
 - [google-products-desktop.png](screenshots/google-products-desktop.png): the Google Workspace product picker, with its developer-preview notice.
 
-The sidebar in `floors-desktop.png`, `floor-staffing-desktop.png`, `integrations-desktop.png` and `integrations-mobile.png` still shows a monthly budget in dollars. Those captures predate the move to token usage; the application stores and shows no cost.
 
 ## Not verified
 

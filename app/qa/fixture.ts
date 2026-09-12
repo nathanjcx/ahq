@@ -39,7 +39,7 @@ const employees: Employee[] = [
     missingCapabilities: [],
     persona: {
       voice: 'Writes in short declaratives and says what she is unsure about before anything else.',
-      traits: ['precise', 'fast', 'dry humour'],
+      traits: ['terse', 'fast', 'dry humour'],
       catchphrase: 'Numbers first, opinions after.',
     },
   },
@@ -54,7 +54,7 @@ const employees: Employee[] = [
     missingCapabilities: [],
     persona: {
       voice: 'Warm and plain-spoken. Explains the reasoning before the recommendation.',
-      traits: ['careful', 'thorough'],
+      traits: ['cautious', 'methodical'],
     },
   },
   {
@@ -68,7 +68,7 @@ const employees: Employee[] = [
     missingCapabilities: [],
     persona: {
       voice: 'Answers with the query he ran and what it returned.',
-      traits: ['methodical', 'literal'],
+      traits: ['methodical', 'blunt'],
     },
   },
   {
@@ -94,7 +94,7 @@ const employees: Employee[] = [
     model: 'gpt-5.6-luna',
     status: 'ready',
     missingCapabilities: [],
-    persona: { voice: 'Reports the failing case first.', traits: ['cautious', 'thorough'] },
+    persona: { voice: 'Reports the failing case first.', traits: ['cautious', 'methodical'] },
   },
   {
     id: 'emp_gil',
@@ -105,7 +105,7 @@ const employees: Employee[] = [
     model: 'gpt-5.6-sol',
     status: 'ready',
     missingCapabilities: [],
-    persona: { voice: 'Gives the number, then the caveat.', traits: ['precise', 'methodical'] },
+    persona: { voice: 'Gives the number, then the caveat.', traits: ['terse', 'methodical'] },
   },
   {
     id: 'emp_hana',
@@ -116,7 +116,7 @@ const employees: Employee[] = [
     model: 'gpt-6-astra',
     status: 'ready',
     missingCapabilities: [],
-    persona: { voice: 'Opens with what the evidence does not cover.', traits: ['cautious', 'patient'] },
+    persona: { voice: 'Opens with what the evidence does not cover.', traits: ['cautious', 'warm'] },
   },
   {
     id: 'emp_mina',
@@ -129,7 +129,7 @@ const employees: Employee[] = [
     missingCapabilities: ['slack'],
     persona: {
       voice: 'Asks one clarifying question, then works without further prompting.',
-      traits: ['cautious', 'literal', 'patient'],
+      traits: ['cautious', 'blunt', 'warm'],
       catchphrase: 'One question, then I am out of your way.',
     },
   },
@@ -653,7 +653,7 @@ export const listings: Listing[] = [
     media: [],
     persona: {
       voice: 'Writes in short declaratives and says what she is unsure about first.',
-      traits: ['precise', 'fast'],
+      traits: ['terse', 'fast'],
     },
     publishedAt: ago(400),
   },
@@ -688,7 +688,7 @@ export const listings: Listing[] = [
     model: 'gpt-5.6-luna',
     color: '#3a8f7a',
     media: [],
-    persona: { voice: 'Asks one clarifying question, then works.', traits: ['cautious', 'patient'] },
+    persona: { voice: 'Asks one clarifying question, then works.', traits: ['cautious', 'warm'] },
     publishedAt: ago(120),
   },
 ];
