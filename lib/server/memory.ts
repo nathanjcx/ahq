@@ -1,5 +1,6 @@
 import { tokenEstimate } from '../../convex/lib/memory';
 import type { Memory, MemoryBudgets, MemoryKind, TaskSummary } from '../contracts';
+import { untrustedBlock } from './untrusted';
 
 /** The sections of a working memory block, in the order an employee reads them. */
 export type WorkingMemorySection = 'workspace' | 'project' | 'floor' | 'agent' | 'summaries';
@@ -60,6 +61,14 @@ function summaryLine(summary: TaskSummary) {
   return `- ${parts.join('. ')}`;
 }
 
+/**
+ * One section of the block: the heading this platform wrote, then the claims another employee wrote
+ * behind the untrusted fence, so nothing inside them reads as an instruction to the shift.
+ */
+function fenced(scope: WorkingMemorySection, lines: string[]) {
+  return `${headings[scope]}\n${untrustedBlock(lines.join('\n'))}`;
+}
+
 /** Fills one section up to its budget in priority order and reports what did not fit. */
 function fill(rows: { id?: string; line: string }[], budget: number) {
   const kept: string[] = [];
@@ -78,6 +87,8 @@ function fill(rows: { id?: string; line: string }[], budget: number) {
 /**
  * The Working memory block injected at the start of a turn: each scope trimmed to its budget by
  * importance, contested and unapproved claims left out, and an honest note about what was omitted.
+ * Claims and summaries are another agent's words, so every scope goes behind the untrusted fence; the
+ * caller's own sections do not, because a caller fences whatever material it adds.
  */
 export function compileWorkingMemory(
   inputs: WorkingMemoryInputs,
@@ -94,7 +105,7 @@ export function compileWorkingMemory(
       [...active].sort(byImportance).map((entry) => ({ id: entry.id, line: entryLine(entry) })),
       inputs.budgets[scope],
     );
-    if (section.kept.length) blocks.push([headings[scope], ...section.kept].join('\n'));
+    if (section.kept.length) blocks.push(fenced(scope, section.kept));
     usedIds.push(...section.usedIds);
     if (section.omitted) omitted.push({ scope, count: section.omitted });
   }
@@ -104,7 +115,7 @@ export function compileWorkingMemory(
       recent.map((summary) => ({ line: summaryLine(summary) })),
       inputs.budgets.summaries,
     );
-    if (section.kept.length) blocks.push([headings.summaries, ...section.kept].join('\n'));
+    if (section.kept.length) blocks.push(fenced('summaries', section.kept));
     if (section.omitted) omitted.push({ scope: 'summaries', count: section.omitted });
   }
   for (const section of options.sections ?? [])
