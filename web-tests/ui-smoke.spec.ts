@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 test('empty workspace navigation and setup stay usable on desktop', async ({ page }) => {
+  // Eight pages with full-page screenshots and a five-second office settle on a development server.
+  test.slow();
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.setViewportSize({ width: 1440, height: 1000 });

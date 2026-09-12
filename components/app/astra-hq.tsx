@@ -1,27 +1,40 @@
 'use client';
 
 import { SignedIn, SignedOut } from '@clerk/nextjs';
-import { useConvexAuth, useQuery } from 'convex/react';
+import { ConvexProvider, ConvexReactClient, useConvexAuth, useQuery } from 'convex/react';
+import { FixtureQueriesContext } from '../shared/use-ui-query';
 import { offlineActions, useWorkspaceActions } from './actions';
 import { CenteredLoader, SignInScreen } from './status-screens';
 import { WorkspaceShell } from './workspace-shell';
 import { emptyDashboard } from '@/lib/contracts';
 import { uiApi } from '@/lib/ui-api';
 
+/**
+ * Before the workspace is configured there is no deployment to subscribe to. Page-owned queries
+ * still mount, so they get a client that is never asked anything (every query answers from the
+ * empty fixture) rather than a missing provider.
+ */
+let placeholder: ConvexReactClient | undefined;
+const noQueries = {};
+
 export function AstraHq({ configured }: { configured: boolean }) {
-  return configured ? (
-    <ConnectedAstraHq />
-  ) : (
-    <WorkspaceShell
-      configured={false}
-      readiness={[]}
-      dashboard={emptyDashboard}
-      listings={[]}
-      drafts={[]}
-      registryTools={[]}
-      providerConfigs={[]}
-      actions={offlineActions}
-    />
+  if (configured) return <ConnectedAstraHq />;
+  placeholder ??= new ConvexReactClient('https://unconfigured.convex.cloud');
+  return (
+    <ConvexProvider client={placeholder}>
+      <FixtureQueriesContext value={noQueries}>
+        <WorkspaceShell
+          configured={false}
+          readiness={[]}
+          dashboard={emptyDashboard}
+          listings={[]}
+          drafts={[]}
+          registryTools={[]}
+          providerConfigs={[]}
+          actions={offlineActions}
+        />
+      </FixtureQueriesContext>
+    </ConvexProvider>
   );
 }
 

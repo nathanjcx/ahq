@@ -63,6 +63,8 @@ for (const viewport of viewports) {
   const mobile = viewport.name === 'mobile';
 
   test(`every page renders inside a ${viewport.width}px viewport`, async ({ page }) => {
+    // Thirteen pages, one of them a 3D scene that settles for four seconds.
+    test.slow();
     const errors = watchErrors(page);
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await open(page);
