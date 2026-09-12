@@ -5,7 +5,6 @@ import type {
   InstanceStatus,
   InstanceUpgrade,
   Memory,
-  PlanProjection,
   VersionChange,
 } from '@/lib/contracts';
 
@@ -199,22 +198,6 @@ export const instanceFindings: AuditFinding[] = [
     updatedAt: ago(40),
   },
 ];
-
-const projection = (args: { projectedTokens: number }): PlanProjection => {
-  const usedTokens = 1_684_400;
-  const monthlyAllowance = 5_000_000;
-  return {
-    plan: 'subscription',
-    usedTokens,
-    projectedTokens: args.projectedTokens,
-    monthlyAllowance,
-    allowanceUsed: (usedTokens + args.projectedTokens) / monthlyAllowance,
-    overAllowance: usedTokens + args.projectedTokens > monthlyAllowance,
-    estimatedCost: undefined,
-    unpricedModels: [],
-    capacity: { instances: 10, maxConcurrentInstances: 16, runningShifts: 3, freeSlots: 13 },
-  };
-};
 
 const instructions = `# Operating rules
 You are an employee of this workspace. Work only on the task you were given, and say what you could
