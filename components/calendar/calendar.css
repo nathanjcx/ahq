@@ -1,0 +1,427 @@
+/*
+ * The calendar page: the week board, the day timeline, the phone's agenda, and the sheet that books
+ * a meeting. The boardroom the calendar opens has its own stylesheet in components/meetings.
+ */
+
+/* === components/calendar/calendar-page.tsx: navigation === */
+.cal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cal-nav > strong {
+  min-width: 172px;
+  text-align: center;
+  font-size: var(--text-lg);
+  letter-spacing: -0.2px;
+}
+.cal-quiet {
+  padding: 14px 16px;
+  color: var(--muted);
+  font-size: var(--text-base);
+}
+
+/* === components/calendar/calendar-grid.tsx: row labels shared by both views === */
+.cal-row-label {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 12px 8px 14px;
+  border-top: 1px solid #edefe8;
+  border-right: 1px solid var(--line);
+  box-shadow: inset 3px 0 var(--row-color);
+}
+.cal-row-label strong {
+  overflow: hidden;
+  font-size: var(--text-base);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cal-row-label small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-tower='true'] .cal-row-label {
+  background: #f4f5ee;
+}
+
+/* === components/calendar/calendar-grid.tsx: blocks === */
+.cal-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 7px;
+  color: #4a5f4d;
+  border: 1px solid #dde4d6;
+  border-radius: 6px;
+  background: #eef2e9;
+  font-size: var(--text-sm);
+  font-weight: 640;
+  text-align: left;
+}
+.cal-item > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A week's cell is narrow, so a title there gets a second line rather than an ellipsis. */
+.cal-cell .cal-item {
+  align-items: flex-start;
+}
+.cal-cell .cal-item > svg {
+  margin-top: 2px;
+}
+.cal-cell .cal-item > span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+}
+.cal-item > svg {
+  flex: none;
+}
+.cal-item:hover:not(.cal-static) {
+  border-color: #c2cfb8;
+}
+.cal-item[data-kind='meeting'] {
+  color: #8a5537;
+  border-color: #e6d0c2;
+  background: #fbeee5;
+}
+.cal-item[data-kind='deadline'] {
+  color: #8c692f;
+  border-color: #e6d9bc;
+  background: #faf1de;
+}
+.cal-item[data-kind='audit'] {
+  color: #4f6a86;
+  border-color: #cfdce8;
+  background: #eaf1f7;
+}
+.cal-item[data-kind='overnight'] {
+  color: #5d5a78;
+  border-color: #d7d5e4;
+  background: #eeedf5;
+}
+.cal-item[data-status='cancelled'] {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.cal-item[data-status='live'] {
+  box-shadow: 0 0 0 2px rgba(144, 168, 132, 0.45);
+}
+
+/* === components/calendar/calendar-grid.tsx: week board === */
+.cal-week {
+  display: grid;
+  grid-template-columns: 168px repeat(7, minmax(0, 1fr));
+  overflow: hidden;
+}
+.cal-week-head,
+.cal-week-row {
+  display: contents;
+}
+.cal-gutter {
+  border-right: 1px solid var(--line);
+  background: #f7f8f2;
+}
+.cal-day-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 9px 4px;
+  color: inherit;
+  border: 0;
+  border-left: 1px solid #edefe8;
+  background: #f7f8f2;
+}
+.cal-day-head:hover {
+  background: #eef1e7;
+}
+.cal-day-head span {
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.cal-day-head strong {
+  font-size: var(--text-lg);
+}
+.cal-day-head[data-today='true'] {
+  color: var(--terra);
+  background: #fbf0e8;
+}
+.cal-day-head[data-today='true'] span {
+  color: var(--terra);
+}
+.cal-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 52px;
+  padding: 5px;
+  border-top: 1px solid #edefe8;
+  border-left: 1px solid #edefe8;
+}
+.cal-cell[data-off='true'] {
+  background: #f4f5ef;
+}
+.cal-cell[data-today='true'] {
+  background: #fdf7f2;
+}
+
+/* === components/calendar/calendar-grid.tsx: day timeline === */
+.cal-day {
+  overflow: hidden;
+}
+.cal-day-row {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+}
+.cal-track {
+  position: relative;
+  height: calc(var(--lanes) * 38px + 8px);
+  border-top: 1px solid #edefe8;
+}
+.cal-axis-row .cal-track {
+  height: 30px;
+  border-top: 0;
+  background: #f7f8f2;
+}
+.cal-axis-row .cal-gutter {
+  border-right: 1px solid var(--line);
+}
+.cal-tick {
+  position: absolute;
+  top: 8px;
+  left: calc(var(--at) * 100%);
+  padding-left: 5px;
+  color: var(--muted);
+  border-left: 1px solid #e2e6da;
+  font-size: var(--text-2xs);
+  font-weight: 680;
+  white-space: nowrap;
+}
+.cal-shade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--from) * 100%);
+  width: calc((var(--to) - var(--from)) * 100%);
+  background: #f2f5ec;
+}
+.cal-now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--at) * 100%);
+  width: 2px;
+  background: var(--terra);
+}
+.cal-slot {
+  position: absolute;
+  top: calc(var(--lane) * 38px + 5px);
+  left: calc(var(--from) * 100%);
+  display: flex;
+  width: max(104px, calc(var(--span) * 100%));
+  max-width: calc(100% - var(--from) * 100%);
+  /* Lanes keep blocks apart, and a widened short block never swallows the click beside it. */
+  pointer-events: none;
+}
+.cal-slot .cal-item {
+  width: 100%;
+  height: 30px;
+  pointer-events: auto;
+}
+
+/* === components/calendar/agenda-list.tsx === */
+.cal-agenda section + section {
+  border-top: 1px solid var(--line);
+}
+.cal-agenda h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 15px 8px;
+  font-size: var(--text-md);
+}
+.cal-agenda h3 span {
+  padding: 2px 7px;
+  color: var(--terra);
+  border-radius: 999px;
+  background: #fbeee5;
+  font-size: var(--text-2xs);
+  font-weight: 720;
+  text-transform: uppercase;
+}
+.cal-agenda-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap);
+  padding: 9px 15px;
+  text-align: left;
+  border: 0;
+  border-top: 1px solid #f0f1ea;
+  background: transparent;
+}
+.cal-agenda-row strong {
+  display: block;
+  overflow: hidden;
+  font-size: var(--text-base);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cal-agenda-row small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--text-2xs);
+}
+.cal-agenda-mark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: #5c705c;
+  border-radius: 8px;
+  background: #eef2e9;
+}
+.cal-agenda-mark[data-kind='meeting'] {
+  color: #8a5537;
+  background: #fbeee5;
+}
+.cal-agenda-mark[data-kind='deadline'] {
+  color: #8c692f;
+  background: #faf1de;
+}
+.cal-agenda-mark[data-kind='audit'] {
+  color: #4f6a86;
+  background: #eaf1f7;
+}
+
+/* === components/calendar/schedule-sheet.tsx === */
+/* A group of checkboxes is not a label; it carries one, so it is styled like the fields around it. */
+.cal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cal-field > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: #5f6d61;
+  font-size: var(--text-xs);
+  font-weight: 670;
+}
+.cal-field > span small {
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  font-weight: 450;
+}
+.cal-attendees {
+  max-height: 236px;
+  overflow-y: auto;
+}
+.cal-when {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1.1fr;
+  gap: 10px;
+}
+.cal-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  color: #8c692f;
+  border: 1px solid #e6d9bc;
+  border-radius: 7px;
+  background: #fbf5e7;
+  font-size: var(--text-base);
+  line-height: 1.55;
+}
+.cal-warning > svg {
+  flex: none;
+  margin-top: 1px;
+}
+.cal-suggest > strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  color: #5f6d61;
+  font-size: var(--text-xs);
+  font-weight: 670;
+}
+.cal-suggest .tool-checklist small {
+  text-transform: capitalize;
+}
+.cal-suggest-own {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--ink-soft);
+  font-size: var(--text-base);
+}
+.cal-suggest-add {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.cal-suggest-add input {
+  flex: 1;
+  min-width: 0;
+  min-height: 39px;
+  padding: 9px 11px;
+  border: 1px solid #d5ddd0;
+  border-radius: 7px;
+  outline: 0;
+  background: #fffef9;
+  font-size: var(--text-sm);
+}
+.cal-suggest-add input:focus {
+  border-color: #9aad90;
+  box-shadow: 0 0 0 3px #e4eadf;
+}
+
+@media (max-width: 1100px) {
+  .cal-week {
+    grid-template-columns: 132px repeat(7, minmax(0, 1fr));
+  }
+  .cal-day-row {
+    grid-template-columns: 132px minmax(0, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  .cal-toolbar {
+    gap: 8px;
+  }
+  .cal-nav > strong {
+    min-width: 0;
+    flex: 1;
+    font-size: var(--text-md);
+  }
+  .cal-when {
+    grid-template-columns: 1fr;
+  }
+}

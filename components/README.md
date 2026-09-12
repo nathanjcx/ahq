@@ -5,8 +5,8 @@
 `inbox/`, `employees/`, `tasks/`, `files/`, `activity/`, `marketplace/`, `integrations/`, `floors/`,
 `admin/`. A directory holds its page component and every part only that page uses. A page directory
 never imports from another page directory — if two pages need the same thing, it belongs in
-`shared/`. The one exception is `floors/`, which renders `office/` because the floor page is the
-office.
+`shared/`. The exceptions are `floors/`, which renders `office/` because the floor page is the
+office, and `calendar/`, which renders `meetings/` because a meeting is the calendar's detail.
 
 `app/` is the shell, not a page: the sidebar, the top bar, the panels that open over any page, the
 review bar, and `page-content.tsx`, which picks the page to render. The shell imports pages; pages
