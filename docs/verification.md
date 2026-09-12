@@ -36,18 +36,20 @@ the assertion holds while the interface keeps treating ids as opaque.
 
 Pure modules, run by Vitest without a browser or a deployment.
 
-| File                       | Tests | What it protects                                                                         |
-| -------------------------- | ----- | ---------------------------------------------------------------------------------------- |
-| `schedule-time.test.ts`    | 13    | `lib/time.ts`: zones, DST, working windows, attended hours, `workingHoursBetween`        |
-| `schedule-planner.test.ts` | 14    | `planTick`: priority, preemption, caps, free slots, cheap mode, unique keys              |
-| `memory-compiler.test.ts`  | 4     | Section order, importance ordering, budgets, the omission note                           |
-| `projects-graph.test.ts`   | 7     | Topological order, cycles, readiness, dependents, milestone status                       |
-| `text.test.ts`             | 20    | `lib/text.ts`: shortening, counting, slugs                                               |
-| `office-activity.test.ts`  | 19    | `deriveActivities`: every rule, its timeout, attention, bubble text, provider matching   |
-| `office-labels.test.ts`    | 10    | Label priority, the collision pass and its stability, bubble ranking and placement       |
-| `office-stations.test.ts`  | 6     | The desk grid, sticky homes, the minimum gap, the lectern queue, consoles, handoff pairs |
-| `office-rooms.test.ts`     | 16    | Records, boardroom, triage and lobby layout invariants: shelves, seats, props            |
-| `office-replay.test.ts`    | 4     | `sceneAt` and `entryAt`: a recorded timeline replayed into the live floor's scene        |
+| File                        | Tests | What it protects                                                                         |
+| --------------------------- | ----- | ---------------------------------------------------------------------------------------- |
+| `schedule-time.test.ts`     | 13    | `lib/time.ts`: zones, DST, working windows, attended hours, `workingHoursBetween`        |
+| `schedule-planner.test.ts`  | 22    | `planTick`: priority, preemption, caps, free slots, cheap mode, unique keys              |
+| `memory-compiler.test.ts`   | 6     | Section order, importance ordering, budgets, the omission note                           |
+| `projects-graph.test.ts`    | 7     | Topological order, cycles, readiness, dependents, milestone status                       |
+| `text.test.ts`              | 20    | `lib/text.ts`: shortening, counting, slugs                                               |
+| `paging.test.ts`            | 4     | `lib/paging.ts`: pages counted per batch, in-app rows excluded, the twenty-minute gate   |
+| `projects-timeline.test.ts` | 5     | The roadmap timeline's lanes, flags, and dependency strings                              |
+| `office-activity.test.ts`   | 35    | `deriveActivities`: every rule, its timeout, attention, bubble text, provider matching   |
+| `office-labels.test.ts`     | 13    | Label priority, the collision pass and its stability, bubble ranking and placement       |
+| `office-stations.test.ts`   | 6     | The desk grid, sticky homes, the minimum gap, the lectern queue, consoles, handoff pairs |
+| `office-rooms.test.ts`      | 18    | Records, boardroom, triage and lobby layout invariants: shelves, seats, props            |
+| `office-replay.test.ts`     | 11    | `sceneAt` and `entryAt`: a recorded timeline replayed into the live floor's scene        |
 
 ## Convex tests
 
@@ -55,15 +57,15 @@ Each family runs against `convex-test` with a real schema and real mutations.
 
 | File                      | Tests | Family                                                                                                                                         |
 | ------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `schedule.test.ts`        | 15    | Settings and their validation, the tick's jobs, reserved staff, shifts, reports, inference, pacing, daily usage                                |
+| `schedule.test.ts`        | 20    | Settings and their validation, the tick's jobs, reserved staff, shifts, reports, inference, pacing, daily usage                                |
 | `calendar.test.ts`        | 5     | Booking, changing, cancelling, derived deadlines and shifts and audits, agenda suggestions                                                     |
 | `meetings.test.ts`        | 3     | Prep, questions and answers on per-attendee sessions, wrap-up outcomes, workspace isolation                                                    |
-| `audit.test.ts`           | 4     | One auditor per day, findings recorded once, posted to the audit and floor channels, the open → addressed → verified → escalated path          |
-| `memory.test.ts`          | 6     | Proposal and approval, supersession, the agent budget, janitor-only curation, contest on both sides, recall ranking                            |
-| `channels.test.ts`        | 3     | Channel creation, per-viewer unread, the employee feed, addressed notes, one report one post                                                   |
-| `triage.test.ts`          | 5     | Fingerprint dedupe, GitHub rule matching, the emergency path, the post-mortem and its memory proposal, signed intake                           |
-| `projects.test.ts`        | 12    | Roadmap confirmation, cycles, waiting and blocked release, re-pointing, planner inputs, dashboard fields                                       |
-| `marketplace.test.ts`     | 15    | Listings and visibility, hiring a count and its cap, policies and requests, renaming and moving, upgrade and rollback, studio preview and diff |
+| `audit.test.ts`           | 5     | One auditor per day, findings recorded once, posted to the audit and floor channels, the open → addressed → verified → escalated path          |
+| `memory.test.ts`          | 10    | Proposal and approval, supersession, the agent budget, janitor-only curation, contest on both sides, recall ranking                            |
+| `channels.test.ts`        | 4     | Channel creation, per-viewer unread, the employee feed, addressed notes, one report one post                                                   |
+| `triage.test.ts`          | 12    | Fingerprint dedupe, GitHub rule matching, the emergency path, the post-mortem and its memory proposal, signed intake                           |
+| `projects.test.ts`        | 15    | Roadmap confirmation, cycles, waiting and blocked release, re-pointing, planner inputs, dashboard fields                                       |
+| `marketplace.test.ts`     | 18    | Listings and visibility, hiring a count and its cap, policies and requests, renaming and moving, upgrade and rollback, studio preview and diff |
 | `reserved.test.ts`        | 2     | One instance per reserved kind per workspace, and reserved versions kept out of the marketplace                                                |
 | `floors.test.ts`          | 3     | Floors, staffing, posts, handoffs                                                                                                              |
 | `data-jobs.test.ts`       | 8     | Queue mutations, leases, job and monitor claiming                                                                                              |
@@ -72,12 +74,13 @@ Each family runs against `convex-test` with a real schema and real mutations.
 | `sharing.test.ts`         | 6     | Connection visibility, borrowing, who may decide                                                                                               |
 | `usage.test.ts`           | 4     | Usage recording, the period aggregate, the token cap                                                                                           |
 | `actions.test.ts`         | 6     | Re-authorization before dispatch, no retry on an unknown outcome, correction preconditions                                                     |
-| `security.test.ts`        | 6     | Request forgery, audit authorization, error redaction, the CSP nonce, `untrustedBlock`, the service-secret length check                        |
+| `security.test.ts`        | 8     | Request forgery, audit authorization, error redaction, the CSP nonce, `untrustedBlock`, the service-secret length check                        |
 | `admin-config.test.ts`    | 4     | Provider configuration and tool registry rules                                                                                                 |
 | `inbox-routing.test.ts`   | 4     | Relay and resource-routed ingestion                                                                                                            |
 | `native-inbox.test.ts`    | 4     | Native webhook signatures and normalization, with constructed payloads                                                                         |
 | `server.test.ts`          | 8     | `safeFetch`, sealing, MCP helpers, tool policy                                                                                                 |
-| `web-api.test.ts`         | 7     | The web routes: schemas, error envelope, status codes                                                                                          |
+| `web-api.test.ts`         | 8     | The web routes: schemas, error envelope, status codes                                                                                          |
+| `notify.test.ts`          | 6     | Web push delivery, pruning of gone endpoints, the public-only lookup, the unconfigured fallback                                                |
 
 ## The runtime harnesses
 
@@ -87,7 +90,7 @@ journaled reads, blocked tools, a write becoming a proposal with the record capt
 unknown run token, a malformed body, an approved write, a correction and its refusal of a second, a
 correction whose record moved on failing cleanly, and the whole operation in the audit timeline.
 
-`web-tests/runtime-day.test.ts` (9 tests) drives one workspace day with a fake clock
+`web-tests/runtime-day.test.ts` (12 tests) drives one workspace day with a fake clock
 (`vi.setSystemTime` over a Wednesday at 10:00 and 22:00 and the Thursday at 10:00) and a scripted
 `TurnRunner`, so the turns exercise real gateway tools, real Convex mutations, and a real fake
 provider — everything except the OpenAI client.
@@ -144,13 +147,13 @@ bar's sheet, and the floor switcher. Shots land in `test-results/visual/`.
 the same fixture route. Each walks its pages at 1280×1000 and 390×844, asserts no page error and no
 horizontal overflow, and writes its shots under `test-results/visual-<domain>/`:
 
-| Spec | What it photographs |
-| --- | --- |
-| `web-tests/visual-projects.spec.ts` | The projects list, a running project, a roadmap awaiting review with its bottleneck questions, the planner working, the new-project sheet |
-| `web-tests/visual-calendar.spec.ts` | The calendar week, the day, the agenda list on a phone, the scheduling sheet, the boardroom |
-| `web-tests/visual-records.spec.ts` | The records basement, the audit room, every section of the settings panel |
-| `web-tests/visual-floors.spec.ts` | A floor's channel, feeds, work, team, and binder; the Triage floor; the notifications ledger |
-| `web-tests/visual-employees.spec.ts` | The employees page, the marketplace, the marketplace studio |
+| Spec                                 | What it photographs                                                                                                                       |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `web-tests/visual-projects.spec.ts`  | The projects list, a running project, a roadmap awaiting review with its bottleneck questions, the planner working, the new-project sheet |
+| `web-tests/visual-calendar.spec.ts`  | The calendar week, the day, the agenda list on a phone, the scheduling sheet, the boardroom                                               |
+| `web-tests/visual-records.spec.ts`   | The records basement, the audit room, every section of the settings panel                                                                 |
+| `web-tests/visual-floors.spec.ts`    | A floor's channel, feeds, work, team, and binder; the Triage floor; the notifications ledger                                              |
+| `web-tests/visual-employees.spec.ts` | The employees page, the marketplace, the marketplace studio                                                                               |
 
 **Office baselines**, `npm run test:lab` (`web-tests/lab/office.spec.ts`). Fifteen deterministic
 scenes from `/office-lab` at 1280×720, reduced motion, a fixed seed, and 1.5 seconds to settle the
