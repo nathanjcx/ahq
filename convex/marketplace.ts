@@ -6,6 +6,7 @@ import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import {
   VERSION_FIELDS,
+  addToFloor,
   changedFields,
   createInstances,
   instanceNames,
@@ -21,15 +22,7 @@ import { settingsFor } from './lib/schedule';
 import { assertEmployeeReady, requireFloor } from './lib/tasks';
 import { registryToolsFor } from './registry';
 import { listingVisibility, persona as personaValidator } from './schema';
-import {
-  cleanText,
-  identity,
-  requirePlatformAdmin,
-  requireWorkspace,
-  sha256,
-  type Ctx,
-  type WorkspaceRole,
-} from './shared';
+import { cleanText, identity, requirePlatformAdmin, requireWorkspace, sha256, type Ctx } from './shared';
 
 const provider = v.union(
   v.literal('linear'),
@@ -189,33 +182,29 @@ async function hirableListing(ctx: Ctx, listingId: Id<'listings'>) {
   return listing;
 }
 
-function assertHireCount(count: number) {
-  if (!Number.isInteger(count) || count < 1 || count > 20)
-    throw new Error('Hire between 1 and 20 instances at a time');
-}
-
-const hireArgs = {
-  listingId: v.id('listings'),
-  floorId: v.optional(v.id('floors')),
-  count: v.optional(v.number()),
-  name: v.optional(v.string()),
-};
-
 /**
  * Hiring under the workspace's policy. `anyone` hires; `admins` refuses members; `approval` files a
  * request for a member and hires straight away for an owner or admin, who is the one who decides it.
  */
 export const hire = mutation({
-  args: hireArgs,
+  args: {
+    listingId: v.id('listings'),
+    floorId: v.optional(v.id('floors')),
+    count: v.optional(v.number()),
+    name: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const { workspace, role, actor } = await requireWorkspace(ctx);
     const count = args.count ?? 1;
-    assertHireCount(count);
+    if (!Number.isInteger(count) || count < 1 || count > 20)
+      throw new Error('Hire between 1 and 20 instances at a time');
     const listing = await hirableListing(ctx, args.listingId);
     const { hiringPolicy } = await settingsFor(ctx, workspace._id);
     if (hiringPolicy !== 'anyone' && role === 'member') {
       if (hiringPolicy === 'admins')
         throw new Error('Only workspace owners and admins can hire in this workspace');
+      // The floor is checked here too, so a request cannot sit pending on a floor that cannot take it.
+      if (args.floorId) await requireFloor(ctx, workspace._id, args.floorId);
       const requestId = await ctx.db.insert('hireRequests', {
         workspaceId: workspace._id,
         listingId: listing._id,
@@ -267,15 +256,11 @@ export const hireRequests = query({
   },
 });
 
-function requireAdmin(role: WorkspaceRole) {
-  if (role === 'member') throw new Error('Workspace owner or administrator access required');
-}
-
 export const decideHire = mutation({
   args: { requestId: v.id('hireRequests'), approved: v.boolean() },
   handler: async (ctx, args) => {
     const { workspace, role, actor } = await requireWorkspace(ctx);
-    requireAdmin(role);
+    if (role === 'member') throw new Error('Workspace owner or administrator access required');
     const request = await ctx.db.get(args.requestId);
     if (!request || request.workspaceId !== workspace._id) throw new Error('Hire request not found');
     if (request.status !== 'pending') throw new Error('Hire request is already decided');
@@ -315,11 +300,7 @@ export const move = mutation({
     const floor = args.floorId ? await requireFloor(ctx, workspace._id, args.floorId) : null;
     if (floor && floor.archivedAt !== undefined) throw new Error('Floor is archived');
     if (installation.floorId) await removeFromFloor(ctx, installation.floorId, installation._id);
-    if (floor && !floor.employeeIds.includes(installation._id))
-      await ctx.db.patch(floor._id, {
-        employeeIds: [...floor.employeeIds, installation._id],
-        updatedAt: Date.now(),
-      });
+    if (floor) await addToFloor(ctx, floor, [installation._id]);
     const version = await ctx.db.get(installation.versionId);
     const current = installation.name ?? version?.name ?? 'Employee';
     const taken = await namesOnFloor(ctx, workspace._id, args.floorId, installation._id);
@@ -341,7 +322,7 @@ export const retireInstance = mutation({
         .withIndex('by_workspace_status', (q) => q.eq('workspaceId', workspace._id).eq('status', status))
         .collect();
       if (tasks.some((task) => task.employeeId === installation._id))
-        throw new Error('Finish or cancel this instance\u2019s active work before retiring it');
+        throw new Error('Finish or cancel the active work on this instance before retiring it');
     }
     if (installation.floorId) await removeFromFloor(ctx, installation.floorId, installation._id);
     await ctx.db.patch(installation._id, { status: 'retired' });
