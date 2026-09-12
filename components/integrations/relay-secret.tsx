@@ -64,7 +64,7 @@ export function RelaySecret({ connectionId }: { connectionId: string }) {
   return (
     <div className="relay-secret">
       <div className="permission-heading">
-        <span className="eyebrow">RELAY SECRET</span>
+        <span className="eyebrow">INBOX RELAY</span>
         <h3>Relay secret</h3>
         <p>
           This provider sends no events on its own. Post them to the relay URL and sign each request with this

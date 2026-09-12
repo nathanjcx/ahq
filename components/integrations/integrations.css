@@ -47,6 +47,11 @@
   color: #3f4d3f;
   font-size: 10px;
 }
+.share-members strong {
+  color: #3f4d3f;
+  font-family: inherit;
+  font-size: 10px;
+}
 .share-choices small {
   display: block;
   margin-top: 2px;

@@ -61,7 +61,7 @@ export function SharePanel({
           ) : candidates.length === 0 ? (
             <p className="field-hint">Invite people by creating an organization in Clerk.</p>
           ) : (
-            <div className="tool-checklist">
+            <div className="tool-checklist share-members">
               {candidates.map((member) => {
                 const checked = subjects.includes(member.subject);
                 return (
