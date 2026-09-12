@@ -65,6 +65,7 @@ function HireAnswer({
         <UserPlus size={15} />
         Hire
       </button>
+      <small>{suggestion.reason}</small>
     </div>
   );
 }
@@ -116,7 +117,7 @@ export function ProposalQuestions({
 }) {
   if (!prompts.length) return null;
   return (
-    <section className="proposal-questions">
+    <section className="roadmap-questions">
       <div className="section-title">
         <CircleHelp size={16} />
         <h2>Answer before confirming</h2>

@@ -9,7 +9,7 @@ import type { Employee, Floor } from '@/lib/contracts';
  * back with a roadmap. The deadline and the staff suggestions are written into the brief, in the
  * words the planner will read, because they are instructions to it rather than fields of the project.
  */
-export function composeBrief(goal: string, deadline: string, suggested: Employee[]) {
+function composeBrief(goal: string, deadline: string, suggested: Employee[]) {
   const lines = [goal.trim()];
   if (deadline) lines.push(`Deadline: ${new Date(`${deadline}T12:00:00`).toDateString()}.`);
   if (suggested.length)
@@ -67,7 +67,7 @@ export function NewProjectSheet({
         </>
       }
     >
-      <div className="form-stack project-form">
+      <div className="form-stack">
         <label>
           Name
           <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Spring launch" />

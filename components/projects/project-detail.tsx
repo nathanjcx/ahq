@@ -8,10 +8,9 @@ import { OverflowMenu } from '../shared/overflow-menu';
 import { shortDate } from '../shared/time';
 import { ProjectStatusPill } from './project-card';
 import { ProjectTaskRow } from './project-task-row';
-import { ProjectionNote } from './projection-note';
 import { finalDeadline, projectTimeline } from './roadmap';
 import { RoadmapTimeline } from './roadmap-timeline';
-import type { Floor, PlanProjection, Project, ProjectTask } from '@/lib/contracts';
+import type { Floor, Project, ProjectTask } from '@/lib/contracts';
 import { pluralize } from '@/lib/text';
 
 /** Statuses that mean the task is not being worked on and says why. */
@@ -25,7 +24,6 @@ export function ProjectDetail({
   project,
   tasks,
   floors,
-  projection,
   actions,
   busy,
   onOpenTask,
@@ -39,7 +37,6 @@ export function ProjectDetail({
   project: Project;
   tasks: ProjectTask[];
   floors: Floor[];
-  projection?: PlanProjection;
   /** Passed through to the project's channel. */
   actions: ChannelsActions;
   busy: boolean;
@@ -102,7 +99,8 @@ export function ProjectDetail({
           {project.behindMilestones > 0 && (
             <p className="project-behind">
               <AlertTriangle size={15} />
-              {pluralize(project.behindMilestones, 'milestone')} past their deadline. Replan or move them.
+              {pluralize(project.behindMilestones, 'milestone')} past deadline. Replan, or move the
+              work that is late.
             </p>
           )}
         </div>
@@ -125,10 +123,9 @@ export function ProjectDetail({
           />
         </div>
       </header>
-      <ProjectionNote projection={projection} />
       {timeline.rows.length > 0 && <RoadmapTimeline timeline={timeline} onSelectBar={onOpenTask} />}
       {held.length > 0 && (
-        <section className="project-held">
+        <section>
           <div className="section-title">
             <AlertTriangle size={16} />
             <h2>Held up</h2>
@@ -175,7 +172,7 @@ export function ProjectDetail({
           </>
         )}
       </section>
-      <section className="project-channel">
+      <section>
         <div className="section-title">
           <MessagesSquare size={16} />
           <h2>Project channel</h2>

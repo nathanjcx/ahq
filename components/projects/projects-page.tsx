@@ -196,7 +196,6 @@ export function ProjectsPage({
                   project={project}
                   tasks={tasks ?? []}
                   floors={dashboard.floors}
-                  projection={projection}
                   actions={actions}
                   busy={busy}
                   onOpenTask={openTask}

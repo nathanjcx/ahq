@@ -98,8 +98,8 @@ export function ProposalReview({
   );
 
   return (
-    <section className="proposal">
-      <header className="proposal-head">
+    <section className="roadmap-review">
+      <header className="roadmap-review-head">
         <div>
           <span className="eyebrow">PROPOSED ROADMAP</span>
           <h2>{project.name}</h2>
@@ -108,7 +108,7 @@ export function ProposalReview({
             {totals.workingHours} working hours · estimates {Math.round(totals.confidence * 100)}% confident
           </p>
         </div>
-        <div className="proposal-actions">
+        <div className="roadmap-review-actions">
           <button className="secondary-button" disabled={busy || !edited} onClick={() => onSave(draft)}>
             <Save size={16} />
             Save edits
@@ -125,7 +125,7 @@ export function ProposalReview({
       </header>
       <ProjectionNote projection={projection} projectedTokens={draft.projectedTokens} />
       {unstaffed > 0 && (
-        <p className="proposal-blocker">
+        <p className="roadmap-blocker">
           {pluralize(unstaffed, 'task')} still need someone to do them before this can be confirmed.
         </p>
       )}
@@ -219,7 +219,7 @@ export function ProposalReview({
         ))}
       </ol>
       {draft.meetings.length > 0 && (
-        <div className="proposal-meetings">
+        <div className="roadmap-meetings">
           <div className="section-title">
             <CalendarClock size={16} />
             <h2>Meeting points</h2>

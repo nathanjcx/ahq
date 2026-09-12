@@ -96,8 +96,16 @@
 }
 
 /* === Detail and proposal === */
+/* These section headings lead with an icon; the shared rule pushes a trailing action to the right. */
+.project-detail .section-title,
+.roadmap-review .section-title,
+.planner-working .section-title {
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+}
 .project-detail,
-.proposal,
+.roadmap-review,
 .planner-working {
   display: flex;
   flex-direction: column;
@@ -106,27 +114,33 @@
   overflow-y: auto;
 }
 .project-head,
-.proposal-head {
+.roadmap-review-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
 }
+.project-head > div:first-child,
+.roadmap-review-head > div:first-child {
+  flex: 1;
+  min-width: 240px;
+}
 .project-head h2,
-.proposal-head h2 {
+.roadmap-review-head h2 {
   margin: 6px 0 4px;
   font-size: 22px;
   color: var(--ink);
 }
 .project-head p,
-.proposal-head p {
+.roadmap-review-head p {
   margin: 0;
   max-width: 62ch;
   color: var(--ink-soft);
   font-size: var(--text-md);
 }
 .project-head-actions,
-.proposal-actions {
+.roadmap-review-actions {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -155,7 +169,7 @@
   font-size: var(--text-md);
 }
 .project-behind,
-.proposal-blocker {
+.roadmap-blocker {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -252,7 +266,7 @@
 }
 .roadmap-track {
   position: relative;
-  min-width: 660px;
+  min-width: 560px;
 }
 .roadmap-head {
   position: relative;
@@ -270,7 +284,7 @@
 .roadmap-flag {
   position: absolute;
   top: 5px;
-  max-width: 160px;
+  max-width: 140px;
   transform: translateX(-50%);
   padding: 2px 8px;
   border-radius: 999px;
@@ -324,6 +338,8 @@
   position: absolute;
   display: flex;
   align-items: center;
+  /* Wide enough to read the task's name, however short the work itself is. */
+  min-width: 104px;
   height: calc(var(--row-h) - 12px);
   margin-top: 6px;
   padding: 0 9px;
@@ -535,14 +551,14 @@
   color: var(--muted);
   font-size: var(--text-sm);
 }
-.proposal-meetings ul {
+.roadmap-meetings ul {
   display: grid;
   gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.proposal-meetings li {
+.roadmap-meetings li {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -553,14 +569,14 @@
   background: var(--paper);
   font-size: var(--text-md);
 }
-.proposal-meetings small {
+.roadmap-meetings small {
   flex-basis: 100%;
   color: var(--muted);
   font-size: var(--text-sm);
 }
 
 /* === Bottleneck questions === */
-.proposal-questions {
+.roadmap-questions {
   display: grid;
   gap: var(--space-2);
 }
@@ -610,6 +626,11 @@
 .question-answer input[type='number'] {
   width: 64px;
 }
+.question-answer small {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
 .question-foot {
   display: flex;
   justify-content: flex-end;
@@ -639,12 +660,25 @@
 }
 .project-options label {
   display: flex;
+  /* The shared form stack lays its labels out in a column; a checkbox row reads across. */
+  flex-direction: row;
   align-items: flex-start;
   gap: var(--space-2);
   padding: 9px 11px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--paper);
+}
+.project-options input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  flex: none;
+  margin-top: 2px;
+  accent-color: var(--sage-800);
+}
+.project-options label > span {
+  min-width: 0;
 }
 .project-options label[data-checked='true'] {
   border-color: var(--sage-400);
@@ -677,15 +711,15 @@
     border-right: 0;
   }
   .project-head,
-  .proposal-head {
+  .roadmap-review-head {
     flex-direction: column;
   }
   .project-head-actions,
-  .proposal-actions {
+  .roadmap-review-actions {
     width: 100%;
   }
-  .proposal-actions .primary-button,
-  .proposal-actions .secondary-button {
+  .roadmap-review-actions .primary-button,
+  .roadmap-review-actions .secondary-button {
     flex: 1;
   }
   .roadmap-labels {
@@ -693,6 +727,20 @@
   }
   .roadmap-track {
     min-width: 560px;
+  }
+  /* The editors fold: the title takes its own line, the pickers share the next. */
+  .milestone-editors > li > header {
+    flex-wrap: wrap;
+  }
+  .milestone-editors > li > header > input:first-of-type,
+  .task-editors > li > input:first-child {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .task-editors > li > select,
+  .task-editors > li > input[type='date'] {
+    flex: 1 1 auto;
+    min-width: 0;
   }
   .project-task-controls input,
   .project-task-controls select,
