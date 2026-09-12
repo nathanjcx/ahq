@@ -76,19 +76,17 @@ const TODAY_SHIFTS: [attendee: Attendee, title: string, from: number, to: number
 
 const entries: CalendarEntry[] = [
   ...shifts,
-  ...TODAY_SHIFTS.map(
-    ([attendee, title, from, to], index): CalendarEntry => ({
-      id: `shift:today-${index}`,
-      kind: 'shift',
-      title,
-      startsAt: todayAt(Math.floor(from), (from % 1) * 60),
-      endsAt: todayAt(Math.floor(to), (to % 1) * 60),
-      attendees: [attendee],
-      agenda: [],
-      status: todayAt(to) < Date.now() ? 'done' : 'scheduled',
-      taskId: 'task_running',
-    }),
-  ),
+  ...TODAY_SHIFTS.map(([attendee, title, from, to], index): CalendarEntry => ({
+    id: `shift:today-${index}`,
+    kind: 'shift',
+    title,
+    startsAt: todayAt(Math.floor(from), (from % 1) * 60),
+    endsAt: todayAt(Math.floor(to), (to % 1) * 60),
+    attendees: [attendee],
+    agenda: [],
+    status: todayAt(to) < Date.now() ? 'done' : 'scheduled',
+    taskId: 'task_running',
+  })),
   {
     id: 'deadline:task_running',
     kind: 'deadline',

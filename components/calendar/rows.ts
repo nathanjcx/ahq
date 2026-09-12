@@ -1,6 +1,6 @@
 import type { CalendarEntry, CalendarKind, CalendarStatus, Employee, WorkingHours } from '@/lib/contracts';
 import { defaultWorkspaceSettings } from '@/lib/contracts';
-import { nextWorkingStart, overnightWindow, startOfDay } from '@/lib/time';
+import { dateKey, nextWorkingStart, overnightWindow, startOfDay } from '@/lib/time';
 
 const HOUR_MS = 3_600_000;
 const NOON_MS = 12 * HOUR_MS;
@@ -23,6 +23,26 @@ export function calendarClock(schedule: WorkingHours | undefined): WorkingHours 
       overnightPolicy,
     }
   );
+}
+
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+/**
+ * A date formatter in the workspace's zone. The calendar's days are the workspace's days, so their
+ * headings have to be read there too; the clock inside a day stays the viewer's.
+ */
+export function dayFormat(timezone: string, options: Intl.DateTimeFormatOptions) {
+  const key = `${timezone}|${Object.entries(options).join()}`;
+  const cached = formatters.get(key);
+  if (cached) return cached;
+  const made = new Intl.DateTimeFormat(undefined, { ...options, timeZone: timezone });
+  formatters.set(key, made);
+  return made;
+}
+
+/** Whether a local day is the one the viewer is living through. */
+export function isToday(dayStart: number, now: number, timezone: string) {
+  return dateKey(dayStart, timezone) === dateKey(now, timezone);
 }
 
 /** Local midnight of each day in a span, plus the boundary that closes the last one. */
@@ -122,8 +142,7 @@ export function calendarRows(
       tower: false,
       items: [],
     });
-  for (const tower of TOWER_ROWS)
-    rows.set(tower.id, { ...tower, tower: true, items: [] });
+  for (const tower of TOWER_ROWS) rows.set(tower.id, { ...tower, tower: true, items: [] });
 
   for (const entry of entries) {
     const item = itemOf(entry);
@@ -131,9 +150,7 @@ export function calendarRows(
       rows.get('tower:audit')?.items.push(item);
       continue;
     }
-    const mine = entry.attendees.filter(
-      (attendee) => attendee.kind === 'employee' && rows.has(attendee.id),
-    );
+    const mine = entry.attendees.filter((attendee) => attendee.kind === 'employee' && rows.has(attendee.id));
     if (!mine.length) {
       const fallback = entry.kind === 'meeting' ? 'tower:boardroom' : 'tower:deadlines';
       rows.get(fallback)?.items.push(item);

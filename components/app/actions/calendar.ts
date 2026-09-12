@@ -52,8 +52,7 @@ export function useCalendarActions(): CalendarActions {
 
   return {
     scheduleMeeting: (draft) => createMeeting(meetingArgs(draft)),
-    rescheduleMeeting: (entryId, draft) =>
-      updateMeeting({ entryId: asId(entryId), ...meetingArgs(draft) }),
+    rescheduleMeeting: (entryId, draft) => updateMeeting({ entryId: asId(entryId), ...meetingArgs(draft) }),
     cancelMeeting: (entryId) => cancelMeeting({ entryId: asId(entryId) }),
   };
 }

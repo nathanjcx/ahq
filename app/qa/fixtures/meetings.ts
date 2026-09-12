@@ -139,7 +139,8 @@ const retroTurns: MeetingTurn[] = [
       kind: 'task',
       payload: JSON.stringify({
         title: 'Fail CI on a rising skipped-test count',
-        prompt: 'Add a CI check that compares the skipped-test count against the base branch and fails when it rises.',
+        prompt:
+          'Add a CI check that compares the skipped-test count against the base branch and fails when it rises.',
         employeeId: 'emp_fen',
       }),
       status: 'confirmed',
@@ -216,6 +217,5 @@ const meetings: Record<string, Meeting> = {
 };
 
 export const meetingsQueries: FixtureQueries = {
-  'meetings:get': (args: unknown) =>
-    meetings[(args as { calendarEntryId: string }).calendarEntryId] ?? null,
+  'meetings:get': (args: unknown) => meetings[(args as { calendarEntryId: string }).calendarEntryId] ?? null,
 };

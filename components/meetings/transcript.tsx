@@ -38,13 +38,7 @@ export function PrepReports({ reports }: { reports: MeetingTurn[] }) {
  * The meeting as it was spoken: each question with the answers it drew, and what the room spent
  * getting them. Answers sit under the question they reply to, whoever answered first.
  */
-export function Transcript({
-  turns,
-  attendees,
-}: {
-  turns: MeetingTurn[];
-  attendees: Attendee[];
-}) {
+export function Transcript({ turns, attendees }: { turns: MeetingTurn[]; attendees: Attendee[] }) {
   const questions = turns.filter((turn) => turn.kind === 'question');
   if (!questions.length)
     return (

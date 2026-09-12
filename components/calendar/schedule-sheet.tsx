@@ -68,10 +68,11 @@ export function ScheduleSheet({
 
   const startsAt = timestampOf(date, time);
   const endsAt = startsAt === undefined ? undefined : startsAt + minutes * 60_000;
-  const suggestions =
-    useUiQuery(uiApi.suggestAgenda, startsAt === undefined ? 'skip' : { startsAt }) ?? [];
+  const suggestions = useUiQuery(uiApi.suggestAgenda, startsAt === undefined ? 'skip' : { startsAt }) ?? [];
   const unattended =
-    startsAt !== undefined && endsAt !== undefined && !(isAttendedTime(startsAt, clock) && isAttendedTime(endsAt - 1, clock));
+    startsAt !== undefined &&
+    endsAt !== undefined &&
+    !(isAttendedTime(startsAt, clock) && isAttendedTime(endsAt - 1, clock));
   const ready = Boolean(title.trim()) && startsAt !== undefined && attendeeIds.length > 0;
 
   const toggle = (id: string) =>
@@ -114,7 +115,11 @@ export function ScheduleSheet({
       <div className="form-stack">
         <label>
           Title
-          <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Launch review" />
+          <input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="Launch review"
+          />
         </label>
         <div className="cal-when">
           <label>
@@ -139,8 +144,8 @@ export function ScheduleSheet({
         {unattended && (
           <p className="cal-warning" role="status">
             <AlertTriangle size={14} />
-            That time falls outside the hours this workspace is attended. Attendees will still prepare,
-            but nobody is expected to be in the room.
+            That time falls outside the hours this workspace is attended. Attendees will still prepare, but
+            nobody is expected to be in the room.
           </p>
         )}
         <div className="cal-field">

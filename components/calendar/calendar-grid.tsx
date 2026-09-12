@@ -3,14 +3,11 @@
 import { CalendarClock, Flag, Moon, ShieldCheck, Users } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { hourLabel, shortTime } from '../shared/time';
-import { workingBand, type CalendarRow, type RowItem } from './rows';
+import { dayFormat, isToday, workingBand, type CalendarRow, type RowItem } from './rows';
 import type { WorkingHours } from '@/lib/contracts';
 import { localParts } from '@/lib/time';
 
 const HOUR_MS = 3_600_000;
-const WEEKDAY = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
-const DAY_NUMBER = new Intl.DateTimeFormat(undefined, { day: 'numeric' });
-const FULL_DAY = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
 
 function ItemIcon({ kind }: { kind: RowItem['kind'] }) {
   if (kind === 'meeting') return <Users size={12} />;
@@ -31,7 +28,10 @@ function RowLabel({ row }: { row: CalendarRow }) {
 
 /** What a block says when it is read aloud or hovered, since a narrow block shows only its title. */
 function itemTitle(item: RowItem) {
-  const span = item.endsAt > item.startsAt ? `${shortTime(item.startsAt)}–${shortTime(item.endsAt)}` : shortTime(item.startsAt);
+  const span =
+    item.endsAt > item.startsAt
+      ? `${shortTime(item.startsAt)}–${shortTime(item.endsAt)}`
+      : shortTime(item.startsAt);
   return `${item.title} · ${span}`;
 }
 
@@ -67,22 +67,26 @@ export function WeekGrid({
   rows,
   bounds,
   clock,
-  today,
+  now,
   onOpen,
   onOpenDay,
 }: {
   rows: CalendarRow[];
   bounds: number[];
   clock: WorkingHours;
-  today: string;
+  now: number;
   onOpen: (item: RowItem) => void;
   /** A day's heading is the way into the day view, where the hours are readable. */
   onOpenDay: (start: number) => void;
 }) {
+  const weekday = dayFormat(clock.timezone, { weekday: 'short' });
+  const number = dayFormat(clock.timezone, { day: 'numeric' });
+  const full = dayFormat(clock.timezone, { weekday: 'long', month: 'short', day: 'numeric' });
   const days = bounds.slice(0, -1).map((start, index) => ({
     start,
     end: bounds[index + 1],
     worked: workingBand(start, bounds[index + 1], clock) !== undefined,
+    today: isToday(start, now, clock.timezone),
   }));
   return (
     <div className="cal-week card">
@@ -92,13 +96,13 @@ export function WeekGrid({
           <button
             key={day.start}
             className="cal-day-head"
-            aria-label={`Open ${FULL_DAY.format(day.start)}`}
-            data-today={new Date(day.start).toDateString() === today}
+            aria-label={`Open ${full.format(day.start)}`}
+            data-today={day.today}
             data-off={!day.worked}
             onClick={() => onOpenDay(day.start)}
           >
-            <span>{WEEKDAY.format(day.start)}</span>
-            <strong>{DAY_NUMBER.format(day.start)}</strong>
+            <span>{weekday.format(day.start)}</span>
+            <strong>{number.format(day.start)}</strong>
           </button>
         ))}
       </div>
@@ -106,12 +110,7 @@ export function WeekGrid({
         <div key={row.id} className="cal-week-row" data-tower={row.tower}>
           <RowLabel row={row} />
           {days.map((day) => (
-            <div
-              key={day.start}
-              className="cal-cell"
-              data-today={new Date(day.start).toDateString() === today}
-              data-off={!day.worked}
-            >
+            <div key={day.start} className="cal-cell" data-today={day.today} data-off={!day.worked}>
               {row.items
                 .filter((item) => item.startsAt >= day.start && item.startsAt < day.end)
                 .map((item) => (

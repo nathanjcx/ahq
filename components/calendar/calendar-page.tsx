@@ -11,23 +11,21 @@ import { useIsNarrow } from '../shared/use-media';
 import { useUiQuery } from '../shared/use-ui-query';
 import { AgendaList } from './agenda-list';
 import { DayTimeline, WeekGrid } from './calendar-grid';
-import { calendarClock, calendarRows, dayStarts, type RowItem } from './rows';
+import { calendarClock, calendarRows, dayFormat, dayStarts, type RowItem } from './rows';
 import { ScheduleSheet } from './schedule-sheet';
 import type { CalendarEntry } from '@/lib/contracts';
-import { startOfDay } from '@/lib/time';
+import { localParts, startOfDay } from '@/lib/time';
 import { uiApi } from '@/lib/ui-api';
 import './calendar.css';
 
 const DAY_MS = 86_400_000;
 /** How far either side of today a deep link is looked for, inside the range one read may span. */
 const LOOKUP_DAYS = 31;
-const WEEK_RANGE = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
-const DAY_TITLE = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
 
 /** Monday of the week an instant falls in, in the workspace's zone. */
 function weekStart(at: number, timezone: string) {
   const midnight = startOfDay(at, timezone);
-  const back = (new Date(midnight).getDay() + 6) % 7;
+  const back = (localParts(midnight, timezone).weekday + 6) % 7;
   return startOfDay(midnight - back * DAY_MS + 12 * 3_600_000, timezone);
 }
 
@@ -124,11 +122,11 @@ export function CalendarPage({
     );
 
   const rows = calendarRows(entries, dashboard.employees, bounds, clock);
-  const today = new Date(now).toDateString();
+  const range = dayFormat(clock.timezone, { month: 'short', day: 'numeric' });
   const heading =
     view === 'week'
-      ? `${WEEK_RANGE.format(bounds[0])} – ${WEEK_RANGE.format(bounds[7] - DAY_MS)}`
-      : DAY_TITLE.format(bounds[0]);
+      ? `${range.format(bounds[0])} – ${range.format(bounds[7] - DAY_MS)}`
+      : dayFormat(clock.timezone, { weekday: 'long', month: 'short', day: 'numeric' }).format(bounds[0]);
 
   return (
     <div>
@@ -174,13 +172,19 @@ export function CalendarPage({
       </div>
       {configured ? (
         narrow ? (
-          <AgendaList entries={entries} bounds={bounds} today={today} onOpen={openEntry} />
+          <AgendaList
+            entries={entries}
+            bounds={bounds}
+            timezone={clock.timezone}
+            now={now}
+            onOpen={openEntry}
+          />
         ) : view === 'week' ? (
           <WeekGrid
             rows={rows}
             bounds={bounds}
             clock={clock}
-            today={today}
+            now={now}
             onOpen={openItem}
             onOpenDay={(start) => {
               setAnchor(start + 12 * 3_600_000);
