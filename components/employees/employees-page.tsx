@@ -1,11 +1,26 @@
 'use client';
 
 import { Archive, ArrowRight, BadgeCheck, Link2, Play, UserPlus, Users } from 'lucide-react';
-import type { Connection, Employee } from '@/lib/contracts';
+import type { Connection, Employee, ProviderId } from '@/lib/contracts';
 import { EmptySection } from '../shared/empty';
-import { modelName } from '../shared/format';
+import { modelName, providerName } from '../shared/format';
 import { Avatar, ProviderMark } from '../shared/marks';
 import { PageIntro } from '../shared/page-intro';
+
+/**
+ * Why a capability is missing, in terms of the connections this viewer can see.
+ * Connections another member has not shared are invisible here, so the advice stays about what to ask for.
+ */
+function missingNote(provider: string, connections: Connection[]) {
+  const label = providerName(provider as ProviderId);
+  const usable = connections.filter((item) => item.provider === provider && item.status === 'connected');
+  const shared = usable.find((item) => !item.isOwner);
+  if (usable.some((item) => item.isOwner))
+    return `Your ${label} account does not allow every tool this employee needs. Update it on the Integrations page.`;
+  if (shared)
+    return `${shared.ownerName} shared a ${label} account, but it does not allow every tool this employee needs. Ask ${shared.ownerName} to allow the rest, or connect your own.`;
+  return `Missing ${label}. Connect ${label} or ask a teammate to share theirs.`;
+}
 
 export function EmployeesPage({
   employees,
@@ -96,7 +111,7 @@ export function EmployeesPage({
                   selected.missingCapabilities.map((capability) => (
                     <p className="readiness-warn" key={capability}>
                       <Link2 size={14} />
-                      Missing {capability}
+                      {missingNote(capability, connections)}
                     </p>
                   ))
                 ) : (

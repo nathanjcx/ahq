@@ -38,6 +38,23 @@ export async function startConnect(provider: ProviderId, serverUrls?: string[]) 
   window.location.assign(body.authorizationUrl);
 }
 
+/** Who the owner is sharing a connection with. */
+export function sharingSummary(connection: Connection) {
+  if (connection.visibility === 'workspace') return 'Shared with workspace';
+  const people = connection.visibleToSubjects.length;
+  if (connection.visibility === 'members' && people)
+    return `Shared with ${people} ${people === 1 ? 'person' : 'people'}`;
+  return 'Private';
+}
+
+/** How wide a connection shared with the viewer reaches, from the viewer's side. */
+export function sharedReach(connection: Connection) {
+  if (connection.visibility === 'workspace') return 'Everyone';
+  const others = connection.visibleToSubjects.length - 1;
+  if (others <= 0) return 'Only you';
+  return `You and ${others} ${others === 1 ? 'other' : 'others'}`;
+}
+
 export function connectionLabel(status: Connection['status']) {
   return status === 'connected'
     ? 'Connected'

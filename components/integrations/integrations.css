@@ -1,0 +1,96 @@
+/* === components/integrations: sharing and relay credentials === */
+.connection-accounts .connection-account > div {
+  flex-wrap: wrap;
+  row-gap: 6px;
+  align-items: center;
+}
+.connection-sharing,
+.connection-reach {
+  color: var(--muted);
+  font-size: 8px;
+}
+.connection-sharing,
+.connection-accounts .connection-shared {
+  margin-right: auto;
+}
+
+/* === components/integrations/share-panel.tsx === */
+.share-choices {
+  display: grid;
+  gap: 8px;
+}
+.share-choices label {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  padding: 11px;
+  border: 1px solid #dce2d6;
+  border-radius: 7px;
+  background: #fffef9;
+  cursor: pointer;
+}
+.share-choices label:has(input:checked) {
+  border-color: #aebfa6;
+  background: #edf3e9;
+  box-shadow: inset 3px 0 #78906f;
+}
+.share-choices input {
+  width: 15px;
+  height: 15px;
+  min-height: 0;
+  padding: 0;
+  accent-color: var(--sage-800);
+}
+.share-choices strong {
+  display: block;
+  color: #3f4d3f;
+  font-size: 10px;
+}
+.share-choices small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 450;
+}
+
+/* === components/integrations/relay-secret.tsx === */
+.relay-secret {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #f6f7f0;
+}
+.relay-secret label {
+  width: 100%;
+}
+.copy-field {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+.copy-field input {
+  font:
+    9px ui-monospace,
+    monospace;
+}
+.relay-confirm {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+}
+.relay-confirm p {
+  margin: 0;
+  color: #7d6436;
+  font-size: 9px;
+}
+.relay-confirm > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

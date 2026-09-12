@@ -5,6 +5,7 @@ import type { Connection } from '@/lib/contracts';
 import { getProvider } from '@/lib/providers';
 import { Sheet } from '../shared/sheet';
 import { ToolChecklist } from '../shared/tool-checklist';
+import { RelaySecret } from './relay-secret';
 
 export function ManageAccessPanel({
   connection,
@@ -51,6 +52,7 @@ export function ManageAccessPanel({
             )}
           </label>
         )}
+        {!provider.inbox && <RelaySecret connectionId={connection.id} />}
         <button type="button" className="text-button" onClick={() => setAdvanced(!advanced)}>
           {advanced ? 'Hide' : 'Show'} advanced restrictions
         </button>

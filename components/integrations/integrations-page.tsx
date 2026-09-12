@@ -1,13 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import type { Connection, ProviderId, ProviderReadiness } from '@/lib/contracts';
+import type { Connection, ConnectionVisibility, ProviderId, ProviderReadiness } from '@/lib/contracts';
 import { getProvider, providers } from '@/lib/providers';
 import { PageIntro } from '../shared/page-intro';
 import { providerSetup, startConnect } from './connect';
 import { IntegrationCard } from './integration-card';
 import { ManageAccessPanel } from './manage-access-panel';
 import { ProductPicker } from './product-picker';
+import { SharePanel } from './share-panel';
+import './integrations.css';
 
 export function IntegrationsPage({
   connections,
@@ -16,6 +18,7 @@ export function IntegrationsPage({
   canManage,
   onDisconnect,
   onUpdateAccess,
+  onSetSharing = () => {},
   onNotice,
 }: {
   connections: Connection[];
@@ -24,10 +27,12 @@ export function IntegrationsPage({
   canManage: boolean;
   onDisconnect: (id: string) => void;
   onUpdateAccess: (id: string, tools: string[], scope: string, inboxResources: string) => void;
+  onSetSharing?: (id: string, visibility: ConnectionVisibility, visibleToSubjects: string[]) => void;
   onNotice: (text: string) => void;
 }) {
   const [choosingProducts, setChoosingProducts] = useState<ProviderId | null>(null);
   const [managing, setManaging] = useState<Connection | null>(null);
+  const [sharing, setSharing] = useState<Connection | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const checking = configured && readiness.length === 0;
 
@@ -62,6 +67,7 @@ export function IntegrationsPage({
             onConnect={(serverUrls) => connect(provider.id, serverUrls)}
             onChooseProducts={() => setChoosingProducts(provider.id)}
             onManage={setManaging}
+            onShare={setSharing}
             onDisconnect={onDisconnect}
           />
         ))}
@@ -91,6 +97,16 @@ export function IntegrationsPage({
           onSave={(tools, scope, inboxResources) => {
             onUpdateAccess(managing.id, tools, scope, inboxResources);
             setManaging(null);
+          }}
+        />
+      )}
+      {sharing && (
+        <SharePanel
+          connection={sharing}
+          onClose={() => setSharing(null)}
+          onSave={(visibility, visibleToSubjects) => {
+            onSetSharing(sharing.id, visibility, visibleToSubjects);
+            setSharing(null);
           }}
         />
       )}
