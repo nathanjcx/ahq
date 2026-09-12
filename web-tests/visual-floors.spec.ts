@@ -80,11 +80,20 @@ for (const viewport of viewports) {
       await shoot(page, viewport.name, `floor-${slug(region)}`);
     }
 
+    // The day replay takes over the stage and brings its own scrubber.
+    await regionSwitch.getByRole('button', { name: 'Team', exact: true }).click();
+    await page.getByRole('button', { name: 'Replay the day' }).click();
+    await expect(page.locator('.office-day-scrub')).toBeVisible();
+    await page.waitForTimeout(2000);
+    await expectNoOverflow(page, viewport.width);
+    await shoot(page, viewport.name, 'floor-day-replay');
+    await page.getByRole('button', { name: 'Replay the day' }).click();
+
     // The unread line, the day separators, and every post kind live in the channel.
     await regionSwitch.getByRole('button', { name: 'Board', exact: true }).click();
     const board = page.locator('.region-board');
     await expect(board.locator('.channel-unread-line')).toBeVisible();
-    await expect(board.locator('.channel-post[data-kind="report"]')).toBeVisible();
+    await expect(board.locator('.channel-post[data-kind="report"]').first()).toBeVisible();
     await expect(board.locator('.channel-post[data-contested="true"]')).toBeVisible();
     await expect(board.locator('.channel-handoff')).toBeVisible();
     await page.getByRole('button', { name: 'Address' }).click();

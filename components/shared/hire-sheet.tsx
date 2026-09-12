@@ -3,7 +3,7 @@
 import { AlertTriangle, Minus, Plus, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import type { HireOptions } from '../app/actions/core';
-import { modelName } from './format';
+import { modelName, money } from './format';
 import { Sheet } from './sheet';
 import { useUiQuery } from './use-ui-query';
 import type { Dashboard, Employee, Listing, ModelId } from '@/lib/contracts';
@@ -227,7 +227,7 @@ export function HireSheet({
                 <dd>
                   {projection.estimatedCost === undefined
                     ? 'No rates set'
-                    : `$${projection.estimatedCost.toFixed(2)} this period`}
+                    : `${money(projection.estimatedCost)} this period`}
                 </dd>
               </div>
             )}

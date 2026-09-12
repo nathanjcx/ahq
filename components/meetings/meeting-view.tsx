@@ -3,11 +3,11 @@
 import { ChevronLeft, DoorClosed, DoorOpen, SendHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import type { MeetingsActions, OutcomeResult } from '../app/actions/meetings';
+import { usageLine } from '../shared/format';
 import { shortDate, shortTime } from '../shared/time';
 import { useUiQuery } from '../shared/use-ui-query';
 import { OutcomeCard } from './outcome-card';
 import { PrepReports, Transcript } from './transcript';
-import { usageLine } from './usage';
 import type { CalendarEntry, Meeting, MeetingStatus } from '@/lib/contracts';
 import { asId, uiApi } from '@/lib/ui-api';
 import './meetings.css';

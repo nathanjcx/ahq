@@ -111,6 +111,16 @@ const launchPosts: Post[] = [
     toEmployeeId: 'emp_ada',
     createdAt: ago(0.6),
   },
+  {
+    id: 'post_10',
+    channelId: 'chan_launch',
+    kind: 'report',
+    authorEmployeeId: 'emp_bruno_2',
+    authorName: 'Bruno 2',
+    text: 'Bruno 2 — Write the customer announcement\nDone: 200 words, no marketing language, saved to outputs/announcement.md\nIn progress: nothing\nBlocked on: nothing\nNext: the status page copy once the migration notes settle\nRisks: the announcement names a date the roadmap may still move',
+    taskId: 'task_completed',
+    createdAt: ago(0.4),
+  },
 ];
 
 const triagePosts: Post[] = [
@@ -139,6 +149,7 @@ const triagePosts: Post[] = [
 const employeeFeeds: Record<string, Post[]> = {
   emp_ada: [launchPosts[0], launchPosts[2]],
   emp_bruno: [launchPosts[3]],
+  emp_bruno_2: [launchPosts[9]],
   emp_mina: [],
 };
 

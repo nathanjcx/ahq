@@ -58,7 +58,7 @@ export function FloorScene({
         </span>
         <span>{pluralize(employeeCount, 'employee')}</span>
       </div>
-      <div className="office-stage floor-stage">
+      <div className={`office-stage floor-stage ${stage ? 'floor-stage-day' : ''}`}>
         {stage ?? (
           <OfficeStage
             employees={officeEmployees}
