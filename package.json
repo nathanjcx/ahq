@@ -15,7 +15,8 @@
     "convex:dev": "convex dev",
     "convex:deploy": "convex deploy",
     "format": "prettier --write app components lib convex services web-tests docs *.json *.ts",
-    "test:ui": "playwright test"
+    "test:ui": "playwright test",
+    "test:visual": "QA_FIXTURE=1 playwright test web-tests/visual.spec.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1131.0",

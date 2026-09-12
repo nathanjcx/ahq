@@ -37,7 +37,8 @@ const contentSecurityPolicy = [
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
-  'upgrade-insecure-requests',
+  // Ignored by browsers in a report-only policy, so it only appears where the policy is enforced.
+  ...(development ? [] : ['upgrade-insecure-requests']),
 ].join('; ');
 
 const config: NextConfig = {

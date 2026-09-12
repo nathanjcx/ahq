@@ -21,6 +21,11 @@ export default defineConfig({
         command: 'npm run dev -- --port 3010',
         url: 'http://localhost:3010',
         reuseExistingServer: !process.env.CI,
-        env: { NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: '', NEXT_PUBLIC_CONVEX_URL: '' },
+        // The visual suite needs the fixture route; the smoke suite deliberately runs without it.
+        env: {
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: '',
+          NEXT_PUBLIC_CONVEX_URL: '',
+          QA_FIXTURE: process.env.QA_FIXTURE ?? '',
+        },
       },
 });

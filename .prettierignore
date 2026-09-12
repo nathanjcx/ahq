@@ -2,4 +2,10 @@ node_modules
 .next
 .convex
 .claude
+test-results
 package-lock.json
+
+# Generated: convex dev writes _generated, Next.js writes the other two.
+convex/_generated
+next-env.d.ts
+tsconfig.json
