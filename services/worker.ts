@@ -10,6 +10,7 @@ import { requiredEnv, safeError } from '../lib/server/secrets';
 import { putArtifact } from '../lib/server/storage';
 import { executeAction } from './actions';
 import type { Job, TaskContext, SessionContext } from './types';
+import { initialTaskInput } from './task-input';
 const secret = requiredEnv('AHQ_SERVICE_SECRET'),
   workerId = randomUUID(),
   api = agentsClient();
@@ -399,7 +400,8 @@ async function run(job: Job) {
                 content: [
                   {
                     type: 'input_text',
-                    text: job.kind === 'start_task' ? context.task.prompt : String(job.payload.text || ''),
+                    text:
+                      job.kind === 'start_task' ? initialTaskInput(context) : String(job.payload.text || ''),
                   },
                 ],
               },

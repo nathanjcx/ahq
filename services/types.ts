@@ -9,6 +9,7 @@ export interface Job {
   attempts: number;
 }
 export interface TaskContext {
+  project?: { id: string; name: string; brief: string };
   task: {
     id: string;
     title: string;
