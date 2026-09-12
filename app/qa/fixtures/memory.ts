@@ -1,3 +1,4 @@
+import { notebookMemories } from './employees';
 import type { FixtureQueries } from '@/components/shared/use-ui-query';
 import type { JanitorLogEntry, Memory, MemoryScopeSummary, TaskSummary } from '@/lib/contracts';
 
@@ -255,15 +256,60 @@ const claims: Memory[] = [
 
 const summaries: Record<'workspace' | 'project' | 'floor', MemoryScopeSummary[]> = {
   workspace: [
-    { scope: 'workspace', scopeId: workspaceId, name: 'Acme', active: 2, proposed: 1, contested: 0, tokens: 1_180, budget: 2_000 },
+    {
+      scope: 'workspace',
+      scopeId: workspaceId,
+      name: 'Acme',
+      active: 2,
+      proposed: 1,
+      contested: 0,
+      tokens: 1_180,
+      budget: 2_000,
+    },
   ],
   project: [
-    { scope: 'project', scopeId: projectId, name: 'Northstar', active: 1, proposed: 1, contested: 0, tokens: 2_240, budget: 3_000 },
-    { scope: 'project', scopeId: 'prj_billing', name: 'Billing clean-up', active: 0, proposed: 0, contested: 0, tokens: 0, budget: 3_000 },
+    {
+      scope: 'project',
+      scopeId: projectId,
+      name: 'Northstar',
+      active: 1,
+      proposed: 1,
+      contested: 0,
+      tokens: 2_240,
+      budget: 3_000,
+    },
+    {
+      scope: 'project',
+      scopeId: 'prj_billing',
+      name: 'Billing clean-up',
+      active: 0,
+      proposed: 0,
+      contested: 0,
+      tokens: 0,
+      budget: 3_000,
+    },
   ],
   floor: [
-    { scope: 'floor', scopeId: 'proj_launch', name: 'Spring launch', active: 2, proposed: 1, contested: 2, tokens: 4_380, budget: 4_000 },
-    { scope: 'floor', scopeId: 'proj_support', name: 'Support backlog', active: 2, proposed: 0, contested: 0, tokens: 1_020, budget: 4_000 },
+    {
+      scope: 'floor',
+      scopeId: 'proj_launch',
+      name: 'Spring launch',
+      active: 2,
+      proposed: 1,
+      contested: 2,
+      tokens: 4_380,
+      budget: 4_000,
+    },
+    {
+      scope: 'floor',
+      scopeId: 'proj_support',
+      name: 'Support backlog',
+      active: 2,
+      proposed: 0,
+      contested: 0,
+      tokens: 1_020,
+      budget: 4_000,
+    },
   ],
 };
 
@@ -319,8 +365,11 @@ type ScopeArgs = { scope?: Memory['scope']; scopeId?: string; status?: Memory['s
 
 export const memoryQueries: FixtureQueries = {
   'memory:list': (args: ScopeArgs) =>
-    claims
-      .filter((entry) => (!args.scope || entry.scope === args.scope) && (!args.scopeId || entry.scopeId === args.scopeId))
+    [...claims, ...notebookMemories]
+      .filter(
+        (entry) =>
+          (!args.scope || entry.scope === args.scope) && (!args.scopeId || entry.scopeId === args.scopeId),
+      )
       .sort((a, b) => b.createdAt - a.createdAt),
   'memory:summaries': (args: { scope: 'workspace' | 'project' | 'floor' }) => summaries[args.scope],
   'memory:taskSummary': (args: { taskId: string }) =>

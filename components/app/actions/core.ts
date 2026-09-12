@@ -5,6 +5,7 @@ import type { DraftInput } from '../../admin/draft-input';
 import type {
   ConnectionVisibility,
   CorrectionDescriptor,
+  ModelId,
   ProviderId,
   TaskVisibility,
   ToolMode,
@@ -13,11 +14,28 @@ import { asId, uiApi } from '@/lib/ui-api';
 
 export type CorrectionResult = { kind: 'task'; taskId: string } | { kind: 'proposal'; proposalId: string };
 
+/** What the hire sheet asks for: how many instances, where they sit, and what to call them. */
+export type HireOptions = {
+  count?: number;
+  floorId?: string;
+  /** One name per instance; without it the names are numbered from the listing's own name. */
+  names?: string[];
+  overnightModel?: ModelId;
+};
+/** Instances hired, or the request filed when the workspace's policy needs an approval. */
+export type HireResult = { employeeIds: string[]; requestId?: string };
+
 /** Every workspace mutation the UI can perform, in UI terms. */
 export type CoreActions = {
   bootstrap: (name: string) => Promise<unknown>;
   setTokenCap: (monthlyTokenCap: number) => Promise<unknown>;
-  hire: (listingId: string) => Promise<unknown>;
+  hire: (listingId: string, options?: HireOptions) => Promise<HireResult | undefined>;
+  decideHire: (requestId: string, approved: boolean) => Promise<unknown>;
+  renameEmployee: (employeeId: string, name: string) => Promise<unknown>;
+  moveEmployee: (employeeId: string, floorId?: string) => Promise<unknown>;
+  retireEmployee: (employeeId: string) => Promise<unknown>;
+  upgradeEmployee: (employeeId: string) => Promise<unknown>;
+  setOvernightModel: (employeeId: string, overnightModel?: ModelId) => Promise<unknown>;
   createTask: (employeeId: string, prompt: string, title: string, floorId?: string) => Promise<unknown>;
   createFloor: (
     name: string,
@@ -82,6 +100,12 @@ export const offlineCoreActions: CoreActions = {
   bootstrap: unavailable,
   setTokenCap: unavailable,
   hire: unavailable,
+  decideHire: unavailable,
+  renameEmployee: unavailable,
+  moveEmployee: unavailable,
+  retireEmployee: unavailable,
+  upgradeEmployee: unavailable,
+  setOvernightModel: unavailable,
   createTask: unavailable,
   createFloor: unavailable,
   updateFloor: unavailable,
@@ -112,6 +136,12 @@ export function useCoreActions(): CoreActions {
   const bootstrap = useMutation(uiApi.bootstrapWorkspace);
   const setTokenCap = useMutation(uiApi.setTokenCap);
   const hire = useMutation(uiApi.hire);
+  const decideHire = useMutation(uiApi.decideHire);
+  const renameEmployee = useMutation(uiApi.renameEmployee);
+  const moveEmployee = useMutation(uiApi.moveEmployee);
+  const retireEmployee = useMutation(uiApi.retireEmployee);
+  const upgradeEmployee = useMutation(uiApi.upgradeEmployee);
+  const setOvernightModel = useMutation(uiApi.setOvernightModel);
   const createTask = useMutation(uiApi.createTask);
   const createFloor = useMutation(uiApi.createFloor);
   const updateFloor = useMutation(uiApi.updateFloor);
@@ -140,7 +170,25 @@ export function useCoreActions(): CoreActions {
   return {
     bootstrap: (name) => bootstrap({ name }),
     setTokenCap: (monthlyTokenCap) => setTokenCap({ monthlyTokenCap }),
-    hire: (listingId) => hire({ listingId: asId(listingId) }),
+    hire: (listingId, options) =>
+      hire({
+        listingId: asId(listingId),
+        count: options?.count,
+        floorId: options?.floorId ? asId<'floors'>(options.floorId) : undefined,
+        names: options?.names,
+        overnightModel: options?.overnightModel,
+      }),
+    decideHire: (requestId, approved) => decideHire({ requestId: asId(requestId), approved }),
+    renameEmployee: (employeeId, name) => renameEmployee({ employeeId: asId(employeeId), name }),
+    moveEmployee: (employeeId, floorId) =>
+      moveEmployee({
+        employeeId: asId(employeeId),
+        floorId: floorId ? asId<'floors'>(floorId) : undefined,
+      }),
+    retireEmployee: (employeeId) => retireEmployee({ employeeId: asId(employeeId) }),
+    upgradeEmployee: (employeeId) => upgradeEmployee({ employeeId: asId(employeeId) }),
+    setOvernightModel: (employeeId, overnightModel) =>
+      setOvernightModel({ employeeId: asId(employeeId), overnightModel }),
     createTask: (employeeId, prompt, title, floorId) =>
       createTask({
         employeeId: asId(employeeId),

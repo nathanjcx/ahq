@@ -1,5 +1,12 @@
 import { v } from 'convex/values';
-import type { Persona, ProviderId, TaskStatus } from '../lib/contracts';
+import type {
+  InstanceStatus,
+  InstanceUpgrade,
+  Persona,
+  ProviderId,
+  TaskStatus,
+  VersionChange,
+} from '../lib/contracts';
 import { MEMORY_PLACEHOLDER, WORKER_ROLE_RULES, composeInstructions } from '../lib/instructions';
 import { PERSONA_LIMITS, isPersonaTrait } from '../lib/personas';
 import type { Doc, Id } from './_generated/dataModel';
@@ -18,7 +25,7 @@ import {
   requireInstance,
 } from './lib/marketplace';
 import { isReservedVersion } from './lib/reserved';
-import { settingsFor } from './lib/schedule';
+import { dailyUsageFor, settingsFor, shiftDate } from './lib/schedule';
 import { assertEmployeeReady, requireFloor } from './lib/tasks';
 import { registryToolsFor } from './registry';
 import { listingVisibility, persona as personaValidator } from './schema';
@@ -192,12 +199,17 @@ export const hire = mutation({
     floorId: v.optional(v.id('floors')),
     count: v.optional(v.number()),
     name: v.optional(v.string()),
+    /** One name per instance. Without it the names are numbered from the version's own name. */
+    names: v.optional(v.array(v.string())),
+    overnightModel: v.optional(model),
   },
   handler: async (ctx, args) => {
     const { workspace, role, actor } = await requireWorkspace(ctx);
-    const count = args.count ?? 1;
+    const count = args.count ?? args.names?.length ?? 1;
     if (!Number.isInteger(count) || count < 1 || count > 20)
       throw new Error('Hire between 1 and 20 instances at a time');
+    if (args.names && args.names.length !== count)
+      throw new Error('Give one name per instance, or none at all');
     const listing = await hirableListing(ctx, args.listingId);
     const { hiringPolicy } = await settingsFor(ctx, workspace._id);
     if (hiringPolicy !== 'anyone' && role === 'member') {
@@ -221,6 +233,8 @@ export const hire = mutation({
       floorId: args.floorId,
       count,
       name: args.name,
+      names: args.names,
+      overnightModel: args.overnightModel,
     });
     return { employeeIds, requestId: undefined };
   },
@@ -276,6 +290,119 @@ export const decideHire = mutation({
       count: request.count,
     });
     return { employeeIds };
+  },
+});
+
+/**
+ * What the employees page shows beside each instance and the dashboard does not carry: the shift it
+ * is in today, the tokens it has spent today, and the model it runs on after hours.
+ */
+export const instanceStatus = query({
+  args: {},
+  handler: async (ctx): Promise<InstanceStatus[]> => {
+    const { workspace } = await requireWorkspace(ctx);
+    const settings = await settingsFor(ctx, workspace._id);
+    const now = Date.now();
+    const [{ tokensByTask }, shifts, installations] = await Promise.all([
+      dailyUsageFor(ctx, workspace._id, settings, now),
+      ctx.db
+        .query('shifts')
+        .withIndex('by_workspace_date', (q) =>
+          q.eq('workspaceId', workspace._id).eq('date', shiftDate(now, settings)),
+        )
+        .collect(),
+      ctx.db
+        .query('installations')
+        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
+        .collect(),
+    ]);
+    // Usage is recorded against a task; the instance behind the task is what the page reads.
+    const tokensToday = new Map<string, number>();
+    for (const [taskId, tokens] of tokensByTask) {
+      const task = await ctx.db.get(taskId as Id<'tasks'>);
+      if (!task) continue;
+      tokensToday.set(task.employeeId, (tokensToday.get(task.employeeId) ?? 0) + tokens);
+    }
+    return installations.map((installation) => {
+      const today = shifts.filter((shift) => shift.employeeId === installation._id);
+      const running = today.find((shift) => shift.endedAt === undefined);
+      const last = today.reduce<Doc<'shifts'> | undefined>(
+        (latest, shift) => (!latest || shift.startedAt > latest.startedAt ? shift : latest),
+        undefined,
+      );
+      const current = running ?? last;
+      return {
+        employeeId: installation._id,
+        overnightModel: installation.overnightModel,
+        shift: current
+          ? {
+              state: running ? ('running' as const) : ('done' as const),
+              kind: current.kind,
+              startedAt: current.startedAt,
+              endedAt: current.endedAt,
+            }
+          : { state: 'off' as const },
+        shiftsToday: today.length,
+        tokensToday: tokensToday.get(installation._id) ?? 0,
+        hiredAt: installation.createdAt,
+      };
+    });
+  },
+});
+
+/** The model an instance runs on outside working hours. Omitting it returns it to its own model. */
+export const setOvernightModel = mutation({
+  args: { employeeId: v.id('installations'), overnightModel: v.optional(model) },
+  handler: async (ctx, args) => {
+    const { workspace } = await requireWorkspace(ctx);
+    const installation = await requireInstance(ctx, workspace._id, args.employeeId);
+    await ctx.db.patch(installation._id, { overnightModel: args.overnightModel });
+    return null;
+  },
+});
+
+/** What upgrading one instance to its listing's current version would change, before it is done. */
+export const instanceUpgrade = query({
+  args: { employeeId: v.id('installations') },
+  handler: async (ctx, args): Promise<InstanceUpgrade | null> => {
+    const { workspace } = await requireWorkspace(ctx);
+    const installation = await requireInstance(ctx, workspace._id, args.employeeId);
+    const listing = installation.listingId ? await ctx.db.get(installation.listingId) : null;
+    if (!listing) return null;
+    const before = await ctx.db.get(installation.versionId);
+    const after = await ctx.db.get(listing.currentVersionId);
+    if (!before || !after || after.retiredAt || before._id === after._id) return null;
+    return {
+      employeeId: installation._id,
+      fromVersion: before.version,
+      toVersion: after.version,
+      publishedAt: after.publishedAt,
+      changed: changedFields(before, after),
+    };
+  },
+});
+
+/** Every version a listing has published, newest first, each with what it changed from the one before. */
+export const listingVersions = query({
+  args: { listingId: v.id('listings') },
+  handler: async (ctx, args): Promise<VersionChange[]> => {
+    await identity(ctx);
+    const listing = await ctx.db.get(args.listingId);
+    if (!listing || listing.visibility !== 'published') throw new Error('Listing is unavailable');
+    const versions = (
+      await ctx.db
+        .query('employeeVersions')
+        .withIndex('by_draft', (q) => q.eq('draftId', listing.draftId))
+        .collect()
+    ).sort((a, b) => a.version - b.version);
+    return versions
+      .map((version, index) => ({
+        version: version.version,
+        publishedAt: version.publishedAt,
+        retired: version.retiredAt !== undefined,
+        changed: index === 0 ? [...VERSION_FIELDS] : changedFields(versions[index - 1], version),
+      }))
+      .reverse();
   },
 });
 

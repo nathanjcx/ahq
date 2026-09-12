@@ -1,12 +1,7 @@
 import { getFunctionName } from 'convex/server';
+import { qaFixture } from '../fixture';
 import type { FixtureQueries } from '@/components/shared/use-ui-query';
-import type {
-  Listing,
-  PlanProjection,
-  Project,
-  ProjectTask,
-  RoadmapProposal,
-} from '@/lib/contracts';
+import type { Listing, PlanProjection, Project, ProjectTask, RoadmapProposal } from '@/lib/contracts';
 import { uiApi } from '@/lib/ui-api';
 
 /**
@@ -265,8 +260,7 @@ const billingProposal: RoadmapProposal = {
 const billing: Project = {
   id: 'pr_billing',
   name: 'Billing migration',
-  brief:
-    'Move invoicing onto the new ledger without a customer noticing.\n\nDeadline: in two weeks.',
+  brief: 'Move invoicing onto the new ledger without a customer noticing.\n\nDeadline: in two weeks.',
   floorIds: ['proj_support'],
   status: 'planning',
   createdBy: 'user_dana',
@@ -385,28 +379,6 @@ const tasksByProject: Record<string, ProjectTask[]> = {
 };
 const proposalsByProject: Record<string, RoadmapProposal> = { pr_billing: billingProposal };
 
-/** One listing, so the capacity question has someone to offer. The marketplace owns the full set. */
-const writerListing: Listing = {
-  id: 'lst_bruno',
-  listingId: 'lst_bruno',
-  versionId: 'ver_bruno',
-  currentVersion: 1,
-  visibility: 'published',
-  hires: 3,
-  completedTasks: 41,
-  name: 'Bruno',
-  role: 'Release writer',
-  description: 'Writes release notes, changelogs, and customer announcements.',
-  category: 'Writing',
-  strengths: ['Plain language', 'Accurate against the diff'],
-  limitations: ['Will not invent a feature that is not in the changelog'],
-  capabilities: [{ provider: 'github', tools: ['list_pull_requests'], optional: false }],
-  model: 'gpt-5.6-terra',
-  color: '#c2683a',
-  media: [],
-  publishedAt: at(-200),
-};
-
 function projection(projectedTokens: number): PlanProjection {
   const usedTokens = 4_120_000;
   const monthlyAllowance = 8_000_000;
@@ -434,5 +406,5 @@ export const projectsQueries: FixtureQueries = {
   [getFunctionName(uiApi.planProjection)]: ({ projectedTokens }: { projectedTokens: number }) =>
     projection(projectedTokens),
   // The marketplace workstream owns this answer; this one stands in until it lands.
-  [getFunctionName(uiApi.listings)]: [writerListing],
+  [getFunctionName(uiApi.listings)]: qaFixture.listings,
 };

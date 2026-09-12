@@ -22,6 +22,10 @@ export const coreApi = {
   moveEmployee: api.marketplace.move,
   retireEmployee: api.marketplace.retireInstance,
   upgradeEmployee: api.marketplace.upgrade,
+  instanceStatus: api.marketplace.instanceStatus,
+  instanceUpgrade: api.marketplace.instanceUpgrade,
+  listingVersions: api.marketplace.listingVersions,
+  setOvernightModel: api.marketplace.setOvernightModel,
 
   // Floors
   createFloor: api.floors.create,

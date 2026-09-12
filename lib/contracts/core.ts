@@ -1,7 +1,9 @@
 import type { WorkspaceSettings } from './plan';
-import type { ScheduleSummary } from './schedule';
+import type { ScheduleSummary, ShiftKind } from './schedule';
 
 export type ModelId = 'gpt-5.6-luna' | 'gpt-5.6-terra' | 'gpt-5.6-sol' | 'gpt-6-astra';
+/** Every model the platform runs, in the order an interface offers them. */
+export const MODEL_IDS: ModelId[] = ['gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol', 'gpt-6-astra'];
 export type ProviderId = 'linear' | 'slack' | 'github' | 'google-workspace' | 'canva';
 export type TaskStatus =
   | 'queued'
@@ -87,6 +89,32 @@ export interface Employee {
   /** Undefined means the lobby. */
   floorId?: string;
   kind?: 'worker' | 'janitor' | 'auditor' | 'triage';
+}
+/** One published version of a listing and what it changed from the version before it. */
+export interface VersionChange {
+  version: number;
+  publishedAt: number;
+  retired: boolean;
+  /** Profile fields this version changed; every field on the first version. */
+  changed: string[];
+}
+/** What upgrading one instance to its listing's current version would change. */
+export interface InstanceUpgrade {
+  employeeId: string;
+  fromVersion: number;
+  toVersion: number;
+  publishedAt: number;
+  changed: string[];
+}
+/** What one instance is doing today, beside the profile the dashboard already carries. */
+export interface InstanceStatus {
+  employeeId: string;
+  /** The model this instance runs on outside working hours; its own model when unset. */
+  overnightModel?: ModelId;
+  shift: { state: 'running' | 'done' | 'off'; kind?: ShiftKind; startedAt?: number; endedAt?: number };
+  shiftsToday: number;
+  tokensToday: number;
+  hiredAt: number;
 }
 /** A member's request to hire, waiting on an owner or admin under the `approval` hiring policy. */
 export interface HireRequest {

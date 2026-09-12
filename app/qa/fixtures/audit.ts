@@ -1,3 +1,4 @@
+import { instanceFindings } from './employees';
 import type { FixtureQueries } from '@/components/shared/use-ui-query';
 import type { AuditDocument, AuditFinding } from '@/lib/contracts';
 
@@ -104,10 +105,12 @@ function documentsFor(date: string): AuditDocument[] {
 }
 
 export const auditQueries: FixtureQueries = {
-  'audit:findings': (args: { status?: AuditFinding['status']; date?: string }) =>
-    findings.filter(
+  'audit:findings': (args: { status?: AuditFinding['status']; date?: string; employeeId?: string }) =>
+    [...findings, ...instanceFindings].filter(
       (finding) =>
-        (!args.status || finding.status === args.status) && (!args.date || finding.auditDate === args.date),
+        (!args.status || finding.status === args.status) &&
+        (!args.date || finding.auditDate === args.date) &&
+        (!args.employeeId || finding.employeeId === args.employeeId),
     ),
   'audit:documents': (args: { date: string }) => documentsFor(args.date),
 };

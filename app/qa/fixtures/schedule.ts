@@ -1,5 +1,5 @@
 import type { FixtureQueries } from '@/components/shared/use-ui-query';
-import type { PlanProjection, ScheduleSummary, WorkspaceSettings } from '@/lib/contracts';
+import type { ScheduleSummary, WorkspaceSettings } from '@/lib/contracts';
 
 /** A workspace whose administrator has already moved the hours off the defaults. */
 const settings: WorkspaceSettings = {
@@ -40,19 +40,7 @@ const summary: ScheduleSummary = {
   usageToday: { input: 182_400, cached: 96_100, output: 24_300, cap: settings.dailyTokenCap },
 };
 
-const projection: PlanProjection = {
-  plan: 'subscription',
-  usedTokens: 1_141_000,
-  projectedTokens: 0,
-  monthlyAllowance: settings.monthlyAllowance,
-  allowanceUsed: 0.143,
-  overAllowance: false,
-  unpricedModels: ['gpt-5.6-terra', 'gpt-5.6-luna'],
-  capacity: { instances: 8, maxConcurrentInstances: 6, runningShifts: 3, freeSlots: 3 },
-};
-
 export const scheduleQueries: FixtureQueries = {
   'schedule:settings': settings,
   'schedule:summary': summary,
-  'plan:projection': projection,
 };
