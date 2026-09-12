@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { api, internal } from '../convex/_generated/api';
 import type { Id } from '../convex/_generated/dataModel';
+import { dailyUsageFor, shiftDate } from '../convex/lib/schedule';
 import { defaultWorkspaceSettings, type WorkspaceSettings } from '../lib/contracts';
 import { harness, hireOne, identity as orgIdentity, publishEmployee, secret, type Harness } from './support';
 
@@ -39,14 +40,34 @@ async function workspace(t: Harness, settings: SettingsArgs = alwaysWorking) {
 }
 
 /** A daily task, as the projects workstream will create it. */
-async function dailyTask(t: Harness, owner: Caller, employeeId: Id<'installations'>, title: string) {
+async function dailyTask(_t: Harness, owner: Caller, employeeId: Id<'installations'>, title: string) {
   const { taskId } = await owner.mutation(api.tasks.create, {
     employeeId,
     title,
     prompt: 'Move the work forward and report at the end of the shift.',
+    cadence: 'daily',
   });
-  await t.run(async (ctx) => ctx.db.patch(taskId, { cadence: 'daily' }));
   return taskId;
+}
+
+/**
+ * The five-minute cron, and the per-workspace transaction it schedules for each workspace. The tick
+ * holds no reads of its own, so the jobs appear only once those have run; `convex-test` starts a
+ * scheduled function on a timer of its own, so this waits for each one to be picked up and to finish.
+ */
+async function tick(t: Harness) {
+  await t.mutation(internal.services.schedule.tick, {});
+  for (let pass = 0; pass < 10; pass++) {
+    const waiting = await t.run(async (ctx) =>
+      (await ctx.db.system.query('_scheduled_functions').collect()).some((job) =>
+        ['pending', 'inProgress'].includes(job.state.kind),
+      ),
+    );
+    if (!waiting) return;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await t.finishInProgressScheduledFunctions();
+  }
+  throw new Error('The scheduler never drained its per-workspace ticks');
 }
 
 async function jobsOfKind(t: Harness, kind: string) {
@@ -105,6 +126,40 @@ describe('workspace settings', () => {
     await expect(save({ emergencyAllowList: ['merge_pull_request'] })).rejects.toThrow('unknown tool');
   });
 
+  it('refuses an emergency allow-list with no channel that reaches a person', async () => {
+    const t = harness();
+    const owner = t.withIdentity(orgIdentity('owner', 'acme', 'org:admin'));
+    await owner.mutation(api.workspace.bootstrap, { name: 'Acme' });
+    await t.run(async (ctx) =>
+      ctx.db.insert('registryTools', {
+        provider: 'github',
+        name: 'merge_pull_request',
+        description: 'Merge a pull request.',
+        mode: 'write',
+        updatedBy: 'platform-admin',
+        updatedAt: 1,
+      }),
+    );
+    const save = (patch: Partial<SettingsArgs>) =>
+      owner.mutation(api.schedule.updateSettings, {
+        ...defaultWorkspaceSettings,
+        timezone: 'UTC',
+        emergencyAllowList: ['merge_pull_request'],
+        ...patch,
+      });
+    // The default channel is the in-app row, which lands whether or not anybody read it; three of
+    // those must not be what opens merge and deploy.
+    await expect(save({})).rejects.toThrow('reaches a person away from the app');
+    await expect(save({ notificationChannels: ['in_app'] })).rejects.toThrow('reaches a person');
+    await save({ notificationChannels: ['in_app', 'push'] });
+    expect(await owner.query(api.schedule.settings, {})).toMatchObject({
+      emergencyAllowList: ['merge_pull_request'],
+      notificationChannels: ['in_app', 'push'],
+    });
+    // Naming no emergency tool at all is what a workspace with only the in-app row may do.
+    await save({ emergencyAllowList: [], notificationChannels: ['in_app'] });
+  });
+
   it('lets only an owner or an administrator save them', async () => {
     const t = harness();
     const owner = t.withIdentity(orgIdentity('owner', 'acme', 'org:admin'));
@@ -122,13 +177,13 @@ describe('the scheduler tick', () => {
     const { owner, employeeId } = await workspace(t);
     const taskId = await dailyTask(t, owner, employeeId, 'Ship the launch page');
 
-    await t.mutation(internal.services.schedule.tick, {});
+    await tick(t);
     const first = await jobsOfKind(t, 'start_shift');
     expect(first).toHaveLength(1);
     expect(first[0].taskId).toBe(taskId);
     expect(first[0].uniqueKey.startsWith(`shift:${taskId}:`)).toBe(true);
 
-    await t.mutation(internal.services.schedule.tick, {});
+    await tick(t);
     expect(await jobsOfKind(t, 'start_shift')).toHaveLength(1);
     // Once the shift is open the planner sees it running and leaves the instance alone.
     const { date } = await startShift(t, taskId);
@@ -136,9 +191,60 @@ describe('the scheduler tick', () => {
       for (const job of await ctx.db.query('jobs').collect())
         if (job.kind === 'start_shift') await ctx.db.delete(job._id);
     });
-    await t.mutation(internal.services.schedule.tick, {});
+    await tick(t);
     expect(await jobsOfKind(t, 'start_shift')).toHaveLength(0);
     expect(date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('starts a daily task as a shift rather than as a session of its own', async () => {
+    const t = harness();
+    const { owner, employeeId } = await workspace(t);
+    const taskId = await dailyTask(t, owner, employeeId, 'Ship the launch page');
+    // A daily task's work is a shift inside working hours, against the day's caps and free slots. A
+    // `start_task` job would have run its prompt at once, with no shift row and no report.
+    expect(await jobsOfKind(t, 'start_task')).toHaveLength(0);
+    await tick(t);
+    expect((await jobsOfKind(t, 'start_shift')).map((job) => job.taskId)).toEqual([taskId]);
+  });
+
+  it('holds the slot and the instance of a shift that opened on the previous working day', async () => {
+    const t = harness();
+    const { owner, employeeId } = await workspace(t);
+    const taskId = await dailyTask(t, owner, employeeId, 'Ship the launch page');
+    const workspaceId = await t.run(async (ctx) => (await ctx.db.query('workspaces').first())!._id);
+    // An overnight shift belongs to the previous working day, so its row carries that date. Reading
+    // only today's rows would leave the instance looking free and over-commit it.
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    await t.run(async (ctx) =>
+      ctx.db.insert('shifts', {
+        workspaceId,
+        taskId,
+        employeeId,
+        date: yesterday,
+        model: 'gpt-5.6-terra',
+        kind: 'work',
+        startedAt: Date.now() - 7 * 3_600_000,
+      }),
+    );
+    await tick(t);
+    expect(await jobsOfKind(t, 'start_shift')).toHaveLength(0);
+  });
+
+  it('plans every workspace, each in its own transaction', async () => {
+    const t = harness();
+    const first = await workspace(t);
+    const firstTask = await dailyTask(t, first.owner, first.employeeId, 'Ship the launch page');
+    const other = t.withIdentity(orgIdentity('other-owner', 'globex', 'org:admin'));
+    await other.mutation(api.workspace.bootstrap, { name: 'Globex' });
+    const { listingId } = await publishEmployee(t, { name: 'Second analyst' });
+    const { employeeId } = await hireOne(other, listingId);
+    await other.mutation(api.schedule.updateSettings, alwaysWorking);
+    const otherTask = await dailyTask(t, other, employeeId, 'Ship the other launch page');
+
+    await tick(t);
+    expect((await jobsOfKind(t, 'start_shift')).map((job) => job.taskId).sort()).toEqual(
+      [firstTask, otherTask].sort(),
+    );
   });
 
   it('waits on an unfinished dependency and reviews it instead', async () => {
@@ -148,7 +254,7 @@ describe('the scheduler tick', () => {
     const second = await dailyTask(t, owner, colleagueId, 'Lay out the page');
     await t.run(async (ctx) => ctx.db.patch(second, { dependsOn: [first], status: 'waiting' }));
 
-    await t.mutation(internal.services.schedule.tick, {});
+    await tick(t);
     expect((await jobsOfKind(t, 'review_shift')).map((job) => job.taskId)).toEqual([second]);
     expect((await jobsOfKind(t, 'start_shift')).map((job) => job.taskId)).toEqual([first]);
   });
@@ -157,18 +263,18 @@ describe('the scheduler tick', () => {
     const t = harness();
     const { owner, employeeId } = await workspace(t, afterHours());
     await dailyTask(t, owner, employeeId, 'Ship the launch page');
-    await t.mutation(internal.services.schedule.tick, {});
+    await tick(t);
     expect(await jobsOfKind(t, 'start_shift')).toHaveLength(0);
 
     await owner.mutation(api.schedule.updateSettings, afterHours({ overnightPolicy: 'cheap' }));
-    await t.mutation(internal.services.schedule.tick, {});
+    await tick(t);
     expect(await jobsOfKind(t, 'start_shift')).toHaveLength(1);
   });
 
   it('creates the reserved employees once and opens one standing session each', async () => {
     const t = harness();
     const { owner } = await workspace(t, afterHours());
-    await t.mutation(internal.services.schedule.tick, {});
+    await tick(t);
     const reserved = async () =>
       t.run(async (ctx) =>
         (await ctx.db.query('installations').collect())
@@ -197,7 +303,7 @@ describe('the scheduler tick', () => {
         .map((one) => one.kind),
     ).toHaveLength(3);
 
-    await t.mutation(internal.services.schedule.tick, {});
+    await tick(t);
     expect(await reserved()).toHaveLength(3);
     expect(await sessions()).toHaveLength(3);
   });
@@ -205,14 +311,14 @@ describe('the scheduler tick', () => {
   it('audits after hours in the night’s own task', async () => {
     const t = harness();
     await workspace(t, afterHours());
-    await t.mutation(internal.services.schedule.tick, {});
+    await tick(t);
     const audits = await jobsOfKind(t, 'audit_run');
     expect(audits).toHaveLength(1);
     const task = await t.run(async (ctx) => ctx.db.get(audits[0].taskId as Id<'tasks'>));
     expect(task).toMatchObject({ kind: 'audit', title: expect.stringContaining('Audit: ') });
     expect(JSON.parse(audits[0].payload)).toMatchObject({ date: task!.sessionKey });
 
-    await t.mutation(internal.services.schedule.tick, {});
+    await tick(t);
     expect(await jobsOfKind(t, 'audit_run')).toHaveLength(1);
     expect(
       await t.run(async (ctx) =>
@@ -238,7 +344,7 @@ describe('the scheduler tick', () => {
       attendees: [{ kind: 'employee', id: employeeId, name: 'Operations analyst' }],
       agenda: ['Launch readiness'],
     });
-    await t.mutation(internal.services.schedule.tick, {});
+    await tick(t);
     const prep = await jobsOfKind(t, 'meeting_prep');
     expect(prep).toHaveLength(1);
     const task = await t.run(async (ctx) => ctx.db.get(prep[0].taskId as Id<'tasks'>));
@@ -249,7 +355,7 @@ describe('the scheduler tick', () => {
     );
     expect(JSON.parse(prep[0].payload)).toMatchObject({ meetingId, employeeId });
 
-    await t.mutation(internal.services.schedule.tick, {});
+    await tick(t);
     expect(await jobsOfKind(t, 'meeting_prep')).toHaveLength(1);
   });
 
@@ -285,15 +391,59 @@ describe('the scheduler tick', () => {
         createdAt: Date.now(),
       });
     });
-    await t.mutation(internal.services.schedule.tick, {});
+    await tick(t);
     expect(await jobsOfKind(t, 'triage_run')).toHaveLength(1);
     // The cap is spent, so the ordinary shift does not start.
     expect(await jobsOfKind(t, 'start_shift')).toHaveLength(0);
   });
 });
 
-/** Leases the task's newest job and opens a shift with it, the way the worker does. */
+describe('the day a run is counted against', () => {
+  it('measures the cap over the working day a run belongs to, not the calendar day', async () => {
+    const t = harness();
+    const { owner, employeeId } = await workspace(t, {
+      ...defaultWorkspaceSettings,
+      timezone: 'UTC',
+      workingDays: [1, 2, 3, 4, 5],
+      startHour: 9,
+      endHour: 18,
+      attendedStartHour: 9,
+      attendedEndHour: 18,
+    });
+    const taskId = await dailyTask(t, owner, employeeId, 'Ship the launch page');
+    const workspaceId = await t.run(async (ctx) => (await ctx.db.query('workspaces').first())!._id);
+    const settings = await owner.query(api.schedule.settings, {});
+    // Ten past midnight on Saturday: the working week closed on Friday at six, so this is still
+    // Friday's night and Friday's allowance.
+    const now = Date.parse('2026-06-06T00:10:00.000Z');
+    for (const at of [Date.parse('2026-06-05T14:00:00.000Z'), Date.parse('2026-06-06T00:05:00.000Z')])
+      await t.run(async (ctx) =>
+        ctx.db.insert('usageReports', {
+          workspaceId,
+          taskId,
+          externalId: `usage-${at}`,
+          model: 'gpt-5.6-terra',
+          input: 100,
+          cached: 0,
+          output: 10,
+          period: '2026-06',
+          createdAt: at,
+        }),
+      );
+    expect(shiftDate(now, settings)).toBe('2026-06-05');
+    const usage = await t.run(async (ctx) => (await dailyUsageFor(ctx, workspaceId, settings, now)).usage);
+    expect(usage).toMatchObject({ input: 200, output: 20 });
+  });
+});
+
+/**
+ * Leases the task's shift job and opens a shift with it, the way the worker does. A daily task has no
+ * job of its own until the planner gives it one, so the tick is what puts the work in the queue.
+ */
 async function startShift(t: Harness, taskId: Id<'tasks'>, leaseToken = 'lease-1') {
+  const queued = async () =>
+    t.run(async (ctx) => (await ctx.db.query('jobs').collect()).some((one) => one.taskId === taskId));
+  if (!(await queued())) await tick(t);
   await t.run(async (ctx) => {
     const job = (await ctx.db.query('jobs').collect()).find((one) => one.taskId === taskId)!;
     await ctx.db.patch(job._id, {

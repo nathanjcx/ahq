@@ -67,6 +67,8 @@ async function validate(ctx: DbCtx, input: Omit<WorkspaceSettings, 'updatedAt'>)
   const notificationChannels = [...new Set(input.notificationChannels)];
   for (const channel of notificationChannels)
     if (!NOTIFICATION_CHANNELS.includes(channel)) throw new Error(`Unknown notification channel: ${channel}`);
+  await assertToolNames(ctx, input.triageAllowList, 'The triage allow-list');
+  await assertToolNames(ctx, input.emergencyAllowList, 'The emergency allow-list');
   // The emergency rule counts pages a channel delivered, and the in-app row always lands whether or
   // not anybody looked at it. A workspace that names emergency tools has to have a channel that leaves
   // the building, or merge and deploy would open on three database writes nobody read.
@@ -77,8 +79,6 @@ async function validate(ctx: DbCtx, input: Omit<WorkspaceSettings, 'updatedAt'>)
     throw new Error(
       'The emergency allow-list needs a notification channel that reaches a person away from the app: add push, slack, or email',
     );
-  await assertToolNames(ctx, input.triageAllowList, 'The triage allow-list');
-  await assertToolNames(ctx, input.emergencyAllowList, 'The emergency allow-list');
   assertRates(input.rates);
   const budgets = input.memoryBudgets;
   return {

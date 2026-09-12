@@ -8,8 +8,8 @@ import { FLOOR_RULES, MEMORY_RULES, PACING_RULES, TRIAGE_RULES, composeInstructi
 import { query, mutate } from './backend';
 import { compileWorkingMemory, type WorkingMemory, type WorkingMemoryInputs } from './memory';
 import { requiredEnv } from './secrets';
-import { untrustedBlock } from './untrusted';
 import { toolPolicy } from './tool-policy';
+import { untrustedBlock } from './untrusted';
 
 let client: OpenAI | undefined;
 export function agentsClient() {

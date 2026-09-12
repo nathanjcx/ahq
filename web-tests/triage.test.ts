@@ -241,11 +241,16 @@ describe('triage authority', () => {
     });
     expect(attempts).toEqual([expect.objectContaining({ subject: 'owner', attempt: 1 })]);
     expect((await authority()).unattendedAttempts).toBe(0);
+    // Nor does the in-app row, which lands whether or not anybody ever looked at it.
     await t.mutation(api.services.notifications.markDelivered, {
       secret,
       id: attempts[0].id,
       channel: 'in_app',
     });
+    expect((await authority()).unattendedAttempts).toBe(0);
+    await t.run(async (ctx) =>
+      ctx.db.patch(attempts[0].id, { deliveredChannel: 'push' }),
+    );
     expect((await authority()).unattendedAttempts).toBe(1);
 
     // Acknowledging is an answer: the count drops back and the emergency path closes.
@@ -269,7 +274,7 @@ describe('triage authority', () => {
         await t.mutation(api.services.notifications.markDelivered, {
           secret,
           id: row.id,
-          channel: 'in_app',
+          channel: 'push',
         });
       return rows[0];
     };
@@ -289,6 +294,215 @@ describe('triage authority', () => {
     // allow-list shuts again until three new ones stand unanswered.
     await user.mutation(api.notifications.acknowledge, { id: second.id });
     expect(await authority()).toMatchObject({ unattendedAttempts: 0, emergency: false });
+  });
+
+  it('counts one page to three people as one page', async () => {
+    const { t, user, workspaceId, employeeId } = await workspace();
+    // Three people the workspace can reach: `workspaceSubjects` is everyone who opened a floor here.
+    for (const person of ['alice', 'bob']) {
+      const colleague = t.withIdentity(orgIdentity(person, 'acme', 'org:admin'));
+      await colleague.mutation(api.floors.create, {
+        name: `${person}'s floor`,
+        brief: 'Somewhere to work.',
+        employeeIds: [],
+      });
+    }
+    await user.mutation(api.triage.setRules, { rules: ['sev1'] });
+    await t.run(async (ctx) => {
+      const settings = await ctx.db
+        .query('workspaceSettings')
+        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspaceId))
+        .unique();
+      if (!settings) throw new Error('Expected settings');
+      await ctx.db.patch(settings._id, {
+        emergencyAllowList: ['merge_pull_request'],
+        notificationChannels: ['push'],
+      });
+      await ctx.db.patch(employeeId, { kind: 'triage' });
+    });
+    const { alertId, taskId } = await t.mutation(api.services.triage.ingest, {
+      secret,
+      workspaceId,
+      ...incident,
+    });
+    if (!taskId) throw new Error('Expected a triage task');
+    const runToken = await t.run(async (ctx) => (await ctx.db.get(taskId))?.runToken ?? '');
+
+    vi.useFakeTimers();
+    const page = async (minutes: number) => {
+      vi.setSystemTime(unattendedNow + minutes * 60_000);
+      const rows = await t.mutation(api.services.triage.pageAlert, { secret, alertId });
+      for (const row of rows)
+        await t.mutation(api.services.notifications.markDelivered, {
+          secret,
+          id: row.id,
+          channel: 'push',
+        });
+      return rows;
+    };
+
+    // One page, three people told, one attempt on the ledger — and no gate twenty minutes later.
+    const first = await page(0);
+    expect(first.map((row) => [row.subject, row.attempt]).sort()).toEqual([
+      ['alice', 1],
+      ['bob', 1],
+      ['owner', 1],
+    ]);
+    expect(first[0].text).toContain('Attempt 1 of 3');
+    vi.setSystemTime(unattendedNow + 25 * 60_000);
+    expect(await t.query(api.services.triage.authority, { secret, runToken })).toMatchObject({
+      unattendedAttempts: 1,
+      emergency: false,
+    });
+
+    // Three pages is three rounds of paging everybody, and only then does the rule open.
+    expect((await page(8))[0].text).toContain('Attempt 2 of 3');
+    await page(16);
+    vi.setSystemTime(unattendedNow + 25 * 60_000);
+    expect(await t.query(api.services.triage.authority, { secret, runToken })).toMatchObject({
+      unattendedAttempts: 3,
+      emergency: true,
+    });
+    expect(await t.run(async (ctx) => ctx.db.query('notifications').collect())).toHaveLength(9);
+    // A fourth page is not due: the ledger is full.
+    expect(await page(24)).toEqual([]);
+  });
+
+  it('refuses to write through a connection its owner kept private', async () => {
+    const { t, user, workspaceId, employeeId } = await workspace();
+    await user.mutation(api.triage.setRules, { rules: ['sev1'] });
+    await t.run(async (ctx) => {
+      const settings = await ctx.db
+        .query('workspaceSettings')
+        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspaceId))
+        .unique();
+      if (!settings) throw new Error('Expected settings');
+      await ctx.db.patch(settings._id, { triageAllowList: ['create_pull_request'] });
+      await ctx.db.patch(employeeId, { kind: 'triage' });
+    });
+    const connectionId = await t.run(async (ctx) =>
+      ctx.db.insert('connections', {
+        workspaceId,
+        ownerSubject: 'colleague',
+        ownerName: 'Colleague',
+        visibility: 'private',
+        visibleToSubjects: [],
+        provider: 'github',
+        name: 'Their own fork',
+        account: 'colleague',
+        status: 'connected',
+        tools: ['create_pull_request'],
+        allowedTools: ['create_pull_request'],
+        resourceScope: '',
+        inboxResources: [],
+        inboxMode: 'unsupported',
+        serverUrl: 'https://mcp.example.com/github',
+        credentialCiphertext: seal({ token: 'theirs' }),
+        credentialKeyVersion: 'v1',
+        createdAt: Date.now(),
+      }),
+    );
+    const { taskId } = await t.mutation(api.services.triage.ingest, { secret, workspaceId, ...incident });
+    if (!taskId) throw new Error('Expected a triage task');
+    const runToken = await t.run(async (ctx) => (await ctx.db.get(taskId))?.runToken ?? '');
+
+    // The credential belongs to the member who connected it, not to the workspace's triage rule.
+    expect((await t.query(api.services.triage.writeConnections, { secret, runToken })).connections).toEqual(
+      [],
+    );
+    const journal = () =>
+      t.mutation(api.services.actions.recordToolCall, {
+        secret,
+        runToken,
+        connectionId,
+        tool: 'create_pull_request',
+        argumentsCiphertext: seal({ title: 'Fix it' }),
+        outcome: 'started' as const,
+        operationId: 'op-private',
+      });
+    await expect(journal()).rejects.toThrow('Tool is not authorized for this task');
+
+    // Shared with the workspace, the same grant is exactly what triage may use.
+    await t.run(async (ctx) => ctx.db.patch(connectionId, { visibility: 'workspace' }));
+    expect(
+      (await t.query(api.services.triage.writeConnections, { secret, runToken })).connections.map(
+        (row) => row.allowedTools,
+      ),
+    ).toEqual([['create_pull_request']]);
+    await expect(journal()).resolves.toMatchObject({ toolCallId: expect.anything() });
+  });
+
+  it('sees an emergency call behind a long journal, and wants a report newer than it', async () => {
+    const { t, user, workspaceId, employeeId } = await workspace();
+    await user.mutation(api.triage.setRules, { rules: ['sev1'] });
+    await t.run(async (ctx) => {
+      const settings = await ctx.db
+        .query('workspaceSettings')
+        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspaceId))
+        .unique();
+      if (!settings) throw new Error('Expected settings');
+      await ctx.db.patch(settings._id, {
+        triageAllowList: ['create_pull_request'],
+        emergencyAllowList: ['merge_pull_request'],
+      });
+      await ctx.db.patch(employeeId, { kind: 'triage' });
+    });
+    const { taskId } = await t.mutation(api.services.triage.ingest, { secret, workspaceId, ...incident });
+    if (!taskId) throw new Error('Expected a triage task');
+    const connectionId = await t.run(async (ctx) =>
+      ctx.db.insert('connections', {
+        workspaceId,
+        ownerSubject: 'owner',
+        ownerName: 'Owner',
+        visibility: 'workspace',
+        visibleToSubjects: [],
+        provider: 'github',
+        name: 'The forge',
+        account: 'acme',
+        status: 'connected',
+        tools: ['merge_pull_request'],
+        allowedTools: ['merge_pull_request'],
+        resourceScope: '',
+        inboxResources: [],
+        inboxMode: 'unsupported',
+        serverUrl: 'https://mcp.example.com/github',
+        credentialCiphertext: seal({ token: 'ours' }),
+        credentialKeyVersion: 'v1',
+        createdAt: Date.now(),
+      }),
+    );
+
+    // The incident's task is reused for the whole life of the alert, and every dispatch journals a
+    // started row beside its terminal one, so an emergency call is soon far from the oldest rows.
+    const journal = async (tool: string, outcome: 'started' | 'succeeded', operationId: string) =>
+      t.run(async (ctx) =>
+        ctx.db.insert('toolCalls', {
+          workspaceId,
+          taskId,
+          connectionId,
+          operationId,
+          outcome,
+          tool,
+          argumentsCiphertext: 'x',
+          createdAt: Date.now(),
+        }),
+      );
+    for (let call = 0; call < 205; call++) {
+      await journal('get_pull_request', 'started', `op-${call}`);
+      await journal('get_pull_request', 'succeeded', `op-${call}`);
+    }
+    await journal('merge_pull_request', 'started', 'op-emergency');
+    await journal('merge_pull_request', 'succeeded', 'op-emergency');
+
+    // Four hundred rows of ordinary work do not hide what the run did without permission.
+    const close = () => t.mutation(api.services.triage.closeRun, { secret, taskId });
+    expect(await close()).toEqual({ emergency: true, reportMissing: true });
+    // Closing twice files nothing twice: the placeholder answers for that call.
+    expect(await close()).toEqual({ emergency: true, reportMissing: false });
+
+    // A second emergency action is its own act, and a report written before it does not answer for it.
+    await journal('merge_pull_request', 'succeeded', 'op-emergency-2');
+    expect(await close()).toEqual({ emergency: true, reportMissing: true });
   });
 
   it('posts the post-mortem to the affected floors and proposes the prevention to memory', async () => {
@@ -424,7 +638,8 @@ describe('what the Triage page reads', () => {
     expect(fresh[0].paging).toMatchObject({ attempts: 0, required: 3, acknowledged: false });
 
     // Two delivered pages: the count rises and the interface is told when the list would open.
-    for (const _ of [1, 2]) {
+    for (const minutes of [0, 8]) {
+      vi.setSystemTime(unattendedNow + minutes * 60_000);
       const [attempt] = await t.mutation(api.services.notifications.attempt, {
         secret,
         workspaceId,
@@ -436,11 +651,12 @@ describe('what the Triage page reads', () => {
       await t.mutation(api.services.notifications.markDelivered, {
         secret,
         id: attempt.id,
-        channel: 'in_app',
+        channel: 'push',
       });
     }
     const paged = (await user.query(api.triage.alerts, {}))[0].paging;
     expect(paged).toMatchObject({ attempts: 2, required: 3, acknowledged: false });
+    // The wait runs from the first page that still stands, not from the latest one.
     expect(paged.opensAt).toBe(unattendedNow + 20 * 60_000);
 
     // Acknowledging the alert answers every page it sent this viewer at once.

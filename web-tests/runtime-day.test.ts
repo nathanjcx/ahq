@@ -1044,7 +1044,8 @@ it('refuses a worker token the audit server and an auditor token a provider writ
 });
 
 /** What the session monitor does when a session goes idle at the end of a shift. */
-async function completeSession(taskId: string) {
+async function completeSession(id: string) {
+  const taskId = id as Id<'tasks'>;
   const { inputRevision } = await t.query(api.services.sessions.sessionContext, { secret, taskId });
   await t.mutation(api.services.sessions.recordEvents, {
     secret,
