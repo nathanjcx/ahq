@@ -58,6 +58,8 @@ The app reserves a default amount per task before dispatch: Luna `$0.25`, Terra 
 
 OpenAI API and hosted-session charges are separate from Railway compute, egress, and storage charges. Provider services may have their own plans or usage fees. Set workspace budgets and task reservation overrides conservatively, then compare the journal estimate with the provider billing consoles. Missing upstream usage remains unknown rather than zero.
 
+The initial worker subscription reads pending jobs across the deployment. Before a large rollout, measure Convex query read limits and subscription traffic under expected queue depth. Split the queue and worker subscriptions before those limits are reached.
+
 ## Failure guide
 
 If sign-in returns a configuration error, compare `APP_URL`, the Clerk publishable and secret keys, organization membership, and `CLERK_JWT_ISSUER_DOMAIN` in Convex. If the dashboard is empty, check that the browser was built with the correct `NEXT_PUBLIC_CONVEX_URL` and that the signed-in organization has a workspace.

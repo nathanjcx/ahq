@@ -30,6 +30,13 @@ test('empty workspace navigation and setup stay usable on desktop', async ({ pag
   await page.getByRole('button', { name: 'Workspace settings', exact: false }).click();
   await expect(page.getByRole('heading', { name: 'Workspace settings' })).toBeVisible();
   await expect(page.getByText('Before the first real task')).toBeVisible();
+  const dialog = page.getByRole('dialog', { name: 'Workspace settings' });
+  await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByRole('button', { name: 'Workspace settings', exact: false })).toBeFocused();
   expect(errors).toEqual([]);
 });
 test('mobile navigation keeps every page within the viewport', async ({ page }) => {

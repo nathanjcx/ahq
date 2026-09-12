@@ -5,7 +5,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   use: {
-    baseURL: 'http://localhost:3010',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3010',
     screenshot: 'on',
     trace: 'retain-on-failure',
     launchOptions: {
@@ -15,10 +15,12 @@ export default defineConfig({
       args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'],
     },
   },
-  webServer: {
-    command: 'npm run dev -- --port 3010',
-    url: 'http://localhost:3010',
-    reuseExistingServer: !process.env.CI,
-    env: { NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: '', NEXT_PUBLIC_CONVEX_URL: '' },
-  },
+  webServer: process.env.PLAYWRIGHT_BASE_URL
+    ? undefined
+    : {
+        command: 'npm run dev -- --port 3010',
+        url: 'http://localhost:3010',
+        reuseExistingServer: !process.env.CI,
+        env: { NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: '', NEXT_PUBLIC_CONVEX_URL: '' },
+      },
 });

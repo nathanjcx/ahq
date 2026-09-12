@@ -196,13 +196,12 @@ Google push ingestion needs a separately configured Google Pub/Sub and provider 
 Complete these steps with a test account and a test provider workspace:
 
 1. Sign in through Clerk and create or join the intended organization. Bootstrap the workspace in the UI.
-2. Open Integrations, choose a provider and its exact approved server URL, run discovery, select the smallest useful tool set, and enter a narrow resource scope. OAuth consent grants account scopes. It does not grant every discovered tool to every employee.
-3. Run a read-only task. Verify the task appears through the Convex subscription, the worker receives it, and the provider request appears only in gateway logs with redacted details.
-4. Run a write-capable task in a test record. Confirm the gateway returns an action proposal, the UI shows its target and correction limits, and no provider mutation occurs before a reviewer accepts it.
-5. Configure an inbox relay only after provider visibility and signature verification pass. Send one signed fixture from the relay, then send it again to confirm deduplication.
-6. As a platform administrator, create a marketplace draft, attach the approved capability IDs and private skills, validate it, and publish. The private instructions and skill content must remain absent from normal user queries and browser bundles.
-7. Hire the published version and run a task that uses its required connection. Verify a missing required connection blocks the task before the Agents session starts.
-8. Restart the worker during a test session. Confirm the worker reconnects to the Agents SSE stream, reconciles saved items, marks any unreplayed interval as a gap, and does not repeat an external write.
+2. Open Integrations, choose a provider and its exact approved server URL, run discovery, and select the smallest useful tool set. Apply resource restrictions only when the tool has a configured `resourceArgument`; otherwise use a provider account restricted to the intended records. OAuth consent does not grant every discovered tool to every employee.
+3. Review the discovered tools and add their exact names, descriptions, and modes to Convex's `MCP_TOOL_REGISTRY_JSON`. Configure execution policies on Railway separately. As a platform administrator, create a marketplace draft with its required and optional capabilities, private instructions, skills, and public media. Publish it, then hire the published employee.
+4. Run a read-only task. Verify live task updates, the worker's session, and the recorded MCP read. Revoke a required connection and verify the next task is blocked before an Agents session starts.
+5. Restore the connection and run a write-capable task against a test record. Confirm the UI shows a proposal and correction limits, with no provider mutation before approval. Approve it, inspect the result, then exercise its documented correction path.
+6. Configure native inbox webhooks or the normalized relay after provider visibility and signature verification pass. Send one signed event twice and confirm deduplication.
+7. Restart the worker during a test session. Confirm SSE reconnection, saved-item recovery, explicit history gaps, and no repeated external write. Download a generated artifact through its authenticated Files link.
 
 Do not call this production ready until these checks have been run with real accounts and their results recorded. The repository contains no account credentials and this guide does not fabricate a successful provider call.
 
