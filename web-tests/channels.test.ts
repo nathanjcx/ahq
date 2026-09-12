@@ -20,6 +20,46 @@ async function workspace() {
 }
 
 describe('channels', () => {
+  it('pages a long channel back past the second page', async () => {
+    const { t, user, employeeId } = await workspace();
+    const { floorId } = await user.mutation(api.floors.create, {
+      name: 'Launch',
+      brief: 'Prepare the launch.',
+      employeeIds: [employeeId],
+    });
+    const { channelId } = await user.mutation(api.channels.open, { kind: 'floor', scopeId: floorId });
+    const total = 420;
+    await t.run(async (ctx) => {
+      const channel = (await ctx.db.get(channelId))!;
+      for (let index = 0; index < total; index++)
+        await ctx.db.insert('posts', {
+          workspaceId: channel.workspaceId,
+          channelId,
+          kind: 'note',
+          authorSubject: 'owner',
+          authorName: 'Owner',
+          text: `Post ${index}`,
+          createdAt: Date.now() + index,
+        });
+    });
+
+    // Each page reads back from the oldest post of the one before it. The cursor is the field the
+    // channel index is keyed by, so the third page costs a page rather than being filtered to nothing.
+    const pages = [];
+    let before: number | undefined;
+    for (let page = 0; page < 3; page++) {
+      const posts = await user.query(api.channels.posts, { channelId, ...(before ? { before } : {}) });
+      pages.push(posts);
+      before = posts[0]?.createdAt;
+    }
+    expect(pages.map((page) => page.length)).toEqual([200, 200, 20]);
+    expect(new Set(pages.flat().map((post) => post.id)).size).toBe(total);
+    expect(pages[2][0].text).toBe('Post 0');
+    // Every page reads oldest first, and the pages themselves run backwards through the channel.
+    for (const page of pages)
+      expect(page.map((post) => post.createdAt)).toEqual([...page.map((post) => post.createdAt)].sort());
+  });
+
   it('creates a floor channel on first use and tracks unread per viewer', async () => {
     const { t, user, employeeId } = await workspace();
     const colleague = t.withIdentity(orgIdentity('colleague', 'acme'));

@@ -1,9 +1,8 @@
-import { lookup } from 'node:dns';
 import { Agent } from 'node:https';
 import { isIP } from 'node:net';
 import webpush, { WebPushError } from 'web-push';
 import { mutate, query } from './backend';
-import { publicAddress } from './network';
+import { publicOnlyLookup } from './network';
 import { safeError, unseal } from './secrets';
 
 /** One recorded attempt to reach one person, exactly as `services/notifications:attempt` returns it. */
@@ -41,20 +40,10 @@ function pushConfigured() {
 /**
  * Push is the one outbound path that does not go through `safeFetch`: `web-push` signs and sends over
  * plain Node HTTPS. The endpoint is a URL a member registered, so it gets the same treatment a
- * provider URL gets — resolution refuses any non-public address, and a literal IP, which never
- * reaches DNS, is refused before the request is made.
+ * provider URL gets — the same resolver refuses any non-public address, and a literal IP, which never
+ * reaches DNS at all, is refused before the request is made.
  */
-const pushAgent = new Agent({
-  lookup: (hostname, options, callback) => {
-    lookup(hostname, { ...options, all: true }, (error, addresses) => {
-      if (error) return callback(error, '', 4);
-      if (!addresses.length || addresses.some((a) => !publicAddress(a.address)))
-        return callback(new Error('Private and reserved network destinations are blocked'), '', 4);
-      if (options.all) return callback(null, addresses);
-      callback(null, addresses[0].address, addresses[0].family);
-    });
-  },
-});
+const pushAgent = new Agent({ lookup: publicOnlyLookup });
 
 function requireSafeEndpoint(endpoint: string) {
   const url = new URL(endpoint);

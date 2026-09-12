@@ -1,5 +1,5 @@
 import { lookup } from 'node:dns';
-import { isIP } from 'node:net';
+import { isIP, type LookupFunction } from 'node:net';
 import ipaddr from 'ipaddr.js';
 import { Agent, fetch as networkFetch } from 'undici';
 import { getProvider } from '../providers';
@@ -45,19 +45,20 @@ export function approvedMcpUrl(providerId: string, raw: string): URL {
     throw new Error('MCP endpoints must use an approved DNS hostname');
   return url;
 }
-const dispatcher = new Agent({
-  connect: {
-    lookup: (hostname, options, callback) => {
-      lookup(hostname, { all: true }, (error, addresses) => {
-        if (error) return callback(error, '', 4);
-        if (!addresses.length || addresses.some((a) => !publicAddress(a.address)))
-          return callback(new Error('Private and reserved network destinations are blocked'), '', 4);
-        if (options.all) callback(null, addresses);
-        else callback(null, addresses[0].address, addresses[0].family);
-      });
-    },
-  },
-});
+/**
+ * Name resolution that refuses to hand back an address inside this network. Every outbound path uses
+ * it: the undici dispatcher below, and the HTTPS agent Web Push signs its own requests with.
+ */
+export const publicOnlyLookup: LookupFunction = (hostname, options, callback) => {
+  lookup(hostname, { ...options, all: true }, (error, addresses) => {
+    if (error) return callback(error, '', 4);
+    if (!addresses.length || addresses.some((a) => !publicAddress(a.address)))
+      return callback(new Error('Private and reserved network destinations are blocked'), '', 4);
+    if (options.all) callback(null, addresses);
+    else callback(null, addresses[0].address, addresses[0].family);
+  });
+};
+const dispatcher = new Agent({ connect: { lookup: publicOnlyLookup } });
 export async function safeFetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
   const loopbackTest = loopbackTestEndpoint(url);

@@ -419,13 +419,28 @@ describe('planner inputs', () => {
         updatedAt: task.createdAt + 2 * 3_600_000,
       });
     });
-    expect(
-      await t.run(async (ctx) => {
-        const task = await ctx.db.get(taskId);
-        if (!task) throw new Error('Expected the task');
-        return estimateTask(ctx, task.workspaceId, versionId, 'daily');
-      }),
-    ).toMatchObject({ workingHours: 2, tokens: 1_000, confidence: 0.4 });
+    const workspaceId = await t.run(async (ctx) => (await ctx.db.get(taskId))!.workspaceId);
+    const estimateFor = (cadence: 'once' | 'daily') =>
+      t.run(async (ctx) => estimateTask(ctx, workspaceId, versionId, cadence));
+    expect(await estimateFor('daily')).toMatchObject({ workingHours: 2, tokens: 1_000, confidence: 0.4 });
+
+    // History is this workspace's. A busy neighbour on the same deployment must not push it out of
+    // the sample and leave every estimate falling back to the per-model default.
+    const other = t.withIdentity(orgIdentity('other-owner', 'globex'));
+    const { workspaceId: otherWorkspaceId } = await other.mutation(api.workspace.bootstrap, {
+      name: 'Globex',
+    });
+    await t.run(async (ctx) => {
+      const { _id, _creationTime, ...task } = (await ctx.db.get(taskId))!;
+      for (let index = 0; index < 250; index++)
+        await ctx.db.insert('tasks', {
+          ...task,
+          workspaceId: otherWorkspaceId,
+          title: `Their work ${index}`,
+          usage: { input: 900_000, cached: 0, output: 100_000 },
+        });
+    });
+    expect(await estimateFor('daily')).toMatchObject({ workingHours: 2, tokens: 1_000, confidence: 0.4 });
   });
 
   it('shows the planner what the workspace has agreed', async () => {
