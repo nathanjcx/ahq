@@ -173,20 +173,12 @@ p {
   border-radius: 12px;
 }
 .workspace-chip {
-  width: 100%;
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) 14px;
+  grid-template-columns: 32px minmax(0, 1fr);
   align-items: center;
   gap: 9px;
-  margin: 28px 0 13px;
+  margin: 28px 0 2px;
   padding: 8px;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  border-radius: 8px;
-}
-.workspace-chip:hover:not(:disabled) {
-  background: #e7ebdf;
 }
 .workspace-chip > span:nth-child(2),
 .account-row > span:nth-child(2) {
@@ -272,11 +264,9 @@ p {
   font-size: var(--text-xs);
   font-weight: 700;
 }
-.sidebar-footer {
-  margin-top: auto;
-}
 .account-row {
   width: 100%;
+  margin-bottom: 6px;
   display: grid;
   grid-template-columns: 31px minmax(0, 1fr) 16px;
   align-items: center;
@@ -597,6 +587,8 @@ p {
 .floor-directory {
   position: sticky;
   top: 88px;
+}
+.directory-rail {
   overflow: hidden;
 }
 .directory-head {
@@ -2608,7 +2600,8 @@ p {
   z-index: 1;
   width: min(470px, 94vw);
   height: 100%;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   background: #fbfaf3;
   box-shadow: -20px 0 70px rgba(25, 40, 30, 0.15);
   animation: slide-in 0.24s ease-out;
@@ -2616,10 +2609,10 @@ p {
 .sheet-wide {
   width: min(780px, 96vw);
 }
+.sheet-handle {
+  display: none;
+}
 .sheet > header {
-  position: sticky;
-  top: 0;
-  z-index: 3;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -2640,7 +2633,20 @@ p {
   font-size: var(--text-xs);
 }
 .sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: 25px 28px 38px;
+}
+.sheet-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 9px;
+  padding: 14px 28px calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: #f7f6ed;
 }
 /* === components/shared: forms inside sheets === */
 .form-stack {
@@ -3237,6 +3243,12 @@ p {
     opacity: 0.5;
   }
 }
+@keyframes sheet-up {
+  from {
+    transform: translateY(30px);
+    opacity: 0.6;
+  }
+}
 @keyframes toast-in {
   from {
     transform: translateY(8px);
@@ -3252,23 +3264,23 @@ p {
   .floor-directory {
     position: static;
   }
-  .directory-list {
+  .directory-rail .directory-list {
     display: flex;
     overflow-x: auto;
   }
-  .directory-list > button {
+  .directory-rail .directory-list > button {
     min-width: 175px;
   }
-  .directory-archive {
+  .directory-rail .directory-archive {
     display: flex;
     align-items: center;
     gap: 10px;
     overflow-x: auto;
   }
-  .directory-archive > span {
+  .directory-rail .directory-archive > span {
     margin: 0;
   }
-  .directory-archive button {
+  .directory-rail .directory-archive button {
     width: auto;
     flex: 0 0 auto;
   }
@@ -3281,9 +3293,6 @@ p {
   }
   .employee-layout {
     grid-template-columns: 1fr;
-  }
-  .employee-profile {
-    order: -1;
   }
 }
 
@@ -3338,22 +3347,7 @@ p {
   }
 }
 
-@media (max-width: 620px) {
-  .directory-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .directory-list > button {
-    min-width: 0;
-    min-height: 64px;
-    grid-template-columns: 29px minmax(0, 1fr);
-  }
-  .directory-list > button > svg {
-    display: none;
-  }
-  .directory-list strong {
-    white-space: normal;
-  }
+@media (max-width: 640px) {
   .project-form input,
   .project-form textarea,
   .task-form input,
@@ -3409,19 +3403,9 @@ p {
   .office-summary {
     grid-template-columns: 1fr;
   }
-  .split-card,
-  .task-layout {
-    display: block;
-  }
   .list-pane,
   .task-list {
-    max-height: 270px;
-    overflow-y: auto;
     border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-  .detail-pane {
-    min-height: 390px;
   }
   .conversation {
     max-height: none;
@@ -3527,6 +3511,494 @@ p {
   }
   .clerk-organization {
     max-width: 150px;
+  }
+}
+
+/* === components/shared/master-detail.tsx === */
+.master-detail {
+  display: grid;
+}
+.master-detail > .md-list,
+.master-detail > .md-detail {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.md-detail > :not(.md-back) {
+  flex: 1;
+  min-height: 0;
+}
+.md-back {
+  display: none;
+}
+
+/* === components/shared/skeleton.tsx === */
+.skeleton-list {
+  display: grid;
+  gap: 13px;
+  padding: 4px 0;
+}
+.skeleton-row {
+  display: grid;
+  gap: 10px;
+}
+.skeleton-message .skeleton-row,
+.skeleton-member .skeleton-row {
+  grid-template-columns: 30px minmax(0, 1fr);
+}
+.skeleton-entry .skeleton-row,
+.skeleton-post .skeleton-row {
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+}
+.skeleton-head {
+  display: flex;
+  gap: 9px;
+  margin-bottom: 9px;
+}
+.skeleton-mark,
+.skeleton-bar {
+  background: linear-gradient(90deg, #e9ece2 25%, #f4f6ee 45%, #e9ece2 65%);
+  background-size: 280% 100%;
+  animation: skeleton-sheen 1.4s ease-in-out infinite;
+}
+.skeleton-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+}
+.skeleton-bar {
+  display: block;
+  height: 10px;
+  border-radius: 5px;
+}
+.skeleton-bar + .skeleton-bar {
+  margin-top: 7px;
+}
+.skeleton-head .skeleton-bar + .skeleton-bar {
+  margin-top: 0;
+}
+@keyframes skeleton-sheen {
+  to {
+    background-position: -180% 0;
+  }
+}
+
+/* === components/app/review-bar.tsx === */
+.review-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 10px clamp(20px, 3.3vw, 52px);
+  color: #6b5127;
+  border-bottom: 1px solid #e7d7b4;
+  background: #f7eed8;
+}
+.review-bar-mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  color: #8a6a2e;
+  border-radius: var(--radius);
+  background: #f1e2c2;
+}
+.review-bar > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+}
+.review-bar strong {
+  font-size: var(--text-md);
+}
+.review-bar small {
+  margin-top: 2px;
+  color: #8c7444;
+  font-size: var(--text-2xs);
+}
+.review-bar .primary-button {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+.review-list {
+  display: grid;
+  gap: var(--space-3);
+}
+.review-card {
+  overflow: hidden;
+  border: 1px solid #e1d4bc;
+  border-radius: var(--radius-lg);
+  background: #fffcf3;
+}
+.review-card[data-active='true'] {
+  border-color: #cbad76;
+  box-shadow: 0 0 0 2px #f1e3c6;
+}
+.review-pick {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 2px;
+  padding: 14px 0 0 12px;
+  cursor: pointer;
+}
+.review-pick input {
+  width: 16px;
+  height: 16px;
+  margin-top: 5px;
+  accent-color: var(--sage-800);
+}
+.review-card .proposal-head {
+  border-bottom: 0;
+}
+.review-pick .proposal-head {
+  padding: 0 14px 0 0;
+}
+.review-evidence {
+  margin: 0 14px;
+}
+.review-evidence > summary {
+  padding: 7px 0;
+  color: #6d7a6b;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 680;
+}
+.review-card > .text-button {
+  margin: 4px 9px 10px;
+}
+.review-target {
+  flex: 1 1 100%;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.review-decide {
+  display: flex;
+  gap: var(--space-2);
+  width: 100%;
+}
+.review-decide button {
+  flex: 1;
+}
+
+/* === components/shared/overflow-menu.tsx === */
+.overflow-menu {
+  position: relative;
+}
+.overflow-options {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 25;
+  min-width: 190px;
+  padding: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: var(--shadow-sm);
+}
+.overflow-options button {
+  width: 100%;
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  text-align: left;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--text-md);
+  font-weight: 620;
+}
+.overflow-options button:hover:not(:disabled) {
+  background: var(--sage-50);
+}
+
+/* === components/marketplace: the mark that replaces the hero on a phone === */
+.listing-mark {
+  display: none;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  color: #fff;
+  border-radius: var(--radius-lg);
+}
+
+/* === Phone: one breakpoint for layout, touch targets, and the bottom sheet === */
+@media (max-width: 640px) {
+  /* Every control a finger has to hit. */
+  .icon-button,
+  .send-button {
+    width: var(--tap);
+    height: var(--tap);
+  }
+  .primary-button,
+  .secondary-button,
+  .primary-button.compact,
+  .secondary-button.compact {
+    min-height: var(--tap);
+    padding: 0 16px;
+  }
+  .text-button {
+    min-height: var(--tap);
+    padding: 0 8px;
+  }
+  .nav-item {
+    height: var(--tap);
+  }
+  .segmented button,
+  .task-tabs button,
+  .floor-region-switch button {
+    min-height: 38px;
+  }
+  .form-stack input,
+  .form-stack select,
+  .form-grid input,
+  .form-grid select,
+  .detail-actions select,
+  .ops-search input,
+  .ops-import select,
+  .ops-secret input,
+  .market-toolbar input,
+  .category-filter select {
+    min-height: var(--tap);
+  }
+  .task-list > button,
+  .inbox-list > button,
+  .directory-list > button,
+  .work-list > button,
+  .floor-task-list > button,
+  .floor-team-list > button,
+  .floor-team-list .team-open,
+  .tool-checklist label,
+  .share-choices label,
+  .staffing-picker label,
+  .ops-checklist label,
+  .ops-modes label,
+  .registry-tools > label {
+    min-height: var(--tap);
+  }
+
+  /* Master and detail: the list is the page, the detail replaces it. */
+  .master-detail {
+    display: block;
+  }
+  .master-detail[data-detail='open'] > .md-list,
+  .master-detail[data-detail='closed'] > .md-detail {
+    display: none;
+  }
+  .md-back {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-height: var(--tap);
+    padding: 0 14px;
+    color: var(--sage-600);
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: var(--sage-50);
+    font-size: var(--text-md);
+    font-weight: 680;
+  }
+  .employee-layout {
+    gap: 0;
+  }
+  .task-layout,
+  .split-card {
+    min-height: 0;
+  }
+  .conversation {
+    min-height: 70vh;
+  }
+  .detail-pane {
+    padding: 20px 18px 24px;
+  }
+  .detail-actions {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+  }
+  .detail-actions .secondary-button,
+  .detail-actions .primary-button {
+    width: 100%;
+  }
+
+  /* Bottom sheet. */
+  .sheet-layer {
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .sheet,
+  .sheet-wide {
+    width: 100%;
+    height: auto;
+    max-height: 90vh;
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -18px 60px rgba(25, 40, 30, 0.22);
+    animation: sheet-up 0.24s ease-out;
+    transition: transform 0.18s ease-out;
+  }
+  .sheet-handle {
+    display: block;
+    width: 42px;
+    height: 4px;
+    margin: 0 auto;
+    padding: 10px 34px;
+    border-radius: 999px;
+    background: #cfd6c7;
+    background-clip: content-box;
+    touch-action: none;
+  }
+  .sheet > header {
+    padding: 4px 18px 14px;
+  }
+  .sheet header h2 {
+    font-size: 21px;
+  }
+  .sheet-body {
+    padding: 16px 18px 22px;
+  }
+  .sheet-footer {
+    padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+  }
+  .sheet-footer .secondary-button,
+  .sheet-footer .primary-button {
+    flex: 1;
+  }
+
+  /* The review bar rides above the bottom of the screen. */
+  .review-bar {
+    position: fixed;
+    z-index: 40;
+    left: 10px;
+    right: 10px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    padding: 10px 12px;
+    border: 1px solid #e0cda2;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 12px 34px rgba(60, 48, 25, 0.2);
+  }
+  .review-bar small {
+    display: none;
+  }
+  .page-wrap {
+    padding-bottom: 100px;
+  }
+  .review-pick .proposal-head,
+  .review-card .proposal-head {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+  .review-card .proposal-status {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  /* Integrations: compact cards, actions behind the overflow menu. */
+  .integration-card {
+    min-height: 0;
+    padding: 15px;
+  }
+  .integration-card > p {
+    min-height: 0;
+  }
+  .integration-card h2 {
+    margin-top: 11px;
+  }
+  .connection-accounts .connection-account {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: var(--space-2);
+  }
+  .connection-account > div {
+    display: contents;
+  }
+  .connection-account .connection-state {
+    grid-area: 2 / 1;
+  }
+  .connection-sharing,
+  .connection-reach {
+    grid-area: 2 / 1;
+    justify-self: end;
+    margin: 0;
+  }
+  .connection-shared {
+    grid-area: 3 / 1 / 4 / 3;
+    margin: 0;
+  }
+  .connection-account .overflow-menu {
+    grid-area: 1 / 2 / 3 / 3;
+    justify-self: end;
+  }
+
+  /* Marketplace: a list of compact cards, no hero. */
+  .listing-visual,
+  .listing-card .capability-row {
+    display: none;
+  }
+  .listing-mark {
+    display: grid;
+  }
+  .listing-head {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+  }
+  .listing-copy {
+    padding: 14px;
+  }
+  .listing-copy h2 {
+    margin-top: 4px;
+    font-size: var(--text-xl);
+  }
+  .listing-description {
+    -webkit-line-clamp: 2;
+  }
+  .listing-footer {
+    margin-top: 12px;
+    padding-top: 11px;
+  }
+
+  /* Usage and admin tables read as cards. */
+  .usage-table thead {
+    display: none;
+  }
+  .usage-table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px 10px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .usage-table th,
+  .usage-table td {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px 0;
+    border: 0;
+    text-align: left;
+  }
+  .usage-table tbody th {
+    grid-column: 1 / -1;
+    font-size: var(--text-md);
+  }
+  .usage-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+  }
+  .admin-list article {
+    grid-template-columns: 38px minmax(0, 1fr);
+    row-gap: 9px;
+  }
+  .admin-list article .model-pill,
+  .admin-list article button {
+    grid-column: 2;
   }
 }
 

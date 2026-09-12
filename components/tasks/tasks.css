@@ -488,7 +488,7 @@
   margin-top: 3px;
 }
 
-@media (max-width: 620px) {
+@media (max-width: 640px) {
   .audit-tab {
     padding: 16px 18px 22px;
   }

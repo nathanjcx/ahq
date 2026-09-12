@@ -458,7 +458,7 @@
   border-color: #e2c9bf;
 }
 
-@media (max-width: 620px) {
+@media (max-width: 640px) {
   .ops-overview {
     grid-template-columns: 1fr;
   }

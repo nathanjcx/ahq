@@ -98,3 +98,20 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* === components/integrations/integration-card.tsx: administrator setup notes === */
+.setup-note details > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  color: #5d6b5b;
+  cursor: pointer;
+  font-weight: 700;
+}
+.setup-note details[open] > strong {
+  margin-top: 7px;
+}
+.connection-own-note {
+  margin-top: 9px;
+}

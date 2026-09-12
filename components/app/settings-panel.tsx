@@ -106,11 +106,11 @@ export function SettingsPanel({
                     {workspace.usage.byModel.map((usage) => (
                       <tr key={usage.model}>
                         <th scope="row">{modelName(usage.model)}</th>
-                        <td>{usage.input.toLocaleString()}</td>
-                        <td>{usage.cached.toLocaleString()}</td>
-                        <td>{usage.output.toLocaleString()}</td>
-                        <td>{cacheHitRate(usage)}</td>
-                        <td>{usage.tasks.toLocaleString()}</td>
+                        <td data-label="Input">{usage.input.toLocaleString()}</td>
+                        <td data-label="Cached">{usage.cached.toLocaleString()}</td>
+                        <td data-label="Output">{usage.output.toLocaleString()}</td>
+                        <td data-label="Cache hits">{cacheHitRate(usage)}</td>
+                        <td data-label="Tasks">{usage.tasks.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>

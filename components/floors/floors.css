@@ -446,7 +446,7 @@
   }
 }
 
-@media (max-width: 620px) {
+@media (max-width: 640px) {
   .region-board {
     height: 520px;
   }
@@ -549,5 +549,101 @@
   }
   .floor-replay-controls select {
     flex: 1 1 100%;
+  }
+}
+
+/* === components/floors/floor-switcher.tsx === */
+.floor-switcher {
+  display: none;
+}
+.floor-switcher-trigger {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 11px;
+  min-height: var(--tap);
+  padding: 9px 12px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+  box-shadow: var(--shadow-sm);
+}
+.floor-switcher-trigger small {
+  display: block;
+  color: #8c9a86;
+  font-size: var(--text-2xs);
+  font-weight: 760;
+  letter-spacing: 1.2px;
+}
+.floor-switcher-trigger strong {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: #294032;
+  font-size: var(--text-lg);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.floor-switcher-trigger .building-mark {
+  width: 36px;
+  height: 36px;
+}
+.switcher-list {
+  display: grid;
+  gap: 4px;
+  padding: 0;
+}
+.switcher-list > button {
+  min-height: var(--tap);
+  grid-template-columns: 31px minmax(0, 1fr) 18px;
+}
+.switcher-list > button > svg {
+  color: var(--sage-600);
+}
+
+/* The brief and the staffing line fold away where the board matters more. */
+.floor-details-toggle {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .floor-switcher {
+    display: block;
+    margin-bottom: 12px;
+  }
+  .office-page > .page-intro,
+  .directory-rail {
+    display: none;
+  }
+  .floor-directory {
+    position: static;
+  }
+  .floor-details-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 36px;
+    margin-top: 4px;
+    padding: 0 8px 0 0;
+    color: var(--sage-600);
+    border: 0;
+    background: transparent;
+    font-size: var(--text-md);
+    font-weight: 680;
+  }
+  .floor-details-toggle[aria-expanded='true'] svg {
+    transform: rotate(180deg);
+  }
+  .floor-details-body[data-open='false'] {
+    display: none;
+  }
+  .floor-heading {
+    min-height: 0;
+    padding: 15px 16px;
+  }
+  .floor-heading h2 {
+    font-size: 20px;
   }
 }
