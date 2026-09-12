@@ -30,7 +30,7 @@ Five Opus agents in isolated worktrees: memory and janitor; schedule, calendar, 
 - Integration fixes by the primary thread: same-millisecond ties in post paging, unread markers, and memory ordering made deterministic on Convex creation time.
 - State after merge: typecheck clean, 213 unit tests, 36 files.
 
-### Reconciliation (phase 2b, in progress)
+### Reconciliation (phase 2b, merged)
 
 - `tasks.kind` field (`work | meeting | audit | curation | triage`) so the dashboard hides session-only tasks; one shared "session task without a start job" helper in `convex/lib/tasks.ts` for meetings, audits, curation, and triage.
 - Janitor creation onto `ensureReservedInstance` (convex/lib/audit.ts); triage's private copy too.
@@ -38,3 +38,9 @@ Five Opus agents in isolated worktrees: memory and janitor; schedule, calendar, 
 - Findings and escalations posted to channels once the channels module lands; the calendar must consume `confirmOutcome`'s `meetingRequest`.
 - The dashboard task projection must carry `projectId`, `cadence`, `deadlineAt`, `dependsOn`; `releaseDependents` scans `by_status` for waiting tasks, so an index on dependencies is worth adding when that table grows.
 - The scheduler must call `ensureMeeting` at the prep lead, `ensureAuditRun` after hours, `ensureJanitor` per workspace, and order shifts with `openFindingsFor`.
+
+Phase 2b outcome (`agent/integrate`): one reserved-instance helper in `convex/lib/reserved.ts` used by janitor, auditor, and triage; one attended-hours check and one settings owner in the schedule module; `tasks.kind` and `sessionKey` with `openSessionTask` for meeting, audit, and standing sessions; the dashboard hides session tasks and carries project, cadence, deadline, and dependency fields; the tick creates reserved staff, opens audit runs after hours, and prepares meetings at the lead; reports, findings, escalations, and contested claims post to channels; every meeting is booked through `createMeetingEntry`; new indexes on `usageReports` and `tasks`; `floorPosts` removed. 221 tests.
+
+## Phase 3: infrastructure (in progress)
+
+Four Opus agents: worker turns and internal tool servers with role enforcement (`agent/runtime`); marketplace listings, instances, hiring policy, studio preview (`agent/marketplace`); code quality helpers, lint to zero outside the office, CSS consolidation, typed boundaries (`agent/quality`); 3D rooms and props with new baselines (`agent/rooms`, started with phase 2b).
