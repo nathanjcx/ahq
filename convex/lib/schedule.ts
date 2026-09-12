@@ -86,8 +86,8 @@ const USAGE_SCAN_LIMIT = 5_000;
 
 /**
  * Today's recorded tokens for one workspace, and the share each task accounts for so the tick can
- * measure triage against its own allowance. `usageReports` is keyed by task, so this walks back from
- * the newest rows and stops at the local day boundary rather than scanning the table.
+ * measure triage against its own allowance. `usageReports` is indexed by task rather than by
+ * workspace, so this reads back from the newest rows and stops after a bounded number of them.
  */
 export async function dailyUsageFor(
   ctx: Ctx,
@@ -100,8 +100,8 @@ export async function dailyUsageFor(
   const tokensByTask = new Map<string, number>();
   let examined = 0;
   for await (const row of ctx.db.query('usageReports').order('desc')) {
-    if (++examined > USAGE_SCAN_LIMIT || row.createdAt < since) break;
-    if (row.workspaceId !== workspaceId) continue;
+    if (++examined > USAGE_SCAN_LIMIT) break;
+    if (row.workspaceId !== workspaceId || row.createdAt < since) continue;
     usage.input += row.input;
     usage.cached += row.cached;
     usage.output += row.output;
