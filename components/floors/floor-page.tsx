@@ -3,10 +3,12 @@
 import { Plus } from 'lucide-react';
 import type { Actions } from '../app/actions';
 import type { Page } from '../app/nav';
+import { FloorFeeds } from '../channels/floor-feeds';
 import type { OfficeEmployee } from '../office/office-view';
 import { PageIntro } from '../shared/page-intro';
 import { timeGreeting } from '../shared/time';
-import { FloorBoard, LiveFloorBoard } from './floor-board';
+import { FloorBinder } from './floor-binder';
+import { FloorChannel } from './floor-channel';
 import { FloorDirectory } from './floor-directory';
 import { ACTIVE_TASK_STATUSES, summarizeFloor, type FloorEntry } from './floor-stats';
 import { FloorView } from './floor-view';
@@ -75,16 +77,6 @@ export function FloorPage({
   const selected = entries.find((entry) => entry.floor.id === selectedFloorId) ?? null;
 
   const workspaceReady = configured && Boolean(dashboard.workspace);
-  const decideHandoff = async (postId: string, accepted: boolean) => {
-    let taskId: string | undefined;
-    const decided = await run(
-      async () => {
-        taskId = (await actions.decideHandoff(postId, accepted))?.taskId;
-      },
-      accepted ? 'Handoff accepted' : 'Handoff declined',
-    );
-    if (decided && taskId) onTask(taskId);
-  };
 
   return (
     <div className="office-page">
@@ -129,7 +121,7 @@ export function FloorPage({
             onTask={onTask}
             onNewTask={onNewTask}
             onEditFloor={onEditFloor}
-            onDecideHandoff={decideHandoff}
+            onRecords={() => onPage('records')}
           />
         ) : (
           <Lobby
@@ -177,7 +169,7 @@ function SelectedFloor({
   onTask,
   onNewTask,
   onEditFloor,
-  onDecideHandoff,
+  onRecords,
 }: {
   entry: FloorEntry;
   floorLabel: string;
@@ -189,7 +181,8 @@ function SelectedFloor({
   onTask: (id: string) => void;
   onNewTask: (floorId: string | null, employeeId?: string | null) => void;
   onEditFloor: (floor: Floor) => void;
-  onDecideHandoff: (postId: string, accepted: boolean) => void;
+  /** The Records room, where the binder's provenance and supersession chains live. */
+  onRecords: () => void;
 }) {
   const { floor, summary } = entry;
   const staff = floor.employeeIds
@@ -197,16 +190,6 @@ function SelectedFloor({
     .filter((employee): employee is Employee => Boolean(employee));
   const tasks = dashboard.tasks.filter((task) => task.floorId === floor.id);
   const activeTasks = tasks.filter((task) => ACTIVE_TASK_STATUSES.includes(task.status));
-  const boardProps = {
-    staff,
-    canPost: configured && !floor.archivedAt,
-    onTask,
-    onPost: (text: string) => void run(() => actions.postToBoard(floor.id, text), 'Posted to the board'),
-    onRequestHandoff: (toEmployeeId: string, brief: string) =>
-      void run(() => actions.requestHandoff(floor.id, toEmployeeId, brief), 'Handoff requested'),
-    onDecideHandoff,
-  };
-
   return (
     <FloorView
       key={floor.id}
@@ -217,12 +200,25 @@ function SelectedFloor({
       officeEmployees={toOfficeEmployees(staff, activeTasks)}
       tasks={tasks}
       proposals={dashboard.proposals}
+      schedule={dashboard.schedule}
       board={
-        configured ? (
-          <LiveFloorBoard floorId={floor.id} {...boardProps} />
-        ) : (
-          <FloorBoard posts={[]} {...boardProps} />
-        )
+        <FloorChannel
+          floorId={floor.id}
+          staff={staff}
+          canPost={configured && !floor.archivedAt}
+          actions={actions}
+          run={run}
+          onTask={onTask}
+        />
+      }
+      feeds={<FloorFeeds staff={staff} onTask={onTask} />}
+      binder={
+        <FloorBinder
+          floorId={floor.id}
+          canApprove={configured && !floor.archivedAt}
+          onApprove={(id) => void run(() => actions.approveMemory(id), 'Claim approved')}
+          onRecords={onRecords}
+        />
       }
       configured={configured}
       onEmployee={onEmployee}

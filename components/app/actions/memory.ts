@@ -1,10 +1,21 @@
 'use client';
 
-/** Memory actions. Filled by the memory UI workstream: type, offline stubs, and the hook, kept in step. */
-export type MemoryActions = Record<never, never>;
+import { useMutation } from 'convex/react';
+import { asId, uiApi } from '@/lib/ui-api';
 
-export const offlineMemoryActions: MemoryActions = {};
+/**
+ * Memory actions. The records workstream owns the rest of this file; the floor page's memory binder
+ * needs approval, which is the one claim decision a person makes outside the Records room.
+ */
+export type MemoryActions = {
+  approveMemory: (id: string) => Promise<unknown>;
+};
+
+export const offlineMemoryActions: MemoryActions = {
+  approveMemory: async () => undefined,
+};
 
 export function useMemoryActions(): MemoryActions {
-  return {};
+  const approveMemory = useMutation(uiApi.approveMemory);
+  return { approveMemory: (id) => approveMemory({ id: asId(id) }) };
 }

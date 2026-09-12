@@ -28,7 +28,6 @@ export const coreApi = {
   updateFloor: api.floors.update,
   setFloorArchived: api.floors.setArchived,
   floorBoard: api.floors.board,
-  postToBoard: api.floors.post,
   requestHandoff: api.floors.requestHandoff,
   decideHandoff: api.floors.decideHandoff,
 

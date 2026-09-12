@@ -1,10 +1,52 @@
 'use client';
 
-/** Triage actions. Filled by the triage UI workstream: type, offline stubs, and the hook, kept in step. */
-export type TriageActions = Record<never, never>;
+import { useMutation } from 'convex/react';
+import { asId, uiApi } from '@/lib/ui-api';
 
-export const offlineTriageActions: TriageActions = {};
+/** Everything a person can do about an incident, plus the notification ledger the pages land in. */
+export type TriageActions = {
+  acknowledgeAlert: (alertId: string) => Promise<unknown>;
+  assignAlertFloors: (alertId: string, floorIds: string[]) => Promise<unknown>;
+  dismissAlert: (alertId: string) => Promise<unknown>;
+  closeAlert: (alertId: string) => Promise<unknown>;
+  setTriageRules: (rules: string[]) => Promise<unknown>;
+  ensureTriageFloor: () => Promise<{ floorId: string } | undefined>;
+  acknowledgeNotification: (id: string) => Promise<unknown>;
+  acknowledgeNotifications: () => Promise<unknown>;
+};
+
+const unavailable = async () => undefined;
+
+export const offlineTriageActions: TriageActions = {
+  acknowledgeAlert: unavailable,
+  assignAlertFloors: unavailable,
+  dismissAlert: unavailable,
+  closeAlert: unavailable,
+  setTriageRules: unavailable,
+  ensureTriageFloor: unavailable,
+  acknowledgeNotification: unavailable,
+  acknowledgeNotifications: unavailable,
+};
 
 export function useTriageActions(): TriageActions {
-  return {};
+  const acknowledgeAlert = useMutation(uiApi.acknowledgeAlert);
+  const assignAlertFloors = useMutation(uiApi.assignAlertFloors);
+  const dismissAlert = useMutation(uiApi.dismissAlert);
+  const closeAlert = useMutation(uiApi.closeAlert);
+  const setTriageRules = useMutation(uiApi.setTriageRules);
+  const ensureTriageFloor = useMutation(uiApi.ensureTriageFloor);
+  const acknowledgeNotification = useMutation(uiApi.acknowledgeNotification);
+  const acknowledgeNotifications = useMutation(uiApi.acknowledgeNotifications);
+
+  return {
+    acknowledgeAlert: (alertId) => acknowledgeAlert({ alertId: asId(alertId) }),
+    assignAlertFloors: (alertId, floorIds) =>
+      assignAlertFloors({ alertId: asId(alertId), floorIds: floorIds.map((id) => asId<'floors'>(id)) }),
+    dismissAlert: (alertId) => dismissAlert({ alertId: asId(alertId) }),
+    closeAlert: (alertId) => closeAlert({ alertId: asId(alertId) }),
+    setTriageRules: (rules) => setTriageRules({ rules }),
+    ensureTriageFloor: () => ensureTriageFloor({}),
+    acknowledgeNotification: (id) => acknowledgeNotification({ id: asId(id) }),
+    acknowledgeNotifications: () => acknowledgeNotifications({}),
+  };
 }
