@@ -1,17 +1,24 @@
 import type { z } from 'zod';
 import { REQUESTED_WITH, webApi } from './routes';
 import {
+  acknowledgedResponse,
   auditResponse,
   connectResponse,
   errorResponse,
   membersResponse,
+  notificationsResponse,
   relaySecretResponse,
   removedResponse,
   savedResponse,
+  subscribedResponse,
+  type AlertSecretRequest,
+  type ClearAlertSecretRequest,
   type ClearInboxSecretRequest,
   type ConnectRequest,
   type InboxSecretRequest,
   type OAuthClientRequest,
+  type PushSubscribeRequest,
+  type PushUnsubscribeRequest,
   type RemoveOAuthClientRequest,
 } from './schemas';
 
@@ -78,7 +85,23 @@ export const webClient = {
     rotate: (connectionId: string) =>
       request({ path: webApi.relaySecret(connectionId), schema: relaySecretResponse, method: 'POST' }),
   },
+  notifications: {
+    list: (signal?: AbortSignal) =>
+      request({ path: webApi.notifications, schema: notificationsResponse, signal }),
+    acknowledge: (id: string) =>
+      request({ path: webApi.acknowledgeNotification(id), schema: acknowledgedResponse, method: 'POST' }),
+  },
+  push: {
+    subscribe: (input: PushSubscribeRequest) =>
+      request({ path: webApi.pushSubscribe, schema: subscribedResponse, method: 'POST', body: input }),
+    unsubscribe: (input: PushUnsubscribeRequest) =>
+      request({ path: webApi.pushSubscribe, schema: removedResponse, method: 'DELETE', body: input }),
+  },
   admin: {
+    setAlertSecret: (input: AlertSecretRequest) =>
+      request({ path: webApi.adminAlertSecret, schema: savedResponse, method: 'POST', body: input }),
+    clearAlertSecret: (input: ClearAlertSecretRequest) =>
+      request({ path: webApi.adminAlertSecret, schema: removedResponse, method: 'DELETE', body: input }),
     setOAuthClient: (input: OAuthClientRequest) =>
       request({ path: webApi.adminOAuthClient, schema: savedResponse, method: 'POST', body: input }),
     removeOAuthClient: (input: RemoveOAuthClientRequest) =>

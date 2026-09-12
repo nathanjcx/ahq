@@ -1,0 +1,414 @@
+import { v } from 'convex/values';
+import type { Doc, Id } from '../_generated/dataModel';
+import { mutation, query } from '../_generated/server';
+import type { MutationCtx } from '../_generated/server';
+import { channelFor, insertPost } from '../lib/posts';
+import { assignmentForFloor, startTask } from '../lib/tasks';
+import {
+  ensureSettings,
+  ensureTriageStaff,
+  isAttendedTime,
+  matchesTriageRules,
+  settingsFor,
+} from '../lib/triage';
+import { severity as severityValidator } from '../schema';
+import { cleanText, requireService, untrustedBlock, type Ctx } from '../shared';
+import { taskForRunToken } from './context';
+
+/** Attempts stop counting past this window, so an old unanswered page cannot authorize anything. */
+const ATTEMPT_WINDOW_MS = 20 * 60 * 1_000;
+const OPEN_STATUSES = ['open', 'triaging', 'fixed'] as const;
+const alertSource = v.union(
+  v.literal('github'),
+  v.literal('webhook'),
+  v.literal('email'),
+  v.literal('manual'),
+);
+type AlertSource = Doc<'alerts'>['source'];
+type Severity = Doc<'alerts'>['severity'];
+
+interface AlertInput {
+  source: AlertSource;
+  fingerprint: string;
+  severity: Severity;
+  title: string;
+  detail: string;
+  url?: string;
+  affectedFloorIds?: Id<'floors'>[];
+}
+
+/**
+ * One alert, deduplicated by fingerprint. A repeat bumps the open alert's count and changes nothing
+ * else; a new one opens the triage task and posts the notice to triage and to the affected floors.
+ */
+async function ingestAlert(ctx: MutationCtx, workspace: Doc<'workspaces'>, input: AlertInput) {
+  const fingerprint = cleanText(input.fingerprint, 'Fingerprint', 300);
+  const title = cleanText(input.title, 'Alert title', 300);
+  const detail = cleanText(input.detail, 'Alert detail', 10_000);
+  const now = Date.now();
+  const open = (
+    await ctx.db
+      .query('alerts')
+      .withIndex('by_workspace_fingerprint', (q) =>
+        q.eq('workspaceId', workspace._id).eq('fingerprint', fingerprint),
+      )
+      .collect()
+  ).find((row) => (OPEN_STATUSES as readonly string[]).includes(row.status));
+  if (open) {
+    await ctx.db.patch(open._id, { occurrences: open.occurrences + 1, updatedAt: now });
+    return { alertId: open._id, taskId: open.triageTaskId, created: false };
+  }
+  const affectedFloorIds = [];
+  for (const floorId of input.affectedFloorIds ?? []) {
+    const floor = await ctx.db.get(floorId);
+    if (floor && floor.workspaceId === workspace._id) affectedFloorIds.push(floor._id);
+  }
+  const { floor, installation, version } = await ensureTriageStaff(ctx, workspace, 'system');
+  const taskId = await startTask(ctx, {
+    workspace,
+    createdBy: 'system',
+    createdByName: 'Triage',
+    employeeId: installation._id,
+    version,
+    title: `Triage: ${title}`.slice(0, 200),
+    prompt: `Reproduce and fix this incident, then post a post-mortem with cause, fix, prevention, and the regression test.\n\n${untrustedBlock(
+      [title, detail, input.url].filter(Boolean).join('\n'),
+    )}`,
+    floor: await assignmentForFloor(ctx, workspace._id, floor._id, installation._id),
+  });
+  const alertId = await ctx.db.insert('alerts', {
+    workspaceId: workspace._id,
+    source: input.source,
+    fingerprint,
+    severity: input.severity,
+    title,
+    detail,
+    url: input.url,
+    status: 'open',
+    triageTaskId: taskId,
+    affectedFloorIds,
+    occurrences: 1,
+    createdAt: now,
+    updatedAt: now,
+  });
+  await postToChannels(ctx, workspace, affectedFloorIds, {
+    kind: 'alert',
+    authorName: version.name,
+    authorEmployeeId: installation._id,
+    text: [`${input.severity.toUpperCase()}: ${title}`, detail, input.url].filter(Boolean).join('\n'),
+    taskId,
+  });
+  return { alertId, taskId, created: true };
+}
+
+/** The triage channel always hears about an incident; affected floors hear about their own. */
+async function postToChannels(
+  ctx: MutationCtx,
+  workspace: Doc<'workspaces'>,
+  floorIds: Id<'floors'>[],
+  post: {
+    kind: Doc<'posts'>['kind'];
+    authorName: string;
+    authorEmployeeId?: Id<'installations'>;
+    text: string;
+    taskId?: Id<'tasks'>;
+  },
+) {
+  const channels = [await channelFor(ctx, workspace._id, 'triage', '')];
+  for (const floorId of floorIds) channels.push(await channelFor(ctx, workspace._id, 'floor', floorId));
+  for (const channel of channels) await insertPost(ctx, { channel, ...post });
+}
+
+export const ingest = mutation({
+  args: {
+    secret: v.string(),
+    workspaceId: v.id('workspaces'),
+    source: alertSource,
+    fingerprint: v.string(),
+    severity: severityValidator,
+    title: v.string(),
+    detail: v.string(),
+    url: v.optional(v.string()),
+    affectedFloorIds: v.optional(v.array(v.id('floors'))),
+  },
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const workspace = await ctx.db.get(args.workspaceId);
+    if (!workspace) throw new Error('Workspace not found');
+    return ingestAlert(ctx, workspace, args);
+  },
+});
+
+function text(value: unknown, max: number) {
+  return typeof value === 'string' ? value.slice(0, max) : '';
+}
+
+/** Labels, title, and body of a GitHub issue, pull request, or comment delivery. */
+function githubDelivery(payload: string) {
+  const parsed: unknown = JSON.parse(payload);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+    throw new Error('GitHub payload must be an object');
+  const body = parsed as Record<string, unknown>;
+  const subject = (body.issue ?? body.pull_request) as Record<string, unknown> | undefined;
+  const repository = body.repository as Record<string, unknown> | undefined;
+  if (!subject || !repository) return null;
+  const comment = body.comment as Record<string, unknown> | undefined;
+  const labels = Array.isArray(subject.labels)
+    ? subject.labels.map((label) =>
+        label && typeof label === 'object' ? text((label as Record<string, unknown>).name, 120) : '',
+      )
+    : [];
+  const repositoryName = text(repository.full_name, 200);
+  const number = typeof subject.number === 'number' ? subject.number : 0;
+  return {
+    labels: labels.filter(Boolean),
+    title: text(subject.title, 300) || `Activity in ${repositoryName}`,
+    body: text(comment?.body ?? subject.body, 5_000),
+    url: text(comment?.html_url ?? subject.html_url, 2_048),
+    fingerprint: `github:${repositoryName}#${number}`,
+  };
+}
+
+async function matchGithubFor(ctx: MutationCtx, workspace: Doc<'workspaces'>, payload: string) {
+  const settings = await settingsFor(ctx, workspace._id);
+  const rules = settings.triageRules ?? [];
+  if (!rules.length) return { matched: false as const };
+  const delivery = githubDelivery(payload);
+  if (!delivery) return { matched: false as const };
+  const rule = matchesTriageRules(rules, [...delivery.labels, delivery.title, delivery.body]);
+  if (!rule) return { matched: false as const };
+  const alert = await ingestAlert(ctx, workspace, {
+    source: 'github',
+    fingerprint: delivery.fingerprint,
+    severity: 'high',
+    title: delivery.title,
+    detail: [`Matched triage rule "${rule}".`, delivery.body].filter(Boolean).join('\n'),
+    url: delivery.url || undefined,
+  });
+  return { matched: true as const, rule, ...alert };
+}
+
+/** Decides whether one GitHub delivery is an alert for this workspace, by label or keyword rule. */
+export const matchGithub = mutation({
+  args: { secret: v.string(), workspaceId: v.id('workspaces'), payload: v.string() },
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const workspace = await ctx.db.get(args.workspaceId);
+    if (!workspace) throw new Error('Workspace not found');
+    return matchGithubFor(ctx, workspace, args.payload);
+  },
+});
+
+/**
+ * The same decision for a native webhook, which knows the repository it came from but not the
+ * workspaces following it. Runs once per workspace with a connected GitHub account on that resource.
+ */
+export const matchGithubDelivery = mutation({
+  args: { secret: v.string(), resourceIds: v.array(v.string()), payload: v.string() },
+  returns: v.object({ matched: v.number() }),
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const connections = await ctx.db
+      .query('connections')
+      .withIndex('by_provider_status', (q) => q.eq('provider', 'github').eq('status', 'connected'))
+      .collect();
+    const workspaceIds = new Set(
+      connections
+        .filter((connection) =>
+          connection.inboxResources.some((resource) => args.resourceIds.includes(resource)),
+        )
+        .map((connection) => connection.workspaceId),
+    );
+    let matched = 0;
+    for (const workspaceId of workspaceIds) {
+      const workspace = await ctx.db.get(workspaceId);
+      if (!workspace) continue;
+      if ((await matchGithubFor(ctx, workspace, args.payload)).matched) matched += 1;
+    }
+    return { matched };
+  },
+});
+
+/** Email the classifier turn has not seen yet. The worker answers with `recordEmailClassification`. */
+export const classifyEmailInputs = query({
+  args: { secret: v.string(), workspaceId: v.id('workspaces') },
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const rows = await ctx.db
+      .query('inbox')
+      .withIndex('by_workspace', (q) => q.eq('workspaceId', args.workspaceId))
+      .order('desc')
+      .take(200);
+    return rows
+      .filter((row) => row.provider === 'google-workspace' && row.triageCheckedAt === undefined)
+      .slice(0, 20)
+      .map((row) => ({
+        itemId: row._id,
+        title: row.title,
+        preview: row.preview,
+        sourceUrl: row.sourceUrl,
+        createdAt: row.createdAt,
+      }));
+  },
+});
+
+export const recordEmailClassification = mutation({
+  args: {
+    secret: v.string(),
+    itemId: v.id('inbox'),
+    isAlert: v.boolean(),
+    severity: v.optional(severityValidator),
+    title: v.optional(v.string()),
+    detail: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const item = await ctx.db.get(args.itemId);
+    if (!item) throw new Error('Inbox item not found');
+    await ctx.db.patch(item._id, { triageCheckedAt: Date.now() });
+    if (!args.isAlert) return { alertId: undefined, created: false };
+    const workspace = await ctx.db.get(item.workspaceId);
+    if (!workspace) throw new Error('Workspace not found');
+    return ingestAlert(ctx, workspace, {
+      source: 'email',
+      fingerprint: `email:${item.externalId}`,
+      severity: args.severity ?? 'medium',
+      title: args.title || item.title,
+      detail: args.detail || item.preview,
+      url: item.sourceUrl,
+    });
+  },
+});
+
+function alertForTask(ctx: Ctx, taskId: Id<'tasks'>) {
+  return ctx.db
+    .query('alerts')
+    .withIndex('by_triage_task', (q) => q.eq('triageTaskId', taskId))
+    .first();
+}
+
+/** The post-mortem: cause, fix, prevention, regression test. It closes the fix, not the alert. */
+export const resolve = mutation({
+  args: {
+    secret: v.string(),
+    taskId: v.id('tasks'),
+    cause: v.string(),
+    fix: v.string(),
+    prevention: v.string(),
+    regressionRef: v.string(),
+  },
+  returns: v.object({ alertId: v.id('alerts') }),
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const task = await ctx.db.get(args.taskId);
+    const alert = await alertForTask(ctx, args.taskId);
+    if (!task || !alert) throw new Error('Alert not found');
+    const workspace = await ctx.db.get(alert.workspaceId);
+    if (!workspace) throw new Error('Workspace not found');
+    const now = Date.now();
+    const body = [
+      `Post-mortem: ${alert.title}`,
+      `Cause: ${cleanText(args.cause, 'Cause', 2_000)}`,
+      `Fix: ${cleanText(args.fix, 'Fix', 2_000)}`,
+      `Prevention: ${cleanText(args.prevention, 'Prevention', 2_000)}`,
+      `Regression test: ${cleanText(args.regressionRef, 'Regression test', 500)}`,
+    ].join('\n');
+    await postToChannels(ctx, workspace, alert.affectedFloorIds, {
+      kind: 'finding',
+      authorName: task.employeeName,
+      authorEmployeeId: task.employeeId,
+      text: body,
+      taskId: task._id,
+    });
+    // The prevention is the claim worth keeping. It enters memory proposed; the janitor and an
+    // administrator decide whether it becomes workspace memory.
+    await ctx.db.insert('memories', {
+      workspaceId: workspace._id,
+      scope: 'workspace',
+      scopeId: '',
+      kind: 'procedure',
+      text: `${alert.title}: ${args.prevention}`.slice(0, 2_000),
+      tags: ['triage', 'post-mortem'],
+      sourceTaskId: task._id,
+      author: 'agent',
+      authorName: task.employeeName,
+      confidence: 0.6,
+      status: 'proposed',
+      createdAt: now,
+      updatedAt: now,
+    });
+    await ctx.db.patch(alert._id, { status: 'fixed', updatedAt: now });
+    return { alertId: alert._id };
+  },
+});
+
+/**
+ * What the gateway needs to decide which triage tools to expose: whether a person is expected to be
+ * watching, the two allow-lists, and how many delivered pages for this incident went unanswered in
+ * the last twenty minutes.
+ */
+export const authority = query({
+  args: { secret: v.string(), runToken: v.string() },
+  returns: v.object({
+    attended: v.boolean(),
+    allowList: v.array(v.string()),
+    emergencyAllowList: v.array(v.string()),
+    unattendedAttempts: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const task = await taskForRunToken(ctx, args.runToken);
+    const settings = await settingsFor(ctx, task.workspaceId);
+    const alert = await alertForTask(ctx, task._id);
+    const since = Date.now() - ATTEMPT_WINDOW_MS;
+    const attempts =
+      alert && (OPEN_STATUSES as readonly string[]).includes(alert.status)
+        ? (
+            await ctx.db
+              .query('notifications')
+              .withIndex('by_alert', (q) => q.eq('alertId', alert._id))
+              .collect()
+          ).filter((row) => row.sentAt >= since && row.deliveredAt !== undefined && !row.acknowledgedAt)
+        : [];
+    return {
+      attended: isAttendedTime(Date.now(), settings),
+      allowList: settings.triageAllowList,
+      emergencyAllowList: settings.emergencyAllowList,
+      unattendedAttempts: attempts.length,
+    };
+  },
+});
+
+/** The sealed alert-intake secret, unsealed only by the web service that verifies a signature. */
+export const alertSecret = query({
+  args: { secret: v.string(), workspaceId: v.id('workspaces') },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const settings = await ctx.db
+      .query('workspaceSettings')
+      .withIndex('by_workspace', (q) => q.eq('workspaceId', args.workspaceId))
+      .unique();
+    return settings?.alertSecretCiphertext ?? null;
+  },
+});
+
+export const setAlertSecret = mutation({
+  args: {
+    secret: v.string(),
+    workspaceId: v.id('workspaces'),
+    alertSecretCiphertext: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const workspace = await ctx.db.get(args.workspaceId);
+    if (!workspace) throw new Error('Workspace not found');
+    const settings = await ensureSettings(ctx, workspace._id);
+    await ctx.db.patch(settings._id, {
+      alertSecretCiphertext: args.alertSecretCiphertext,
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});

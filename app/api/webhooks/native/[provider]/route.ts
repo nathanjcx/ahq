@@ -24,6 +24,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
       resourceIds: delivery.resourceIds,
       items: delivery.items,
     });
+    // A GitHub delivery is also triage input: the workspace's label and keyword rules decide.
+    if (provider === 'github')
+      await mutate('services/triage:matchGithubDelivery', {
+        resourceIds: delivery.resourceIds,
+        payload: body,
+      });
     return NextResponse.json({ accepted: true, delivered }, { status: 202 });
   } catch (error) {
     return failure(error);

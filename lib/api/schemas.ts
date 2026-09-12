@@ -156,6 +156,48 @@ export const inboxSecretRequest = z.object({
   inboxSecret: z.string().min(1).max(2000),
 });
 export const clearInboxSecretRequest = z.object({ provider: z.string() });
+// Triage. The generic alert endpoint is signed, not signed in: the body is the whole request.
+export const alertRequest = z.object({
+  source: z.enum(['github', 'webhook', 'email', 'manual']),
+  fingerprint: z.string().min(1).max(300),
+  severity: z.enum(['low', 'medium', 'high', 'critical']),
+  title: z.string().min(1).max(300),
+  detail: z.string().min(1).max(10_000),
+  url: httpsUrl.optional(),
+  floorIds: z.array(z.string().min(1).max(100)).max(20).optional(),
+});
+export const alertResponse = z.object({
+  accepted: z.literal(true),
+  alertId: z.string(),
+  /** True when the fingerprint matched an alert that is already open. */
+  duplicate: z.boolean(),
+});
+export const alertSecretRequest = z.object({
+  workspaceId: z.string().min(1).max(100),
+  alertSecret: z.string().min(32).max(2000),
+});
+export const clearAlertSecretRequest = z.object({ workspaceId: z.string().min(1).max(100) });
+
+// Notifications and browser push.
+export const notificationSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['triage', 'meeting', 'finding', 'general']),
+  title: z.string(),
+  text: z.string(),
+  alertId: z.string().optional(),
+  attempt: z.number(),
+  sentAt: z.number(),
+  acknowledgedAt: z.number().optional(),
+});
+export const notificationsResponse = z.array(notificationSchema);
+export const acknowledgedResponse = z.object({ acknowledged: z.literal(true) });
+export const pushSubscribeRequest = z.object({
+  endpoint: httpsUrl,
+  keys: z.object({ p256dh: z.string().min(1).max(300), auth: z.string().min(1).max(300) }),
+});
+export const pushUnsubscribeRequest = z.object({ endpoint: httpsUrl });
+export const subscribedResponse = z.object({ subscribed: z.literal(true) });
+
 export const savedResponse = z.object({ saved: z.literal(true) });
 export const removedResponse = z.object({ removed: z.literal(true) });
 
@@ -171,3 +213,13 @@ export type InboxSecretRequest = z.infer<typeof inboxSecretRequest>;
 export type ClearInboxSecretRequest = z.infer<typeof clearInboxSecretRequest>;
 export type SavedResponse = z.infer<typeof savedResponse>;
 export type RemovedResponse = z.infer<typeof removedResponse>;
+export type AlertRequest = z.infer<typeof alertRequest>;
+export type AlertResponse = z.infer<typeof alertResponse>;
+export type AlertSecretRequest = z.infer<typeof alertSecretRequest>;
+export type ClearAlertSecretRequest = z.infer<typeof clearAlertSecretRequest>;
+export type Notification = z.infer<typeof notificationSchema>;
+export type NotificationsResponse = z.infer<typeof notificationsResponse>;
+export type AcknowledgedResponse = z.infer<typeof acknowledgedResponse>;
+export type PushSubscribeRequest = z.infer<typeof pushSubscribeRequest>;
+export type PushUnsubscribeRequest = z.infer<typeof pushUnsubscribeRequest>;
+export type SubscribedResponse = z.infer<typeof subscribedResponse>;

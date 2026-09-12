@@ -501,6 +501,8 @@ export default defineSchema({
     createdAt: v.number(),
     status: v.union(v.literal('unread'), v.literal('read'), v.literal('assigned')),
     taskId: v.optional(v.id('tasks')),
+    /** When the triage classifier last looked at this item, so it is classified once. */
+    triageCheckedAt: v.optional(v.number()),
   })
     .index('by_connection_external', ['connectionId', 'externalId'])
     .index('by_workspace', ['workspaceId']),
@@ -623,6 +625,10 @@ export default defineSchema({
     taskId: v.optional(v.id('tasks')),
     /** Employee a note is addressed to; accepting turns it into a task. */
     toEmployeeId: v.optional(v.id('installations')),
+    /** The task an accepted addressed note started, so a note is accepted once. */
+    acceptedTaskId: v.optional(v.id('tasks')),
+    /** The shift report a `report` post renders, so posting one report twice is a no-op. */
+    reportId: v.optional(v.id('reports')),
     handoff: v.optional(
       v.object({
         toEmployeeId: v.id('installations'),
@@ -637,7 +643,17 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index('by_channel', ['channelId', 'createdAt'])
-    .index('by_employee', ['authorEmployeeId', 'createdAt']),
+    .index('by_channel_kind', ['channelId', 'kind'])
+    .index('by_employee', ['authorEmployeeId', 'createdAt'])
+    .index('by_report', ['reportId']),
+  channelReads: defineTable({
+    workspaceId: v.id('workspaces'),
+    channelId: v.id('channels'),
+    subject: v.string(),
+    lastReadAt: v.number(),
+  })
+    .index('by_channel_subject', ['channelId', 'subject'])
+    .index('by_subject', ['subject']),
   calendarEntries: defineTable({
     workspaceId: v.id('workspaces'),
     kind: calendarKind,
@@ -731,7 +747,9 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index('by_workspace_fingerprint', ['workspaceId', 'fingerprint'])
-    .index('by_workspace_status', ['workspaceId', 'status']),
+    .index('by_workspace_status', ['workspaceId', 'status'])
+    .index('by_workspace_created', ['workspaceId', 'createdAt'])
+    .index('by_triage_task', ['triageTaskId']),
   notifications: defineTable({
     workspaceId: v.id('workspaces'),
     subject: v.string(),
@@ -743,6 +761,8 @@ export default defineSchema({
     attempt: v.number(),
     sentAt: v.number(),
     deliveredAt: v.optional(v.number()),
+    /** The channel that delivered this attempt; an attempt counts only once one did. */
+    deliveredChannel: v.optional(v.string()),
     acknowledgedAt: v.optional(v.number()),
   })
     .index('by_subject', ['subject', 'sentAt'])
@@ -775,6 +795,10 @@ export default defineSchema({
     hiringPolicy,
     auditPolicy: v.union(v.literal('soft'), v.literal('hard')),
     triageAllowList: v.array(v.string()),
+    /** GitHub label or keyword rules that turn a native delivery into an alert. */
+    triageRules: v.optional(v.array(v.string())),
+    /** Signing secret for the generic alert endpoint, sealed by the web service. */
+    alertSecretCiphertext: v.optional(v.string()),
     emergencyAllowList: v.array(v.string()),
     notificationChannels: v.array(v.string()),
     plan: v.union(v.literal('subscription'), v.literal('byok')),

@@ -2,7 +2,7 @@ import { v } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import type { MutationCtx } from './_generated/server';
-import { canSeeTask, cleanText, requireWorkspace, untrustedBlock } from './shared';
+import { channelFor, findChannel, insertHandoff, insertNote, insertPost, recentPosts } from './lib/posts';
 import {
   assertEmployeeReady,
   assertTokenCap,
@@ -10,7 +10,7 @@ import {
   requireFloor,
   startTask,
 } from './lib/tasks';
-import { insertHandoff, insertNote } from './lib/posts';
+import { canSeeTask, cleanText, requireWorkspace, untrustedBlock } from './shared';
 
 function floorFields(name: string, brief: string) {
   return {
@@ -32,10 +32,18 @@ async function validateEmployees(
   }
 }
 
-function publicPost(post: Doc<'floorPosts'>) {
+/** The board shows the three post kinds it has always shown; the rest live in the channel. */
+const BOARD_KINDS = ['note', 'system', 'handoff'] as const;
+type BoardKind = (typeof BOARD_KINDS)[number];
+
+function isBoardPost(post: Doc<'posts'>): post is Doc<'posts'> & { kind: BoardKind } {
+  return (BOARD_KINDS as readonly string[]).includes(post.kind);
+}
+
+function boardPost(floorId: Id<'floors'>, post: Doc<'posts'> & { kind: BoardKind }) {
   return {
     id: post._id,
-    floorId: post.floorId,
+    floorId,
     kind: post.kind,
     authorSubject: post.authorSubject,
     authorName: post.authorName,
@@ -100,17 +108,16 @@ export const setArchived = mutation({
 
 // No `returns` validator on the board: it would restate the whole post document including its
 // nested handoff record, which the schema already defines.
+/** The floor channel under the board's old name, until the interface moves to `channels`. */
 export const board = query({
   args: { floorId: v.id('floors') },
   handler: async (ctx, args) => {
     const { workspace } = await requireWorkspace(ctx);
     await requireFloor(ctx, workspace._id, args.floorId);
-    const posts = await ctx.db
-      .query('floorPosts')
-      .withIndex('by_floor', (q) => q.eq('floorId', args.floorId))
-      .order('desc')
-      .take(200);
-    return posts.reverse().map(publicPost);
+    const channel = await findChannel(ctx, workspace._id, 'floor', args.floorId);
+    if (!channel) return [];
+    const posts = await recentPosts(ctx, channel._id, 200);
+    return posts.filter(isBoardPost).map((post) => boardPost(args.floorId, post));
   },
 });
 
@@ -137,7 +144,7 @@ export const requestHandoff = mutation({
     brief: v.string(),
     sourceTaskId: v.optional(v.id('tasks')),
   },
-  returns: v.object({ postId: v.id('floorPosts') }),
+  returns: v.object({ postId: v.id('posts') }),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
     const floor = await requireFloor(ctx, workspace._id, args.floorId);
@@ -159,14 +166,16 @@ export const requestHandoff = mutation({
 
 /** A person accepts a handoff, which starts a floor task carrying the source task's final message. */
 export const decideHandoff = mutation({
-  args: { postId: v.id('floorPosts'), accepted: v.boolean() },
+  args: { postId: v.id('posts'), accepted: v.boolean() },
   returns: v.object({ taskId: v.optional(v.id('tasks')) }),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
     const post = await ctx.db.get(args.postId);
     if (!post || post.workspaceId !== workspace._id || !post.handoff) throw new Error('Handoff not found');
     if (post.handoff.status !== 'pending') return { taskId: post.handoff.taskId };
-    const floor = await requireFloor(ctx, workspace._id, post.floorId);
+    const channel = await ctx.db.get(post.channelId);
+    if (!channel || channel.kind !== 'floor') throw new Error('Handoff not found');
+    const floor = await requireFloor(ctx, workspace._id, channel.scopeId as Id<'floors'>);
     const now = Date.now();
     if (!args.accepted) {
       await ctx.db.patch(post._id, {
@@ -205,14 +214,13 @@ export const decideHandoff = mutation({
     await ctx.db.patch(post._id, {
       handoff: { ...post.handoff, status: 'accepted', decidedBy: actor.subject, decidedAt: now, taskId },
     });
-    await ctx.db.insert('floorPosts', {
-      workspaceId: workspace._id,
-      floorId: floor._id,
+    await insertPost(ctx, {
+      channel: await channelFor(ctx, workspace._id, 'floor', floor._id),
       kind: 'system',
+      authorEmployeeId: post.handoff.toEmployeeId,
       authorName: version.name,
       text: 'Accepted handoff → task created',
       taskId,
-      createdAt: Date.now(),
     });
     return { taskId };
   },

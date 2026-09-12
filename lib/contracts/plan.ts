@@ -27,6 +27,8 @@ export interface WorkspaceSettings {
   hiringPolicy: HiringPolicy;
   auditPolicy: AuditPolicy;
   triageAllowList: string[];
+  /** GitHub label or keyword rules that turn a native delivery into an alert. */
+  triageRules?: string[];
   emergencyAllowList: string[];
   notificationChannels: string[];
   plan: PlanKind;
