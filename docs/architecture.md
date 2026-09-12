@@ -149,22 +149,87 @@ A floor is a project with a brief, a team of employees, a board, and shared task
 
 ## Frontend
 
-`components/` is organized by page with shared primitives:
+`app/` holds the routes: the shell at `/`, the web routes under `app/api/`, `/health`, and the development-only fixture route `/qa`. `components/` is organized by page with shared primitives:
 
 ```
 components/
-  app/          shell, navigation, providers, actions hook
-  office/       3D office and floor overview
-  floors/       floor page, board, staffing, handoffs
-  inbox/
-  employees/
-  tasks/        list, detail, conversation, proposal card, audit tab, visibility menu, handoff sheet
-  files/
-  activity/
-  marketplace/  listing, detail, hire
-  integrations/ cards, product picker, manage access, sharing, relay secret
-  admin/        marketplace studio, operations (providers, registry, usage)
-  shared/       Sheet, PageIntro, Avatar, marks, empty states, formatting
+  app/          shell, sidebar, topbar, page content, new task panel, notices, settings, review bar, actions
+  office/       the 3D office: scene, stage, room, furniture, people, signals, overlay, pan,
+                and the pure modules activity.ts, office-stations.ts, office-labels.ts, daylight.ts, sound.ts
+  floors/       floor page, view, board, work, team, directory, switcher, lobby, scene, replay, stats
+  tasks/        list, detail, conversation, message bubble, proposal card, audit tab, visibility menu, handoff sheet
+  integrations/ cards, connect, product picker, manage access, sharing, relay secret
+  admin/        marketplace studio, employee editor, operations (providers, OAuth client form, tool registry)
+  marketplace/  listing, detail, capabilities
+  inbox/ employees/ files/ activity/   one page each
+  shared/       MasterDetail, Sheet, SkeletonList, OverflowMenu, useIsNarrow, marks, page intro,
+                empty states, JSON view, state diff, tool checklist, formatting, members
 ```
 
 Pages receive data through props from the shell and call actions through one typed actions object. No page imports another page.
+
+## The typed layer
+
+The interface never writes a Convex function name as a string and never posts an unchecked body to its own routes.
+
+`lib/ui-api.ts` exports `uiApi`, every Convex function the interface calls under the name the UI uses, holding the generated `api.*` references. Arguments and results are typed by the Convex functions themselves, so a renamed or re-shaped function fails the build there rather than in the browser. The interface carries Convex ids as opaque strings; `asId<Table>(value)` is the single cast back, and Convex rejects an id from the wrong table.
+
+`lib/contracts.ts` is the shape the interface renders. `web-tests/contracts.types.test.ts` asserts at compile time that each Convex query extends its contract (`dashboard`, `marketplace.list`, `projects.board`, `integrations.readiness`, `admin.providerConfigs`, `admin.registryTools`, `tasks.messages`) and that the audit route's response, minus its truncation flag, satisfies `AuditTimeline`. Convex returns branded `Id` values where the contracts say `string`; an `Id` is a string subtype, so the assertion holds.
+
+`lib/api/schemas.ts` holds a zod schema for the request and response of every web route. Routes parse requests with them and declare their responses `satisfies` the inferred type. `lib/api/client.ts` exports `webClient`, the only browser path to those routes: same-origin, JSON in and out, every response parsed against its schema, and the shared error envelope `{ error, code? }` turned into a `WebApiError` carrying the HTTP status and the route's stable code. Every call sends `x-requested-with: astra-hq` from `lib/api/routes.ts`, which `actor()` requires on any non-GET alongside a matching `Origin`; a cross-site form can set neither. The routes are the six that need the encryption key or Clerk's backend API: workspace members, the audit timeline, starting a connection, the relay secret, and the two administrator secret routes. Convex handles everything else.
+
+## The office
+
+The office is a react-three-fiber scene dressed by the journal. Its rules live in pure modules so they can be tested without a renderer.
+
+**Activity.** `deriveActivities` in `components/office/activity.ts` gives every employee one activity. Precedence is highest first:
+
+| Activity      | Chosen when                                                                                           | Holds for                    |
+| ------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `reviewing`   | The newest active task is `awaiting_approval`, or its latest event is `agent.session.requires_action` | While that stays true        |
+| `failed`      | The newest settled task is `failed` or `uncertain`                                                    | 5 minutes                    |
+| `celebrating` | The newest settled task is `completed`                                                                | 90 seconds                   |
+| `writing`     | The active task's last assistant message is fresh                                                     | 20 seconds                   |
+| `calling`     | The active task's latest event is `<tool>: started`                                                   | Until the next event         |
+| `reading`     | The active task's latest event is `<tool>: succeeded`                                                 | 20 seconds                   |
+| `thinking`    | An active task with none of the above; timed from the newest `agent.session.turn.created`             | While the task is active     |
+| `talking`     | A pending handoff names this employee, or this employee wrote it                                      | Until the handoff is decided |
+| `idle`        | Nothing else                                                                                          |                              |
+
+Active means `queued`, `running`, or `awaiting_approval`. `providerForTool` reads the provider out of the tool name by prefix, so `linear_create_issue` sends the figure to the Linear console. A bubble is the first sentence of the explaining task's last message, up to 90 characters, while that message is under a minute old; a talking figure speaks the handoff brief instead. Attention is separate from activity: `stuck` when one of the employee's tasks has waited on approval for more than 30 minutes, otherwise `approval` when a pending proposal on one of its tasks is one this viewer can decide.
+
+**Stations.** `office-stations.ts` places everyone somewhere the room explains. Homes are sticky, drawn from the desk grid the room itself draws, then the lounge and meeting seats, then the near edge, so nobody swaps chairs between renders. No two stations are closer than `MIN_GAP` (0.9). A reviewing figure joins the review lectern queue, up to three deep. A calling figure takes a provider console on the window wall, its own provider's when that one is free, else the next; there are five console slots. A handoff pair takes one of three huddle spots and stands `TALK_GAP` (0.8) apart facing each other, and only when both figures name each other as partner.
+
+**Labels and bubbles.** `office-labels.ts` ranks pills: selected, then attention, then talking, then working or failed, then everybody else. The overlay lifts that further for a hovered, focused or selected pill and for the pinned board note. The collision pass runs highest priority first, lifts a covered pill 20 px at a time up to four steps, and hides whatever is still covered. Bubbles are ranked talking, then attention, then newest, and `placeBubble` opens each one on the side of its figure with room, shifting it 26 px at a time to clear the pills and the other bubble; a pill a bubble covers gives way. `OfficeOverlay` runs this pass at 20 fps, projecting each figure's head to screen space and writing the result straight to the DOM, so a crowded room never re-renders React at frame rate. The Labels control cycles names, dots and off, persisted in `ahq.labels`; phones open on dots.
+
+**Room signals.** The review lectern's tray glows and carries a count when work waits on a person. A figure the floor is waiting on gets a breathing ring at its feet, faster and redder when the wait is stuck. Each connected provider has a console whose bars breathe, and sputter when any connection for that provider is degraded or revoked; the status device does the same with one amber eye. The room dims by up to 35 percent as the workspace approaches its monthly token cap. Every one of these reads a value already in the journal.
+
+**Daylight.** `daylight.ts` interpolates five keyframes (02:00, 08:00, 13:00, 20:00, 21:00) around the clock for the viewer's local hour, producing background, ground, sun, fill and disc colours, a sky height, an interior lamp weight, and a night flag. Hours wrap, so 23:00 blends into the small hours.
+
+**Sound.** `sound.ts` is off until somebody turns it on, because the audio graph can only be created from a user gesture; the preference lives in `ahq.sound`. Sound on adds a quiet pad and three cues, played on activity transitions: a rising pair for a new approval to decide, a settled third for a completed task, one falling tone for a failure.
+
+**Replay.** `components/floors/floor-replay.tsx` rebuilds a finished task from its audit timeline, fetched through `webClient.audit`. `sceneAt` replays the entries up to the scrubber's position through the same `deriveActivities` the live floor uses, so replay shows the recorded work rather than a second animation model. It runs at ten times the recorded pace, and it overrides the scene rather than feeding the subscription, so live work is untouched.
+
+## Personas
+
+A persona is the public character of an employee version: `voice`, up to five `traits` from a fixed ten-word vocabulary in `lib/personas.ts`, and an optional `catchphrase`. Convex normalizes and enforces the limits when a draft is saved (400 characters of voice, 5 traits, 80 characters of catchphrase) and refuses an unknown or duplicate trait, so a persona is never a place to smuggle instructions.
+
+`personaInstructions` turns the persona into one paragraph appended to the session instructions after the operating rules, the floor rules, and the employee version's own instructions. It states the voice, the manner, a catchphrase allowance of at most once per task and never inside tool arguments, and the closing rule that voice never changes what the employee does, what it claims, or which tools it uses. Traits also tune the figure's idle animation in the office. Nothing in a persona widens a capability.
+
+## The mobile design system
+
+One interface serves both viewports; the phone is not a reduced build.
+
+- **Type.** Every size in the stylesheets comes from the `--text-*` tokens. Under 640 px each token below 12 px is lifted to 12 px in one place, so no text on a phone is smaller than that.
+- **Targets.** `--tap` is 44 px. Under 640 px it sizes the controls a finger has to hit: icon buttons, primary, secondary and text buttons, navigation items, inputs and selects, list rows and choice labels, overflow menu items, the detail back header, and the floor switcher. Segmented switches and tab strips sit at 38 px.
+- **Master and detail.** `MasterDetail` shows both panes on a desktop and one at a time on a phone. `useMasterDetail` pushes a history entry when the detail opens on a phone, so the browser back button returns to the list, and the back header does the same thing.
+- **Sheets.** `Sheet` is a bottom sheet on a phone and a side panel on a desktop: focus moves into it, Tab wraps, Escape closes, focus returns to what opened it, the body stops scrolling, a drag past 90 px dismisses it, and the primary action is pinned to its footer.
+- **Loading.** `SkeletonList` renders rows shaped like the content that is loading, instead of a spinner in an empty box.
+- **Crowded rows.** `OverflowMenu` folds a row's actions into one touchable control where a row of text buttons will not fit.
+- **Review.** `ReviewBar` keeps the one thing a person has to do in reach: a bar above the bottom of a phone screen, a banner under the top bar on a desktop, opening a sheet that decides each pending action in place.
+
+`useIsNarrow` answers the same 640 px breakpoint the stylesheets use, for the few places the two layouts need different markup.
+
+## Security
+
+[Security](security.md) holds the threat model, the controls, and the known gaps. In short: `proxy.ts` mints a CSP nonce per request from `lib/server/csp.ts`, so `script-src` needs no `'unsafe-inline'`; anything a provider or another agent wrote is wrapped in `untrustedBlock` before it enters a prompt; state-changing routes require a matching `Origin` and `x-requested-with`; in-process fixed-window rate limits guard the unauthenticated webhook routes, the relay-secret reveal, and starting an OAuth flow; and the gateway and worker refuse to start without a valid `CREDENTIAL_ENCRYPTION_KEY` and a service secret of at least 32 characters.

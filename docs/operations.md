@@ -42,6 +42,19 @@ Health is JSON on `/health`, HTTP 200 while the Convex subscription is live and 
 
 `status` is `connecting` before the first subscription update, `ok` once connected, and `stopping` during shutdown. On `SIGTERM` or `SIGINT` the worker stops claiming, unsubscribes, waits up to 30 seconds for in-flight jobs, releases every stream lease so another replica takes the sessions over without waiting the lease out, closes health, and exits. A replica killed without that grace period loses its sessions for at most the remaining 120 seconds of each stream lease; an expired job lease on an approved write is not retried, it is marked uncertain.
 
+## Office signals
+
+The Office page is a reading of the journal, not a separate source of truth. Four signals matter when something looks wrong.
+
+- **The lectern glows and carries a count.** Work is waiting on a person: pending proposals this viewer can decide. Check the Tasks list and the review bar; the count is the same set.
+- **A ring breathes under a figure's feet.** That employee has something waiting on a person. A faster, redder ring means an approval has sat undecided for more than 30 minutes. Find out who owns the connection that would execute it.
+- **A provider console's bars sputter, and the status device stutters amber.** At least one connection for that provider is `degraded` or `revoked`. Usually an expired grant; see [Expired credentials](#expired-credentials).
+- **The room is dimmer than the hour explains.** The workspace is approaching its monthly token cap; at the cap the room is 35 percent darker. Daylight is separate and follows the viewer's local clock.
+
+A furnished but empty room means no live data reached the browser. Check the Convex subscription and `NEXT_PUBLIC_CONVEX_URL` before looking at anything else.
+
+`QA_FIXTURE` must never be set on a deployed service. It is the development-only switch that builds `/qa`, a fake workspace with fake employees, tasks and proposals; without it that route answers 404.
+
 ## Routine checks
 
 After a deployment, read the startup logs of all three services. Request `/mcp/<connectionId>` on the gateway without a bearer token and expect HTTP 401 with `reason: "unauthorized"`. Request the gateway's `/health` and expect `{"status":"ok","service":"mcp-gateway"}`.
