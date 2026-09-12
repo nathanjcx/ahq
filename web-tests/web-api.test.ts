@@ -72,6 +72,14 @@ describe('per-instance rate limiting', () => {
       vi.useRealTimers();
     }
   });
+
+  it('stays bounded when an unauthenticated caller floods it with fresh keys', () => {
+    // Keys come from headers and path segments, so a flood of distinct ones must not grow the map
+    // without end. Past the cap the oldest live window is dropped, which is what makes room here.
+    for (let key = 0; key <= 10_000; key++) expect(withinRateLimit(`flood:${key}`, 1)).toBe(true);
+    expect(withinRateLimit('flood:0', 1)).toBe(true);
+    expect(withinRateLimit('flood:10000', 1)).toBe(false);
+  });
 });
 
 describe('typed web client', () => {
