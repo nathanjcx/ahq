@@ -197,12 +197,16 @@
   display: none;
 }
 
-/* The speaker toggle lives in the office legend. */
-.office-sound {
+/* The sound and label toggles sit together at the end of the office legend. */
+.office-labels {
+  margin-left: auto;
+}
+
+.office-sound,
+.office-labels {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  margin-left: auto;
   padding: 4px 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -214,12 +218,14 @@
   cursor: pointer;
 }
 
-.office-sound:hover {
+.office-sound:hover,
+.office-labels:hover {
   border-color: #b8c8a8;
   color: #5d7050;
 }
 
-.office-sound[aria-pressed='true'] {
+.office-sound[aria-pressed='true'],
+.office-labels[data-mode='names'] {
   border-color: #aec1a2;
   background: #eef3e8;
   color: #4f6644;

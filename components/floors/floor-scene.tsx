@@ -82,7 +82,8 @@ export function FloorScene({
         </span>
         <button
           type="button"
-          className="office-sound"
+          className="office-labels"
+          data-mode={labels.mode}
           title={LABEL_TITLE[labels.mode]}
           onClick={labels.cycle}
         >

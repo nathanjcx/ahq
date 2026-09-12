@@ -74,7 +74,7 @@ export function homeStations(count: number): Station[] {
 }
 
 /** Yaw that makes a figure at `from` look at `to`. */
-export function facing(from: Point, to: Point): number {
+function facing(from: Point, to: Point): number {
   return Math.atan2(to[0] - from[0], to[2] - from[2]);
 }
 

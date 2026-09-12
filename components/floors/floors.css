@@ -545,11 +545,19 @@
 }
 
 @media (max-width: 620px) {
-  /* A phone gets the whole width and a 4:3 stage, so the room has room. */
+  /* A phone gets the whole width and a 4:3 stage, so the room has room. The
+     view is pinned to that box, since a percentage height cannot resolve
+     against an aspect ratio. */
   .floor-canvas .floor-stage {
+    position: relative;
     height: auto;
     min-height: 0;
     aspect-ratio: 4 / 3;
+  }
+  .floor-canvas .floor-stage > .office-view {
+    position: absolute;
+    inset: 0;
+    min-height: 0;
   }
   .office-toolbar {
     height: auto;
