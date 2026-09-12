@@ -10,8 +10,8 @@ import { isAttendedTime } from '../lib/time';
 import { alertPaging, ensureTriageStaff, isOpenAlert, matchesTriageRules } from '../lib/triage';
 import { policiesFor } from '../registry';
 import { severity as severityValidator } from '../schema';
-import { cleanText, requireService, untrustedBlock, type Ctx } from '../shared';
-import { privateConnection, taskForRunToken } from './context';
+import { cleanText, clerkRole, requireService, untrustedBlock, type Ctx } from '../shared';
+import { privateConnection, taskForRunToken, workspaceForActor } from './context';
 import { recordAttempts } from './notifications';
 
 const alertSource = v.union(
@@ -632,6 +632,40 @@ export const alertSecret = query({
   },
 });
 
+/**
+ * The same write, made by a workspace administrator rather than by the platform.
+ *
+ * The plaintext secret never reaches Convex: the web route seals it and passes the ciphertext with
+ * the signed-in actor, and the role is decided here from the same Clerk claims every other mutation
+ * uses. Passing no ciphertext clears the secret and closes the signed endpoint.
+ */
+export const setAlertSecretForActor = mutation({
+  args: {
+    secret: v.string(),
+    authSubject: v.string(),
+    authOrgId: v.optional(v.string()),
+    authOrgRole: v.optional(v.string()),
+    alertSecretCiphertext: v.optional(v.string()),
+  },
+  returns: v.object({ updatedAt: v.number() }),
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const workspace = await workspaceForActor(ctx, args.authSubject, args.authOrgId);
+    if (!workspace) throw new Error('Create a workspace first');
+    const role = clerkRole(args.authOrgId, args.authOrgRole);
+    if (role !== 'owner' && role !== 'admin')
+      throw new Error('Workspace administrator access required');
+    const settings = await ensureSettings(ctx, workspace._id);
+    const updatedAt = Date.now();
+    await ctx.db.patch(settings._id, {
+      alertSecretCiphertext: args.alertSecretCiphertext,
+      alertSecretUpdatedAt: updatedAt,
+      updatedAt,
+    });
+    return { updatedAt };
+  },
+});
+
 export const setAlertSecret = mutation({
   args: {
     secret: v.string(),
@@ -644,9 +678,11 @@ export const setAlertSecret = mutation({
     const workspace = await ctx.db.get(args.workspaceId);
     if (!workspace) throw new Error('Workspace not found');
     const settings = await ensureSettings(ctx, workspace._id);
+    const updatedAt = Date.now();
     await ctx.db.patch(settings._id, {
       alertSecretCiphertext: args.alertSecretCiphertext,
-      updatedAt: Date.now(),
+      alertSecretUpdatedAt: updatedAt,
+      updatedAt,
     });
     return null;
   },

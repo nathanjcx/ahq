@@ -64,6 +64,8 @@ export interface IncidentReport {
 /** How alerts reach this workspace. The signing secret is never read back, only whether one is set. */
 export interface TriageIntake {
   signedEndpointReady: boolean;
+  /** When the signing secret was last written. The secret itself is never read back. */
+  secretUpdatedAt?: number;
   rules: string[];
   github: string[];
   emailClassification: boolean;

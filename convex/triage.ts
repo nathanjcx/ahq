@@ -337,13 +337,15 @@ export const incidentReports = query({
 });
 
 /**
- * How alerts get in: the signed endpoint's readiness, the GitHub rules, and whether mail is being
- * classified. The signing secret itself is never returned — it is written once and only sealed.
+ * How alerts get in: whether the signed endpoint has a secret and when it last changed, the GitHub
+ * rules, and whether mail is being classified. The secret itself is never returned; it is written
+ * sealed and read back only by the web service that verifies a signature.
  */
 export const intake = query({
   args: {},
   returns: v.object({
     signedEndpointReady: v.boolean(),
+    secretUpdatedAt: v.optional(v.number()),
     rules: v.array(v.string()),
     github: v.array(v.string()),
     emailClassification: v.boolean(),
@@ -362,6 +364,8 @@ export const intake = query({
     const connected = connections.filter((row) => row.status === 'connected');
     return {
       signedEndpointReady: Boolean(stored?.alertSecretCiphertext),
+      // When it last changed, which is the only thing about the secret a person may read back.
+      secretUpdatedAt: stored?.alertSecretUpdatedAt,
       rules: settings.triageRules ?? [],
       github: connected
         .filter((row) => row.provider === 'github')

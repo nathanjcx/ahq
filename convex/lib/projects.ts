@@ -83,6 +83,7 @@ export async function projectView(ctx: Ctx, project: Doc<'projects'>): Promise<P
     id: String(project._id),
     name: project.name,
     brief: project.brief,
+    deadlineAt: project.deadlineAt,
     floorIds: project.floorIds.map(String),
     status: project.status,
     createdBy: project.createdBy,
@@ -174,13 +175,22 @@ function weekOf(at: number) {
 
 /**
  * The questions a person has to answer before the roadmap can be confirmed: floors with more work
- * due in one week than they have instances, and deadlines that fall before the work they depend on.
+ * due in one week than they have instances, deadlines that fall before the work they depend on, and
+ * milestones planned past the project's own deadline, which is a field rather than a line in the brief.
  */
 export function bottleneckPrompts(
   proposal: RoadmapProposal,
   capacity: readonly FloorCapacity[],
+  projectDeadlineAt?: number,
 ): RoadmapProposal['prompts'] {
   const prompts: RoadmapProposal['prompts'] = [];
+  if (projectDeadlineAt !== undefined)
+    for (const milestone of proposal.milestones)
+      if (milestone.deadlineAt !== undefined && milestone.deadlineAt > projectDeadlineAt)
+        prompts.push({
+          kind: 'deadline',
+          text: `Milestone "${milestone.title}" is due after the project itself. Move it, or move the project deadline.`,
+        });
   const tasks = proposal.milestones.flatMap((milestone) => milestone.tasks);
   const byFloorWeek = new Map<string, number>();
   for (const task of tasks) {

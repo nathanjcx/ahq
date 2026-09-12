@@ -140,6 +140,8 @@ export const recordAnswer = mutation({
       authorName: name,
       inReplyTo: args.turnId,
       text: cleanText(args.text, 'Answer', 20_000),
+      // What this answer cost, so the boardroom can price the question rather than the whole meeting.
+      ...(args.usage ? { usage: args.usage } : {}),
       createdAt: Date.now(),
     });
     if (args.usage) await addMeetingUsage(ctx, meeting, args.usage);

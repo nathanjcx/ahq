@@ -54,6 +54,7 @@ export async function settingsFor(ctx: Ctx, workspaceId: Id<'workspaces'>): Prom
     _creationTime: _createdAt,
     workspaceId: _workspaceId,
     alertSecretCiphertext: _secret,
+    alertSecretUpdatedAt: _secretUpdatedAt,
     ...values
   } = row;
   return values;

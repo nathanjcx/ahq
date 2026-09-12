@@ -47,7 +47,13 @@ export async function actor(request?: Request) {
   }
   const identity = await auth();
   if (!identity.userId) throw new HttpError(401, 'Sign in to continue.', 'unauthenticated');
-  return { authSubject: identity.userId, ...(identity.orgId ? { authOrgId: identity.orgId } : {}) };
+  // The organization role travels with the actor, so a route can hand Convex what it needs to decide
+  // workspace administration instead of falling back to the platform-administrator list.
+  return {
+    authSubject: identity.userId,
+    ...(identity.orgId ? { authOrgId: identity.orgId } : {}),
+    ...(identity.orgRole ? { authOrgRole: identity.orgRole } : {}),
+  };
 }
 
 /** Platform administrators are trusted by bootstrap environment, the same list Convex reads. */

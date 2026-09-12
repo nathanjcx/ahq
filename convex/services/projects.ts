@@ -88,7 +88,13 @@ export const plannerInputs = query({
         .unique(),
     ]);
     return {
-      project: { id: project._id, name: project.name, brief: project.brief, status: project.status },
+      project: {
+        id: project._id,
+        name: project.name,
+        brief: project.brief,
+        deadlineAt: project.deadlineAt,
+        status: project.status,
+      },
       floors,
       capacity: {
         floors: floors.map((floor) => ({
@@ -130,7 +136,9 @@ export const recordProposal = mutation({
     const seen = new Set(proposal.prompts.map((prompt) => prompt.text));
     const prompts = [
       ...proposal.prompts,
-      ...bottleneckPrompts(proposal, capacity).filter((prompt) => !seen.has(prompt.text)),
+      ...bottleneckPrompts(proposal, capacity, project.deadlineAt).filter(
+        (prompt) => !seen.has(prompt.text),
+      ),
     ];
     await ctx.db.patch(project._id, {
       proposal: JSON.stringify({ ...proposal, prompts }),
