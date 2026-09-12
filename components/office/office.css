@@ -250,7 +250,7 @@
   padding: 7px 9px;
   border: 1px solid #b8b098;
   border-radius: 6px;
-  background: #f4efddf2;
+  background: #f4efdd;
   color: #3d4a42;
   font-size: 11px;
   line-height: 1.35;
@@ -261,9 +261,32 @@
   line-clamp: 3;
 }
 
+/* It steps aside for a bubble that has nowhere else to open. */
+.office-note[data-covered='true'] {
+  visibility: hidden;
+}
+
 @container (max-width: 520px) {
   /* Not enough width to read the board note without covering the room. */
   .office-note {
     display: none;
+  }
+}
+
+/* A phone reads at 12px or better: the office chrome keeps its desktop sizes and
+   lifts every small label to the mobile floor. */
+@media (max-width: 620px) {
+  /* A wrapped legend keeps its toggles together rather than pushing one right. */
+  .office-labels {
+    margin-left: 0;
+  }
+  .office-pill,
+  .office-tray-count,
+  .office-note,
+  .office-sound,
+  .office-labels,
+  .office-bubble > button,
+  .office-bubble strong {
+    font-size: 12px;
   }
 }

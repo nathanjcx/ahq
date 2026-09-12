@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { JSX } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
+import { useOverlayEntry } from './office-overlay';
 import { Box, C, Round, type Point } from './office-primitives';
 
 const AMBER = '#e8a54f';
@@ -194,12 +195,29 @@ export function ProviderConsole({
   );
 }
 
-/** The whiteboard's latest note, pinned as a small cream card. */
+/**
+ * The whiteboard's latest note, pinned as a small cream card. It joins the
+ * declutter pass as a fixed obstacle: pills and bubbles route around it, and it
+ * gives way to a bubble that has nowhere else to go.
+ */
 export function BoardNote({ position, note }: { position: Point; note?: string }): JSX.Element | null {
+  const entry = useOverlayEntry('office-note');
+  useLayoutEffect(() => {
+    if (!entry) return;
+    entry.pinned = true;
+    entry.anchor.set(...position);
+  }, [entry, position]);
   if (!note) return null;
   return (
     <Html position={position} center zIndexRange={[18, 8]}>
-      <div className="office-note">{note}</div>
+      <div
+        className="office-note"
+        ref={(element) => {
+          if (entry) entry.pill = element;
+        }}
+      >
+        {note}
+      </div>
     </Html>
   );
 }
