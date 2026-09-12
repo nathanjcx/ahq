@@ -94,6 +94,9 @@ describe('channels', () => {
       ['note', 'Kick-off is Monday.'],
       ['decision', 'Ship on Friday.'],
     ]);
+    // Two posts inside one millisecond still have an order and a cursor each, because `createdAt` is
+    // the channel's own sequence rather than the clock alone.
+    expect(posts[0].createdAt).toBeLessThan(posts[1].createdAt);
     expect(await colleague.query(api.channels.posts, { channelId, before: posts[1].createdAt })).toEqual(
       posts.slice(0, 1),
     );

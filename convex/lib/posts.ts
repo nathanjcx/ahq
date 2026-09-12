@@ -74,6 +74,15 @@ export interface PostInput {
 
 /** The one path that writes a post. Text is trimmed and capped; the channel fixes the workspace. */
 export async function insertPost(ctx: MutationCtx, input: PostInput) {
+  // `createdAt` is the channel's own order and its paging cursor, so it is kept strictly increasing:
+  // several posts written inside one millisecond — a shift report and its system line, say — would
+  // otherwise share a cursor and page as one.
+  const newest = await ctx.db
+    .query('posts')
+    .withIndex('by_channel', (q) => q.eq('channelId', input.channel._id))
+    .order('desc')
+    .first();
+  const createdAt = Math.max(Date.now(), (newest?.createdAt ?? 0) + 1);
   const postId = await ctx.db.insert('posts', {
     workspaceId: input.channel.workspaceId,
     channelId: input.channel._id,
@@ -87,7 +96,7 @@ export async function insertPost(ctx: MutationCtx, input: PostInput) {
     toEmployeeId: input.toEmployeeId,
     reportId: input.reportId,
     handoff: input.handoff,
-    createdAt: Date.now(),
+    createdAt,
   });
   return { postId };
 }
