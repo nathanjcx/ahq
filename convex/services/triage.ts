@@ -413,6 +413,29 @@ export const writeConnections = query({
  * Opens the classifier turn over the workspace's unchecked email. The triage instance's standing
  * session runs it, because a classification is triage work with no incident of its own yet.
  */
+/** Opens the hourly email classifier turn in the triage standing session. Idempotent per hour. */
+export async function enqueueEmailClassificationFor(ctx: MutationCtx, workspace: Doc<'workspaces'>) {
+  const { floor, installation, version } = await ensureTriageStaff(ctx, workspace, 'system');
+  const taskId = await openSessionTask(ctx, {
+    workspace,
+    employeeId: installation._id,
+    version,
+    kind: 'standing',
+    key: 'standing',
+    title: `${installation.name ?? version.name} standing session`,
+    prompt: 'You answer this workspace’s incidents. Wait for a triage run; do nothing until one arrives.',
+    floor: await assignmentForFloor(ctx, workspace._id, floor._id, installation._id),
+  });
+  const jobId = await insertJob(ctx, {
+    workspaceId: workspace._id,
+    taskId,
+    uniqueKey: `email_classify:${workspace._id}:${Math.floor(Date.now() / 3_600_000)}`,
+    kind: 'email_classify',
+    payload: JSON.stringify({ workspaceId: workspace._id, model: version.model }),
+  });
+  return { taskId, jobId: jobId ?? null };
+}
+
 export const enqueueEmailClassification = mutation({
   args: { secret: v.string(), workspaceId: v.id('workspaces') },
   returns: v.object({ taskId: v.id('tasks'), jobId: v.union(v.id('jobs'), v.null()) }),
@@ -420,25 +443,7 @@ export const enqueueEmailClassification = mutation({
     requireService(args.secret);
     const workspace = await ctx.db.get(args.workspaceId);
     if (!workspace) throw new Error('Workspace not found');
-    const { floor, installation, version } = await ensureTriageStaff(ctx, workspace, 'system');
-    const taskId = await openSessionTask(ctx, {
-      workspace,
-      employeeId: installation._id,
-      version,
-      kind: 'standing',
-      key: 'standing',
-      title: `${installation.name ?? version.name} standing session`,
-      prompt: 'You answer this workspace’s incidents. Wait for a triage run; do nothing until one arrives.',
-      floor: await assignmentForFloor(ctx, workspace._id, floor._id, installation._id),
-    });
-    const jobId = await insertJob(ctx, {
-      workspaceId: workspace._id,
-      taskId,
-      uniqueKey: `email_classify:${workspace._id}:${Math.floor(Date.now() / 3_600_000)}`,
-      kind: 'email_classify',
-      payload: JSON.stringify({ workspaceId: workspace._id, model: version.model }),
-    });
-    return { taskId, jobId: jobId ?? null };
+    return enqueueEmailClassificationFor(ctx, workspace);
   },
 });
 

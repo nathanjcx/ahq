@@ -3,6 +3,7 @@ import type { Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import type { MutationCtx } from './_generated/server';
 import { createMeetingEntry } from './lib/calendar';
+import { enqueuePlanningFor } from './services/projects';
 import { assertAcyclic, topologicalOrder } from './lib/dependencies';
 import { meetingRequests, parseProposal, projectView, requireProject, storedProposal } from './lib/projects';
 import {
@@ -79,6 +80,8 @@ export const create = mutation({
       createdAt: now,
       updatedAt: now,
     });
+    const project = await ctx.db.get(projectId);
+    if (project) await enqueuePlanningFor(ctx, project);
     return { projectId };
   },
 });
@@ -258,6 +261,8 @@ export const replan = mutation({
     const { workspace } = await requireWorkspace(ctx);
     const project = await requireProject(ctx, workspace._id, args.projectId);
     await ctx.db.patch(project._id, { status: 'planning', proposal: undefined, updatedAt: Date.now() });
+    const refreshed = await ctx.db.get(project._id);
+    if (refreshed) await enqueuePlanningFor(ctx, refreshed);
     return null;
   },
 });

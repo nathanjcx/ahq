@@ -18,7 +18,7 @@ import type { Job, TaskContext } from '../services/types';
 import { runJob } from '../services/worker/jobs';
 import { createRuntime, type WorkerRuntime } from '../services/worker/state';
 import { installTurnRunner, type TurnRunner } from '../services/worker/turns';
-import { harness, identity, publishEmployee, secret, testBackend, type Harness } from './support';
+import { type Harness, harness, hireOne, identity, publishEmployee, secret, testBackend } from './support';
 
 // The fake provider runs on loopback HTTP, which every production network rule rejects.
 process.env.ALLOW_INSECURE_MCP_FOR_TESTS = '1';
@@ -318,16 +318,9 @@ beforeAll(async () => {
   });
 
   // Two versions rather than two hires of one: hiring the same version twice returns the instance.
-  employeeId = (
-    await user.mutation(api.marketplace.hire, {
-      versionId: (await publishEmployee(t, { name: 'Builder' })).versionId,
-    })
-  ).employeeId;
-  secondEmployeeId = (
-    await user.mutation(api.marketplace.hire, {
-      versionId: (await publishEmployee(t, { name: 'Writer' })).versionId,
-    })
-  ).employeeId;
+  employeeId = (await hireOne(user, (await publishEmployee(t, { name: 'Builder' })).listingId)).employeeId;
+  secondEmployeeId = (await hireOne(user, (await publishEmployee(t, { name: 'Writer' })).listingId))
+    .employeeId;
   floorId = (
     await user.mutation(api.floors.create, {
       name: 'Platform',

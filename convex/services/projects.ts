@@ -1,6 +1,7 @@
 import { v } from 'convex/values';
-import type { Id } from '../_generated/dataModel';
+import type { Doc, Id } from '../_generated/dataModel';
 import { mutation, query } from '../_generated/server';
+import type { MutationCtx } from '../_generated/server';
 import {
   bottleneckPrompts,
   estimateTask,
@@ -197,6 +198,35 @@ export const dependencyReviews = query({
  * than to an audit night or an incident. Creating a project does not call this yet — `projects:create`
  * belongs to the projects workstream — so planning is started explicitly.
  */
+/** Opens the planner turn for a project in the janitor's standing session. Idempotent per project revision. */
+export async function enqueuePlanningFor(ctx: MutationCtx, project: Doc<'projects'>) {
+  const workspace = await ctx.db.get(project.workspaceId);
+  if (!workspace) throw new Error('Workspace not found');
+  const { installation, version } = await ensureJanitorFor(ctx, workspace._id);
+  const taskId = await openSessionTask(ctx, {
+    workspace,
+    employeeId: installation._id,
+    version,
+    kind: 'standing',
+    key: `plan:${project._id}`,
+    title: `Plan ${project.name}`,
+    prompt: 'You plan this project. Wait for the planner run; do nothing until one arrives.',
+    project: project._id,
+  });
+  const jobId = await insertJob(ctx, {
+    workspaceId: workspace._id,
+    taskId,
+    uniqueKey: `plan_project:${project._id}:${project.updatedAt}`,
+    kind: 'plan_project',
+    payload: JSON.stringify({
+      workspaceId: workspace._id,
+      projectId: project._id,
+      model: version.model,
+    }),
+  });
+  return { taskId, jobId: jobId ?? null };
+}
+
 export const enqueuePlanning = mutation({
   args: { secret: v.string(), projectId: v.id('projects') },
   returns: v.object({ taskId: v.id('tasks'), jobId: v.union(v.id('jobs'), v.null()) }),
@@ -204,31 +234,7 @@ export const enqueuePlanning = mutation({
     requireService(args.secret);
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error('Project not found');
-    const workspace = await ctx.db.get(project.workspaceId);
-    if (!workspace) throw new Error('Workspace not found');
-    const { installation, version } = await ensureJanitorFor(ctx, workspace._id);
-    const taskId = await openSessionTask(ctx, {
-      workspace,
-      employeeId: installation._id,
-      version,
-      kind: 'standing',
-      key: `plan:${project._id}`,
-      title: `Plan ${project.name}`,
-      prompt: 'You plan this project. Wait for the planner run; do nothing until one arrives.',
-      project: project._id,
-    });
-    const jobId = await insertJob(ctx, {
-      workspaceId: workspace._id,
-      taskId,
-      uniqueKey: `plan_project:${project._id}:${project.updatedAt}`,
-      kind: 'plan_project',
-      payload: JSON.stringify({
-        workspaceId: workspace._id,
-        projectId: project._id,
-        model: version.model,
-      }),
-    });
-    return { taskId, jobId: jobId ?? null };
+    return enqueuePlanningFor(ctx, project);
   },
 });
 

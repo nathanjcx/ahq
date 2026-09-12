@@ -4,6 +4,7 @@ import { mutation } from '../_generated/server';
 import type { MutationCtx } from '../_generated/server';
 import { provider } from '../schema';
 import { requireService } from '../shared';
+import { enqueueEmailClassificationFor } from './triage';
 
 const inboxItem = v.object({
   externalId: v.string(),
@@ -73,6 +74,11 @@ export const ingestInbox = mutation({
     const connection = await ctx.db.get(args.connectionId);
     if (!connection || connection.status !== 'connected') throw new Error('Connection is inactive');
     const inserted = await insertInboxItems(ctx, connection, args.items);
+    // New mail may report an incident; the triage classifier decides, once an hour at most.
+    if (inserted && connection.provider === 'google-workspace') {
+      const workspace = await ctx.db.get(connection.workspaceId);
+      if (workspace) await enqueueEmailClassificationFor(ctx, workspace);
+    }
     await ctx.db.patch(connection._id, {
       inboxMode: 'push',
       cursor: args.cursor === undefined ? connection.cursor : args.cursor,
