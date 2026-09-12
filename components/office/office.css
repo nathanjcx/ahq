@@ -290,3 +290,109 @@
     font-size: 12px;
   }
 }
+
+/* The task board and the calendar wall keep their text in the overlay, as fixed
+   cards the declutter pass routes everything else around. */
+.office-board,
+.office-calendar {
+  width: max-content;
+  max-width: 172px;
+  padding: 6px 7px 7px;
+  border: 1px solid #b8b098;
+  border-radius: 7px;
+  background: #f4efdd;
+  color: #3d4a42;
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.office-board[data-covered='true'],
+.office-calendar[data-covered='true'] {
+  visibility: hidden;
+}
+
+.office-board h3,
+.office-calendar h3 {
+  margin: 0 0 4px;
+  color: #6d8468;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.office-board ol,
+.office-calendar ol {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.office-board button {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 2px 5px 3px;
+  border: 1px solid #ddd6bd;
+  border-left: 4px solid var(--card-status, #9fae9b);
+  border-radius: 4px;
+  background: #fffdf4;
+  color: #33473c;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.office-board button[data-status='done'] {
+  background: #ece7d4;
+  color: #74836f;
+}
+
+.office-calendar li {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.office-calendar li span:first-child {
+  color: #8a7a44;
+  font-weight: 700;
+}
+
+.office-calendar li span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.office-calendar p {
+  margin: 6px 0 0;
+}
+
+.office-calendar p button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #7d8b7c;
+  font: inherit;
+  cursor: pointer;
+}
+
+.office-view[data-office-archived='true'] .office-board,
+.office-view[data-office-archived='true'] .office-calendar {
+  display: none;
+}
+
+@media (max-width: 620px) {
+  .office-board,
+  .office-calendar {
+    font-size: 12px;
+  }
+}

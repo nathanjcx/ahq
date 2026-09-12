@@ -86,6 +86,8 @@ export type StationPerson = {
 export type PlacedStation = {
   id: string;
   station: Station;
+  /** The index of this person's home station, whether or not they are standing at it. */
+  home: number;
   /** The provider being called, so the figure's bubble can take its colour. */
   accent?: string;
 };
@@ -118,7 +120,7 @@ export function layoutStations({
     if (home !== undefined) taken.add(home);
   }
   let free = 0;
-  const home = new Map<string, Station>();
+  const home = new Map<string, { index: number; station: Station }>();
   for (const person of people) {
     let index = seats.get(person.id);
     if (index === undefined) {
@@ -127,7 +129,8 @@ export function layoutStations({
       taken.add(index);
       seats.set(person.id, index);
     }
-    home.set(person.id, homes[index % homes.length]);
+    const slot = index % homes.length;
+    home.set(person.id, { index: slot, station: homes[slot] });
   }
 
   const partners = huddlePairs(people);
@@ -135,17 +138,21 @@ export function layoutStations({
   const consoles = new Set<number>();
   const result: PlacedStation[] = [];
   for (const person of people) {
-    const at = home.get(person.id)!;
+    const own = home.get(person.id)!;
     const pair = partners.get(person.id);
     if (pair) {
-      result.push({ id: person.id, station: pair });
+      result.push({ id: person.id, station: pair, home: own.index });
       continue;
     }
     if (person.state.activity === 'reviewing' && lecternQueue < LECTERN_SLOTS) {
       const x = LECTERN[0] + lecternQueue * LECTERN_STEP;
       lecternQueue += 1;
       const stand: Point = [x, 0, LECTERN[2] - LECTERN_STEP];
-      result.push({ id: person.id, station: { at: stand, facing: facing(stand, [x, 0, LECTERN[2]]) } });
+      result.push({
+        id: person.id,
+        station: { at: stand, facing: facing(stand, [x, 0, LECTERN[2]]) },
+        home: own.index,
+      });
       continue;
     }
     if (person.state.activity === 'calling' && providers.length) {
@@ -157,12 +164,13 @@ export function layoutStations({
         result.push({
           id: person.id,
           station: { at: stand, facing: facing(stand, [CONSOLE_X, 0, z]) },
+          home: own.index,
           ...(providers[slot]?.color ? { accent: providers[slot].color } : {}),
         });
         continue;
       }
     }
-    result.push({ id: person.id, station: at });
+    result.push({ id: person.id, station: own.station, home: own.index });
   }
   return result;
 }

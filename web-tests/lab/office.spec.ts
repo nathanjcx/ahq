@@ -11,6 +11,12 @@ const scenes: { name: string; query: string }[] = [
   { name: 'floor-night', query: 'preset=floor-night&hour=22' },
   { name: 'floor-dots', query: 'preset=floor-day&hour=13&labels=dots' },
   { name: 'floor-celebrate', query: 'preset=floor-celebrate&hour=15' },
+  { name: 'floor-props', query: 'preset=floor-props&hour=13' },
+  { name: 'after-hours', query: 'preset=after-hours&hour=23' },
+  { name: 'lobby-calendar', query: 'preset=lobby-calendar&hour=10' },
+  { name: 'records', query: 'preset=records&hour=11' },
+  { name: 'boardroom', query: 'preset=boardroom&hour=15' },
+  { name: 'triage', query: 'preset=triage&hour=14' },
 ];
 
 test.skip(process.env.QA_FIXTURE !== '1', 'needs QA_FIXTURE=1');

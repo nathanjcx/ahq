@@ -6,12 +6,13 @@ import { Component, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import * as THREE from 'three';
 import type { LabelMode } from './office-labels';
+import type { SelectProp } from './office-props';
 import { OfficeScene, isActiveEmployee } from './office-scene';
-import type { OfficeEmployee, OfficeProvider } from './office-scene';
+import type { OfficeDressing, OfficeEmployee, OfficeProvider } from './office-scene';
 import './office-view.css';
 import './office.css';
 
-export type { OfficeEmployee, OfficeProvider } from './office-scene';
+export type { OfficeDressing, OfficeEmployee, OfficeProvider, OfficeRoom } from './office-scene';
 
 /**
  * The office's public props. Everything past `emptyMessage` is the live floor:
@@ -38,6 +39,10 @@ export type OfficeViewProps = {
   hour?: number;
   /** What the legend's Labels control is set to. */
   labels?: LabelMode;
+  /** Which room this is, and the props it is carrying. */
+  dressing?: OfficeDressing;
+  /** Called when a prop is clicked: the binder, a notebook, a card, a shelf, a lamp. */
+  onSelectProp?: SelectProp;
 };
 
 const ZOOM_MIN = 0.55;
@@ -139,6 +144,8 @@ export default function OfficeView({
   lightBudget,
   hour,
   labels = 'names',
+  dressing,
+  onSelectProp,
 }: OfficeViewProps) {
   const [eventSource, setEventSource] = useState<HTMLDivElement | null>(null);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
@@ -330,6 +337,8 @@ export default function OfficeView({
               note={note}
               lightBudget={lightBudget}
               hour={hour}
+              dressing={dressing}
+              onSelectProp={onSelectProp}
             />
           </Canvas>
         )}

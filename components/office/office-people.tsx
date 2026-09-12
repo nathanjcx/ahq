@@ -7,8 +7,9 @@ import type { CSSProperties } from 'react';
 import * as THREE from 'three';
 import type { Activity, EmployeeActivity } from './activity';
 import { labelPriority, type LabelMode } from './office-labels';
-import { useOverlayEntry } from './office-overlay';
+import { useOverlayEntry, useOverlayRelayout } from './office-overlay';
 import { Box, C, Cylinder, Round } from './office-primitives';
+import { JanitorCart } from './office-props';
 import type { OfficeEmployee } from './office-scene';
 import type { Station } from './office-stations';
 
@@ -23,6 +24,10 @@ type Appearance = {
 
 const SKIN_TONES = ['#b98261', '#e2b48e', '#885e48', '#ce9a76', '#bc815e', '#e6bea0'];
 const HAIR_COLORS = ['#3d3029', '#76533b', '#272f2b', '#3c3029', '#9c7653', '#3b3431'];
+
+/** The reserved kinds the workspace creates itself, each with its own kit. */
+export type EmployeeKind = 'worker' | 'janitor' | 'auditor' | 'triage';
+const COAT = '#2f3740';
 
 /** Activities that happen in the chair rather than on the person's feet. */
 const SEATED: Activity[] = ['idle', 'thinking', 'reading', 'writing', 'failed'];
@@ -173,16 +178,22 @@ function Figure({
   index,
   pose,
   appearance,
+  kind = 'worker',
 }: {
   appearance: Appearance;
   color: string;
   index: number;
   pose: Pose;
+  kind?: EmployeeKind;
 }) {
   const { seated } = pose;
   const headY = seated ? 1.31 : 1.62;
   const shoulderY = seated ? 1.01 : 1.29;
-  const trouser = index % 2 ? '#5e6259' : '#3d4b51';
+  const trouser = kind === 'auditor' ? '#39414a' : index % 2 ? '#5e6259' : '#3d4b51';
+  // The coat, the vest and the cap are the kit; the person's own colour stays as
+  // a collar, so a janitor is still recognisably that janitor.
+  const suit = kind === 'auditor' ? COAT : color;
+  const hat = kind === 'janitor' ? 'cap' : appearance.hat;
   return (
     <group position={[0, pose.hop, 0]} rotation={[0, pose.spin, pose.lean]}>
       <Round
@@ -192,17 +203,36 @@ function Figure({
           0.57,
           0.29,
         ]}
-        color={color}
+        color={suit}
         radius={0.105}
       />
+      {kind !== 'worker' && <Box p={[0, seated ? 1.13 : 1.34, 0.02]} s={[0.3, 0.07, 0.28]} color={color} />}
+      {kind === 'auditor' && (
+        <group>
+          {/* A long dark coat, and the clipboard the findings are written on. */}
+          <Round p={[0, seated ? 0.72 : 0.84, 0]} s={[0.53, 0.36, 0.33]} color={COAT} radius={0.06} />
+          <group position={[0.2, seated ? 1.0 : 1.28, 0.24]} rotation={[-0.5, 0.2, 0]}>
+            <Round s={[0.3, 0.38, 0.02]} color="#7d6a4c" radius={0.01} />
+            <Box p={[0, -0.02, 0.014]} s={[0.26, 0.3, 0.006]} color="#f1ead6" />
+            <Box p={[0, 0.17, 0.018]} s={[0.12, 0.035, 0.012]} color={C.brass} />
+          </group>
+        </group>
+      )}
+      {kind === 'triage' && (
+        <group>
+          {/* A high-visibility vest over the shirt, with two reflective bands. */}
+          <Round p={[0, seated ? 0.95 : 1.16, 0.01]} s={[0.5, 0.48, 0.33]} color="#e0cc4b" radius={0.08} />
+          {[-0.09, 0.07].map((y) => (
+            <Box key={y} p={[0, (seated ? 0.95 : 1.16) + y, 0.17]} s={[0.46, 0.045, 0.02]} color="#c9ced2" />
+          ))}
+        </group>
+      )}
       <Cylinder p={[0, headY - 0.23, 0]} radius={0.075} height={0.15} color={appearance.skin} />
       <group position={[0, headY, 0]} rotation={[pose.headPitch, pose.headYaw, 0]}>
-        {appearance.hat !== 'none' && (
+        {hat !== 'none' && (
           <group>
-            <Round p={[0, 0.21, 0]} s={[0.4, 0.19, 0.37]} color={color} radius={0.08} />
-            {appearance.hat === 'cap' && (
-              <Round p={[0, 0.15, 0.2]} s={[0.39, 0.04, 0.3]} color={color} radius={0.03} />
-            )}
+            <Round p={[0, 0.21, 0]} s={[0.4, 0.19, 0.37]} color={suit} radius={0.08} />
+            {hat === 'cap' && <Round p={[0, 0.15, 0.2]} s={[0.39, 0.04, 0.3]} color={suit} radius={0.03} />}
           </group>
         )}
         <Round p={[0, 0, 0]} s={[0.35, 0.4, 0.33]} color={appearance.skin} radius={0.11} />
@@ -241,7 +271,7 @@ function Figure({
             </group>
           </group>
           <group position={[side * 0.27, shoulderY, 0]} rotation={[pose.shoulder[i], 0, pose.roll[i]]}>
-            <Round p={[0, -0.15, 0]} s={[0.16, 0.31, 0.18]} color={color} radius={0.045} />
+            <Round p={[0, -0.15, 0]} s={[0.16, 0.31, 0.18]} color={suit} radius={0.045} />
             <group position={[0, -0.29, 0]} rotation={[pose.elbow[i], 0, 0]}>
               <Round p={[0, -0.11, 0]} s={[0.13, 0.25, 0.14]} color={appearance.skin} radius={0.04} />
               <Round p={[0, -0.245, 0.02]} s={[0.13, 0.12, 0.135]} color={appearance.skin} radius={0.04} />
@@ -274,6 +304,7 @@ export function EmployeeAvatar({
   mode,
   selected,
   speaking,
+  pinned,
   onSelect,
 }: {
   employee: OfficeEmployee;
@@ -288,6 +319,8 @@ export function EmployeeAvatar({
   selected?: boolean;
   /** Whether this figure holds one of the floor's bubbles right now. */
   speaking?: boolean;
+  /** Keeps the pill on screen whatever else is in the way: the person speaking in a meeting. */
+  pinned?: boolean;
   onSelect?: (id: string) => void;
 }) {
   const group = useRef<THREE.Group>(null);
@@ -305,6 +338,7 @@ export function EmployeeAvatar({
   const seated = SEATED.includes(activity);
   const status = statusOf(state);
   const entry = useOverlayEntry(employee.id);
+  const relayout = useOverlayRelayout();
   const headroom = seated ? 1.95 : 2.24;
 
   // The office's own declutter pass needs to know who matters most.
@@ -315,7 +349,7 @@ export function EmployeeAvatar({
       ...(selected ? { selected } : {}),
       ...(state.attention ? { attention: state.attention } : {}),
     });
-    entry.forced = Boolean(hovered || focused || selected);
+    entry.forced = Boolean(hovered || focused || selected || pinned);
   });
 
   // A new station starts a walk. Reduced motion, and the first placement, snap.
@@ -395,7 +429,17 @@ export function EmployeeAvatar({
         }}
         onPointerOut={() => setHovered(false)}
       >
-        <Figure color={color} appearance={appearance} index={index} pose={walking ? REST : pose} />
+        <Figure
+          color={color}
+          appearance={appearance}
+          index={index}
+          pose={walking ? REST : pose}
+          kind={employee.kind}
+        />
+        {/* The janitor brings the cart with them, parked at their side, and leaves it to sit down. */}
+        {employee.kind === 'janitor' && !seated && (
+          <JanitorCart position={[0.85, 0, -0.22]} rotation={-0.55} />
+        )}
         {(hovered || selected) && (
           <mesh position={[0, 0.052, 0]} rotation={[-Math.PI / 2, 0, 0]}>
             <ringGeometry args={[0.43, 0.48, 48]} />
@@ -416,6 +460,7 @@ export function EmployeeAvatar({
           <button
             ref={(element) => {
               if (entry) entry.pill = element;
+              relayout();
             }}
             type="button"
             className="office-pill"
@@ -440,6 +485,7 @@ export function EmployeeAvatar({
           <div
             ref={(element) => {
               if (entry) entry.bubble = element;
+              relayout();
             }}
             className="office-bubble"
             data-visible={speaking ? 'true' : undefined}

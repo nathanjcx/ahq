@@ -3,10 +3,12 @@
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { JSX } from 'react';
+import type { CSSProperties, JSX } from 'react';
 import * as THREE from 'three';
-import { useOverlayEntry } from './office-overlay';
+import { boardLayout, CALENDAR_ENTRIES, type BoardCard, type CalendarEntry } from './office-layout';
+import { useOverlayEntry, useOverlayRelayout } from './office-overlay';
 import { Box, C, Round, type Point } from './office-primitives';
+import { STATUS_COLOR, type SelectProp } from './office-props';
 
 const AMBER = '#e8a54f';
 const DEGRADED = '#c2643f';
@@ -202,6 +204,7 @@ export function ProviderConsole({
  */
 export function BoardNote({ position, note }: { position: Point; note?: string }): JSX.Element | null {
   const entry = useOverlayEntry('office-note');
+  const relayout = useOverlayRelayout();
   useLayoutEffect(() => {
     if (!entry) return;
     entry.pinned = true;
@@ -214,6 +217,7 @@ export function BoardNote({ position, note }: { position: Point; note?: string }
         className="office-note"
         ref={(element) => {
           if (entry) entry.pill = element;
+          relayout();
         }}
       >
         {note}
@@ -263,5 +267,110 @@ export function StatusDevice({
         />
       </mesh>
     </group>
+  );
+}
+
+/**
+ * What the task board says, in the overlay where the office keeps anything meant
+ * to be read. Like the board note it is a fixed card, so pills and bubbles route
+ * around it rather than over it.
+ */
+export function TaskCards({
+  position,
+  cards,
+  onSelectProp,
+}: {
+  position: Point;
+  cards: BoardCard[];
+  onSelectProp?: SelectProp;
+}): JSX.Element | null {
+  const entry = useOverlayEntry('office-board');
+  const relayout = useOverlayRelayout();
+  useLayoutEffect(() => {
+    if (!entry) return;
+    entry.pinned = true;
+    entry.anchor.set(...position);
+  }, [entry, position]);
+  const shown = boardLayout(cards).cards;
+  if (!shown.length) return null;
+  return (
+    <Html position={position} center zIndexRange={[18, 8]}>
+      <div
+        className="office-board"
+        ref={(element) => {
+          if (entry) entry.pill = element;
+          relayout();
+        }}
+      >
+        <h3>Board</h3>
+        <ol>
+          {shown.map((card) => (
+            <li key={card.id}>
+              <button
+                type="button"
+                data-status={card.status}
+                style={{ '--card-status': STATUS_COLOR[card.status] } as CSSProperties}
+                title={`${card.title} · ${card.status}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelectProp?.('card', card.id);
+                }}
+              >
+                {card.title}
+              </button>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </Html>
+  );
+}
+
+/** Today's shifts and meetings, on the lobby's calendar wall. */
+export function CalendarCard({
+  position,
+  entries,
+  onSelectProp,
+}: {
+  position: Point;
+  entries: CalendarEntry[];
+  onSelectProp?: SelectProp;
+}): JSX.Element | null {
+  const entry = useOverlayEntry('office-calendar');
+  const relayout = useOverlayRelayout();
+  useLayoutEffect(() => {
+    if (!entry) return;
+    entry.pinned = true;
+    entry.anchor.set(...position);
+  }, [entry, position]);
+  if (!entries.length) return null;
+  const shown = entries.slice(0, CALENDAR_ENTRIES);
+  return (
+    <Html position={position} center zIndexRange={[18, 8]}>
+      <div
+        className="office-calendar"
+        ref={(element) => {
+          if (entry) entry.pill = element;
+          relayout();
+        }}
+      >
+        <h3>Today</h3>
+        <ol>
+          {shown.map((item) => (
+            <li key={`${item.at} ${item.label}`}>
+              <span>{item.at}</span>
+              <span>{item.label}</span>
+            </li>
+          ))}
+        </ol>
+        {entries.length > shown.length && (
+          <p>
+            <button type="button" onClick={() => onSelectProp?.('calendar')}>
+              +{entries.length - shown.length} more
+            </button>
+          </p>
+        )}
+      </div>
+    </Html>
   );
 }

@@ -3,7 +3,9 @@
 import { useMemo } from 'react';
 import type { Activity, EmployeeActivity } from '@/components/office/activity';
 import type { LabelMode } from '@/components/office/office-labels';
-import type { OfficeEmployee, OfficeProvider } from '@/components/office/office-scene';
+import type { BoardCard, ShelfSpec } from '@/components/office/office-layout';
+import type { EmployeeKind } from '@/components/office/office-people';
+import type { OfficeDressing, OfficeEmployee, OfficeProvider } from '@/components/office/office-scene';
 import { OfficeStage, type OfficeSceneData } from '@/components/office/office-stage';
 
 /**
@@ -22,12 +24,124 @@ const PEOPLE: { name: string; role: string; color: string; traits: string[] }[] 
   { name: 'Mina', role: 'Marketing', color: '#7a4fb0', traits: ['curious'] },
 ];
 
-const PRESETS: Record<string, (Activity | undefined)[]> = {
-  lobby: [],
-  'floor-day': ['thinking', 'writing', 'calling', 'reviewing', 'reading', 'talking', 'talking', 'idle'],
-  'floor-quiet': ['idle', 'idle', 'idle'],
-  'floor-celebrate': ['celebrating', 'failed', 'writing', 'idle'],
-  'floor-night': ['writing', 'idle', 'idle', 'idle', 'idle', 'idle'],
+const CARDS: BoardCard[] = [
+  { id: 'c1', title: 'Draft the release note', status: 'active', dependsOn: [] },
+  { id: 'c2', title: 'Approve the changelog', status: 'waiting', dependsOn: ['c1'] },
+  { id: 'c3', title: 'Ship 4.2 to production', status: 'blocked', dependsOn: ['c2'] },
+  { id: 'c4', title: 'Collect QA sign-off', status: 'done', dependsOn: [] },
+  { id: 'c5', title: 'Update the pricing page', status: 'active', dependsOn: ['c4'] },
+  { id: 'c6', title: 'Brief the support team', status: 'waiting', dependsOn: ['c3'] },
+];
+
+const SHELVES: ShelfSpec[] = [
+  { scope: 'workspace', name: 'Workspace', fill: 0.42, contested: 2 },
+  { scope: 'floor', name: 'Release desk', fill: 0.68, contested: 0 },
+  { scope: 'project', name: 'September release', fill: 0.52, contested: 0 },
+  { scope: 'project', name: 'Pricing refresh', fill: 0.26, contested: 1 },
+  { scope: 'agent', name: 'Employees', fill: 0.83, contested: 0 },
+  { scope: 'task', name: 'Task dossiers', fill: 0.47, contested: 0 },
+];
+
+const CALENDAR = [
+  { at: '09:00', label: 'Ada · release shift' },
+  { at: '09:30', label: 'Bruno · changelog shift' },
+  { at: '11:00', label: 'September release review' },
+  { at: '13:00', label: 'Cyrus · warehouse shift' },
+  { at: '15:30', label: 'Pricing deadline' },
+  { at: '17:00', label: 'Audit pass · Floor 1' },
+  { at: '21:00', label: 'Janitor · memory curation' },
+];
+
+type Preset = {
+  /** One activity per person, in the order of PEOPLE. `undefined` leaves them out of the journal. */
+  roles: (Activity | undefined)[];
+  kinds?: (EmployeeKind | undefined)[];
+  label: string;
+  lightBudget?: number;
+  providers?: boolean;
+  /** Everything past the people: the room, its props, the schedule, the meeting. */
+  dressing?: (ids: string[]) => OfficeDressing;
+};
+
+const FLOOR_DAY: (Activity | undefined)[] = [
+  'thinking',
+  'writing',
+  'calling',
+  'reviewing',
+  'reading',
+  'talking',
+  'talking',
+  'idle',
+];
+const FLOOR_LABEL = 'Floor 1 · Release desk';
+
+const PRESETS: Record<string, Preset> = {
+  lobby: { roles: [], label: 'Lobby' },
+  'floor-day': {
+    roles: FLOOR_DAY,
+    // Reserved kinds walk the floors: an auditor at a console, the janitor, a triage engineer.
+    kinds: [undefined, undefined, 'auditor', undefined, undefined, 'janitor', undefined, 'triage'],
+    label: FLOOR_LABEL,
+  },
+  'floor-quiet': { roles: ['idle', 'idle', 'idle'], label: FLOOR_LABEL },
+  'floor-celebrate': { roles: ['celebrating', 'failed', 'writing', 'idle'], label: FLOOR_LABEL },
+  'floor-night': {
+    roles: ['writing', 'idle', 'idle', 'idle', 'idle', 'idle'],
+    label: FLOOR_LABEL,
+    lightBudget: 0.8,
+  },
+  'floor-props': {
+    roles: ['writing', 'thinking', 'reviewing', 'reading'],
+    label: FLOOR_LABEL,
+    dressing: (ids) => ({
+      memory: {
+        floorFill: 0.72,
+        agentFills: new Map(ids.map((id, index) => [id, [0.8, 0.35, 0.55, 0.15][index] ?? 0.4])),
+        contested: 2,
+      },
+      board: { cards: CARDS },
+      findings: new Map([[ids[1], 2]]),
+      incident: true,
+    }),
+  },
+  'after-hours': {
+    roles: ['writing', 'idle', 'idle', 'idle'],
+    label: FLOOR_LABEL,
+    lightBudget: 0.45,
+    dressing: () => ({ schedule: { working: false, attended: false, overnightCheap: true } }),
+  },
+  'lobby-calendar': {
+    roles: ['idle', 'idle', 'talking', 'talking', 'idle'],
+    label: 'Lobby',
+    providers: false,
+    dressing: () => ({ room: 'lobby', calendar: CALENDAR }),
+  },
+  records: {
+    roles: ['writing', 'reading'],
+    kinds: ['janitor', 'auditor'],
+    label: 'Records',
+    providers: false,
+    dressing: () => ({
+      room: 'records',
+      records: { shelves: SHELVES },
+      memory: { floorFill: 0.68, agentFills: new Map(), contested: 3 },
+    }),
+  },
+  boardroom: {
+    roles: ['thinking', 'talking', 'thinking', 'reading', 'thinking'],
+    label: 'Boardroom',
+    providers: false,
+    dressing: (ids) => ({
+      room: 'boardroom',
+      meeting: { attendeeIds: ids.slice(0, 5), speakingId: ids[1] },
+    }),
+  },
+  triage: {
+    roles: ['calling', 'writing', 'thinking', 'idle'],
+    kinds: ['triage', 'triage', undefined, 'triage'],
+    label: 'Triage',
+    dressing: () => ({ room: 'triage', incident: true, incidentCount: 3 }),
+  },
 };
 
 const PROVIDERS: OfficeProvider[] = [
@@ -37,20 +151,21 @@ const PROVIDERS: OfficeProvider[] = [
 
 const NOW = 1_800_000_000_000;
 
-function buildScene(preset: string, hour: number, seed: number) {
-  const roles = PRESETS[preset] ?? PRESETS['floor-day'];
-  const count = preset === 'lobby' ? 6 : roles.length;
+function buildScene(name: string, hour: number, seed: number) {
+  const preset = PRESETS[name] ?? PRESETS['floor-day'];
+  const count = preset.roles.length || 6;
   const employees: OfficeEmployee[] = PEOPLE.slice(0, count).map((person, index) => ({
     id: `lab-${seed}-${index}`,
     name: person.name,
     role: person.role,
-    status: roles[index] && roles[index] !== 'idle' ? 'working' : 'ready',
+    status: preset.roles[index] && preset.roles[index] !== 'idle' ? 'working' : 'ready',
     color: person.color,
     traits: person.traits,
+    ...(preset.kinds?.[index] ? { kind: preset.kinds[index] } : {}),
   }));
   const activities = new Map<string, EmployeeActivity>();
   employees.forEach((employee, index) => {
-    const activity = roles[index];
+    const activity = preset.roles[index];
     if (!activity) return;
     const partner = activity === 'talking' ? employees[index % 2 === 0 ? index + 1 : index - 1] : undefined;
     activities.set(employee.id, {
@@ -66,15 +181,20 @@ function buildScene(preset: string, hour: number, seed: number) {
       partnerId: partner?.id,
     });
   });
+  const dressing = preset.dressing?.(employees.map((employee) => employee.id)) ?? {};
+  const lobby = name === 'lobby' || dressing.room === 'lobby';
+  // The whiteboard note belongs to a working floor; the other rooms have no whiteboard.
+  const whiteboard = !lobby && dressing.room !== 'records' && dressing.room !== 'boardroom';
   const scene: OfficeSceneData = {
     activities,
     traits: new Map(employees.map((employee) => [employee.id, employee.traits ?? []])),
-    providers: preset === 'lobby' ? [] : PROVIDERS,
-    note: preset === 'lobby' ? undefined : 'Ship the September release once the changelog is approved.',
-    lightBudget: preset === 'floor-night' ? 0.8 : 0.2,
+    providers: preset.providers === false || lobby ? [] : PROVIDERS,
+    ...(whiteboard ? { note: 'Ship the September release once the changelog is approved.' } : {}),
+    lightBudget: preset.lightBudget ?? 0.2,
     hour,
+    ...dressing,
   };
-  return { employees, scene };
+  return { employees, scene, label: preset.label };
 }
 
 export function OfficeLab({
@@ -88,15 +208,14 @@ export function OfficeLab({
   labels: string;
   seed: number;
 }) {
-  const { employees, scene } = useMemo(() => buildScene(preset, hour, seed), [preset, hour, seed]);
+  const { employees, scene, label } = useMemo(() => buildScene(preset, hour, seed), [preset, hour, seed]);
   return (
     <main className="office-lab" data-preset={preset} style={{ width: 1280, height: 720, margin: 0 }}>
       <OfficeStage
         live={false}
         scene={scene}
         employees={employees}
-        floorId={preset === 'lobby' ? undefined : `lab-floor-${seed}`}
-        label={preset === 'lobby' ? 'Lobby' : 'Floor 1 · Release desk'}
+        label={label}
         labels={labels as LabelMode}
       />
     </main>
