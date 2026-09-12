@@ -108,11 +108,7 @@ export const severity = v.union(
 );
 export const overnightPolicy = v.union(v.literal('off'), v.literal('audits_only'), v.literal('cheap'));
 export const hiringPolicy = v.union(v.literal('anyone'), v.literal('admins'), v.literal('approval'));
-export const listingVisibility = v.union(
-  v.literal('published'),
-  v.literal('hidden'),
-  v.literal('retired'),
-);
+export const listingVisibility = v.union(v.literal('published'), v.literal('hidden'), v.literal('retired'));
 export const attendee = v.object({
   kind: v.union(v.literal('employee'), v.literal('person')),
   id: v.string(),

@@ -99,11 +99,7 @@ export async function namesOnFloor(
   return new Set(names.filter(Boolean));
 }
 
-export async function addToFloor(
-  ctx: MutationCtx,
-  floor: Doc<'floors'>,
-  employeeIds: Id<'installations'>[],
-) {
+export async function addToFloor(ctx: MutationCtx, floor: Doc<'floors'>, employeeIds: Id<'installations'>[]) {
   const missing = employeeIds.filter((id) => !floor.employeeIds.includes(id));
   if (missing.length)
     await ctx.db.patch(floor._id, {

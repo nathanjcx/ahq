@@ -1,11 +1,6 @@
 import { v } from 'convex/values';
 import type { Persona, ProviderId, TaskStatus } from '../lib/contracts';
-import {
-  FLOOR_RULES,
-  MEMORY_PLACEHOLDER,
-  OPERATING_RULES,
-  composeInstructions,
-} from '../lib/instructions';
+import { FLOOR_RULES, MEMORY_PLACEHOLDER, OPERATING_RULES, composeInstructions } from '../lib/instructions';
 import { PERSONA_LIMITS, isPersonaTrait } from '../lib/personas';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
@@ -186,13 +181,7 @@ export const list = query({
 });
 
 /** Statuses a task still occupies its instance with; an instance in one of them cannot be retired. */
-const ACTIVE_TASK_STATUSES: TaskStatus[] = [
-  'queued',
-  'running',
-  'awaiting_approval',
-  'waiting',
-  'blocked',
-];
+const ACTIVE_TASK_STATUSES: TaskStatus[] = ['queued', 'running', 'awaiting_approval', 'waiting', 'blocked'];
 
 async function hirableListing(ctx: Ctx, listingId: Id<'listings'>) {
   const listing = await ctx.db.get(listingId);

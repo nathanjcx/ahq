@@ -187,7 +187,13 @@ export const dashboard = query({
           role: version.role,
           color: version.color,
           model: version.model,
-          status: version.retiredAt ? 'retired' : missingCapabilities.length ? 'blocked' : 'ready',
+          // A retired instance stays listed so past work still resolves a name, but reads as retired.
+          status:
+            installation.status === 'retired' || version.retiredAt
+              ? 'retired'
+              : missingCapabilities.length
+                ? 'blocked'
+                : 'ready',
           missingCapabilities,
           persona: version.persona,
           floorId: installation.floorId,
