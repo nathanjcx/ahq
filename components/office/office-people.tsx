@@ -314,8 +314,9 @@ export function EmployeeAvatar({
     }
   }, [motion, station.at[0], station.at[1], station.at[2], station.facing]);
 
+  // Reduced motion still changes pose, it just never tweens between them.
   useEffect(() => {
-    if (!motion) setPose(poseFor(activity, 0, 99, traits));
+    if (!motion) setPose(poseFor(activity, 0, 0, traits));
   }, [motion, activity, employee.id]);
 
   useEffect(() => {

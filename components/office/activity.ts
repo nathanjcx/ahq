@@ -93,7 +93,6 @@ function newest<T>(items: T[], at: (item: T) => number): T | undefined {
  */
 export function deriveActivities(input: ActivityInput): Map<string, EmployeeActivity> {
   const { employees, tasks, events, proposals, posts, now } = input;
-  const tasksById = new Map(tasks.map((task) => [task.id, task]));
   const byEmployee = new Map<string, Task[]>();
   for (const task of tasks) {
     const list = byEmployee.get(task.employeeId);
@@ -138,7 +137,7 @@ export function deriveActivities(input: ActivityInput): Map<string, EmployeeActi
       handoff,
       now,
     );
-    const attention = attentionFor(own, proposals, tasksById, now);
+    const attention = attentionFor(own, proposals, now);
     result.set(employee.id, {
       ...state,
       ...(bubble ? { bubble } : {}),
@@ -234,21 +233,12 @@ function bubbleFor(
   return undefined;
 }
 
-function attentionFor(
-  own: Task[],
-  proposals: ActionProposal[],
-  tasksById: Map<string, Task>,
-  now: number,
-): Attention | undefined {
+function attentionFor(own: Task[], proposals: ActionProposal[], now: number): Attention | undefined {
   const stuck = own.some((task) => task.status === 'awaiting_approval' && now - task.updatedAt > STUCK_MS);
   if (stuck) return 'stuck';
   const ownIds = new Set(own.map((task) => task.id));
   const approval = proposals.some(
-    (proposal) =>
-      proposal.status === 'pending' &&
-      proposal.canDecide &&
-      ownIds.has(proposal.taskId) &&
-      tasksById.has(proposal.taskId),
+    (proposal) => proposal.status === 'pending' && proposal.canDecide && ownIds.has(proposal.taskId),
   );
   return approval ? 'approval' : undefined;
 }
