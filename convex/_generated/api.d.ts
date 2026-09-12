@@ -21,7 +21,10 @@ import type * as memory from "../memory.js";
 import type * as meetings from "../meetings.js";
 import type * as floors from "../floors.js";
 import type * as projects from "../projects.js";
+import type * as plan from "../plan.js";
 import type * as registry from "../registry.js";
+import type * as calendar from "../calendar.js";
+import type * as schedule from "../schedule.js";
 import type * as services_actions from "../services/actions.js";
 import type * as services_artifacts from "../services/artifacts.js";
 import type * as services_audit from "../services/audit.js";
@@ -36,7 +39,9 @@ import type * as services_notifications from "../services/notifications.js";
 import type * as services_integrations from "../services/integrations.js";
 import type * as services_meetings from "../services/meetings.js";
 import type * as services_projects from "../services/projects.js";
+import type * as services_calendar from "../services/calendar.js";
 import type * as services_queue from "../services/queue.js";
+import type * as services_schedule from "../services/schedule.js";
 import type * as services_sessions from "../services/sessions.js";
 import type * as services_triage from "../services/triage.js";
 import type * as shared from "../shared.js";
@@ -49,7 +54,9 @@ import type * as lib_posts from "../lib/posts.js";
 import type * as lib_projects from "../lib/projects.js";
 import type * as triage from "../triage.js";
 import type * as lib_triage from "../lib/triage.js";
+import type * as lib_schedule from "../lib/schedule.js";
 import type * as lib_tasks from "../lib/tasks.js";
+import type * as lib_time from "../lib/time.js";
 import type * as workspace from "../workspace.js";
 
 import type {
@@ -72,7 +79,10 @@ declare const fullApi: ApiFromModules<{
   meetings: typeof meetings;
   floors: typeof floors;
   projects: typeof projects;
+  plan: typeof plan;
   registry: typeof registry;
+  calendar: typeof calendar;
+  schedule: typeof schedule;
   "services/actions": typeof services_actions;
   "services/artifacts": typeof services_artifacts;
   "services/audit": typeof services_audit;
@@ -87,7 +97,9 @@ declare const fullApi: ApiFromModules<{
   "services/integrations": typeof services_integrations;
   "services/meetings": typeof services_meetings;
   "services/projects": typeof services_projects;
+  "services/calendar": typeof services_calendar;
   "services/queue": typeof services_queue;
+  "services/schedule": typeof services_schedule;
   "services/sessions": typeof services_sessions;
   "services/triage": typeof services_triage;
   shared: typeof shared;
@@ -100,7 +112,9 @@ declare const fullApi: ApiFromModules<{
   "lib/projects": typeof lib_projects;
   triage: typeof triage;
   "lib/triage": typeof lib_triage;
+  "lib/schedule": typeof lib_schedule;
   "lib/tasks": typeof lib_tasks;
+  "lib/time": typeof lib_time;
   workspace: typeof workspace;
 }>;
 
