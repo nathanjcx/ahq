@@ -5,7 +5,7 @@ import { useState } from 'react';
 import type { PageProps } from '../app/page-props';
 import { EmptySection } from '../shared/empty';
 import { modelName } from '../shared/format';
-import { HireSheet } from '../shared/hire-sheet';
+import { HireSheet, hireContext } from '../shared/hire-sheet';
 import { Avatar } from '../shared/marks';
 import { MasterDetail, useMasterDetail } from '../shared/master-detail';
 import { PageIntro } from '../shared/page-intro';
@@ -116,13 +116,7 @@ export function EmployeesPage({ listings, ...props }: Props) {
   const selected =
     visible.find((employee) => employee.id === props.selectedEmployee) ?? visible[0] ?? null;
   const statusFor = (id: string) => statuses?.find((entry) => entry.employeeId === id);
-  const role = dashboard.workspace?.role ?? 'member';
-  const hiringPolicy = dashboard.settings?.hiringPolicy ?? 'anyone';
-  const needsApproval = hiringPolicy === 'approval' && role === 'member';
-  const usedTokens = (dashboard.workspace?.usage.byModel ?? []).reduce(
-    (total, row) => total + row.input + row.output,
-    0,
-  );
+  const { needsApproval } = hireContext(dashboard);
   const openCard = (employee: Employee) => {
     onSelectEmployee(employee.id);
     openDetail();
@@ -270,12 +264,8 @@ export function EmployeesPage({ listings, ...props }: Props) {
       {hiring && (
         <HireSheet
           listing={hiring.listing}
-          employees={dashboard.employees}
-          floors={dashboard.floors}
+          dashboard={dashboard}
           floorId={hiring.floorId}
-          hiringPolicy={hiringPolicy}
-          role={role}
-          usedTokens={usedTokens}
           onClose={() => setHiring(null)}
           onHire={(options) =>
             run(

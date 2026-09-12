@@ -190,10 +190,3 @@ export function nextDeadline(project: Project) {
     .find((at) => at >= now);
 }
 
-/** The last milestone deadline: the day the project as a whole is due. */
-export function finalDeadline(project: Project) {
-  const deadlines = project.milestones
-    .map((milestone) => milestone.deadlineAt)
-    .filter((at): at is number => at !== undefined);
-  return deadlines.length ? Math.max(...deadlines) : undefined;
-}

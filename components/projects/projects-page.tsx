@@ -4,6 +4,7 @@ import { FolderKanban, Plus, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import type { PageProps } from '../app/page-props';
 import { EmptyPane, EmptySection } from '../shared/empty';
+import { HireSheet, hireContext } from '../shared/hire-sheet';
 import { MasterDetail, useMasterDetail } from '../shared/master-detail';
 import { PageIntro } from '../shared/page-intro';
 import { SkeletonList } from '../shared/skeleton';
@@ -12,6 +13,7 @@ import { NewProjectSheet } from './new-project-sheet';
 import { ProjectCard } from './project-card';
 import { ProjectDetail } from './project-detail';
 import { ProjectionNote } from './projection-note';
+import type { HireSuggestion } from './proposal-questions';
 import { ProposalReview } from './proposal-review';
 import { pluralize } from '@/lib/text';
 import { asId, uiApi } from '@/lib/ui-api';
@@ -49,6 +51,7 @@ export function ProjectsPage({
 }: PageProps) {
   const [filter, setFilter] = useState<'open' | 'all'>('open');
   const [composing, setComposing] = useState(false);
+  const [hiring, setHiring] = useState<HireSuggestion | null>(null);
   const [busy, setBusy] = useState(false);
   const { open, openDetail, closeDetail } = useMasterDetail();
 
@@ -79,10 +82,10 @@ export function ProjectsPage({
     onSelectTask(taskId);
     go('tasks');
   };
-  const create = async (name: string, brief: string, floorIds: string[]) => {
+  const create = async (name: string, brief: string, floorIds: string[], deadlineAt?: number) => {
     setBusy(true);
     try {
-      const created = await actions.createProject(name, brief, floorIds);
+      const created = await actions.createProject(name, brief, floorIds, deadlineAt);
       if (created) {
         onSelectProject(created.projectId);
         openDetail();
@@ -94,6 +97,8 @@ export function ProjectsPage({
   };
 
   const floors = dashboard.floors.filter((floor) => !floor.archivedAt);
+  const { needsApproval } = hireContext(dashboard);
+  const hiringListing = listings?.find((listing) => listing.listingId === hiring?.listingId);
   const newProject = (
     <button className="primary-button" disabled={!configured} onClick={() => setComposing(true)}>
       <Plus size={17} />
@@ -182,12 +187,7 @@ export function ProjectsPage({
                       'Roadmap confirmed. The work is on the calendar.',
                     )
                   }
-                  onHire={(listingId, floorId, count) =>
-                    perform(
-                      () => actions.hireForProject(listingId, floorId, count),
-                      `Hired ${pluralize(count, 'instance')}.`,
-                    )
-                  }
+                  onHire={setHiring}
                 />
               ) : project.status === 'planning' ? (
                 <PlannerWorking name={project.name} />
@@ -206,6 +206,19 @@ export function ProjectsPage({
                   onFinish={() =>
                     perform(() => actions.setProjectStatus(project.id, 'done'), 'Project marked finished.')
                   }
+                  onProjectDeadline={(deadlineAt) =>
+                    perform(
+                      () =>
+                        actions.updateProject(
+                          project.id,
+                          project.name,
+                          project.brief,
+                          project.floorIds,
+                          deadlineAt,
+                        ),
+                      deadlineAt ? 'Deadline set.' : 'Deadline cleared.',
+                    )
+                  }
                   onDeadline={(taskId, deadlineAt) =>
                     perform(() => actions.setTaskDeadline(taskId, deadlineAt), 'Deadline changed.')
                   }
@@ -221,6 +234,23 @@ export function ProjectsPage({
                 title="No project selected"
                 text="Choose a project to see its roadmap, its milestones, and its channel."
               />
+            )
+          }
+        />
+      )}
+      {hiring && hiringListing && (
+        <HireSheet
+          listing={hiringListing}
+          dashboard={dashboard}
+          floorId={hiring.floorId}
+          count={hiring.count}
+          onClose={() => setHiring(null)}
+          onHire={(options) =>
+            run(
+              () => actions.hire(hiring.listingId, options),
+              needsApproval
+                ? 'Requested. An owner or an administrator decides it.'
+                : `Hired ${pluralize(options.count ?? 1, 'instance')} of ${hiring.name}.`,
             )
           }
         />

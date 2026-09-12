@@ -1,9 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { dateInputValue } from '../shared/time';
 import {
   DAY_MS,
-  dateOf,
   dayAt,
   dayMoments,
   dayOf,
@@ -106,7 +106,7 @@ export function DayReplay({
           <span>Day</span>
           <input
             type="date"
-            value={dateOf(record.from)}
+            value={dateInputValue(record.from)}
             disabled={!onPickDay}
             onChange={(event) => {
               const picked = dayOf(event.target.value);

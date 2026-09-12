@@ -2,12 +2,10 @@
 
 import { CalendarClock, Check, Save, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { shortDate, shortTime } from '../shared/time';
+import { dateInputTime, dateInputValue, shortDate, shortTime } from '../shared/time';
 import { ProjectionNote, tokenCount } from './projection-note';
 import {
   answerPrompt,
-  dateTime,
-  dateValue,
   editMilestone,
   editTask,
   proposalTotals,
@@ -56,7 +54,7 @@ export function ProposalReview({
   busy: boolean;
   onSave: (proposal: RoadmapProposal) => void;
   onConfirm: (proposal: RoadmapProposal) => void;
-  onHire: (listingId: string, floorId: string, count: number) => void;
+  onHire: (suggestion: HireSuggestion) => void;
 }) {
   const [draft, setDraft] = useState(proposal);
   const [edited, setEdited] = useState(false);
@@ -66,7 +64,6 @@ export function ProposalReview({
     setEdited(true);
   };
 
-  const projectFloors = floors.filter((floor) => project.floorIds.includes(floor.id));
   const floorName = (id: string) => floors.find((floor) => floor.id === id)?.name ?? 'Floor';
   const employeeName = (id?: string) => employees.find((employee) => employee.id === id)?.name ?? 'Unstaffed';
   /** The instances a floor holds, which are the people a task on that floor can go to. */
@@ -90,6 +87,7 @@ export function ProposalReview({
           listingId: listing.listingId,
           name: listing.name,
           floorId: entry.floorId,
+          floorName: floorName(entry.floorId),
           count: hire.count,
           reason: hire.reason,
         },
@@ -131,7 +129,6 @@ export function ProposalReview({
       )}
       <ProposalQuestions
         prompts={draft.prompts}
-        floors={projectFloors}
         suggestions={suggestions}
         busy={busy}
         onHire={onHire}
@@ -154,9 +151,9 @@ export function ProposalReview({
               <input
                 type="date"
                 aria-label={`Milestone ${index + 1} deadline`}
-                value={dateValue(milestone.deadlineAt)}
+                value={dateInputValue(milestone.deadlineAt)}
                 onChange={(event) =>
-                  change(editMilestone(draft, milestone.key, { deadlineAt: dateTime(event.target.value) }))
+                  change(editMilestone(draft, milestone.key, { deadlineAt: dateInputTime(event.target.value) }))
                 }
               />
               <button
@@ -194,9 +191,9 @@ export function ProposalReview({
                   <input
                     type="date"
                     aria-label={`Deadline for ${task.title}`}
-                    value={dateValue(task.deadlineAt)}
+                    value={dateInputValue(task.deadlineAt)}
                     onChange={(event) =>
-                      change(editTask(draft, task.key, { deadlineAt: dateTime(event.target.value) }))
+                      change(editTask(draft, task.key, { deadlineAt: dateInputTime(event.target.value) }))
                     }
                   />
                   <button

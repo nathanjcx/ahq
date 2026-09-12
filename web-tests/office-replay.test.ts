@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { entryAt, sceneAt } from '../components/floors/floor-replay';
 import {
   DAY_MS,
-  dateOf,
   dayAt,
   dayInputAt,
   dayMoments,
@@ -11,6 +10,7 @@ import {
   yesterday,
   type DayRecord,
 } from '../components/office/day-replay';
+import { dateInputValue } from '../components/shared/time';
 import type { AuditTimeline } from '../lib/contracts';
 
 const START = 1_700_000_000_000;
@@ -295,7 +295,7 @@ describe('replaying a day', () => {
 
   it('reads a yyyy-mm-dd day and writes one back', () => {
     expect(dayOf('2026-09-09')).toEqual({ from: DAY, to: DAY + DAY_MS });
-    expect(dateOf(DAY)).toBe('2026-09-09');
+    expect(dateInputValue(DAY)).toBe('2026-09-09');
     expect(dayOf('not a day')).toBeUndefined();
     expect(yesterday(DAY + 11 * 3_600_000)).toEqual({ from: DAY - DAY_MS, to: DAY });
   });

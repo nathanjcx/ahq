@@ -3,7 +3,7 @@
 import { PlayCircle } from 'lucide-react';
 import { statusLabel } from '../shared/format';
 import { StatusMark } from '../shared/marks';
-import { dateTime, dateValue } from './proposal';
+import { dateInputTime, dateInputValue } from '../shared/time';
 import type { ProjectTask } from '@/lib/contracts';
 
 /**
@@ -44,9 +44,9 @@ export function ProjectTaskRow({
           <span className="sr-only">Deadline for {task.title}</span>
           <input
             type="date"
-            value={dateValue(task.deadlineAt)}
+            value={dateInputValue(task.deadlineAt)}
             disabled={busy}
-            onChange={(event) => onDeadline(task.id, dateTime(event.target.value))}
+            onChange={(event) => onDeadline(task.id, dateInputTime(event.target.value))}
           />
         </label>
         <label>

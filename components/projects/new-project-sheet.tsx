@@ -2,16 +2,16 @@
 
 import { useState } from 'react';
 import { Sheet } from '../shared/sheet';
+import { dateInputTime } from '../shared/time';
 import type { Employee, Floor } from '@/lib/contracts';
 
 /**
- * A project is created with a name, a brief, and its floors; the planner reads the brief and comes
- * back with a roadmap. The deadline and the staff suggestions are written into the brief, in the
- * words the planner will read, because they are instructions to it rather than fields of the project.
+ * A project is created with a name, a brief, its floors, and its deadline; the planner reads the
+ * brief and comes back with a roadmap. Staff suggestions are written into the brief, in the words
+ * the planner will read, because they are an instruction to it rather than a field of the project.
  */
-function composeBrief(goal: string, deadline: string, suggested: Employee[]) {
+function composeBrief(goal: string, suggested: Employee[]) {
   const lines = [goal.trim()];
-  if (deadline) lines.push(`Deadline: ${new Date(`${deadline}T12:00:00`).toDateString()}.`);
   if (suggested.length)
     lines.push(`Suggested staff: ${suggested.map((employee) => employee.name).join(', ')}.`);
   return lines.filter(Boolean).join('\n\n');
@@ -28,7 +28,7 @@ export function NewProjectSheet({
   employees: Employee[];
   busy: boolean;
   onClose: () => void;
-  onCreate: (name: string, brief: string, floorIds: string[]) => void;
+  onCreate: (name: string, brief: string, floorIds: string[], deadlineAt?: number) => void;
 }) {
   const [name, setName] = useState('');
   const [goal, setGoal] = useState('');
@@ -60,7 +60,9 @@ export function NewProjectSheet({
           <button
             className="primary-button"
             disabled={!ready}
-            onClick={() => onCreate(name.trim(), composeBrief(goal, deadline, suggested), floorIds)}
+            onClick={() =>
+              onCreate(name.trim(), composeBrief(goal, suggested), floorIds, dateInputTime(deadline))
+            }
           >
             {busy ? 'Creating…' : 'Create and plan'}
           </button>

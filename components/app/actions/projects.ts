@@ -10,18 +10,20 @@ export type ProjectsActions = {
     name: string,
     brief: string,
     floorIds: string[],
+    deadlineAt?: number,
   ) => Promise<{ projectId: string } | undefined>;
-  updateProject: (projectId: string, name: string, brief: string, floorIds: string[]) => Promise<unknown>;
+  updateProject: (
+    projectId: string,
+    name: string,
+    brief: string,
+    floorIds: string[],
+    deadlineAt?: number,
+  ) => Promise<unknown>;
   setProjectStatus: (projectId: string, status: ProjectStatus) => Promise<unknown>;
   saveRoadmapProposal: (projectId: string, proposal: RoadmapProposal) => Promise<unknown>;
   confirmRoadmap: (projectId: string, proposal: RoadmapProposal) => Promise<unknown>;
   replanProject: (projectId: string) => Promise<unknown>;
   archiveProject: (projectId: string) => Promise<unknown>;
-  /**
-   * Answers a roadmap's capacity question by staffing the floor it names. The core `hire` action
-   * hires one instance into the lobby; a bottleneck needs a count on a named floor.
-   */
-  hireForProject: (listingId: string, floorId: string, count: number) => Promise<unknown>;
   setTaskDependencies: (taskId: string, dependsOn: string[]) => Promise<unknown>;
   setTaskDeadline: (taskId: string, deadlineAt?: number) => Promise<unknown>;
   setTaskCadence: (taskId: string, cadence: 'once' | 'daily') => Promise<unknown>;
@@ -39,7 +41,6 @@ export const offlineProjectsActions: ProjectsActions = {
   confirmRoadmap: unavailable,
   replanProject: unavailable,
   archiveProject: unavailable,
-  hireForProject: unavailable,
   setTaskDependencies: unavailable,
   setTaskDeadline: unavailable,
   setTaskCadence: unavailable,
@@ -54,27 +55,28 @@ export function useProjectsActions(): ProjectsActions {
   const confirmRoadmap = useMutation(uiApi.confirmRoadmap);
   const replanProject = useMutation(uiApi.replanProject);
   const archiveProject = useMutation(uiApi.archiveProject);
-  const hire = useMutation(uiApi.hire);
   const setTaskDependencies = useMutation(uiApi.setTaskDependencies);
   const setTaskDeadline = useMutation(uiApi.setTaskDeadline);
   const setTaskCadence = useMutation(uiApi.setTaskCadence);
   const unblockTask = useMutation(uiApi.unblockTask);
 
   return {
-    createProject: async (name, brief, floorIds) => {
+    createProject: async (name, brief, floorIds, deadlineAt) => {
       const { projectId } = await createProject({
         name,
         brief,
         floorIds: floorIds.map((id) => asId<'floors'>(id)),
+        deadlineAt,
       });
       return { projectId: String(projectId) };
     },
-    updateProject: (projectId, name, brief, floorIds) =>
+    updateProject: (projectId, name, brief, floorIds, deadlineAt) =>
       updateProject({
         projectId: asId(projectId),
         name,
         brief,
         floorIds: floorIds.map((id) => asId<'floors'>(id)),
+        deadlineAt,
       }),
     setProjectStatus: (projectId, status) => setProjectStatus({ projectId: asId(projectId), status }),
     saveRoadmapProposal: (projectId, proposal) =>
@@ -82,8 +84,6 @@ export function useProjectsActions(): ProjectsActions {
     confirmRoadmap: (projectId, proposal) => confirmRoadmap({ projectId: asId(projectId), proposal }),
     replanProject: (projectId) => replanProject({ projectId: asId(projectId) }),
     archiveProject: (projectId) => archiveProject({ projectId: asId(projectId) }),
-    hireForProject: (listingId, floorId, count) =>
-      hire({ listingId: asId(listingId), floorId: asId<'floors'>(floorId), count }),
     setTaskDependencies: (taskId, dependsOn) =>
       setTaskDependencies({ taskId: asId(taskId), dependsOn: dependsOn.map((id) => asId<'tasks'>(id)) }),
     setTaskDeadline: (taskId, deadlineAt) => setTaskDeadline({ taskId: asId(taskId), deadlineAt }),
