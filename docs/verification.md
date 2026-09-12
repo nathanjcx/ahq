@@ -5,7 +5,7 @@ Verified locally on September 11, 2026. Production accounts and provider credent
 ## Checks
 
 - `npm run typecheck` passes.
-- `npm test` passes all 32 tests. Coverage includes tenant privacy, Clerk organization claims, tool grants, write approvals, cancellation, uncertain outcomes, correction conditions, queue leases, stale turn completion, budget rollover, and signed inbox delivery.
+- `npm test` passes all 35 tests. Coverage includes tenant privacy, Clerk organization claims, tool grants, write approvals, cancellation, uncertain outcomes, correction conditions, queue leases, stale turn completion, budget rollover, signed inbox delivery, and project floors.
 - The real local Convex backend compiled the schema and functions. Runtime checks exercised organization workspace creation, private draft publication, public listing redaction, hiring, task creation, and cancellation.
 - `docker build -t ahq-web-check .` builds the production application. The image starts all three service commands as a non-root user.
 - Web, gateway, and worker health endpoints returned HTTP 200. The worker connected to the local Convex subscription. An unauthenticated MCP request returned HTTP 401.
@@ -13,6 +13,12 @@ Verified locally on September 11, 2026. Production accounts and provider credent
 - `npm audit --omit=dev` reported zero vulnerabilities.
 
 The code reduction and quality review removed the desktop/demo runtime, obsolete UI, unused dependencies, and redundant branches. It corrected queue races, audit acknowledgement handling, permission revocation, server-side skill hashes, and deployment variable scopes.
+
+## Project floors
+
+The local Convex backend also compiled the project schema and functions. Runtime checks created three project floors, staffed them, and assigned tasks. They verified that editing a project preserves existing task context, archiving blocks new work, restoring permits the floor again, and coworkers cannot read each other's private tasks. Unit checks cover inbox project assignments and correction context after archiving. Session configuration checks confirm that a project brief does not enter privileged employee instructions.
+
+See [project floors](project-floors.md) for behavior and deployment order.
 
 ## Visual review
 

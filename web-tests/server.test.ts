@@ -7,6 +7,7 @@ import { toolPolicy, checkResourceScope, canonical } from '../lib/server/tool-po
 import { verifyInboxSignature, inboxPayload } from '../lib/server/inbox-events';
 import { sessionConfiguration, estimateUsage } from '../lib/server/agents';
 import type { TaskContext } from '../services/types';
+import { initialTaskInput } from '../services/task-input';
 afterEach(() => {
   delete process.env.MCP_TOOL_POLICIES_JSON;
   delete process.env.MCP_APPROVED_HOSTS;
@@ -79,7 +80,8 @@ it('canonicalizes nested arguments for action deduplication', () => {
 it('builds an isolated hosted session with only the employee/tool grant intersection', () => {
   process.env.MCP_GATEWAY_URL = 'https://gateway.example';
   const context = {
-    task: { id: 'task1', model: 'gpt-5.6-terra' },
+    task: { id: 'task1', model: 'gpt-5.6-terra', prompt: 'Review the pipeline.' },
+    project: { id: 'project1', name: 'Growth', brief: 'A user-authored project brief.' },
     employeeVersion: {
       id: 'version1',
       instructions: 'Private instructions',
@@ -97,6 +99,10 @@ it('builds an isolated hosted session with only the employee/tool grant intersec
     runToken: 'private-run-token',
   } as TaskContext;
   const config = sessionConfiguration(context);
+  expect(config.agent?.instructions).not.toContain(context.project!.brief);
+  expect(initialTaskInput(context)).toContain(context.project!.brief);
+  expect(initialTaskInput(context)).toContain(context.task.prompt);
+  expect(initialTaskInput({ task: context.task })).toBe(context.task.prompt);
   expect(config.input).toBeUndefined();
   expect(config.agent?.multi_agent?.enabled).toBe(false);
   expect(config.agent?.tools).toHaveLength(1);
