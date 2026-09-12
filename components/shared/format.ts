@@ -42,13 +42,6 @@ export function relativeTime(timestamp: number) {
     ? `${days}d ago`
     : new Date(timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
-export function safeJson(value: string) {
-  try {
-    return JSON.stringify(JSON.parse(value), null, 2);
-  } catch {
-    return value;
-  }
-}
 export function fileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;

@@ -105,6 +105,13 @@ export function PageContent(props: PageContentProps) {
           run(() => actions.decide(id, approved), approved ? 'Action approved' : 'Action rejected')
         }
         onCorrect={props.onCorrect}
+        employees={dashboard.employees}
+        onSetVisibility={(taskId, visibility) =>
+          run(() => actions.setTaskVisibility(taskId, visibility), 'Visibility updated')
+        }
+        onRequestHandoff={(projectId, toEmployeeId, brief, taskId) =>
+          run(() => actions.requestHandoff(projectId, toEmployeeId, brief, taskId), 'Handoff requested')
+        }
       />
     );
 
