@@ -1,7 +1,7 @@
 'use client';
 
 import { MessageSquareText } from 'lucide-react';
-import { EmptyPane } from '../shared/empty';
+import { EmptyMini } from '../shared/empty';
 import { shortTime } from '../shared/time';
 import { totalUsage, usageLine } from './usage';
 import type { Attendee, MeetingTurn } from '@/lib/contracts';
@@ -50,8 +50,8 @@ export function Transcript({
     return (
       <section className="meeting-section">
         <h3>Transcript</h3>
-        <EmptyPane
-          icon={<MessageSquareText size={22} />}
+        <EmptyMini
+          icon={<MessageSquareText size={18} />}
           title="Nothing asked yet"
           text="Read the preparation, then put a question to the room or to one attendee."
         />

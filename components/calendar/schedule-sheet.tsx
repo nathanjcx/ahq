@@ -5,7 +5,7 @@ import { useState } from 'react';
 import type { MeetingDraft } from '../app/actions/calendar';
 import { Sheet } from '../shared/sheet';
 import { useUiQuery } from '../shared/use-ui-query';
-import type { Attendee, CalendarEntry, Employee, ScheduleSummary } from '@/lib/contracts';
+import type { Attendee, CalendarEntry, Employee, WorkingHours } from '@/lib/contracts';
 import { isAttendedTime } from '@/lib/time';
 import { uiApi } from '@/lib/ui-api';
 
@@ -44,7 +44,7 @@ export function ScheduleSheet({
   /** The meeting being changed, or nothing when one is being booked. */
   entry?: CalendarEntry;
   employees: Employee[];
-  clock: ScheduleSummary;
+  clock: WorkingHours;
   /** Where the calendar is looking, so a new meeting opens on the day being read. */
   startAt: number;
   onClose: () => void;
@@ -143,9 +143,11 @@ export function ScheduleSheet({
             but nobody is expected to be in the room.
           </p>
         )}
-        <label>
-          Attendees <small>Instances answer questions in their own session.</small>
-          <span className="tool-checklist">
+        <div className="cal-field">
+          <span>
+            Attendees <small>Instances answer questions in their own session.</small>
+          </span>
+          <div className="tool-checklist cal-attendees">
             {employees.map((employee) => (
               <label key={employee.id}>
                 <input
@@ -159,8 +161,8 @@ export function ScheduleSheet({
                 </span>
               </label>
             ))}
-          </span>
-        </label>
+          </div>
+        </div>
         <label>
           Purpose <small>What the meeting has to decide.</small>
           <textarea
@@ -175,7 +177,7 @@ export function ScheduleSheet({
             Suggested agenda
           </strong>
           {suggestions.length ? (
-            <span className="tool-checklist">
+            <div className="tool-checklist">
               {suggestions.map((suggestion) => (
                 <label key={suggestion.text}>
                   <input
@@ -189,7 +191,7 @@ export function ScheduleSheet({
                   </span>
                 </label>
               ))}
-            </span>
+            </div>
           ) : (
             <p className="cal-quiet">Nothing is due before this time.</p>
           )}

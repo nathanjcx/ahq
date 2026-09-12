@@ -3,13 +3,14 @@
 import { CalendarClock, Flag, Moon, ShieldCheck, Users } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { hourLabel, shortTime } from '../shared/time';
-import { fractionOf, workingBand, type CalendarRow, type RowItem } from './rows';
-import type { ScheduleSummary } from '@/lib/contracts';
+import { workingBand, type CalendarRow, type RowItem } from './rows';
+import type { WorkingHours } from '@/lib/contracts';
+import { localParts } from '@/lib/time';
 
-/** Hours the day view labels. Every third hour keeps the axis readable at a phone's width too. */
-const AXIS_HOURS = [0, 3, 6, 9, 12, 15, 18, 21];
+const HOUR_MS = 3_600_000;
 const WEEKDAY = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
 const DAY_NUMBER = new Intl.DateTimeFormat(undefined, { day: 'numeric' });
+const FULL_DAY = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
 
 function ItemIcon({ kind }: { kind: RowItem['kind'] }) {
   if (kind === 'meeting') return <Users size={12} />;
@@ -68,12 +69,15 @@ export function WeekGrid({
   clock,
   today,
   onOpen,
+  onOpenDay,
 }: {
   rows: CalendarRow[];
   bounds: number[];
-  clock: ScheduleSummary;
+  clock: WorkingHours;
   today: string;
   onOpen: (item: RowItem) => void;
+  /** A day's heading is the way into the day view, where the hours are readable. */
+  onOpenDay: (start: number) => void;
 }) {
   const days = bounds.slice(0, -1).map((start, index) => ({
     start,
@@ -85,15 +89,17 @@ export function WeekGrid({
       <div className="cal-week-head">
         <div className="cal-gutter" />
         {days.map((day) => (
-          <div
+          <button
             key={day.start}
             className="cal-day-head"
+            aria-label={`Open ${FULL_DAY.format(day.start)}`}
             data-today={new Date(day.start).toDateString() === today}
             data-off={!day.worked}
+            onClick={() => onOpenDay(day.start)}
           >
             <span>{WEEKDAY.format(day.start)}</span>
             <strong>{DAY_NUMBER.format(day.start)}</strong>
-          </div>
+          </button>
         ))}
       </div>
       {rows.map((row) => (
@@ -120,8 +126,42 @@ export function WeekGrid({
 }
 
 /**
+ * The window a day is drawn in: its working hours, widened to hold everything that happens outside
+ * them and padded by an hour, so the useful part of the day fills the track instead of a flat 24.
+ */
+function dayWindow(bounds: number[], clock: WorkingHours, rows: CalendarRow[]) {
+  const band = workingBand(bounds[0], bounds[1], clock);
+  let from = band ? band.start : bounds[0] + 8 * HOUR_MS;
+  let to = band ? band.end : bounds[0] + 18 * HOUR_MS;
+  for (const row of rows)
+    for (const item of row.items) {
+      if (item.kind === 'overnight') continue;
+      from = Math.min(from, Math.max(bounds[0], item.startsAt));
+      to = Math.max(to, Math.min(bounds[1], item.endsAt));
+    }
+  return { from: Math.max(bounds[0], from - HOUR_MS), to: Math.min(bounds[1], to + HOUR_MS) };
+}
+
+/**
+ * Blocks that would be drawn on top of each other get a line of their own. A short block still
+ * needs room for its title, so overlap is measured against a tenth of the day rather than the clock.
+ */
+function lanesOf(items: RowItem[], span: number) {
+  const minimum = span * 0.1;
+  const ends: number[] = [];
+  const placed = items.map((item) => {
+    const until = Math.max(item.endsAt, item.startsAt + minimum);
+    const free = ends.findIndex((end) => end <= item.startsAt);
+    const lane = free === -1 ? ends.length : free;
+    ends[lane] = until;
+    return { item, lane };
+  });
+  return { placed, lanes: Math.max(1, ends.length) };
+}
+
+/**
  * One day on a clock: working hours shaded, the hour now marked, and every block placed where it
- * actually falls. Overnight bands run past both edges, so a block is clipped to the day it is in.
+ * actually falls. Anything running past the day's edges is clipped to the day it is being read on.
  */
 export function DayTimeline({
   rows,
@@ -132,56 +172,71 @@ export function DayTimeline({
 }: {
   rows: CalendarRow[];
   bounds: number[];
-  clock: ScheduleSummary;
+  clock: WorkingHours;
   now: number;
   onOpen: (item: RowItem) => void;
 }) {
+  const { from, to } = dayWindow(bounds, clock, rows);
+  const span = to - from;
+  const fraction = (at: number) => Math.min(1, Math.max(0, (at - from) / span));
   const band = workingBand(bounds[0], bounds[1], clock);
   const shade = band
-    ? ({ '--from': fractionOf(band.start, bounds), '--to': fractionOf(band.end, bounds) } as CSSProperties)
+    ? ({ '--from': fraction(band.start), '--to': fraction(band.end) } as CSSProperties)
     : undefined;
-  const nowAt = now > bounds[0] && now < bounds[bounds.length - 1] ? fractionOf(now, bounds) : undefined;
+  const nowAt = now > from && now < to ? fraction(now) : undefined;
+
+  const anchor = band?.start ?? bounds[0];
+  const ticks: number[] = [];
+  for (let at = anchor - Math.ceil((anchor - from) / HOUR_MS) * HOUR_MS; at < to; at += HOUR_MS)
+    if (at >= from) ticks.push(at);
+
   return (
     <div className="cal-day card">
       <div className="cal-day-row cal-axis-row">
         <div className="cal-gutter" />
-        <div className="cal-track">
-          {AXIS_HOURS.map((hour) => (
-            <span
-              key={hour}
-              className="cal-tick"
-              style={{ '--at': hour / 24 } as CSSProperties}
-            >
-              {hourLabel(hour, clock.timezone)}
+        <div className="cal-track" style={{ '--lanes': 1 } as CSSProperties}>
+          {ticks.map((at) => (
+            <span key={at} className="cal-tick" style={{ '--at': fraction(at) } as CSSProperties}>
+              {hourLabel(localParts(at, clock.timezone).hour, clock.timezone)}
             </span>
           ))}
         </div>
       </div>
-      {rows.map((row) => (
-        <div key={row.id} className="cal-day-row" data-tower={row.tower}>
-          <RowLabel row={row} />
-          <div className="cal-track">
-            {shade && <span className="cal-shade" style={shade} />}
-            {nowAt !== undefined && (
-              <span className="cal-now" style={{ '--at': nowAt } as CSSProperties} aria-hidden="true" />
-            )}
-            {row.items.map((item) => {
-              const from = fractionOf(item.startsAt, bounds);
-              const to = fractionOf(item.endsAt, bounds);
-              return (
-                <span
-                  key={item.id}
-                  className="cal-slot"
-                  style={{ '--from': from, '--span': Math.max(0, to - from) } as CSSProperties}
-                >
-                  <Item item={item} onOpen={onOpen} />
-                </span>
-              );
-            })}
+      {rows.map((row) => {
+        const { placed, lanes } = lanesOf(row.items, span);
+        return (
+          <div key={row.id} className="cal-day-row" data-tower={row.tower}>
+            <RowLabel row={row} />
+            <div className="cal-track" style={{ '--lanes': lanes } as CSSProperties}>
+              {shade && <span className="cal-shade" style={shade} />}
+              {nowAt !== undefined && (
+                <span className="cal-now" style={{ '--at': nowAt } as CSSProperties} aria-hidden="true" />
+              )}
+              {placed.map(({ item, lane }) => {
+                const left = fraction(item.startsAt);
+                return (
+                  <span
+                    key={item.id}
+                    className="cal-slot"
+                    style={
+                      {
+                        '--from': left,
+                        '--span': fraction(item.endsAt) - left,
+                        '--lane': lane,
+                      } as CSSProperties
+                    }
+                  >
+                    <Item item={item} onOpen={onOpen} />
+                  </span>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
-      {!rows.some((row) => row.items.length) && <p className="cal-quiet">Nothing on the calendar this day.</p>}
+        );
+      })}
+      {!rows.some((row) => row.items.length) && (
+        <p className="cal-quiet">Nothing on the calendar this day.</p>
+      )}
     </div>
   );
 }

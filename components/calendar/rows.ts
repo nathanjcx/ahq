@@ -1,4 +1,4 @@
-import type { CalendarEntry, CalendarKind, CalendarStatus, Employee, ScheduleSummary } from '@/lib/contracts';
+import type { CalendarEntry, CalendarKind, CalendarStatus, Employee, WorkingHours } from '@/lib/contracts';
 import { defaultWorkspaceSettings } from '@/lib/contracts';
 import { nextWorkingStart, overnightWindow, startOfDay } from '@/lib/time';
 
@@ -6,25 +6,23 @@ const HOUR_MS = 3_600_000;
 const NOON_MS = 12 * HOUR_MS;
 
 /**
- * The clock the calendar draws in. Every workspace has one; a viewer without a workspace yet gets
- * the platform defaults in their own zone so the grid still reads as a week rather than nothing.
+ * The hours the calendar draws in. Every workspace has its own; a viewer without one yet gets the
+ * platform defaults in their own zone, so the grid still reads as a week rather than nothing.
  */
-export function calendarClock(schedule: ScheduleSummary | undefined): ScheduleSummary {
-  if (schedule) return schedule;
+export function calendarClock(schedule: WorkingHours | undefined): WorkingHours {
   const { workingDays, startHour, endHour, attendedStartHour, attendedEndHour, overnightPolicy } =
     defaultWorkspaceSettings;
-  return {
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    workingDays,
-    startHour,
-    endHour,
-    attendedStartHour,
-    attendedEndHour,
-    overnightPolicy,
-    working: false,
-    attended: false,
-    usageToday: { input: 0, cached: 0, output: 0, cap: 0 },
-  };
+  return (
+    schedule ?? {
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      workingDays,
+      startHour,
+      endHour,
+      attendedStartHour,
+      attendedEndHour,
+      overnightPolicy,
+    }
+  );
 }
 
 /** Local midnight of each day in a span, plus the boundary that closes the last one. */
@@ -35,19 +33,8 @@ export function dayStarts(from: number, days: number, timezone: string) {
   return bounds;
 }
 
-/** Where an instant falls across a span, as a fraction of its whole width. Clamped to the edges. */
-export function fractionOf(at: number, bounds: number[]) {
-  const days = bounds.length - 1;
-  if (at <= bounds[0]) return 0;
-  if (at >= bounds[days]) return 1;
-  for (let day = 0; day < days; day++)
-    if (at < bounds[day + 1])
-      return (day + (at - bounds[day]) / (bounds[day + 1] - bounds[day])) / days;
-  return 1;
-}
-
 /** The working window of a local day, or nothing when that day is not worked. */
-export function workingBand(dayStart: number, dayEnd: number, clock: ScheduleSummary) {
+export function workingBand(dayStart: number, dayEnd: number, clock: WorkingHours) {
   const start = nextWorkingStart(dayStart, clock);
   if (start === undefined || start >= dayEnd) return undefined;
   const end = overnightWindow(start + 1, clock)?.start;
@@ -96,7 +83,7 @@ function itemOf(entry: CalendarEntry): RowItem {
 }
 
 /** The nights the workspace runs on its cheap models, one band per non-working stretch in the span. */
-function overnightBands(bounds: number[], clock: ScheduleSummary): RowItem[] {
+function overnightBands(bounds: number[], clock: WorkingHours): RowItem[] {
   if (clock.overnightPolicy !== 'cheap') return [];
   const bands = new Map<number, RowItem>();
   for (let day = 0; day < bounds.length - 1; day++) {
@@ -123,7 +110,7 @@ export function calendarRows(
   entries: CalendarEntry[],
   employees: Employee[],
   bounds: number[],
-  clock: ScheduleSummary,
+  clock: WorkingHours,
 ): CalendarRow[] {
   const rows = new Map<string, CalendarRow>();
   for (const employee of employees)

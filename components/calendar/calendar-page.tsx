@@ -2,6 +2,7 @@
 
 import { CalendarDays, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { useState } from 'react';
+import type { MeetingDraft } from '../app/actions/calendar';
 import type { PageProps } from '../app/page-props';
 import { MeetingView } from '../meetings/meeting-view';
 import { EmptySection } from '../shared/empty';
@@ -79,7 +80,7 @@ export function CalendarPage({
     if (item.entry) openEntry(item.entry);
   };
 
-  const submit = async (draft: Parameters<typeof actions.scheduleMeeting>[0]) => {
+  const submit = async (draft: MeetingDraft) => {
     const editing = sheet?.entry;
     setSheet(null);
     if (editing) {
@@ -175,7 +176,17 @@ export function CalendarPage({
         narrow ? (
           <AgendaList entries={entries} bounds={bounds} today={today} onOpen={openEntry} />
         ) : view === 'week' ? (
-          <WeekGrid rows={rows} bounds={bounds} clock={clock} today={today} onOpen={openItem} />
+          <WeekGrid
+            rows={rows}
+            bounds={bounds}
+            clock={clock}
+            today={today}
+            onOpen={openItem}
+            onOpenDay={(start) => {
+              setAnchor(start + 12 * 3_600_000);
+              setView('day');
+            }}
+          />
         ) : (
           <DayTimeline rows={rows} bounds={bounds} clock={clock} now={now} onOpen={openItem} />
         )

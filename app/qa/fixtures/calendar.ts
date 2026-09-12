@@ -17,6 +17,11 @@ function mondayOfThisWeek() {
 const monday = mondayOfThisWeek();
 /** An instant this week, by weekday index from Monday and the hour of the local day. */
 const at = (day: number, hour: number, minute = 0) => monday + day * DAY + hour * HOUR + minute * 60_000;
+/** The same, on whatever day the fixture is being read, so the day view is never empty. */
+const todayIndex = (new Date().getDay() + 6) % 7;
+const todayAt = (hour: number, minute = 0) => at(todayIndex, hour, minute);
+/** The hour the live meeting is in, so it reads as happening now whenever this is opened. */
+const thisHour = new Date().getHours();
 
 const person = { kind: 'person', id: 'user_sam', name: 'Sam Okafor' } as const;
 const ada = { kind: 'employee', id: 'emp_ada', name: 'Ada' } as const;
@@ -47,7 +52,8 @@ const SHIFTS: [attendee: Attendee, title: string, day: number, from: number, to:
   [mina, 'Support triage', 4, 9, 13],
 ];
 
-const shifts: CalendarEntry[] = SHIFTS.map(
+/** Today's shifts are written out below, so the week's own rows leave that day to them. */
+const shifts: CalendarEntry[] = SHIFTS.filter(([, , day]) => day !== todayIndex).map(
   ([attendee, title, day, from, to], index): CalendarEntry => ({
     id: `shift:${index}`,
     kind: 'shift',
@@ -61,8 +67,28 @@ const shifts: CalendarEntry[] = SHIFTS.map(
   }),
 );
 
+const TODAY_SHIFTS: [attendee: Attendee, title: string, from: number, to: number][] = [
+  [ada, 'Open launch blockers', 9, 12.5],
+  [bruno, 'Migration notes', 9.5, 14],
+  [emi, 'Release notes layout', 13, 17],
+  [cyrus, 'Backfill the events table', 14, 18],
+];
+
 const entries: CalendarEntry[] = [
   ...shifts,
+  ...TODAY_SHIFTS.map(
+    ([attendee, title, from, to], index): CalendarEntry => ({
+      id: `shift:today-${index}`,
+      kind: 'shift',
+      title,
+      startsAt: todayAt(Math.floor(from), (from % 1) * 60),
+      endsAt: todayAt(Math.floor(to), (to % 1) * 60),
+      attendees: [attendee],
+      agenda: [],
+      status: todayAt(to) < Date.now() ? 'done' : 'scheduled',
+      taskId: 'task_running',
+    }),
+  ),
   {
     id: 'deadline:task_running',
     kind: 'deadline',
@@ -100,8 +126,8 @@ const entries: CalendarEntry[] = [
     id: 'cal_standup',
     kind: 'meeting',
     title: 'Launch stand-up',
-    startsAt: at(3, 10),
-    endsAt: at(3, 10, 30),
+    startsAt: todayAt(Math.min(21, thisHour + 4)),
+    endsAt: todayAt(Math.min(21, thisHour + 4), 30),
     floorId: 'proj_launch',
     attendees: [person, ada, bruno],
     agenda: ['Where the migration notes stand', 'Anything still blocking the release candidate'],
@@ -113,8 +139,8 @@ const entries: CalendarEntry[] = [
     id: 'cal_launch',
     kind: 'meeting',
     title: 'Spring launch review',
-    startsAt: at(2, 11),
-    endsAt: at(2, 12),
+    startsAt: todayAt(thisHour),
+    endsAt: todayAt(thisHour + 1),
     projectId: 'proj_launch',
     floorId: 'proj_launch',
     attendees: [person, ada, bruno, emi],
@@ -131,8 +157,8 @@ const entries: CalendarEntry[] = [
     id: 'cal_retro',
     kind: 'meeting',
     title: 'February retrospective',
-    startsAt: at(0, 15),
-    endsAt: at(0, 16),
+    startsAt: todayAt(Math.max(7, thisHour - 3)),
+    endsAt: todayAt(Math.max(7, thisHour - 3) + 1),
     floorId: 'proj_support',
     attendees: [person, cyrus, fen],
     agenda: ['What the backfill cost', 'The two regressions that reached customers'],

@@ -70,7 +70,7 @@ export function MeetingView({
     );
   };
 
-  const confirm = (turnId: string) =>
+  const confirmTurn = (turnId: string) =>
     run(async () => {
       const result = await actions.confirmOutcome(turnId);
       setResults((current) => ({ ...current, [turnId]: result }));
@@ -159,7 +159,7 @@ export function MeetingView({
                   key={turn.id}
                   turn={turn}
                   result={results[turn.id]}
-                  onConfirm={() => void confirm(turn.id)}
+                  onConfirm={() => void confirmTurn(turn.id)}
                   onDismiss={() => void run(() => actions.dismissOutcome(turn.id), 'Dismissed.')}
                   onOpenTask={onOpenTask}
                   onOpenMeeting={onOpenMeeting}
