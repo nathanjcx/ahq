@@ -372,6 +372,10 @@ p {
   min-height: 34px;
   padding: 0 12px;
 }
+.secondary-button.compact {
+  min-height: 34px;
+  padding: 0 11px;
+}
 .full {
   width: 100%;
 }
@@ -507,9 +511,6 @@ p {
 }
 .office-stage {
   background: #e6e7dd;
-}
-.office-stage .office-view {
-  height: 100%;
 }
 .office-legend {
   min-height: 41px;
@@ -760,10 +761,6 @@ p {
   display: flex;
   gap: 8px;
   flex: 0 0 auto;
-}
-.secondary-button.compact {
-  min-height: 34px;
-  padding: 0 11px;
 }
 .floor-overview {
   display: grid;
@@ -1642,114 +1639,6 @@ p {
   color: white;
   background: var(--sage-800);
 }
-/* === components/tasks/proposal-card.tsx === */
-.proposal-card {
-  max-width: 720px;
-  margin: 19px 0 23px 40px;
-  overflow: hidden;
-  border: 1px solid #e1d4bc;
-  border-radius: 9px;
-  background: #fffcf3;
-  box-shadow: 0 6px 20px rgba(92, 73, 42, 0.06);
-}
-.proposal-head {
-  display: grid;
-  grid-template-columns: 35px minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-  padding: 14px;
-  border-bottom: 1px solid #e9dfcc;
-}
-.proposal-icon {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  color: #9a702f;
-  border-radius: 8px;
-  background: #f5e9ce;
-}
-.proposal-head h3 {
-  font-size: 11px;
-}
-.proposal-head .eyebrow {
-  margin-bottom: 3px;
-  color: #9a7c4e;
-}
-.proposal-status {
-  padding: 4px 8px;
-  border-radius: 999px;
-  color: #8c692f;
-  background: #f3e6ca;
-  font-size: 7px;
-  font-weight: 760;
-  text-transform: uppercase;
-}
-.proposal-approved,
-.proposal-succeeded {
-  color: #4c7549;
-  background: #e6f0e1;
-}
-.proposal-rejected,
-.proposal-failed {
-  color: #a05248;
-  background: #f5e4e1;
-}
-.proposal-diff {
-  padding: 13px 14px;
-}
-.proposal-diff > span {
-  color: #9a896c;
-  font-size: 8px;
-  font-weight: 680;
-}
-.proposal-diff pre {
-  max-height: 180px;
-  overflow: auto;
-  margin: 7px 0 0;
-  padding: 11px;
-  color: #405043;
-  border-radius: 6px;
-  background: #f3f2e9;
-  font:
-    9px/1.6 ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
-  white-space: pre-wrap;
-}
-.correction-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  margin: 0 14px 12px;
-  color: #766f62;
-  font-size: 8px;
-}
-.correction-note strong {
-  color: #575449;
-}
-.proposal-decision {
-  margin: 0 14px 12px;
-  color: var(--muted);
-  font-size: 8px;
-}
-.proposal-locked {
-  flex: 1;
-  color: var(--muted);
-  font-size: 8px;
-}
-.proposal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 11px 14px;
-  border-top: 1px solid #e9dfcc;
-  background: #fcf8ee;
-}
-.correction-button {
-  margin: 0 14px 12px;
-}
 
 /* === components/files/files-page.tsx === */
 .file-grid {
@@ -2457,13 +2346,11 @@ p {
   font-size: 8px;
   font-style: italic;
 }
-.connection-account small {
-  display: block;
-}
 .connection-account strong {
   font-size: 9px;
 }
 .connection-account small {
+  display: block;
   color: var(--muted);
   font-size: 7px;
 }
@@ -3526,9 +3413,6 @@ p {
   .conversation-head {
     align-items: flex-start;
     flex-direction: column;
-  }
-  .proposal-card {
-    margin-left: 0;
   }
   .message-stream {
     padding: 18px;

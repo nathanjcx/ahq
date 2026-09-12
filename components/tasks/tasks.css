@@ -191,11 +191,86 @@
 }
 
 /* === components/tasks/proposal-card.tsx === */
-.proposal-card .correction-note,
-.proposal-card .proposal-locked,
-.proposal-card .proposal-decision {
+.proposal-card {
+  max-width: 720px;
+  margin: 19px 0 23px 40px;
+  overflow: hidden;
+  border: 1px solid #e1d4bc;
+  border-radius: 9px;
+  background: #fffcf3;
+  box-shadow: 0 6px 20px rgba(92, 73, 42, 0.06);
+}
+.proposal-head {
+  display: grid;
+  grid-template-columns: 35px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 14px;
+  border-bottom: 1px solid #e9dfcc;
+}
+.proposal-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: #9a702f;
+  border-radius: 8px;
+  background: #f5e9ce;
+}
+.proposal-head h3 {
+  font-size: 11px;
+}
+.proposal-head .eyebrow {
+  margin-bottom: 3px;
+  color: #9a7c4e;
+}
+.proposal-status {
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #8c692f;
+  background: #f3e6ca;
+  font-size: 7px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+.proposal-approved,
+.proposal-succeeded {
+  color: #4c7549;
+  background: #e6f0e1;
+}
+.proposal-rejected,
+.proposal-failed {
+  color: #a05248;
+  background: #f5e4e1;
+}
+.correction-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0 14px 12px;
+  color: #766f62;
   font-size: 10px;
   line-height: 1.55;
+}
+.proposal-decision {
+  margin: 0 14px 12px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+.proposal-locked {
+  flex: 1;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+.proposal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 11px 14px;
+  border-top: 1px solid #e9dfcc;
+  background: #fcf8ee;
 }
 .proposal-meta {
   display: flex;
@@ -445,6 +520,9 @@
   }
   .state-diff-pair .diff-after::before {
     content: 'After ';
+  }
+  .proposal-card {
+    margin-left: 0;
   }
   .proposal-body {
     padding: 4px 12px 12px;
