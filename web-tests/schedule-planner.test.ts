@@ -174,7 +174,10 @@ describe('the reserved teams', () => {
   it('leaves an auditor or janitor without a standing task alone', () => {
     expect(
       planTick(
-        input({ now: mondayNight, instances: [worker('aud', { kind: 'auditor' }), worker('jan', { kind: 'janitor' })] }),
+        input({
+          now: mondayNight,
+          instances: [worker('aud', { kind: 'auditor' }), worker('jan', { kind: 'janitor' })],
+        }),
       ),
     ).toEqual([]);
   });
@@ -198,7 +201,9 @@ describe('triage and preparation', () => {
       ['triage', 'bad', 'triage:bad'],
     ]);
     expect(planTick({ ...plan, now: mondayNight })).toHaveLength(1);
-    expect(planTick({ ...plan, instances: [responder, worker('two', { kind: 'triage', standingTaskId: 't2' })] })).toHaveLength(2);
+    expect(
+      planTick({ ...plan, instances: [responder, worker('two', { kind: 'triage', standingTaskId: 't2' })] }),
+    ).toHaveLength(2);
   });
 
   it('runs an alert in the task triage already opened for it', () => {

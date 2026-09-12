@@ -1,5 +1,6 @@
 import {
   defaultWorkspaceSettings,
+  type ScheduleSummary,
   type Cadence,
   type EmployeeKind,
   type ModelId,
@@ -10,7 +11,14 @@ import {
 import type { Doc, Id } from '../_generated/dataModel';
 import type { MutationCtx } from '../_generated/server';
 import type { Ctx } from '../shared';
-import { dateKey, isWorkingTime, overnightWindow, workingHoursBetween } from './time';
+import {
+  dateKey,
+  isAttendedTime,
+  isWorkingTime,
+  overnightWindow,
+  startOfDay,
+  workingHoursBetween,
+} from './time';
 
 /** The zone a workspace gets until an administrator picks one. */
 export const FALLBACK_TIMEZONE = 'UTC';
@@ -49,6 +57,57 @@ export async function settingsFor(ctx: Ctx, workspaceId: Id<'workspaces'>): Prom
   };
   if (isMutation(ctx)) await ctx.db.insert('workspaceSettings', { workspaceId, ...values });
   return values;
+}
+
+/** The schedule as the office reads it: the hours, where the clock stands in them, today's tokens. */
+export async function scheduleSummaryFor(
+  ctx: Ctx,
+  workspaceId: Id<'workspaces'>,
+  settings: WorkspaceSettings,
+  now: number,
+): Promise<ScheduleSummary> {
+  const { usage } = await dailyUsageFor(ctx, workspaceId, settings, now);
+  return {
+    timezone: settings.timezone,
+    workingDays: settings.workingDays,
+    startHour: settings.startHour,
+    endHour: settings.endHour,
+    attendedStartHour: settings.attendedStartHour,
+    attendedEndHour: settings.attendedEndHour,
+    overnightPolicy: settings.overnightPolicy,
+    working: isWorkingTime(now, settings),
+    attended: isAttendedTime(now, settings),
+    usageToday: { ...usage, cap: settings.dailyTokenCap },
+  };
+}
+
+/** Rows walked back through `usageReports` before a day's total is treated as good enough. */
+const USAGE_SCAN_LIMIT = 5_000;
+
+/**
+ * Today's recorded tokens for one workspace, and the share each task accounts for so the tick can
+ * measure triage against its own allowance. `usageReports` is keyed by task, so this walks back from
+ * the newest rows and stops at the local day boundary rather than scanning the table.
+ */
+export async function dailyUsageFor(
+  ctx: Ctx,
+  workspaceId: Id<'workspaces'>,
+  settings: WorkspaceSettings,
+  now: number,
+) {
+  const since = startOfDay(now, settings.timezone);
+  const usage = { input: 0, cached: 0, output: 0 };
+  const tokensByTask = new Map<string, number>();
+  let examined = 0;
+  for await (const row of ctx.db.query('usageReports').order('desc')) {
+    if (++examined > USAGE_SCAN_LIMIT || row.createdAt < since) break;
+    if (row.workspaceId !== workspaceId) continue;
+    usage.input += row.input;
+    usage.cached += row.cached;
+    usage.output += row.output;
+    tokensByTask.set(row.taskId, (tokensByTask.get(row.taskId) ?? 0) + row.input + row.output);
+  }
+  return { usage, tokensByTask };
 }
 
 /**
@@ -198,8 +257,7 @@ export function planTick(input: PlannerInput): PlannedJob[] {
     planned.push(job);
   };
 
-  const triageSpent =
-    settings.triageAllowance > 0 && input.triageUsageToday >= settings.triageAllowance;
+  const triageSpent = settings.triageAllowance > 0 && input.triageUsageToday >= settings.triageAllowance;
   if (!triageSpent) {
     const responders = input.instances.filter(
       (instance) => instance.kind === 'triage' && instance.standingTaskId,

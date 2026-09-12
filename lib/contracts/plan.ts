@@ -57,3 +57,28 @@ export const defaultWorkspaceSettings: Omit<WorkspaceSettings, 'timezone' | 'upd
   rates: [],
   standards: '',
 };
+
+/** Instances and the parallelism a workspace has right now. One instance runs one shift. */
+export interface Capacity {
+  instances: number;
+  maxConcurrentInstances: number;
+  runningShifts: number;
+  freeSlots: number;
+}
+/** What work would consume, against a subscription allowance or the workspace's own rates. */
+export interface PlanProjection {
+  plan: PlanKind;
+  /** Tokens already recorded this period. */
+  usedTokens: number;
+  /** Tokens the caller asked to project on top of what is recorded. */
+  projectedTokens: number;
+  monthlyAllowance: number;
+  /** Share of the allowance consumed once the projection lands; zero without an allowance. */
+  allowanceUsed: number;
+  overAllowance: boolean;
+  /** Estimated spend from the admin-maintained rates. Undefined when no rate is set. */
+  estimatedCost?: number;
+  /** Models with recorded usage and no rate, so the interface can say the estimate is incomplete. */
+  unpricedModels: ModelId[];
+  capacity: Capacity;
+}

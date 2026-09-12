@@ -2,6 +2,8 @@ import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import type { QueryCtx } from './_generated/server';
+import { scheduleSummaryFor, settingsFor } from './lib/schedule';
+import { periodUsage } from './lib/tasks';
 import { registryToolsFor } from './registry';
 import {
   authKey,
@@ -15,7 +17,6 @@ import {
   usagePeriod,
   workspaceForIdentity,
 } from './shared';
-import { periodUsage } from './lib/tasks';
 
 /** Statuses the workspace is still waiting on; only these carry a live message into the office. */
 const ACTIVE_TASK_STATUSES = ['queued', 'running', 'awaiting_approval'];
@@ -91,6 +92,7 @@ export const dashboard = query({
         artifacts: [],
       };
     const { workspace, role } = found;
+    const settings = await settingsFor(ctx, workspace._id);
     const [installations, allConnections, floors, tasks, events, proposals, inbox, artifacts, usage] =
       await Promise.all([
         ctx.db
@@ -188,6 +190,8 @@ export const dashboard = query({
       openHandoffs.set(floor._id, posts.filter((post) => post.handoff?.status === 'pending').length);
     }
     return {
+      settings,
+      schedule: await scheduleSummaryFor(ctx, workspace._id, settings, Date.now()),
       workspace: {
         id: workspace._id,
         name: workspace.name,

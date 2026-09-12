@@ -1,2 +1,10 @@
-/** Convex references for the calendar domain. Filled by the calendar workstream; keep names in UI terms. */
-export const calendarApi = {} as const;
+import { api } from '@/convex/_generated/api';
+
+/** Convex references for the calendar domain. The generated references keep the names honest. */
+export const calendarApi = {
+  calendarEntries: api.calendar.entries,
+  createMeeting: api.calendar.createMeeting,
+  updateMeeting: api.calendar.updateMeeting,
+  cancelMeeting: api.calendar.cancelMeeting,
+  suggestAgenda: api.calendar.suggestAgenda,
+} as const;

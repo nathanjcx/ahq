@@ -1,3 +1,6 @@
+import type { WorkspaceSettings } from './plan';
+import type { ScheduleSummary } from './schedule';
+
 export type ModelId = 'gpt-5.6-luna' | 'gpt-5.6-terra' | 'gpt-5.6-sol' | 'gpt-6-astra';
 export type ProviderId = 'linear' | 'slack' | 'github' | 'google-workspace' | 'canva';
 export type TaskStatus =
@@ -230,6 +233,9 @@ export interface Dashboard {
   proposals: ActionProposal[];
   inbox: InboxItem[];
   artifacts: Artifact[];
+  /** Absent until the viewer has a workspace. */
+  settings?: WorkspaceSettings;
+  schedule?: ScheduleSummary;
 }
 export const emptyDashboard: Dashboard = {
   workspace: null,

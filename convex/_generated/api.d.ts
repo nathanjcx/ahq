@@ -16,7 +16,10 @@ import type * as integrations from "../integrations.js";
 import type * as maintenance from "../maintenance.js";
 import type * as marketplace from "../marketplace.js";
 import type * as floors from "../floors.js";
+import type * as plan from "../plan.js";
 import type * as registry from "../registry.js";
+import type * as calendar from "../calendar.js";
+import type * as schedule from "../schedule.js";
 import type * as services_actions from "../services/actions.js";
 import type * as services_artifacts from "../services/artifacts.js";
 import type * as services_config from "../services/config.js";
@@ -24,12 +27,16 @@ import type * as services_context from "../services/context.js";
 import type * as services_floors from "../services/floors.js";
 import type * as services_inbox from "../services/inbox.js";
 import type * as services_integrations from "../services/integrations.js";
+import type * as services_calendar from "../services/calendar.js";
 import type * as services_queue from "../services/queue.js";
+import type * as services_schedule from "../services/schedule.js";
 import type * as services_sessions from "../services/sessions.js";
 import type * as shared from "../shared.js";
 import type * as tasks from "../tasks.js";
 import type * as lib_posts from "../lib/posts.js";
+import type * as lib_schedule from "../lib/schedule.js";
 import type * as lib_tasks from "../lib/tasks.js";
+import type * as lib_time from "../lib/time.js";
 import type * as workspace from "../workspace.js";
 
 import type {
@@ -47,7 +54,10 @@ declare const fullApi: ApiFromModules<{
   maintenance: typeof maintenance;
   marketplace: typeof marketplace;
   floors: typeof floors;
+  plan: typeof plan;
   registry: typeof registry;
+  calendar: typeof calendar;
+  schedule: typeof schedule;
   "services/actions": typeof services_actions;
   "services/artifacts": typeof services_artifacts;
   "services/config": typeof services_config;
@@ -55,12 +65,16 @@ declare const fullApi: ApiFromModules<{
   "services/floors": typeof services_floors;
   "services/inbox": typeof services_inbox;
   "services/integrations": typeof services_integrations;
+  "services/calendar": typeof services_calendar;
   "services/queue": typeof services_queue;
+  "services/schedule": typeof services_schedule;
   "services/sessions": typeof services_sessions;
   shared: typeof shared;
   tasks: typeof tasks;
   "lib/posts": typeof lib_posts;
+  "lib/schedule": typeof lib_schedule;
   "lib/tasks": typeof lib_tasks;
+  "lib/time": typeof lib_time;
   workspace: typeof workspace;
 }>;
 
