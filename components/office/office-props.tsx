@@ -4,9 +4,12 @@ import { useEffect, useState } from 'react';
 import type { JSX, ReactNode } from 'react';
 import {
   boardLayout,
-  BOARD_COLUMNS,
-  BOARD_ROWS,
+  cardCenter,
+  BOARD_FACE_Y,
+  BOARD_HEIGHT,
+  BOARD_WIDTH,
   CALENDAR_ENTRIES,
+  CARD_TILE,
   type BoardCard,
   type BoardStatus,
   type CalendarEntry,
@@ -30,13 +33,16 @@ export type OfficePropKind =
   | 'shelf'
   | 'calendar'
   | 'alerts'
-  | 'lift';
+  | 'lift'
+  | 'notice';
 
 export type SelectProp = (kind: OfficePropKind, id?: string) => void;
 
 const AMBER = '#e8a54f';
 const RED = '#c2543f';
 const PAPER = '#f1ead6';
+
+const PICKABLE = { interactive: true };
 
 /** A prop the viewer can pick, with the office's pointer cursor while it is under the mouse. */
 export function Pickable({
@@ -61,6 +67,8 @@ export function Pickable({
   }, [hovered, onSelectProp]);
   return (
     <group
+      // The merge pass walks around anything a click has to land on.
+      userData={PICKABLE}
       onClick={(event) => {
         if (!onSelectProp) return;
         event.stopPropagation();
@@ -199,26 +207,12 @@ export function FindingsFolder({
   );
 }
 
-/** The task board's face, and the tile grid the cards sit in, in world units. */
-const BOARD_WIDTH = 2.72;
-const BOARD_HEIGHT = 1.58;
-const CARD_STEP_X = 0.86;
-const CARD_STEP_Y = 0.49;
-const CARD_TILE: [number, number] = [0.76, 0.4];
 export const STATUS_COLOR: Record<BoardStatus, string> = {
   active: '#6f9e5c',
   waiting: '#e0b262',
   blocked: '#c2543f',
   done: '#97a696',
 };
-
-/** Where a card's tile sits on the board's face. */
-function cardCenter(column: number, row: number): { x: number; y: number } {
-  return {
-    x: (column - (BOARD_COLUMNS - 1) / 2) * CARD_STEP_X,
-    y: ((BOARD_ROWS - 1) / 2 - row) * CARD_STEP_Y,
-  };
-}
 
 /**
  * The floor's task board: a card per task, coloured by status, with a string
@@ -251,7 +245,7 @@ export function TaskBoard({
           <Box p={[side * 1.1, 0.02, 0.24]} s={[0.1, 0.04, 0.5]} color={C.walnut} />
         </group>
       ))}
-      <group position={[0, 1.72, 0]}>
+      <group position={[0, BOARD_FACE_Y, 0]}>
         <Round s={[BOARD_WIDTH + 0.14, BOARD_HEIGHT + 0.14, 0.07]} color={C.walnut} radius={0.03} />
         <Box p={[0, 0, 0.04]} s={[BOARD_WIDTH, BOARD_HEIGHT, 0.012]} color="#3c4a40" />
         {board.strings.map((string) => {
@@ -509,5 +503,70 @@ export function OvernightLamp({ position }: { position: Point }): JSX.Element {
       <Halo p={[0, -0.05, 0]} size={[3.2, 3.2]} opacity={0.8} />
       <pointLight position={[0, -0.02, 0]} color="#ffdd9b" intensity={5} distance={5} decay={2} />
     </group>
+  );
+}
+
+/**
+ * The string a waiting task lives on: taut from whoever is waiting to the card
+ * they are waiting for, with a tag at the near end. Amber for waiting, red for
+ * blocked, the same two colours the board's cards use.
+ */
+export function WaitingString({
+  from,
+  to,
+  blocked = false,
+}: {
+  from: Point;
+  to: Point;
+  blocked?: boolean;
+}): JSX.Element | null {
+  const [dx, dy, dz] = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
+  const length = Math.hypot(dx, dy, dz);
+  if (length < 0.2) return null;
+  const color = blocked ? STATUS_COLOR.blocked : STATUS_COLOR.waiting;
+  return (
+    <group
+      position={[from[0] + dx / 2, from[1] + dy / 2, from[2] + dz / 2]}
+      rotation={[0, Math.atan2(-dz, dx), Math.asin(dy / length)]}
+    >
+      <Box s={[length, 0.028, 0.028]} color={color} roughness={0.9} />
+      {/* The tag hangs at the waiting end, where the figure can see it. */}
+      <Box p={[-length / 2 + 0.2, -0.1, 0]} s={[0.3, 0.18, 0.012]} color={PAPER} />
+      <Box p={[-length / 2 + 0.2, -0.1, 0.009]} s={[0.08, 0.18, 0.008]} color={color} />
+    </group>
+  );
+}
+
+/**
+ * The notice triage leaves when it merged or deployed without waiting for a
+ * person: a sheet by the door with a red stamp across it. It stays until
+ * somebody acknowledges it.
+ */
+export function EmergencyNotice({
+  position,
+  rotation,
+  onSelectProp,
+}: {
+  position: Point;
+  rotation?: Point;
+  onSelectProp?: SelectProp;
+}): JSX.Element {
+  return (
+    <Pickable kind="notice" onSelectProp={onSelectProp}>
+      <group position={position} rotation={rotation}>
+        <Box s={[0.78, 1.04, 0.03]} color="#2f3d35" />
+        <Box p={[0, 0, 0.022]} s={[0.7, 0.94, 0.012]} color={PAPER} />
+        {[0.3, 0.19, -0.22, -0.31, -0.4].map((y) => (
+          <Box key={y} p={[-0.02, y, 0.03]} s={[0.52, 0.032, 0.006]} color="#a9ac96" />
+        ))}
+        {/* The stamp, struck across the sheet at an angle. */}
+        <group position={[0, -0.02, 0.034]} rotation={[0, 0, 0.18]}>
+          <Box s={[0.62, 0.22, 0.006]} color={RED} />
+          <Box s={[0.58, 0.15, 0.008]} color={PAPER} />
+          <Box s={[0.5, 0.05, 0.01]} color={RED} />
+        </group>
+        <GlowBar p={[0, 0.54, 0.032]} s={[0.66, 0.02, 0.01]} color="#ff9c6a" />
+      </group>
+    </Pickable>
   );
 }

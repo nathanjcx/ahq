@@ -183,3 +183,97 @@
     font-size: 12px;
   }
 }
+
+/* The day replay: the office with a day under it, and one line saying where the
+   scrubber is standing. The stage keeps the height it was given. */
+.office-day {
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.office-day > .office-view {
+  min-height: 0;
+  border-radius: 10px;
+}
+
+.office-day-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 2px;
+}
+
+.office-day-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #6f7f68;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.office-day-date input,
+.office-day-bar > button {
+  border: 1px solid #dce4d4;
+  border-radius: 6px;
+  background: #fbfcf6;
+  padding: 4px 8px;
+  color: #34433a;
+  font: inherit;
+  font-size: 12px;
+}
+
+.office-day-bar > button {
+  cursor: pointer;
+}
+
+.office-day-bar > button:hover:not(:disabled) {
+  border-color: #b9c8b0;
+}
+
+.office-day-date input:disabled,
+.office-day-bar > button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.office-day-scrub {
+  flex: 1;
+  min-width: 120px;
+  accent-color: #738c65;
+}
+
+.office-day-clock {
+  min-width: 54px;
+  color: #34433a;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.office-day-moment {
+  margin: 0;
+  min-height: 17px;
+  padding: 0 2px;
+  color: #6f7f68;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 620px) {
+  .office-day-bar {
+    flex-wrap: wrap;
+  }
+
+  .office-day-scrub {
+    order: 3;
+    flex-basis: 100%;
+  }
+}

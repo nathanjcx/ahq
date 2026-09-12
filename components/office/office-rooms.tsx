@@ -4,6 +4,7 @@ import type { JSX, ReactNode } from 'react';
 import { OperationsDisplay } from './office-details';
 import { Chair, Desk, Plant } from './office-furniture';
 import { boardroomSeats, shelfLayout, TABLE, type ShelfPlacement, type ShelfSpec } from './office-layout';
+import { Static } from './office-merge';
 import { Box, C, Cylinder, GlowBar, Halo, Round, type Point } from './office-primitives';
 import { JanitorCart, LiftDoor, Pickable, type SelectProp } from './office-props';
 
@@ -126,61 +127,71 @@ function RecordsShelf({ shelf, onSelectProp }: { shelf: ShelfPlacement; onSelect
   const doors = shelf.scope === 'workspace';
   return (
     <Pickable kind="shelf" id={shelf.name} onSelectProp={onSelectProp}>
-      <group position={shelf.position}>
-        <Box p={[0, 1.12, -0.3]} s={[1.8, 2.24, 0.06]} color="#6f7f72" />
-        {[-1, 1].map((side) => (
-          <Round key={side} p={[side * 0.87, 1.12, 0]} s={[0.07, 2.24, 0.62]} color="#7f8f80" radius={0.02} />
-        ))}
-        <Round p={[0, 2.26, 0]} s={[1.86, 0.08, 0.66]} color="#7f8f80" radius={0.02} />
-        <Box p={[0, 0.06, 0]} s={[1.8, 0.12, 0.62]} color="#4d5b51" />
-        {/* A painted colour band names the scope from across the room. */}
-        <Box p={[0, 2.33, 0.28]} s={[1.5, 0.055, 0.03]} color={color} />
-        {ROW_Y.map((y, row) => (
-          <group key={y}>
-            <Box p={[0, y - 0.27, 0]} s={[1.72, 0.055, 0.6]} color="#93a293" />
-            {drawers ? (
-              <group>
-                <Round p={[0, y, 0.3]} s={[1.66, 0.47, 0.07]} color="#a7b5a2" radius={0.02} />
-                <Box p={[0, y + 0.02, 0.35]} s={[0.3, 0.075, 0.025]} color={C.brass} />
-                <Box
-                  p={[-0.55, y + 0.14, 0.35]}
-                  s={[0.42, 0.1, 0.02]}
-                  color={row * SHELF_SLOTS < filled ? color : '#dcd8c4'}
-                />
-              </group>
-            ) : doors && row > 1 ? (
-              <group>
-                <Round p={[0, y, 0.3]} s={[1.66, 0.5, 0.05]} color="#a7b5a2" radius={0.02} />
-                {[-1, 1].map((side) => (
-                  <Cylinder
-                    key={side}
-                    p={[side * 0.1, y, 0.34]}
-                    radius={0.018}
-                    height={0.24}
-                    color={C.brass}
+      {/* Nine binders a row, four rows, six casework runs: merged inside the
+          Pickable, so the merged copy is what the click lands on. */}
+      <Static revision={`${shelf.name} ${filled} ${contested}`}>
+        <group position={shelf.position}>
+          <Box p={[0, 1.12, -0.3]} s={[1.8, 2.24, 0.06]} color="#6f7f72" />
+          {[-1, 1].map((side) => (
+            <Round
+              key={side}
+              p={[side * 0.87, 1.12, 0]}
+              s={[0.07, 2.24, 0.62]}
+              color="#7f8f80"
+              radius={0.02}
+            />
+          ))}
+          <Round p={[0, 2.26, 0]} s={[1.86, 0.08, 0.66]} color="#7f8f80" radius={0.02} />
+          <Box p={[0, 0.06, 0]} s={[1.8, 0.12, 0.62]} color="#4d5b51" />
+          {/* A painted colour band names the scope from across the room. */}
+          <Box p={[0, 2.33, 0.28]} s={[1.5, 0.055, 0.03]} color={color} />
+          {ROW_Y.map((y, row) => (
+            <group key={y}>
+              <Box p={[0, y - 0.27, 0]} s={[1.72, 0.055, 0.6]} color="#93a293" />
+              {drawers ? (
+                <group>
+                  <Round p={[0, y, 0.3]} s={[1.66, 0.47, 0.07]} color="#a7b5a2" radius={0.02} />
+                  <Box p={[0, y + 0.02, 0.35]} s={[0.3, 0.075, 0.025]} color={C.brass} />
+                  <Box
+                    p={[-0.55, y + 0.14, 0.35]}
+                    s={[0.42, 0.1, 0.02]}
+                    color={row * SHELF_SLOTS < filled ? color : '#dcd8c4'}
                   />
-                ))}
-              </group>
-            ) : (
-              Array.from({ length: SHELF_SLOTS }, (_, i) => {
-                const index = row * SHELF_SLOTS + i;
-                if (index >= filled) return null;
-                const red = index >= filled - contested;
-                return (
-                  <group key={i}>
-                    <Box
-                      p={[-0.72 + i * 0.18, y - 0.05, 0.02]}
-                      s={[0.15, 0.38 + (i % 3) * 0.03, 0.5]}
-                      color={red ? '#b6503c' : i % 4 === 0 ? '#d7cdb2' : color}
+                </group>
+              ) : doors && row > 1 ? (
+                <group>
+                  <Round p={[0, y, 0.3]} s={[1.66, 0.5, 0.05]} color="#a7b5a2" radius={0.02} />
+                  {[-1, 1].map((side) => (
+                    <Cylinder
+                      key={side}
+                      p={[side * 0.1, y, 0.34]}
+                      radius={0.018}
+                      height={0.24}
+                      color={C.brass}
                     />
-                    <Box p={[-0.72 + i * 0.18, y + 0.06, 0.272]} s={[0.1, 0.075, 0.006]} color="#efe9d8" />
-                  </group>
-                );
-              })
-            )}
-          </group>
-        ))}
-      </group>
+                  ))}
+                </group>
+              ) : (
+                Array.from({ length: SHELF_SLOTS }, (_, i) => {
+                  const index = row * SHELF_SLOTS + i;
+                  if (index >= filled) return null;
+                  const red = index >= filled - contested;
+                  return (
+                    <group key={i}>
+                      <Box
+                        p={[-0.72 + i * 0.18, y - 0.05, 0.02]}
+                        s={[0.15, 0.38 + (i % 3) * 0.03, 0.5]}
+                        color={red ? '#b6503c' : i % 4 === 0 ? '#d7cdb2' : color}
+                      />
+                      <Box p={[-0.72 + i * 0.18, y + 0.06, 0.272]} s={[0.1, 0.075, 0.006]} color="#efe9d8" />
+                    </group>
+                  );
+                })
+              )}
+            </group>
+          ))}
+        </group>
+      </Static>
     </Pickable>
   );
 }

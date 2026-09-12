@@ -1,12 +1,15 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { Activity, EmployeeActivity } from '@/components/office/activity';
+import { DAY_MS, type DayRecord } from '@/components/office/day-replay';
+import { DayReplay } from '@/components/office/office-day';
 import type { LabelMode } from '@/components/office/office-labels';
 import type { BoardCard, ShelfSpec } from '@/components/office/office-layout';
 import type { EmployeeKind } from '@/components/office/office-people';
 import type { OfficeDressing, OfficeEmployee, OfficeProvider } from '@/components/office/office-scene';
 import { OfficeStage, type OfficeSceneData } from '@/components/office/office-stage';
+import type { RenderStats } from '@/components/office/office-view';
 
 /**
  * Presets are the scenes the baselines photograph. Each is fully determined by its name, the hour,
@@ -59,6 +62,8 @@ type Preset = {
   label: string;
   lightBudget?: number;
   providers?: boolean;
+  /** Extra state per person: what they are waiting on, whose desk they are at, which alert. */
+  detail?: (ids: string[], index: number) => Partial<EmployeeActivity>;
   /** Everything past the people: the room, its props, the schedule, the meeting. */
   dressing?: (ids: string[]) => OfficeDressing;
 };
@@ -142,6 +147,56 @@ const PRESETS: Record<string, Preset> = {
     label: 'Triage',
     dressing: () => ({ room: 'triage', incident: true, incidentCount: 3 }),
   },
+  'day-replay': {
+    roles: [undefined, undefined, undefined, undefined],
+    label: 'Floor 1 · Release desk · Wednesday 9 September',
+    providers: false,
+  },
+  'meeting-live': {
+    roles: ['presenting', 'answering', 'thinking', 'thinking', 'reading'],
+    label: 'Boardroom · September release review',
+    providers: false,
+    dressing: (ids) => ({
+      room: 'boardroom',
+      meeting: { attendeeIds: ids.slice(0, 5), speakingId: ids[0], live: true },
+    }),
+  },
+  'audit-night': {
+    roles: ['auditing', 'reporting', 'uneasy', 'off_shift', 'off_shift'],
+    kinds: ['auditor'],
+    label: FLOOR_LABEL,
+    lightBudget: 0.55,
+    detail: (ids, index) => (index === 0 ? { visitingId: ids[2] } : {}),
+    dressing: (ids) => ({
+      schedule: { working: false, attended: false, overnightCheap: true },
+      memory: {
+        floorFill: 0.62,
+        agentFills: new Map(ids.map((id, index) => [id, [0.7, 0.4, 0.55, 0.2, 0.3][index] ?? 0.4])),
+        contested: 1,
+      },
+      findings: new Map([[ids[2], 2]]),
+    }),
+  },
+  incident: {
+    roles: ['triaging', 'writing', 'waiting', 'blocked', 'thinking'],
+    kinds: ['triage'],
+    label: FLOOR_LABEL,
+    // A chain the floor can read: Emi is blocked on Cyrus, Cyrus is waiting on
+    // Bruno, and Bruno is the one writing. The board card lives on `floor-props`.
+    detail: (ids, index) =>
+      index === 0
+        ? { alertId: 'alr_1' }
+        : index === 2
+          ? { waitingOn: 'c2', waitingOnId: ids[1] }
+          : index === 3
+            ? { waitingOn: 'c3', waitingOnId: ids[2] }
+            : {},
+    dressing: () => ({
+      incident: true,
+      incidentCount: 2,
+      emergency: { title: 'Deployed the checkout fix without approval.', since: NOW - 900_000 },
+    }),
+  },
 };
 
 const PROVIDERS: OfficeProvider[] = [
@@ -169,6 +224,10 @@ function buildScene(name: string, hour: number, seed: number) {
     if (!activity) return;
     const partner = activity === 'talking' ? employees[index % 2 === 0 ? index + 1 : index - 1] : undefined;
     activities.set(employee.id, {
+      ...preset.detail?.(
+        employees.map((item) => item.id),
+        index,
+      ),
       activity,
       since: NOW - 10_000 - index * 1_000,
       bubble:
@@ -197,27 +256,211 @@ function buildScene(name: string, hour: number, seed: number) {
   return { employees, scene, label: preset.label };
 }
 
+/**
+ * One recorded day on the release desk, to the minute: three people on shift, a
+ * meeting at eleven, an alert in the afternoon that triage takes without waiting
+ * for an answer, and the night's audit leaving a finding on Bruno's desk.
+ */
+const REPLAY_DAY = new Date(2026, 8, 9).getTime();
+const hours = (value: number) => REPLAY_DAY + value * 3_600_000;
+
+function replayRecord(employees: OfficeEmployee[]): DayRecord {
+  const [ada, bruno, cyrus, emi] = employees.map((employee) => employee.id);
+  const session = (
+    id: string,
+    employeeId: string,
+    employeeName: string,
+    kind: 'triage' | 'audit',
+    from: number,
+    to: number,
+  ) => ({
+    id,
+    floorId: 'flr_1',
+    employeeId,
+    employeeName,
+    kind,
+    createdBy: 'system',
+    createdByName: 'Astra HQ',
+    isOwner: true,
+    visibility: 'workspace' as const,
+    title: kind === 'triage' ? 'Checkout incident' : 'Nightly audit',
+    prompt: '',
+    status: 'completed' as const,
+    createdAt: from,
+    updatedAt: to,
+    model: 'gpt-5.6-terra' as const,
+  });
+  return {
+    from: REPLAY_DAY,
+    to: REPLAY_DAY + DAY_MS,
+    employees: employees.map((employee) => ({ id: employee.id, name: employee.name })),
+    schedule: {
+      timezone: 'Europe/London',
+      workingDays: [1, 2, 3, 4, 5],
+      startHour: 9,
+      endHour: 18,
+      attendedStartHour: 9,
+      attendedEndHour: 18,
+      overnightPolicy: 'cheap',
+      working: true,
+      attended: true,
+      usageToday: { input: 0, output: 0, cached: 0, cap: 0 },
+    },
+    tasks: [session('tsk_triage', emi, 'Emi', 'triage', hours(14.4), hours(16))],
+    shifts: [
+      { employeeId: ada, startedAt: hours(9), endedAt: hours(17.5) },
+      { employeeId: bruno, startedAt: hours(9.1), endedAt: hours(17.8) },
+      { employeeId: cyrus, startedAt: hours(9.3), endedAt: hours(18) },
+    ],
+    meetings: [
+      {
+        entry: {
+          id: 'cal_review',
+          kind: 'meeting',
+          title: 'September release review',
+          startsAt: hours(11),
+          endsAt: hours(11.75),
+          attendees: employees.slice(0, 3).map((employee) => ({
+            kind: 'employee' as const,
+            id: employee.id,
+            name: employee.name,
+          })),
+          agenda: ['Changelog sign-off', 'Pricing page'],
+          status: 'scheduled',
+        },
+        meeting: {
+          id: 'mtg_review',
+          calendarEntryId: 'cal_review',
+          status: 'closed',
+          openedAt: hours(11.03),
+          closedAt: hours(11.7),
+          turns: [
+            {
+              id: 'trn_1',
+              kind: 'question',
+              authorName: 'Sam',
+              addressedTo: [bruno],
+              text: 'Is the changelog signed off?',
+              createdAt: hours(11.1),
+            },
+            {
+              id: 'trn_2',
+              kind: 'answer',
+              authorName: 'Bruno',
+              employeeId: bruno,
+              text: 'Signed off this morning. The pricing page is the one at risk.',
+              createdAt: hours(11.2),
+            },
+          ],
+        },
+      },
+    ],
+    findings: [
+      {
+        id: 'fnd_1',
+        employeeId: bruno,
+        employeeName: 'Bruno',
+        auditDate: '2026-09-08',
+        severity: 'medium',
+        claim: 'The report claims the tests pass; the journal has no test run.',
+        evidence: 'No tool call between 15:10 and the report.',
+        requiredAction: 'Run the tests and post the output.',
+        status: 'addressed',
+        createdAt: hours(-1.2),
+        updatedAt: hours(9.8),
+      },
+    ],
+    alerts: [
+      {
+        id: 'alr_1',
+        source: 'github',
+        fingerprint: 'checkout-500',
+        severity: 'high',
+        title: 'Checkout is returning 500 on card payments.',
+        detail: 'Five reports in ten minutes.',
+        status: 'closed',
+        triageTaskId: 'tsk_triage',
+        affectedFloorIds: [],
+        occurrences: 5,
+        createdAt: hours(14.3),
+        updatedAt: hours(16.1),
+      },
+    ],
+    notifications: [
+      {
+        id: 'ntf_1',
+        kind: 'triage',
+        title: 'Deployed the checkout fix without approval.',
+        text: 'Three attempts over twenty minutes went unanswered.',
+        alertId: 'alr_1',
+        attempt: 3,
+        sentAt: hours(15),
+      },
+    ],
+  };
+}
+
 export function OfficeLab({
   preset,
   hour,
   labels,
   seed,
+  at,
 }: {
   preset: string;
   hour: number;
   labels: string;
   seed: number;
+  /** Hour of the recorded day the replay's scrubber stands on. */
+  at: number;
 }) {
   const { employees, scene, label } = useMemo(() => buildScene(preset, hour, seed), [preset, hour, seed]);
+  const [stats, setStats] = useState<RenderStats | null>(null);
+  const report = useCallback(
+    (next: RenderStats) => setStats((current) => (current?.calls === next.calls ? current : next)),
+    [],
+  );
+  const record = useMemo(() => replayRecord(employees), [employees]);
+  // The lab reports what a click landed on, so a merged room can be shown to be
+  // as clickable as the loose one it replaced.
+  const [picked, setPicked] = useState('');
   return (
-    <main className="office-lab" data-preset={preset} style={{ width: 1280, height: 720, margin: 0 }}>
-      <OfficeStage
-        live={false}
-        scene={scene}
-        employees={employees}
-        label={label}
-        labels={labels as LabelMode}
-      />
-    </main>
+    <>
+      <main className="office-lab" data-preset={preset} style={{ width: 1280, height: 720, margin: 0 }}>
+        {preset === 'day-replay' ? (
+          <DayReplay
+            employees={employees}
+            label={label}
+            labels={labels as LabelMode}
+            record={record}
+            startAt={at * 3_600_000}
+            dressing={{ board: { cards: CARDS } }}
+            onSelect={(id) => setPicked(`employee ${id}`)}
+            onSelectProp={(kind, id) => setPicked(id ? `${kind} ${id}` : kind)}
+          />
+        ) : (
+          <OfficeStage
+            live={false}
+            scene={scene}
+            employees={employees}
+            label={label}
+            labels={labels as LabelMode}
+            onRenderStats={report}
+            onSelect={(id) => setPicked(`employee ${id}`)}
+            onSelectProp={(kind, id) => setPicked(id ? `${kind} ${id}` : kind)}
+          />
+        )}
+      </main>
+      {/* Outside the photographed stage, so the read-out never lands in a baseline. */}
+      <p
+        data-office-stats={stats ? String(stats.calls) : ''}
+        data-office-picked={picked}
+        style={{ font: '12px ui-monospace, monospace', margin: '6px 0 0' }}
+      >
+        {stats
+          ? `${stats.calls} draw calls · ${stats.meshes} meshes (${stats.casters} casting shadows) · ${stats.triangles.toLocaleString()} triangles · ${stats.geometries} geometries`
+          : 'measuring…'}
+      </p>
+    </>
   );
 }

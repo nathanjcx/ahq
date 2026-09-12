@@ -6,11 +6,24 @@ import {
   READING_MS,
   STUCK_MS,
   deriveActivities,
+  deriveFloorSignals,
   firstSentence,
+  isWorking,
   providerForTool,
+  shiftsFromCalendar,
   type ActivityInput,
 } from '../components/office/activity';
-import type { ActionProposal, ActivityEvent, FloorPost, Task } from '../lib/contracts';
+import type {
+  ActionProposal,
+  ActivityEvent,
+  Alert,
+  AuditFinding,
+  CalendarEntry,
+  FloorPost,
+  Meeting,
+  ScheduleSummary,
+  Task,
+} from '../lib/contracts';
 
 const NOW = 1_700_000_000_000;
 const ada = { id: 'emp_ada', name: 'Ada' };
@@ -270,5 +283,247 @@ describe('providerForTool', () => {
     expect(providerForTool('google-workspace.gmail_draft')).toBe('google-workspace');
     expect(providerForTool('google_workspace_drive_list')).toBe('google-workspace');
     expect(providerForTool('astra_floor_post')).toBeUndefined();
+  });
+});
+
+function calendarEntry(
+  overrides: Partial<CalendarEntry> & Pick<CalendarEntry, 'id' | 'kind'>,
+): CalendarEntry {
+  return {
+    title: 'September release review',
+    startsAt: NOW,
+    endsAt: NOW + 1_800_000,
+    attendees: [{ kind: 'employee', id: ada.id, name: ada.name }],
+    agenda: [],
+    status: 'scheduled',
+    ...overrides,
+  };
+}
+
+function finding(overrides: Partial<AuditFinding> = {}): AuditFinding {
+  return {
+    id: 'fnd_1',
+    employeeId: ada.id,
+    employeeName: ada.name,
+    auditDate: '2026-09-11',
+    severity: 'medium',
+    claim: 'The report says the tests pass; the journal has no test run.',
+    evidence: 'No tool call in the journal.',
+    requiredAction: 'Run the tests and post the output.',
+    status: 'open',
+    createdAt: NOW - 40_000_000,
+    updatedAt: NOW - 40_000_000,
+    ...overrides,
+  };
+}
+
+function alert(overrides: Partial<Alert> = {}): Alert {
+  return {
+    id: 'alr_1',
+    source: 'github',
+    fingerprint: 'checkout-500',
+    severity: 'high',
+    title: 'Checkout is returning 500 for card payments.',
+    detail: 'Five reports in ten minutes.',
+    status: 'triaging',
+    affectedFloorIds: ['prj_1'],
+    occurrences: 5,
+    createdAt: NOW - 120_000,
+    updatedAt: NOW - 60_000,
+    ...overrides,
+  };
+}
+
+const schedule: ScheduleSummary = {
+  timezone: 'Europe/London',
+  workingDays: [1, 2, 3, 4, 5],
+  startHour: 9,
+  endHour: 18,
+  attendedStartHour: 9,
+  attendedEndHour: 18,
+  overnightPolicy: 'cheap',
+  working: false,
+  attended: false,
+  usageToday: { input: 0, output: 0, cached: 0, cap: 0 },
+};
+
+describe('the day around the desk', () => {
+  it('walks an attendee to the meeting an hour before it starts', () => {
+    const state = derive({
+      day: { meetings: [{ entry: calendarEntry({ id: 'cal_1', kind: 'meeting', startsAt: NOW + 600_000 }) }] },
+    }).get(ada.id);
+    expect(state?.activity).toBe('preparing');
+  });
+
+  it('gives the floor to whoever answered last, and the question to whoever was asked', () => {
+    const entry = calendarEntry({ id: 'cal_1', kind: 'meeting', status: 'live' });
+    const meeting: Meeting = {
+      id: 'mtg_1',
+      calendarEntryId: 'cal_1',
+      status: 'live',
+      turns: [
+        {
+          id: 'trn_1',
+          kind: 'answer',
+          authorName: ada.name,
+          employeeId: ada.id,
+          text: 'The changelog is signed off. The pricing page is not.',
+          createdAt: NOW - 10_000,
+        },
+      ],
+    };
+    expect(derive({ day: { meetings: [{ entry, meeting }] } }).get(ada.id)).toMatchObject({
+      activity: 'presenting',
+      bubble: 'The changelog is signed off.',
+    });
+
+    const asked: Meeting = {
+      ...meeting,
+      turns: [
+        ...meeting.turns,
+        {
+          id: 'trn_2',
+          kind: 'question',
+          authorName: 'Sam',
+          addressedTo: [ada.id],
+          text: 'When does pricing land?',
+          createdAt: NOW - 5_000,
+        },
+      ],
+    };
+    expect(derive({ day: { meetings: [{ entry, meeting: asked }] } }).get(ada.id)?.activity).toBe(
+      'answering',
+    );
+  });
+
+  it('runs a triage session to the console, carrying the alert', () => {
+    const state = derive({
+      tasks: [task({ id: 'tsk_t', status: 'running', kind: 'triage' })],
+      day: { alerts: [alert({ triageTaskId: 'tsk_t' })] },
+    }).get(ada.id);
+    expect(state).toMatchObject({ activity: 'triaging', alertId: 'alr_1' });
+  });
+
+  it('sends an auditor to the desk of whoever the night found something on', () => {
+    const state = derive({
+      employees: [bo, ada],
+      tasks: [task({ id: 'tsk_a', status: 'running', kind: 'audit', employeeId: bo.id })],
+      day: { findings: [finding()] },
+    }).get(bo.id);
+    expect(state).toMatchObject({ activity: 'auditing', visitingId: ada.id });
+  });
+
+  it('files the janitor at the binder during a curation run', () => {
+    const state = derive({
+      tasks: [task({ id: 'tsk_c', status: 'running', kind: 'curation' })],
+    }).get(ada.id);
+    expect(state?.activity).toBe('filing');
+  });
+
+  it('puts a planning turn at the task board', () => {
+    const state = derive({ tasks: [task({ id: 'tsk_p', status: 'running', kind: 'standing' })] }).get(ada.id);
+    expect(state?.activity).toBe('planning');
+  });
+
+  it('reads the memory tools as memory, not as another provider call', () => {
+    const state = derive({
+      tasks: [task({ id: 'tsk_1', status: 'running' })],
+      events: [event({ type: 'tool_call', text: 'astra_memory_remember: started' })],
+    }).get(ada.id);
+    expect(state).toMatchObject({ activity: 'remembering', tool: 'astra_memory_remember' });
+  });
+
+  it('runs a string from a waiting task to the dependency it is waiting on', () => {
+    const state = derive({
+      tasks: [
+        task({ id: 'tsk_2', status: 'waiting', dependsOn: ['tsk_1'] }),
+        task({ id: 'tsk_1', status: 'running', employeeId: bo.id }),
+      ],
+    }).get(ada.id);
+    expect(state).toMatchObject({ activity: 'waiting', waitingOn: 'tsk_1' });
+  });
+
+  it('leaves an idle employee with an open finding uneasy', () => {
+    expect(derive({ day: { findings: [finding()] } }).get(ada.id)?.activity).toBe('uneasy');
+  });
+
+  it('reads the edges of a shift as arriving and leaving, and the rest of the night as off shift', () => {
+    const shifts = [{ employeeId: ada.id, startedAt: NOW - 60_000, endedAt: NOW + 600_000 }];
+    expect(derive({ day: { shifts } }).get(ada.id)?.activity).toBe('arriving');
+    expect(
+      derive({ day: { shifts: [{ employeeId: ada.id, startedAt: NOW - 3_600_000, endedAt: NOW - 60_000 }] } }).get(
+        ada.id,
+      )?.activity,
+    ).toBe('leaving');
+    expect(derive({ day: { schedule } }).get(ada.id)?.activity).toBe('off_shift');
+  });
+
+  it('calls end-of-day writing a report rather than task output', () => {
+    const state = derive({
+      tasks: [
+        task({
+          id: 'tsk_1',
+          status: 'running',
+          lastMessage: { text: 'Done for today: the changelog.', createdAt: NOW - 1_000 },
+        }),
+      ],
+      day: { schedule, shifts: [{ employeeId: ada.id, taskId: 'tsk_1', startedAt: NOW - 3_600_000 }] },
+    }).get(ada.id);
+    expect(state?.activity).toBe('reporting');
+  });
+
+  it('takes the calendar shift blocks as the shifts', () => {
+    const shifts = shiftsFromCalendar([
+      calendarEntry({ id: 'cal_s', kind: 'shift', taskId: 'tsk_1' }),
+      calendarEntry({ id: 'cal_m', kind: 'meeting' }),
+    ]);
+    expect(shifts).toEqual([
+      { employeeId: ada.id, taskId: 'tsk_1', startedAt: NOW, endedAt: NOW + 1_800_000 },
+    ]);
+  });
+});
+
+describe('isWorking', () => {
+  it('separates the people a desk lamp belongs to from the ones it does not', () => {
+    for (const activity of ['thinking', 'auditing', 'triaging', 'filing', 'reporting'] as const)
+      expect(isWorking(activity), activity).toBe(true);
+    for (const activity of ['idle', 'off_shift', 'leaving', 'waiting', 'blocked', 'uneasy'] as const)
+      expect(isWorking(activity), activity).toBe(false);
+  });
+});
+
+describe('deriveFloorSignals', () => {
+  it('lights the beacon for an open alert that reaches this floor, and not another one', () => {
+    expect(deriveFloorSignals({ alerts: [alert()] }, 'prj_1', NOW)).toMatchObject({
+      incident: true,
+      incidentCount: 1,
+    });
+    expect(deriveFloorSignals({ alerts: [alert()] }, 'prj_2', NOW).incident).toBe(false);
+  });
+
+  it('carries the notice once three attempts to reach a person went unanswered', () => {
+    const notice = {
+      id: 'ntf_1',
+      kind: 'triage' as const,
+      title: 'Deployed the checkout fix without approval.',
+      text: 'Three attempts, no answer.',
+      attempt: 3,
+      sentAt: NOW - 60_000,
+    };
+    expect(deriveFloorSignals({ notifications: [notice] }, undefined, NOW).emergency).toMatchObject({
+      title: 'Deployed the checkout fix without approval.',
+    });
+    expect(
+      deriveFloorSignals({ notifications: [{ ...notice, attempt: 2 }] }, undefined, NOW).emergency,
+    ).toBeUndefined();
+  });
+
+  it('counts open findings per employee for the folder on the desk', () => {
+    const signals = deriveFloorSignals(
+      { findings: [finding(), finding({ id: 'fnd_2' }), finding({ id: 'fnd_3', status: 'verified' })] },
+      undefined,
+      NOW,
+    );
+    expect(signals.findings.get(ada.id)).toBe(2);
   });
 });

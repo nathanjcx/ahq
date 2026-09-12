@@ -24,6 +24,34 @@ export const CONSOLE_Z = [-3.6, -1.7, 0.2, 2.1, 4];
 const CONSOLE_STEP = 0.85;
 
 /**
+ * Props a figure walks to, and the room's way in. The rooms draw them here and
+ * the people stand here, so a figure is never a metre away from what it is doing.
+ */
+export const TASK_BOARD: Point = [-0.9, 0, 2.55];
+export const INCIDENT_LAMP: Point = [0.6, 0, 5.15];
+export const BINDER: Point = [4.55, 0.99, -3.95];
+/** The way in and out of a room: the lift on the lobby, the door on a floor. */
+export const DOORWAY: Point = [-8.5, 0, -5.88];
+
+/** In front of the task board, facing it. */
+const BOARD_STAND: Station = { at: [TASK_BOARD[0], 0, TASK_BOARD[2] + 1.15], facing: 0 };
+/** At the beacon, when there is no console free to run to. */
+const BEACON_STAND: Station = { at: [INCIDENT_LAMP[0] + 0.9, 0, INCIDENT_LAMP[2] - 0.5], facing: -2.1 };
+/** At the meeting table, filing the floor's binder. */
+const BINDER_STAND: Station = { at: [BINDER[0], 0, BINDER[2] + 1.05], facing: 0 };
+/** Just inside the door, arriving or on the way out. */
+const DOOR_STAND: Station = { at: [DOORWAY[0] + 1.1, 0, DOORWAY[2] + 1.1], facing: 2.36 };
+
+/** Activities that put a figure somewhere specific in the room, whatever their desk is. */
+const AT_A_PROP: Partial<Record<EmployeeActivity['activity'], Station>> = {
+  planning: BOARD_STAND,
+  filing: BINDER_STAND,
+  arriving: DOOR_STAND,
+  leaving: DOOR_STAND,
+  preparing: DOOR_STAND,
+};
+
+/**
  * Open floor two people can meet on without crowding a station. Each spot takes
  * one pair, standing `TALK_GAP` apart along the spot's axis.
  */
@@ -155,7 +183,25 @@ export function layoutStations({
       });
       continue;
     }
-    if (person.state.activity === 'calling' && providers.length) {
+    const prop = AT_A_PROP[person.state.activity];
+    if (prop) {
+      result.push({ id: person.id, station: prop, home: own.index });
+      continue;
+    }
+    // An auditor stands at the desk of whoever they are reading, not at their own.
+    if (person.state.activity === 'auditing' && person.state.visitingId) {
+      const desk = home.get(person.state.visitingId);
+      if (desk) {
+        const stand: Point = [desk.station.at[0] + 1.05, 0, desk.station.at[2] + 0.15];
+        result.push({
+          id: person.id,
+          station: { at: stand, facing: facing(stand, desk.station.at) },
+          home: own.index,
+        });
+        continue;
+      }
+    }
+    if ((person.state.activity === 'calling' || person.state.activity === 'triaging') && providers.length) {
       const slot = freeConsole(person.state.provider, providers, consoles);
       if (slot >= 0) {
         consoles.add(slot);
@@ -169,6 +215,11 @@ export function layoutStations({
         });
         continue;
       }
+    }
+    // An incident with nowhere to take it still gets somebody at the beacon.
+    if (person.state.activity === 'triaging') {
+      result.push({ id: person.id, station: BEACON_STAND, home: own.index });
+      continue;
     }
     result.push({ id: person.id, station: own.station, home: own.index });
   }

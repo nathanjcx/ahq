@@ -1,12 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import type { EmployeeActivity } from './activity';
 
 /** The three things worth hearing, and the pad underneath them. */
 export type SoundCue = 'proposal' | 'completed' | 'failed';
-
-const SOUND_KEY = 'ahq.sound';
 
 type Voice = { freq: number; to: number; duration: number; gain: number; type: OscillatorType };
 
@@ -28,24 +26,6 @@ const CUES: Record<SoundCue, Voice[]> = {
 let context: AudioContext | undefined;
 let master: GainNode | undefined;
 let ambient: { nodes: AudioScheduledSourceNode[]; gain: GainNode } | undefined;
-
-/** Reads the stored preference. Sound is off until somebody turns it on. */
-function soundStored(): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    return window.localStorage.getItem(SOUND_KEY) === 'on';
-  } catch {
-    return false;
-  }
-}
-
-function store(on: boolean) {
-  try {
-    window.localStorage.setItem(SOUND_KEY, on ? 'on' : 'off');
-  } catch {
-    // A blocked storage is not worth an error; the toggle still works for this session.
-  }
-}
 
 /**
  * Creates the audio graph. Browsers only allow this from a user gesture, so this
@@ -106,8 +86,7 @@ function stopAmbient() {
 }
 
 /** Turns sound on or off. Must be called from a user gesture to turn it on. */
-export function setSoundOn(on: boolean): boolean {
-  store(on);
+function setSoundOn(on: boolean): boolean {
   if (!on) {
     stopAmbient();
     return false;
@@ -139,15 +118,31 @@ export function playCue(cue: SoundCue) {
   });
 }
 
+/**
+ * Whether the office is audible. The audio graph is the source of truth, not
+ * React: the stored preference cannot start it on its own, because browsers only
+ * open an `AudioContext` from a user gesture.
+ */
+const listeners = new Set<() => void>();
+let playing = false;
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
 /** The speaker toggle's state, persisted in `localStorage` under `ahq.sound`. */
 export function useSound() {
-  const [on, setOn] = useState(false);
-  // The stored preference cannot start audio on its own: the graph waits for a click.
-  useEffect(() => setOn(soundStored() && Boolean(context)), []);
-  return {
-    on,
-    toggle: () => setOn(setSoundOn(!on)),
-  };
+  const on = useSyncExternalStore(
+    subscribe,
+    () => playing,
+    () => false,
+  );
+  const toggle = useCallback(() => {
+    playing = setSoundOn(!playing);
+    listeners.forEach((listener) => listener());
+  }, []);
+  return { on, toggle };
 }
 
 /**

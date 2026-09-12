@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
 /**
@@ -11,7 +11,8 @@ export function useOfficePan(
   invalidate: () => void,
   resetKey: number,
 ) {
-  const offset = useRef(new THREE.Vector2());
+  // A plain stable object rather than a ref: losing it only recentres the view.
+  const offset = useMemo(() => new THREE.Vector2(), []);
 
   useEffect(() => {
     if (!(camera instanceof THREE.OrthographicCamera)) return;
@@ -23,8 +24,7 @@ export function useOfficePan(
       if (!rect.width || !rect.height) return;
       const x = (-dx * (camera.right - camera.left)) / (camera.zoom * rect.width);
       const y = (dy * (camera.top - camera.bottom)) / (camera.zoom * rect.height);
-      offset.current.x += x;
-      offset.current.y += y;
+      offset.set(offset.x + x, offset.y + y);
       camera.translateX(x);
       camera.translateY(y);
       camera.updateMatrixWorld(true);
@@ -108,7 +108,7 @@ export function useOfficePan(
       window.removeEventListener('pointercancel', up, true);
       window.removeEventListener('blur', finish);
     };
-  }, [camera, source, invalidate, resetKey]);
+  }, [camera, source, invalidate, resetKey, offset]);
 
-  return offset.current;
+  return offset;
 }

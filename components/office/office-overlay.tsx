@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { bubbleRect, layoutLabels, overlaps, placeBubble, type LabelInput } from './office-labels';
 
 /** One figure's overlay: where its head is, and the two elements that hang off it. */
-export type OverlayEntry = {
+type OverlayEntry = {
   id: string;
   /** From `labelPriority`. Decides who keeps their pill when the room is crowded. */
   priority: number;
@@ -18,11 +18,24 @@ export type OverlayEntry = {
   /** Hover, focus or selection keeps a pill on screen even when it is covered. */
   forced: boolean;
   /** A fixed card, such as the board note: it never moves, so everything routes around it. */
-  pinned?: boolean;
+  pinned: boolean;
+};
+
+/**
+ * What a figure or a card holds on to. The entry itself stays inside the
+ * overlay, so nothing outside it writes the layout's own bookkeeping by hand.
+ */
+export type OverlayLabel = {
+  /** Head or card position in world space. Move it with `anchor.set(...)`. */
+  anchor: THREE.Vector3;
+  /** How hard this label fights for its place, and whether it may be hidden at all. */
+  rank: (priority: number, forced: boolean) => void;
+  /** React hands the pill and the bubble over as they mount, and `null` as they go. */
+  attach: (part: 'pill' | 'bubble', element: HTMLElement | null) => void;
 };
 
 export type Overlay = {
-  register: (id: string) => OverlayEntry;
+  register: (id: string, pinned: boolean) => OverlayLabel;
   release: (id: string) => void;
   /** Lay the overlay out again on the next frame: an element has arrived or gone. */
   relayout: () => void;
@@ -30,11 +43,15 @@ export type Overlay = {
 
 const OverlayContext = createContext<Overlay | null>(null);
 
-export function useOverlayEntry(id: string): OverlayEntry | null {
+/**
+ * This figure's or card's place in the overlay. A pinned label never moves, so
+ * every other label routes around it.
+ */
+export function useOverlayLabel(id: string, pinned = false): OverlayLabel | null {
   const overlay = useContext(OverlayContext);
-  const entry = useMemo(() => overlay?.register(id) ?? null, [overlay, id]);
+  const label = useMemo(() => overlay?.register(id, pinned) ?? null, [overlay, id, pinned]);
   useEffect(() => () => overlay?.release(id), [overlay, id]);
-  return entry;
+  return label;
 }
 
 /**
@@ -72,19 +89,28 @@ export function OfficeOverlay({ children }: { children: ReactNode }) {
 
   const overlay = useMemo<Overlay>(
     () => ({
-      register(id) {
-        const existing = entries.current.get(id);
-        if (existing) return existing;
-        const entry: OverlayEntry = {
+      register(id, pinned) {
+        const entry: OverlayEntry = entries.current.get(id) ?? {
           id,
           priority: 0,
           anchor: new THREE.Vector3(),
           pill: null,
           bubble: null,
           forced: false,
+          pinned,
         };
+        entry.pinned = pinned;
         entries.current.set(id, entry);
-        return entry;
+        return {
+          anchor: entry.anchor,
+          rank(priority, forced) {
+            entry.priority = priority;
+            entry.forced = forced;
+          },
+          attach(part, element) {
+            entry[part] = element;
+          },
+        };
       },
       release(id) {
         entries.current.delete(id);

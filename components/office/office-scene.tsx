@@ -3,18 +3,20 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import type { EmployeeActivity } from './activity';
+import { isWorking, type EmployeeActivity } from './activity';
 import { afterHours, daylight, windowless, type Daylight } from './daylight';
 import { FileCabinet, OfficeSpeakers } from './office-furniture';
 import { rankBubbles, type LabelMode } from './office-labels';
 import {
   boardroomSeats,
+  cardPin,
   defaultShelves,
   recordsStations,
   type BoardCard,
   type CalendarEntry,
   type ShelfSpec,
 } from './office-layout';
+import { Static } from './office-merge';
 import { OfficeOverlay } from './office-overlay';
 import { useOfficePan } from './office-pan';
 import { EmployeeAvatar, type EmployeeKind } from './office-people';
@@ -24,6 +26,7 @@ import {
   CalendarWall,
   ContestedFolder,
   DeskNotebook,
+  EmergencyNotice,
   FindingsFolder,
   IncidentLamp,
   LiftDoor,
@@ -31,6 +34,7 @@ import {
   OvernightLamp,
   StatusLamp,
   TaskBoard,
+  WaitingString,
   type SelectProp,
 } from './office-props';
 import { Architecture } from './office-room';
@@ -38,12 +42,24 @@ import { Boardroom, RecordsRoom } from './office-rooms';
 import {
   BoardNote,
   CalendarCard,
+  MeetingMurmur,
   ProviderConsole,
   ReviewLectern,
   StatusDevice,
   TaskCards,
 } from './office-signals';
-import { CONSOLE_X, CONSOLE_Z, LECTERN, deskGrid, layoutStations, type Station } from './office-stations';
+import {
+  BINDER,
+  CONSOLE_X,
+  CONSOLE_Z,
+  DOORWAY,
+  INCIDENT_LAMP,
+  LECTERN,
+  TASK_BOARD,
+  deskGrid,
+  layoutStations,
+  type Station,
+} from './office-stations';
 
 /** The one employee shape this component understands. */
 export type OfficeEmployee = {
@@ -78,7 +94,9 @@ export type OfficeDressing = {
   /** Open incidents, for the triage floor's alert board. */
   incidentCount?: number;
   schedule?: { working: boolean; attended: boolean; overnightCheap: boolean };
-  meeting?: { attendeeIds: string[]; speakingId?: string };
+  meeting?: { attendeeIds: string[]; speakingId?: string; live?: boolean };
+  /** Triage acted without permission: the floor carries the notice by the door. */
+  emergency?: { title: string; since: number };
   /** Named shelves for the records room. Without them the room derives them from memory. */
   records?: { shelves: ShelfSpec[] };
   calendar?: CalendarEntry[];
@@ -163,44 +181,47 @@ function Framing({
   /** Where the busiest part of the floor is, for the close framing. */
   cluster: Point;
 }) {
-  const { camera, size, invalidate } = useThree();
+  const { camera, size, invalidate, get } = useThree();
   const pan = useOfficePan(camera, source, invalidate, resetKey);
   const previousReset = useRef(resetKey);
   useLayoutEffect(() => {
-    if (!(camera instanceof THREE.OrthographicCamera)) return;
+    // The live camera, read from the renderer rather than captured at render:
+    // fitting the room is an imperative pass over an object React does not own.
+    const view = get().camera;
+    if (!(view instanceof THREE.OrthographicCamera)) return;
     if (previousReset.current !== resetKey) {
       pan.set(0, 0);
       previousReset.current = resetKey;
     }
     const compact = size.width < COMPACT_WIDTH;
     const azimuth = Math.PI / 4 + (angle * Math.PI) / 180;
-    camera.position.set(Math.sin(azimuth) * 28, 24.5, Math.cos(azimuth) * 28);
-    camera.lookAt(compact ? new THREE.Vector3(...cluster) : new THREE.Vector3(0, 0.6, 0));
-    camera.updateMatrixWorld(true);
+    view.position.set(Math.sin(azimuth) * 28, 24.5, Math.cos(azimuth) * 28);
+    view.lookAt(compact ? new THREE.Vector3(...cluster) : new THREE.Vector3(0, 0.6, 0));
+    view.updateMatrixWorld(true);
     const bounds = new THREE.Box3();
     for (const x of [-ROOM.x, ROOM.x])
       for (const y of [0, ROOM.y])
         for (const z of [-ROOM.z, ROOM.z])
-          bounds.expandByPoint(corner.set(x, y, z).applyMatrix4(camera.matrixWorldInverse));
+          bounds.expandByPoint(corner.set(x, y, z).applyMatrix4(view.matrixWorldInverse));
     const width = bounds.max.x - bounds.min.x;
     const height = bounds.max.y - bounds.min.y;
     if (!compact) {
       // Centre the projected plate rather than assuming the floor origin is its
       // visual centre; the close framing is already centred on the cluster.
       const center = bounds.getCenter(corner);
-      camera.translateX(center.x);
-      camera.translateY(center.y);
+      view.translateX(center.x);
+      view.translateY(center.y);
     }
-    camera.translateX(pan.x);
-    camera.translateY(pan.y);
-    camera.updateMatrixWorld(true);
+    view.translateX(pan.x);
+    view.translateY(pan.y);
+    view.updateMatrixWorld(true);
     const safeWidth = Math.max(100, size.width - (compact ? 12 : 32));
     const safeHeight = Math.max(100, size.height - 24);
     const fit = Math.min(safeWidth / width, safeHeight / height);
-    camera.zoom = fit * (compact ? FILL_COMPACT : FILL) * zoom;
-    camera.updateProjectionMatrix();
+    view.zoom = fit * (compact ? FILL_COMPACT : FILL) * zoom;
+    view.updateProjectionMatrix();
     invalidate();
-  }, [camera, size.width, size.height, zoom, angle, resetKey, pan, invalidate, cluster]);
+  }, [get, size.width, size.height, zoom, angle, resetKey, pan, invalidate, cluster]);
   return null;
 }
 
@@ -215,15 +236,16 @@ type Placed = {
 };
 
 const EMPTY_DRESSING: OfficeDressing = {};
-/** The floor's props, in the room's coordinates. Desk props are in the desk's own. */
-const BINDER: Point = [4.55, 0.99, -3.95];
-const TASK_BOARD: Point = [-0.9, 0, 2.55];
-const INCIDENT_LAMP: Point = [0.6, 0, 5.15];
+/** The floor's props, in the room's coordinates. Desk props are in the desk's own.
+ *  The ones a figure walks to live in office-stations, so both agree on where they are. */
 const CALENDAR_WALL: Point = [2.75, 1.72, -0.6];
+/** Beside the door, at eye height, where a notice is read on the way in. */
+const NOTICE: Point = [-8.84, 1.62, -3.2];
+/** A waiting figure holds its string at about chest height. */
+const STRING_HEIGHT = 1.18;
 /** The overlay cards hang above the props they belong to. */
 const TASK_CARDS: Point = [-2.3, 3.4, 2.55];
 const CALENDAR_CARD: Point = [2.75, 2.85, -0.6];
-const LIFT_DOOR: Point = [-8.5, 0, -5.88];
 /** The triage signals stack on the window wall's pier: the board, then the lamp. */
 const ALERT_BOARD: Point = [-8.86, 1.4, -0.8];
 const STATUS_LAMP: Point = [-8.8, 2.66, -0.8];
@@ -316,7 +338,9 @@ export function OfficeScene({
 }: OfficeSceneProps) {
   const { size } = useThree();
   const surfaces = useSurfaceTextures();
-  const seats = useRef(new Map<string, number>());
+  // Sticky desk assignments. A plain stable object rather than a ref: losing it
+  // only means the room picks the chairs again, which nobody can tell apart.
+  const seats = useMemo(() => new Map<string, number>(), []);
   const room = dressing.room ?? 'floor';
   const { schedule, meeting } = dressing;
   const light = useMemo(() => {
@@ -351,7 +375,7 @@ export function OfficeScene({
     const stations = layoutStations({
       people: present.map((employee, index) => ({ id: employee.id, state: states[index] })),
       providers,
-      seats: seats.current,
+      seats,
     });
     return present.map((employee, index) => ({
       employee,
@@ -361,7 +385,7 @@ export function OfficeScene({
       home: stations[index].home,
       ...(stations[index].accent ? { accent: stations[index].accent } : {}),
     }));
-  }, [present, providers, room, onFloor, meeting]);
+  }, [present, providers, room, onFloor, meeting, seats]);
   const shelves = useMemo(
     () =>
       dressing.records?.shelves ?? (dressing.memory ? defaultShelves(dressing.memory) : ([] as ShelfSpec[])),
@@ -381,6 +405,7 @@ export function OfficeScene({
   const contested = dressing.memory?.contested ?? 0;
   // Whoever has the floor in a meeting sits a little higher and keeps their name.
   const speakingInMeeting = room === 'boardroom' ? meeting?.speakingId : undefined;
+  const speakingSeat = people.findIndex((person) => person.employee.id === speakingInMeeting);
 
   return (
     <>
@@ -389,14 +414,31 @@ export function OfficeScene({
       <SurfaceContext.Provider value={surfaces}>
         <Lighting light={light} budget={lightBudget} sky={room !== 'records'} />
         {room === 'records' && (
-          <RecordsRoom shelves={shelves} interior={light.interior} onSelectProp={onSelectProp} />
+          <Static revision={`records ${light.interior.toFixed(2)}`}>
+            <RecordsRoom shelves={shelves} interior={light.interior} onSelectProp={onSelectProp} />
+          </Static>
         )}
-        {room === 'boardroom' && <Boardroom interior={light.interior} onSelectProp={onSelectProp} />}
+        {room === 'boardroom' && (
+          <>
+            <Static revision={`boardroom ${light.interior.toFixed(2)}`}>
+              <Boardroom interior={light.interior} onSelectProp={onSelectProp} />
+            </Static>
+            {meeting?.live && (
+              <MeetingMurmur
+                seats={people.map((person) => person.station.at)}
+                {...(speakingSeat >= 0 ? { speakingIndex: speakingSeat } : {})}
+                motion={motion}
+              />
+            )}
+          </>
+        )}
         {onFloor && (
           <>
-            <Architecture desks={desks} interior={light.interior} />
-            <FileCabinet />
-            <OfficeSpeakers />
+            <Static revision={desks.length}>
+              <Architecture desks={desks} interior={light.interior} />
+              <FileCabinet />
+              <OfficeSpeakers />
+            </Static>
             <group position={LECTERN} rotation={[0, Math.PI, 0]}>
               <ReviewLectern
                 position={[0, 0, 0]}
@@ -532,7 +574,16 @@ function FloorDressing({
   people: Placed[];
   onSelectProp?: SelectProp;
 }) {
-  const { memory, board, findings, incident, incidentCount = 0, schedule, calendar = [] } = dressing;
+  const {
+    memory,
+    board,
+    findings,
+    incident,
+    incidentCount = 0,
+    schedule,
+    calendar = [],
+    emergency,
+  } = dressing;
   const overnight = Boolean(schedule && !schedule.working && schedule.overnightCheap);
   return (
     <group>
@@ -542,7 +593,7 @@ function FloorDressing({
         if (!desk) return null;
         const fill = memory?.agentFills.get(person.employee.id);
         const open = findings?.get(person.employee.id) ?? 0;
-        const working = overnight && person.state.activity !== 'idle';
+        const working = overnight && isWorking(person.state.activity);
         if (fill === undefined && open <= 0 && !working) return null;
         return (
           <group key={person.employee.id} position={desk}>
@@ -568,11 +619,38 @@ function FloorDressing({
         );
       })}
       {board && <TaskBoard position={TASK_BOARD} cards={board.cards} onSelectProp={onSelectProp} />}
+      {/* A task that cannot start yet is on a string to whatever it is waiting
+          for: the desk of whoever owes it, or the card on the board when that
+          person is not on this floor. Board card ids are task ids, which is what
+          makes the second pair of ends meet. */}
+      {people.flatMap((person) => {
+        const { waitingOn, waitingOnId, activity } = person.state;
+        const owner = waitingOnId ? people.find((other) => other.employee.id === waitingOnId) : undefined;
+        const pin = waitingOn && board ? cardPin(board.cards, waitingOn) : undefined;
+        const to: Point | undefined = owner
+          ? [owner.station.at[0], STRING_HEIGHT, owner.station.at[2]]
+          : pin
+            ? [TASK_BOARD[0] + pin[0], pin[1], TASK_BOARD[2] + pin[2]]
+            : undefined;
+        if (!to) return [];
+        const stand = person.station.at;
+        return [
+          <WaitingString
+            key={person.employee.id}
+            from={[stand[0], STRING_HEIGHT, stand[2]]}
+            to={to}
+            blocked={activity === 'blocked'}
+          />,
+        ];
+      })}
+      {emergency && (
+        <EmergencyNotice position={NOTICE} rotation={[0, Math.PI / 2, 0]} onSelectProp={onSelectProp} />
+      )}
       {incident && <IncidentLamp position={INCIDENT_LAMP} onSelectProp={onSelectProp} />}
       {room === 'lobby' && (
         <>
           <CalendarWall position={CALENDAR_WALL} entries={calendar} onSelectProp={onSelectProp} />
-          <LiftDoor position={LIFT_DOOR} onSelectProp={onSelectProp} />
+          <LiftDoor position={DOORWAY} onSelectProp={onSelectProp} />
         </>
       )}
       {room === 'triage' && (

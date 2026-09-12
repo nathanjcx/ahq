@@ -3,11 +3,14 @@
 import { useQuery } from 'convex/react';
 import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState } from 'react';
-import { deriveActivities, type EmployeeActivity } from './activity';
+import { deriveActivities, deriveFloorSignals, type DayInput, type EmployeeActivity } from './activity';
+import { startOfDay } from './day-replay';
 import type { LabelMode } from './office-labels';
 import type { SelectProp } from './office-props';
 import type { OfficeDressing, OfficeEmployee, OfficeProvider } from './office-scene';
+import type { RenderStats } from './office-view';
 import { useActivityCues } from './sound';
+import { useDayQueries } from './use-day';
 import type { Dashboard, FloorPost } from '@/lib/contracts';
 import { providers as providerCatalog } from '@/lib/providers';
 import { asId, uiApi } from '@/lib/ui-api';
@@ -49,14 +52,19 @@ export type OfficeStageProps = {
   onSelect?: (id: string) => void;
   /** Called when a prop is clicked: the binder, a notebook, a card, a shelf, a lamp. */
   onSelectProp?: SelectProp;
+  /** Reports what the renderer did on the last frame. Only the lab asks. */
+  onRenderStats?: (stats: RenderStats) => void;
 };
 
-/** Turns one dashboard and one board into everything the room shows. */
+const NO_DAY: DayInput = {};
+
+/** Turns one dashboard, one board and the day around them into everything the room shows. */
 export function deriveScene(
   dashboard: Dashboard,
   posts: FloorPost[],
   floorId: string | undefined,
   now: number,
+  day: DayInput = NO_DAY,
 ): OfficeSceneData {
   const tasks = dashboard.tasks.filter((task) => (floorId ? task.floorId === floorId : !task.floorId));
   const taskIds = new Set(tasks.map((task) => task.id));
@@ -79,6 +87,7 @@ export function deriveScene(
     0,
   );
   const note = [...posts].reverse().find((post) => post.kind === 'note');
+  const signals = deriveFloorSignals(day, floorId, now);
   return {
     traits: new Map(
       dashboard.employees
@@ -92,12 +101,27 @@ export function deriveScene(
       proposals: dashboard.proposals,
       posts,
       now,
+      day,
     }),
     providers,
     ...(note ? { note: note.text.slice(0, NOTE_CHARS) } : {}),
     lightBudget: cap > 0 ? Math.min(1, used / cap) : 0,
+    ...(signals.incident ? { incident: true, incidentCount: signals.incidentCount } : {}),
+    ...(signals.emergency ? { emergency: signals.emergency } : {}),
+    ...(signals.meeting ? { meeting: signals.meeting } : {}),
+    ...(signals.findings.size ? { findings: signals.findings } : {}),
+    ...(dashboard.schedule
+      ? {
+          schedule: {
+            working: dashboard.schedule.working,
+            attended: dashboard.schedule.attended,
+            overnightCheap: dashboard.schedule.overnightPolicy === 'cheap',
+          },
+        }
+      : {}),
   };
 }
+
 
 /**
  * The office, dressed by the journal. With a Convex client it subscribes for the
@@ -126,9 +150,10 @@ function LiveStage(props: Omit<OfficeStageProps, 'live' | 'scene'>) {
     props.floorId ? { floorId: asId<'floors'>(props.floorId) } : 'skip',
   );
   const now = useNow(5_000);
+  const day = useDayQueries(startOfDay(now));
   const scene = useMemo(
-    () => (dashboard ? deriveScene(dashboard, posts ?? [], props.floorId, now) : emptyScene),
-    [dashboard, posts, props.floorId, now],
+    () => (dashboard ? deriveScene(dashboard, posts ?? [], props.floorId, now, day) : emptyScene),
+    [dashboard, posts, props.floorId, now, day],
   );
   useActivityCues(scene.activities);
   return <Stage {...props} scene={scene} />;
@@ -143,6 +168,7 @@ function Stage({
   labels,
   onSelect,
   onSelectProp,
+  onRenderStats,
 }: Omit<OfficeStageProps, 'live' | 'floorId'> & { scene: OfficeSceneData }) {
   const dressed = useMemo(
     () =>
@@ -167,6 +193,7 @@ function Stage({
       hour={scene.hour}
       dressing={scene}
       onSelectProp={onSelectProp}
+      onRenderStats={onRenderStats}
     />
   );
 }

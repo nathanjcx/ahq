@@ -7,7 +7,8 @@ import type { CSSProperties } from 'react';
 import * as THREE from 'three';
 import type { Activity, EmployeeActivity } from './activity';
 import { labelPriority, type LabelMode } from './office-labels';
-import { useOverlayEntry, useOverlayRelayout } from './office-overlay';
+import { Static } from './office-merge';
+import { useOverlayLabel, useOverlayRelayout } from './office-overlay';
 import { Box, C, Cylinder, Round } from './office-primitives';
 import { JanitorCart } from './office-props';
 import type { OfficeEmployee } from './office-scene';
@@ -30,7 +31,23 @@ export type EmployeeKind = 'worker' | 'janitor' | 'auditor' | 'triage';
 const COAT = '#2f3740';
 
 /** Activities that happen in the chair rather than on the person's feet. */
-const SEATED: Activity[] = ['idle', 'thinking', 'reading', 'writing', 'failed'];
+const SEATED: Activity[] = [
+  'idle',
+  'thinking',
+  'reading',
+  'writing',
+  'failed',
+  'reading_memory',
+  'remembering',
+  'reporting',
+  'waiting',
+  'blocked',
+  'uneasy',
+  'off_shift',
+  'reviewing_peer',
+  'presenting',
+  'answering',
+];
 /** How long the hop-and-arms-up lasts, however long the task stays freshly completed. */
 const CELEBRATION_MS = 3_000;
 /** Every walk across the floor takes the same time, however far it is. */
@@ -155,6 +172,103 @@ function poseFor(activity: Activity, time: number, age: number, traits: string[]
         elbow: [-0.2, -1.15],
         headPitch: Math.sin(time * 2) * 0.12,
       };
+    case 'reading_memory':
+    case 'reviewing_peer': {
+      // The same two-handed read as `reading`, a little lower over the page.
+      const turn = Math.max(0, Math.sin(time * 1.7) - 0.88) * 4;
+      return { ...base, shoulder: [-0.99, -0.99], elbow: [-0.7, -0.7 - turn], headPitch: 0.31 };
+    }
+    case 'remembering':
+    case 'reporting': {
+      // Writing by hand rather than typing: one arm still, the other working.
+      const stroke = Math.sin(time * 3.4);
+      return {
+        ...base,
+        shoulder: [-0.86, -1.04],
+        elbow: [-0.7, -1.12 + stroke * 0.14],
+        headPitch: 0.34,
+      };
+    }
+    case 'waiting':
+    case 'blocked':
+      // Turned away from the desk toward whatever the string leads to.
+      return {
+        ...base,
+        shoulder: [-0.5, -0.5],
+        elbow: [-0.45, -0.45],
+        headPitch: activity === 'blocked' ? 0.2 : 0.05,
+        headYaw: 0.6 + Math.sin(time * 0.3) * 0.12,
+      };
+    case 'uneasy':
+      // A glance at the folder, then back, then another one.
+      return {
+        ...base,
+        shoulder: [-0.7, -0.82],
+        elbow: [-0.7, -0.95],
+        headPitch: 0.1 + Math.sin(time * 1.9) * 0.07,
+        headYaw: Math.sin(time * 0.9) * 0.42,
+        lean: Math.sin(time * 1.3) * 0.035,
+      };
+    case 'off_shift':
+      return { ...base, shoulder: [-0.6, -0.6], elbow: [-0.4, -0.4], headPitch: 0.42 };
+    case 'preparing':
+      // On their feet with the prep report in both hands, waiting for the lift.
+      return { ...base, shoulder: [-1.05, -1.05], elbow: [-1.25, -1.25], headPitch: 0.24 };
+    case 'presenting':
+      return {
+        ...base,
+        shoulder: [-0.55, -0.95 + Math.sin(time * 2.6) * 0.22],
+        elbow: [-0.6, -1.2],
+        headPitch: Math.sin(time * 2.2) * 0.1,
+      };
+    case 'answering':
+      // One hand up, the other on the table.
+      return { ...base, shoulder: [-0.8, -2.1], elbow: [-0.8, -0.7], headPitch: -0.06 };
+    case 'auditing': {
+      // Standing at somebody else's desk, writing on the clipboard.
+      const note = Math.sin(time * 2.8);
+      return {
+        ...base,
+        shoulder: [-1.18, -1.02],
+        elbow: [-1.3, -1.15 + note * 0.12],
+        headPitch: 0.4,
+      };
+    }
+    case 'triaging': {
+      // Fast and two-handed at the console; the shoulders never settle.
+      const rush = Math.sin(time * 6.4);
+      return {
+        ...base,
+        shoulder: [-1.1 + rush * 0.12, -1.1 - rush * 0.12],
+        elbow: [-1.15, -1.15],
+        headPitch: 0.2,
+        hop: Math.abs(rush) * 0.02,
+      };
+    }
+    case 'filing': {
+      // Reaching a binder onto the shelf, then down for the next one.
+      const reach = Math.sin(time * 1.1);
+      return {
+        ...base,
+        shoulder: [-1.2 - reach * 0.9, -1.2 - reach * 0.9],
+        elbow: [-0.5, -0.5],
+        headPitch: -0.12 - reach * 0.18,
+      };
+    }
+    case 'planning': {
+      // Pinning a string: one arm high on the board, the other holding the card.
+      const pin = Math.max(0, Math.sin(time * 0.9));
+      return {
+        ...base,
+        shoulder: [-1.0, -2.3 - pin * 0.3],
+        elbow: [-1.1, -0.35],
+        headPitch: -0.16,
+      };
+    }
+    case 'arriving':
+    case 'leaving':
+      // Between the door and the desk, with the day's things in one hand.
+      return { ...base, shoulder: [-0.14, -0.1], elbow: [-0.5, -0.14], headPitch: 0.02 };
     default: {
       // Idle, tuned by persona: fast fidgets sooner, cautious looks around,
       // playful turns all the way round now and then.
@@ -194,73 +308,56 @@ function Figure({
   // a collar, so a janitor is still recognisably that janitor.
   const suit = kind === 'auditor' ? COAT : color;
   const hat = kind === 'janitor' ? 'cap' : appearance.hat;
+  // A figure is two dozen little boxes hung off eight joints. The boxes inside
+  // any one joint never move relative to each other, so each joint is merged
+  // into as few meshes as it has materials: a head becomes three, not nine.
+  const kit = `${kind} ${suit} ${color} ${trouser} ${appearance.skin} ${appearance.gender} ${seated}`;
+  const face = `${hat} ${appearance.hairstyle} ${appearance.glasses} ${appearance.skin} ${appearance.hair} ${suit}`;
   return (
     <group position={[0, pose.hop, 0]} rotation={[0, pose.spin, pose.lean]}>
-      <Round
-        p={[0, seated ? 0.91 : 1.12, 0]}
-        s={[
-          appearance.gender === 'masculine' ? 0.51 : appearance.gender === 'feminine' ? 0.43 : 0.47,
-          0.57,
-          0.29,
-        ]}
-        color={suit}
-        radius={0.105}
-      />
-      {kind !== 'worker' && <Box p={[0, seated ? 1.13 : 1.34, 0.02]} s={[0.3, 0.07, 0.28]} color={color} />}
-      {kind === 'auditor' && (
-        <group>
-          {/* A long dark coat, and the clipboard the findings are written on. */}
-          <Round p={[0, seated ? 0.72 : 0.84, 0]} s={[0.53, 0.36, 0.33]} color={COAT} radius={0.06} />
-          <group position={[0.2, seated ? 1.0 : 1.28, 0.24]} rotation={[-0.5, 0.2, 0]}>
-            <Round s={[0.3, 0.38, 0.02]} color="#7d6a4c" radius={0.01} />
-            <Box p={[0, -0.02, 0.014]} s={[0.26, 0.3, 0.006]} color="#f1ead6" />
-            <Box p={[0, 0.17, 0.018]} s={[0.12, 0.035, 0.012]} color={C.brass} />
-          </group>
-        </group>
-      )}
-      {kind === 'triage' && (
-        <group>
-          {/* A high-visibility vest over the shirt, with two reflective bands. */}
-          <Round p={[0, seated ? 0.95 : 1.16, 0.01]} s={[0.5, 0.48, 0.33]} color="#e0cc4b" radius={0.08} />
-          {[-0.09, 0.07].map((y) => (
-            <Box key={y} p={[0, (seated ? 0.95 : 1.16) + y, 0.17]} s={[0.46, 0.045, 0.02]} color="#c9ced2" />
-          ))}
-        </group>
-      )}
-      <Cylinder p={[0, headY - 0.23, 0]} radius={0.075} height={0.15} color={appearance.skin} />
-      <group position={[0, headY, 0]} rotation={[pose.headPitch, pose.headYaw, 0]}>
-        {hat !== 'none' && (
+      <Static revision={kit}>
+        <Round
+          p={[0, seated ? 0.91 : 1.12, 0]}
+          s={[
+            appearance.gender === 'masculine' ? 0.51 : appearance.gender === 'feminine' ? 0.43 : 0.47,
+            0.57,
+            0.29,
+          ]}
+          color={suit}
+          radius={0.105}
+        />
+        {kind !== 'worker' && <Box p={[0, seated ? 1.13 : 1.34, 0.02]} s={[0.3, 0.07, 0.28]} color={color} />}
+        {kind === 'auditor' && (
           <group>
-            <Round p={[0, 0.21, 0]} s={[0.4, 0.19, 0.37]} color={suit} radius={0.08} />
-            {hat === 'cap' && <Round p={[0, 0.15, 0.2]} s={[0.39, 0.04, 0.3]} color={suit} radius={0.03} />}
+            {/* A long dark coat, and the clipboard the findings are written on. */}
+            <Round p={[0, seated ? 0.72 : 0.84, 0]} s={[0.53, 0.36, 0.33]} color={COAT} radius={0.06} />
+            <group position={[0.2, seated ? 1.0 : 1.28, 0.24]} rotation={[-0.5, 0.2, 0]}>
+              <Round s={[0.3, 0.38, 0.02]} color="#7d6a4c" radius={0.01} />
+              <Box p={[0, -0.02, 0.014]} s={[0.26, 0.3, 0.006]} color="#f1ead6" />
+              <Box p={[0, 0.17, 0.018]} s={[0.12, 0.035, 0.012]} color={C.brass} />
+            </group>
           </group>
         )}
-        <Round p={[0, 0, 0]} s={[0.35, 0.4, 0.33]} color={appearance.skin} radius={0.11} />
-        {appearance.hairstyle !== 'bald' && (
-          <Round p={[0, 0.135, -0.025]} s={[0.368, 0.175, 0.352]} color={appearance.hair} radius={0.07} />
+        {kind === 'triage' && (
+          <group>
+            {/* A high-visibility vest over the shirt, with two reflective bands. */}
+            <Round p={[0, seated ? 0.95 : 1.16, 0.01]} s={[0.5, 0.48, 0.33]} color="#e0cc4b" radius={0.08} />
+            {[-0.09, 0.07].map((y) => (
+              <Box
+                key={y}
+                p={[0, (seated ? 0.95 : 1.16) + y, 0.17]}
+                s={[0.46, 0.045, 0.02]}
+                color="#c9ced2"
+              />
+            ))}
+          </group>
         )}
-        {appearance.hairstyle !== 'bald' && (
-          <Box p={[0, 0.055, -0.156]} s={[0.35, 0.2, 0.045]} color={appearance.hair} />
-        )}
-        {appearance.hairstyle === 'long' && (
-          <Round p={[0.155, -0.1, -0.1]} s={[0.09, 0.32, 0.16]} color={appearance.hair} radius={0.04} />
-        )}
-        <Round p={[0, -0.035, 0.179]} s={[0.071, 0.09, 0.058]} color={appearance.skin} radius={0.024} />
+        <Cylinder p={[0, headY - 0.23, 0]} radius={0.075} height={0.15} color={appearance.skin} />
+        {/* The legs are part of the kit: they take their pose from `seated` and
+            never move again, so they merge with the body rather than animating. */}
         {[-1, 1].map((side) => (
-          <group key={side}>
-            <mesh position={[side * 0.087, 0.005, 0.167]}>
-              <sphereGeometry args={[0.016, 6, 6]} />
-              <meshStandardMaterial color="#32392e" />
-            </mesh>
-            {appearance.glasses && (
-              <Box p={[side * 0.087, 0.012, 0.175]} s={[0.13, 0.075, 0.018]} color="#454d46" />
-            )}
-          </group>
-        ))}
-      </group>
-      {[-1, 1].map((side, i) => (
-        <group key={side}>
           <group
+            key={side}
             position={[side * 0.14, seated ? 0.56 : 0.85, 0]}
             rotation={[seated ? -Math.PI / 2 : 0, 0, 0]}
           >
@@ -270,11 +367,49 @@ function Figure({
               <Round p={[0, -0.35, 0.06]} s={[0.19, 0.12, 0.31]} color="#e0ddce" radius={0.035} />
             </group>
           </group>
+        ))}
+      </Static>
+      <group position={[0, headY, 0]} rotation={[pose.headPitch, pose.headYaw, 0]}>
+        <Static revision={face}>
+          {hat !== 'none' && (
+            <group>
+              <Round p={[0, 0.21, 0]} s={[0.4, 0.19, 0.37]} color={suit} radius={0.08} />
+              {hat === 'cap' && <Round p={[0, 0.15, 0.2]} s={[0.39, 0.04, 0.3]} color={suit} radius={0.03} />}
+            </group>
+          )}
+          <Round p={[0, 0, 0]} s={[0.35, 0.4, 0.33]} color={appearance.skin} radius={0.11} />
+          {appearance.hairstyle !== 'bald' && (
+            <Round p={[0, 0.135, -0.025]} s={[0.368, 0.175, 0.352]} color={appearance.hair} radius={0.07} />
+          )}
+          {appearance.hairstyle !== 'bald' && (
+            <Box p={[0, 0.055, -0.156]} s={[0.35, 0.2, 0.045]} color={appearance.hair} />
+          )}
+          {appearance.hairstyle === 'long' && (
+            <Round p={[0.155, -0.1, -0.1]} s={[0.09, 0.32, 0.16]} color={appearance.hair} radius={0.04} />
+          )}
+          <Round p={[0, -0.035, 0.179]} s={[0.071, 0.09, 0.058]} color={appearance.skin} radius={0.024} />
+          {[-1, 1].map((side) => (
+            <group key={side}>
+              <mesh position={[side * 0.087, 0.005, 0.167]}>
+                <sphereGeometry args={[0.016, 6, 6]} />
+                <meshStandardMaterial color="#32392e" />
+              </mesh>
+              {appearance.glasses && (
+                <Box p={[side * 0.087, 0.012, 0.175]} s={[0.13, 0.075, 0.018]} color="#454d46" />
+              )}
+            </group>
+          ))}
+        </Static>
+      </group>
+      {[-1, 1].map((side, i) => (
+        <group key={side}>
           <group position={[side * 0.27, shoulderY, 0]} rotation={[pose.shoulder[i], 0, pose.roll[i]]}>
             <Round p={[0, -0.15, 0]} s={[0.16, 0.31, 0.18]} color={suit} radius={0.045} />
             <group position={[0, -0.29, 0]} rotation={[pose.elbow[i], 0, 0]}>
-              <Round p={[0, -0.11, 0]} s={[0.13, 0.25, 0.14]} color={appearance.skin} radius={0.04} />
-              <Round p={[0, -0.245, 0.02]} s={[0.13, 0.12, 0.135]} color={appearance.skin} radius={0.04} />
+              <Static revision={appearance.skin}>
+                <Round p={[0, -0.11, 0]} s={[0.13, 0.25, 0.14]} color={appearance.skin} radius={0.04} />
+                <Round p={[0, -0.245, 0.02]} s={[0.13, 0.12, 0.135]} color={appearance.skin} radius={0.04} />
+              </Static>
             </group>
           </group>
         </group>
@@ -327,39 +462,46 @@ export function EmployeeAvatar({
   const walk = useRef({ from: new THREE.Vector3(), to: new THREE.Vector3(), t: 1 });
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
-  const [pose, setPose] = useState<Pose>(() => poseFor(state.activity, 0, 0, employee.traits ?? []));
+  /** The frame loop's pose. Null until the first frame, and ignored without motion. */
+  const [animated, setAnimated] = useState<Pose | null>(null);
   const elapsed = useRef(index * 7.3 + 7);
   const lastPoseUpdate = useRef(-1);
   const placed = useRef(false);
   const color = employee.color || C.sage;
-  const traits = employee.traits ?? [];
+  const traits = useMemo(() => employee.traits ?? [], [employee.traits]);
   const appearance = useMemo(() => appearanceFor(employee.id), [employee.id]);
   const activity = state.activity;
   const seated = SEATED.includes(activity);
   const status = statusOf(state);
-  const entry = useOverlayEntry(employee.id);
+  const label = useOverlayLabel(employee.id);
   const relayout = useOverlayRelayout();
   const headroom = seated ? 1.95 : 2.24;
+  // Reduced motion still changes pose, it just never tweens between them.
+  const still = useMemo(() => poseFor(activity, 0, 0, traits), [activity, traits]);
+  const pose = motion ? (animated ?? still) : still;
+  const [homeX, homeY, homeZ] = station.at;
+  const facing = station.facing;
 
   // The office's own declutter pass needs to know who matters most.
   useLayoutEffect(() => {
-    if (!entry) return;
-    entry.priority = labelPriority({
-      activity,
-      ...(selected ? { selected } : {}),
-      ...(state.attention ? { attention: state.attention } : {}),
-    });
-    entry.forced = Boolean(hovered || focused || selected || pinned);
+    label?.rank(
+      labelPriority({
+        activity,
+        ...(selected ? { selected } : {}),
+        ...(state.attention ? { attention: state.attention } : {}),
+      }),
+      Boolean(hovered || focused || selected || pinned),
+    );
   });
 
   // A new station starts a walk. Reduced motion, and the first placement, snap.
   useEffect(() => {
     if (!group.current) return;
-    const target = scratch.set(...station.at);
+    const target = scratch.set(homeX, homeY, homeZ);
     if (!motion || !placed.current) {
       placed.current = true;
       group.current.position.copy(target);
-      group.current.rotation.y = station.facing;
+      group.current.rotation.y = facing;
       walk.current.t = 1;
       return;
     }
@@ -367,12 +509,7 @@ export function EmployeeAvatar({
     walk.current.from.copy(group.current.position);
     walk.current.to.copy(target);
     walk.current.t = 0;
-  }, [motion, station.at[0], station.at[1], station.at[2], station.facing]);
-
-  // Reduced motion still changes pose, it just never tweens between them.
-  useEffect(() => {
-    if (!motion) setPose(poseFor(activity, 0, 0, traits));
-  }, [motion, activity, employee.id]);
+  }, [motion, homeX, homeY, homeZ, facing]);
 
   useEffect(() => {
     if (!hovered) return;
@@ -396,25 +533,29 @@ export function EmployeeAvatar({
         const eased = journey.t * journey.t * (3 - 2 * journey.t);
         figure.position.lerpVectors(journey.from, journey.to, eased);
         heading.copy(journey.to).sub(journey.from);
-        const walking = journey.t < 0.82 && heading.lengthSq() > 0.09;
+        const turning = journey.t < 0.82 && heading.lengthSq() > 0.09;
         figure.rotation.y = turnToward(
           figure.rotation.y,
-          walking ? Math.atan2(heading.x, heading.z) : station.facing,
+          turning ? Math.atan2(heading.x, heading.z) : facing,
           step * 4.5,
         );
       } else {
-        figure.rotation.y = turnToward(figure.rotation.y, station.facing, step * 4.5);
+        figure.rotation.y = turnToward(figure.rotation.y, facing, step * 4.5);
       }
-      // Articulated limbs update at 20fps.
+      // Articulated limbs update at 20fps. A figure crossing the floor walks
+      // rather than carrying its desk pose with it.
       if (elapsed.current - lastPoseUpdate.current > 0.05) {
         lastPoseUpdate.current = elapsed.current;
-        setPose(poseFor(activity, elapsed.current, (Date.now() - state.since) / 1000, traits));
+        setAnimated(
+          journey.t < 1
+            ? REST
+            : poseFor(activity, elapsed.current, (Date.now() - state.since) / 1000, traits),
+        );
       }
     }
-    if (entry) entry.anchor.set(figure.position.x, headroom, figure.position.z);
+    label?.anchor.set(figure.position.x, headroom, figure.position.z);
   });
 
-  const walking = walk.current.t < 1;
   const bubble = state.bubble;
   return (
     <group ref={group} position={station.at} rotation={[0, station.facing, 0]}>
@@ -429,13 +570,7 @@ export function EmployeeAvatar({
         }}
         onPointerOut={() => setHovered(false)}
       >
-        <Figure
-          color={color}
-          appearance={appearance}
-          index={index}
-          pose={walking ? REST : pose}
-          kind={employee.kind}
-        />
+        <Figure color={color} appearance={appearance} index={index} pose={pose} kind={employee.kind} />
         {/* The janitor brings the cart with them, parked at their side, and leaves it to sit down. */}
         {employee.kind === 'janitor' && !seated && (
           <JanitorCart position={[0.85, 0, -0.22]} rotation={-0.55} />
@@ -459,7 +594,7 @@ export function EmployeeAvatar({
         {mode === 'names' && (
           <button
             ref={(element) => {
-              if (entry) entry.pill = element;
+              label?.attach('pill', element);
               relayout();
             }}
             type="button"
@@ -484,7 +619,7 @@ export function EmployeeAvatar({
         {bubble && (
           <div
             ref={(element) => {
-              if (entry) entry.bubble = element;
+              label?.attach('bubble', element);
               relayout();
             }}
             className="office-bubble"
@@ -536,25 +671,34 @@ function turnToward(current: number, target: number, step: number): number {
   return Math.abs(difference) <= step ? target : current + Math.sign(difference) * step;
 }
 
+const LABELS: Partial<Record<Activity, string>> = {
+  thinking: 'Thinking',
+  reading: 'Reading a result',
+  calling: 'Using a tool',
+  writing: 'Writing',
+  reviewing: 'Waiting for review',
+  celebrating: 'Just finished',
+  failed: 'Stopped on an error',
+  talking: 'Handing work over',
+  reading_memory: 'Reading memory',
+  remembering: 'Writing memory down',
+  filing: 'Filing memory',
+  waiting: 'Waiting on another task',
+  blocked: 'Blocked',
+  reviewing_peer: 'Reviewing a dependency',
+  preparing: 'Preparing for a meeting',
+  presenting: 'Speaking in the meeting',
+  answering: 'Answering a question',
+  auditing: 'Auditing a desk',
+  triaging: 'On an incident',
+  planning: 'Planning the project',
+  arriving: 'Starting a shift',
+  leaving: 'Ending a shift',
+  off_shift: 'Off shift',
+  reporting: 'Writing the shift report',
+  uneasy: 'Has an open finding',
+};
+
 function activityLabel(activity: Activity): string {
-  switch (activity) {
-    case 'thinking':
-      return 'Thinking';
-    case 'reading':
-      return 'Reading a result';
-    case 'calling':
-      return 'Using a tool';
-    case 'writing':
-      return 'Writing';
-    case 'reviewing':
-      return 'Waiting for review';
-    case 'celebrating':
-      return 'Just finished';
-    case 'failed':
-      return 'Stopped on an error';
-    case 'talking':
-      return 'Handing work over';
-    default:
-      return 'Available';
-  }
+  return LABELS[activity] ?? 'Available';
 }

@@ -17,6 +17,12 @@ const scenes: { name: string; query: string }[] = [
   { name: 'records', query: 'preset=records&hour=11' },
   { name: 'boardroom', query: 'preset=boardroom&hour=15' },
   { name: 'triage', query: 'preset=triage&hour=14' },
+  { name: 'meeting-live', query: 'preset=meeting-live&hour=15' },
+  { name: 'audit-night', query: 'preset=audit-night&hour=23' },
+  { name: 'incident', query: 'preset=incident&hour=14' },
+  // The replayed day, stopped at three in the afternoon: the incident is open,
+  // triage is on it, and the notice from the unanswered pages is by the door.
+  { name: 'day-replay', query: 'preset=day-replay&at=15' },
 ];
 
 test.skip(process.env.QA_FIXTURE !== '1', 'needs QA_FIXTURE=1');
@@ -39,6 +45,17 @@ test('office performance budget', async ({ page }) => {
   await page.goto('/office-lab?preset=floor-day&hour=13&seed=1');
   await page.locator('canvas').waitFor();
   await page.waitForTimeout(1000);
+
+  // A full floor is the busiest thing the office draws. The plan's budget is 400
+  // draw calls; a call is one mesh, plus one more if it casts a shadow, so this
+  // is really a budget on how many separate things the room is made of.
+  const readout = page.locator('[data-office-stats]');
+  await expect
+    .poll(async () => Number((await readout.getAttribute('data-office-stats')) || 0), { timeout: 20_000 })
+    .toBeGreaterThan(0);
+  const calls = Number(await readout.getAttribute('data-office-stats'));
+  expect(calls, 'draw calls on a floor at 1440').toBeLessThan(400);
+
   const sample = await page.evaluate(
     () =>
       new Promise<{ medianMs: number; frames: number }>((resolve) => {
