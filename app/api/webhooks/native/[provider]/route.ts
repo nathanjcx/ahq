@@ -9,14 +9,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
   try {
     const { provider } = await params;
     if (!isNativeProvider(provider)) throw new HttpError(404, 'Unknown native inbox provider.');
-    const secret = nativeSecret(provider);
+    const secret = await nativeSecret(provider);
     if (!secret) throw new HttpError(404, 'Native inbox delivery is not configured for this provider.');
     const body = await rawBody(request, 1_000_000);
     const delivery = parseNativeDelivery(provider, secret, body, request.headers);
     if (delivery.kind === 'challenge') return NextResponse.json({ challenge: delivery.challenge });
     if (delivery.kind === 'ignored')
       return NextResponse.json({ accepted: true, ignored: true }, { status: 202 });
-    const { delivered } = await mutate<{ delivered: number }>('services:ingestInboxByResource', {
+    const { delivered } = await mutate<{ delivered: number }>('services/inbox:ingestInboxByResource', {
       provider,
       resourceIds: delivery.resourceIds,
       items: delivery.items,

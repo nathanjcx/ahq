@@ -3,27 +3,27 @@ import { connectedMcp } from '../lib/server/mcp';
 import { canonical, checkResourceScope, resultObject, toolPolicy } from '../lib/server/tool-policy';
 import { toolEvidence } from '../lib/server/audit-mcp';
 import { safeError } from '../lib/server/secrets';
-import type { PrivateConnection } from '../lib/server/mcp';
-import type { Job } from './types';
+import type { Job, PrivateConnection, ToolPolicy } from './types';
 interface ExecutableAction {
   action: { id: string; tool: string; arguments: string; beforeState?: string; originalActionId?: string };
   connection: PrivateConnection;
+  policies: ToolPolicy[];
   task: { id: string; runToken: string };
   original?: { arguments: string; beforeState?: string; afterState?: string; tool: string };
 }
 export async function executeAction(job: Job) {
   const proposalId = String(job.payload.proposalId);
-  let dispatched = false;
+  let dispatched = 0;
   let audit: Record<string, unknown> | undefined;
   let terminal: Record<string, unknown>;
   let auditResult: unknown;
   try {
-    const context = await query<ExecutableAction>('services:actionContext', {
+    const context = await query<ExecutableAction>('services/actions:actionContext', {
       proposalId,
       leaseToken: job.leaseToken,
     });
     const { action, connection } = context;
-    const policy = toolPolicy(connection.provider, action.tool);
+    const policy = toolPolicy(context.policies, connection.provider, action.tool);
     if (policy.mode !== 'write') throw new Error('This tool is no longer approved for external writes.');
     let args = JSON.parse(action.arguments) as Record<string, unknown>;
     let before = action.beforeState ? JSON.parse(action.beforeState) : undefined;
@@ -52,17 +52,17 @@ export async function executeAction(job: Job) {
         throw new Error('The approved action has no captured resource version.');
       args[rule.expectedVersionArgument] = before[rule.versionField];
     }
-    checkResourceScope(connection.resourceScope, args, toolPolicy(connection.provider, action.tool));
+    checkResourceScope(connection.resourceScope, args, policy);
     // Recheck the lease and grants immediately before dispatch. Never retry a write after an uncertain result.
     const result = await connectedMcp(connection, async (client) => {
-      const current = await query<ExecutableAction>('services:actionContext', {
+      const current = await query<ExecutableAction>('services/actions:actionContext', {
         proposalId,
         leaseToken: job.leaseToken,
       });
       checkResourceScope(
         current.connection.resourceScope,
         args,
-        toolPolicy(current.connection.provider, action.tool),
+        toolPolicy(current.policies, current.connection.provider, action.tool),
       );
       audit = {
         runToken: current.task.runToken,
@@ -73,8 +73,8 @@ export async function executeAction(job: Job) {
         leaseToken: job.leaseToken,
         argumentsCiphertext: toolEvidence(args).ciphertext,
       };
-      await journalMutation('services:recordToolCall', { ...audit, outcome: 'started' });
-      dispatched = true;
+      await journalMutation('services/actions:recordToolCall', { ...audit, outcome: 'started' });
+      dispatched = Date.now();
       return client.callTool({ name: action.tool, arguments: args }, undefined, { timeout: 45_000 });
     });
     if (result.isError)
@@ -100,7 +100,7 @@ export async function executeAction(job: Job) {
       ...(afterState ? { afterState } : {}),
     };
   } catch (error) {
-    auditResult = { error: safeError(error), outcomeUnknown: dispatched };
+    auditResult = { error: safeError(error), outcomeUnknown: Boolean(dispatched) };
     terminal = {
       proposalId,
       leaseToken: job.leaseToken,
@@ -110,12 +110,14 @@ export async function executeAction(job: Job) {
   }
   if (audit && dispatched) {
     const evidence = toolEvidence(auditResult);
-    await journalMutation('services:recordToolCall', {
+    await journalMutation('services/actions:recordToolCall', {
       ...audit,
       outcome: terminal.status === 'succeeded' ? 'succeeded' : 'failed',
+      ...(terminal.status === 'succeeded' ? {} : { reason: 'provider_error' }),
+      durationMs: Date.now() - dispatched,
       resultCiphertext: evidence.ciphertext,
       sha256: evidence.sha256,
     });
   }
-  await journalMutation('services:recordActionResult', terminal);
+  await journalMutation('services/actions:recordActionResult', terminal);
 }

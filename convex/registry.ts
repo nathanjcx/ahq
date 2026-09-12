@@ -1,70 +1,29 @@
-export const providerIds = ['linear', 'slack', 'github', 'google-workspace', 'canva'] as const;
-export type ProviderId = (typeof providerIds)[number];
-export type RegistryTool = { name: string; description: string; mode: 'read' | 'write' | 'blocked' };
+import type { Doc } from './_generated/dataModel';
+import type { DbCtx } from './shared';
+import type { ProviderConfig, ProviderId, ProviderReadiness, RegistryTool } from '../lib/contracts';
+import type { ToolPolicy } from '../services/types';
 
-function providerJson(name: string): Record<string, unknown> {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(process.env[name] || '{}');
-  } catch {
-    throw new Error(`${name} is invalid JSON`);
-  }
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw))
-    throw new Error(`${name} must be an object keyed by provider`);
-  for (const key of Object.keys(raw)) {
-    if (!providerIds.includes(key as ProviderId)) throw new Error(`${name} has an unknown provider: ${key}`);
-  }
-  return raw as Record<string, unknown>;
+export const providerIds: ProviderId[] = ['linear', 'slack', 'github', 'google-workspace', 'canva'];
+
+export async function providerConfigFor(ctx: DbCtx, provider: ProviderId) {
+  return ctx.db
+    .query('providerConfigs')
+    .withIndex('by_provider', (q) => q.eq('provider', provider))
+    .unique();
 }
 
-/** Reviewed tools an administrator permits per provider. */
-export function toolRegistry() {
-  const source = providerJson('MCP_TOOL_REGISTRY_JSON');
-  return providerIds.map((providerId) => {
-    const value = source[providerId];
-    if (value === undefined) return { provider: providerId, configured: false, tools: [] as RegistryTool[] };
-    if (!Array.isArray(value)) throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId} must be an array`);
-    if (value.length > 2_000) throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId} has too many tools`);
-    const tools = value.map((item, index): RegistryTool => {
-      if (!item || typeof item !== 'object' || Array.isArray(item))
-        throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId}[${index}] is invalid`);
-      const record = item as Record<string, unknown>;
-      if (Object.keys(record).some((key) => key !== 'name' && key !== 'description' && key !== 'mode'))
-        throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId}[${index}] has an unknown field`);
-      if (
-        typeof record.name !== 'string' ||
-        !record.name.trim() ||
-        record.name !== record.name.trim() ||
-        record.name.length > 200
-      )
-        throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId}[${index}].name is invalid`);
-      if (
-        typeof record.description !== 'string' ||
-        !record.description.trim() ||
-        record.description !== record.description.trim() ||
-        record.description.length > 2_000
-      )
-        throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId}[${index}].description is invalid`);
-      if (record.mode !== 'read' && record.mode !== 'write' && record.mode !== 'blocked')
-        throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId}[${index}].mode is invalid`);
-      return { name: record.name, description: record.description, mode: record.mode };
-    });
-    if (new Set(tools.map((tool) => tool.name)).size !== tools.length)
-      throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId} has duplicate tool names`);
-    return { provider: providerId, configured: true, tools };
-  });
+export async function registryToolsFor(ctx: DbCtx, provider: ProviderId) {
+  return ctx.db
+    .query('registryTools')
+    .withIndex('by_provider', (q) => q.eq('provider', provider))
+    .collect();
 }
 
-/** Exact MCP server URLs an administrator admitted per provider. */
-export function enabledServerUrls(providerId: string): string[] {
-  const value = providerJson('MCP_SERVER_URLS_JSON')[providerId];
-  if (value === undefined) return [];
-  if (!Array.isArray(value) || value.some((url) => typeof url !== 'string'))
-    throw new Error(`MCP_SERVER_URLS_JSON.${providerId} must be an array of URLs`);
-  return value;
+export async function enabledServerUrls(ctx: DbCtx, provider: ProviderId) {
+  return (await providerConfigFor(ctx, provider))?.enabledUrls ?? [];
 }
 
-export function assertApprovedServerUrl(providerId: string, serverUrl: string) {
+export async function assertApprovedServerUrl(ctx: DbCtx, provider: ProviderId, serverUrl: string) {
   let url: URL;
   try {
     url = new URL(serverUrl);
@@ -73,29 +32,129 @@ export function assertApprovedServerUrl(providerId: string, serverUrl: string) {
   }
   if (url.protocol !== 'https:' || url.username || url.password)
     throw new Error('MCP server URL must use HTTPS without embedded credentials');
-  if (!enabledServerUrls(providerId).includes(url.toString()))
+  const enabled = await enabledServerUrls(ctx, provider);
+  if (!enabled.includes(url.toString()) && !enabled.includes(serverUrl))
     throw new Error('This MCP server is not enabled by your administrator');
 }
 
-/** Tools a new connection receives: everything discovered that the registry reviewed and did not block. */
-export function grantableTools(providerId: string, discovered: string[]): string[] {
-  const entry = toolRegistry().find((item) => item.provider === providerId);
-  const reviewed = new Set(entry?.tools.filter((tool) => tool.mode !== 'blocked').map((tool) => tool.name));
+/** Tools a connection may receive: everything discovered that the registry reviewed and did not block. */
+export async function grantableTools(ctx: DbCtx, provider: ProviderId, discovered: string[]) {
+  const reviewed = new Set(
+    (await registryToolsFor(ctx, provider))
+      .filter((tool) => tool.mode !== 'blocked')
+      .map((tool) => tool.name),
+  );
   return discovered.filter((name) => reviewed.has(name));
 }
 
-export type ProviderReadiness = {
-  provider: ProviderId;
-  enabledUrls: string[];
-  reviewedTools: number;
-};
+export function toolPolicyOf(row: Doc<'registryTools'>): ToolPolicy {
+  return {
+    provider: row.provider,
+    name: row.name,
+    mode: row.mode,
+    ...(row.resourceArgument ? { resourceArgument: row.resourceArgument } : {}),
+    ...(row.correction ? { correction: row.correction } : {}),
+  };
+}
 
-/** Convex-side deployment state per provider. Web-side OAuth and webhook state is added by the web service. */
-export function providerReadiness(): ProviderReadiness[] {
-  const registry = new Map(toolRegistry().map((entry) => [entry.provider, entry]));
-  return providerIds.map((provider) => ({
+export async function policiesFor(ctx: DbCtx, providers: ProviderId[]): Promise<ToolPolicy[]> {
+  const policies: ToolPolicy[] = [];
+  for (const provider of [...new Set(providers)]) {
+    policies.push(...(await registryToolsFor(ctx, provider)).map(toolPolicyOf));
+  }
+  return policies;
+}
+
+export function registryTool(row: Doc<'registryTools'>): RegistryTool {
+  return {
+    provider: row.provider,
+    name: row.name,
+    description: row.description,
+    mode: row.mode,
+    ...(row.resourceArgument ? { resourceArgument: row.resourceArgument } : {}),
+    ...(row.correction ? { correction: row.correction } : {}),
+    ...(row.annotations ? { annotations: row.annotations } : {}),
+    updatedAt: row.updatedAt,
+    updatedBy: row.updatedBy,
+  };
+}
+
+function oauthUrls(config: Doc<'providerConfigs'> | null) {
+  if (!config) return [];
+  if (config.oauthClients.some((client) => !client.serverUrl)) return [...config.enabledUrls];
+  const configured = new Set(config.oauthClients.map((client) => client.serverUrl));
+  return config.enabledUrls.filter((url) => configured.has(url));
+}
+
+export function providerConfig(provider: ProviderId, config: Doc<'providerConfigs'> | null): ProviderConfig {
+  return {
     provider,
-    enabledUrls: enabledServerUrls(provider),
-    reviewedTools: registry.get(provider)?.tools.filter((tool) => tool.mode !== 'blocked').length ?? 0,
-  }));
+    enabledUrls: config?.enabledUrls ?? [],
+    oauthClients: (config?.oauthClients ?? []).map((client) => ({
+      ...(client.serverUrl ? { serverUrl: client.serverUrl } : {}),
+      clientId: client.clientId,
+      hasClientSecret: Boolean(client.clientSecretCiphertext),
+      ...(client.scopes ? { scopes: client.scopes } : {}),
+      ...(client.authorizationUrl ? { authorizationUrl: client.authorizationUrl } : {}),
+      ...(client.tokenUrl ? { tokenUrl: client.tokenUrl } : {}),
+      ...(client.tokenAuthMethod ? { tokenAuthMethod: client.tokenAuthMethod } : {}),
+    })),
+    hasInboxSecret: Boolean(config?.inboxSecretCiphertext),
+    ...(config ? { updatedAt: config.updatedAt, updatedBy: config.updatedBy } : {}),
+  };
+}
+
+/** What the Integrations page needs to explain readiness, derived entirely from the configuration tables. */
+export async function providerReadiness(ctx: DbCtx): Promise<ProviderReadiness[]> {
+  const readiness: ProviderReadiness[] = [];
+  for (const provider of providerIds) {
+    const config = await providerConfigFor(ctx, provider);
+    const tools = await registryToolsFor(ctx, provider);
+    readiness.push({
+      provider,
+      enabledUrls: config?.enabledUrls ?? [],
+      oauthUrls: oauthUrls(config),
+      reviewedTools: tools.filter((tool) => tool.mode !== 'blocked').length,
+      inboxConfigured: Boolean(config?.inboxSecretCiphertext),
+    });
+  }
+  return readiness;
+}
+
+const destructive = /(^|[._-])(?:delete|purge|destroy|remove)(?:[._-]|$)/i;
+
+export function isDestructiveName(name: string) {
+  return destructive.test(name.replace(/([a-z0-9])([A-Z])/g, '$1_$2'));
+}
+
+/** Guards the one table that grants tools to agents. Annotations are hints and never validated as grants. */
+export function validateRegistryTool(input: {
+  name: string;
+  description: string;
+  mode: 'read' | 'write' | 'blocked';
+  resourceArgument?: string;
+  correction?: {
+    readTool: string;
+    idArgument: string;
+    versionField: string;
+    expectedVersionArgument: string;
+    fields: string[];
+  };
+}) {
+  const name = input.name.trim();
+  if (!name || name.length > 200) throw new Error('Tool name is required and limited to 200 characters');
+  const description = input.description.trim();
+  if (description.length > 2_000) throw new Error('Tool description is too long');
+  if (input.mode === 'read' && isDestructiveName(name))
+    throw new Error('A destructive tool name cannot be saved as read-only');
+  if (input.resourceArgument !== undefined && !input.resourceArgument.trim())
+    throw new Error('Resource argument cannot be blank');
+  if (input.correction) {
+    const { readTool, idArgument, versionField, expectedVersionArgument, fields } = input.correction;
+    if (![readTool, idArgument, versionField, expectedVersionArgument].every((value) => value.trim()))
+      throw new Error('Every correction descriptor field is required');
+    if (!fields.length || fields.some((field) => !field.trim()))
+      throw new Error('Correction fields must be non-empty');
+  }
+  return { name, description };
 }

@@ -7,7 +7,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const identity = await actor(),
       { id } = await params;
     const { artifact } = await query<{ artifact: { storageKey: string; name: string; size: number } }>(
-      'services:artifactContext',
+      'services/artifacts:artifactContext',
       { ...identity, artifactId: id },
     );
     const file = await getArtifact(artifact.storageKey);

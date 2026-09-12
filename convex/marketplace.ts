@@ -1,8 +1,9 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
 import type { Doc } from './_generated/dataModel';
-import { toolRegistry, type ProviderId } from './registry';
-import { cleanText, identity, requirePlatformAdmin, requireWorkspace, sha256 } from './shared';
+import type { ProviderId } from '../lib/contracts';
+import { registryToolsFor } from './registry';
+import { cleanText, identity, requirePlatformAdmin, requireWorkspace, sha256, type Ctx } from './shared';
 
 const provider = v.union(
   v.literal('linear'),
@@ -24,10 +25,10 @@ const media = v.object({
   alt: v.string(),
 });
 const skill = v.object({ name: v.string(), version: v.string(), sha256: v.string(), content: v.string() });
-function validateCapabilities(
+async function validateCapabilities(
+  ctx: Ctx,
   capabilities: Array<{ provider: ProviderId; tools: string[]; optional: boolean }>,
 ) {
-  const registry = new Map(toolRegistry().map((entry) => [entry.provider, entry]));
   const seenProviders = new Set<ProviderId>();
   for (const capability of capabilities) {
     if (seenProviders.has(capability.provider))
@@ -37,9 +38,9 @@ function validateCapabilities(
       throw new Error(`${capability.provider} capability requires at least one tool`);
     if (new Set(capability.tools).size !== capability.tools.length)
       throw new Error(`${capability.provider} capability has duplicate tools`);
-    const entry = registry.get(capability.provider);
-    if (!entry?.configured) throw new Error(`${capability.provider} has no configured MCP tool registry`);
-    const tools = new Map(entry.tools.map((tool) => [tool.name, tool]));
+    const tools = new Map(
+      (await registryToolsFor(ctx, capability.provider)).map((tool) => [tool.name, tool]),
+    );
     for (const tool of capability.tools) {
       const registered = tools.get(tool);
       if (!registered) throw new Error(`${capability.provider}.${tool} is not in the MCP tool registry`);
@@ -156,14 +157,6 @@ export const adminList = query({
   },
 });
 
-export const adminToolRegistry = query({
-  args: {},
-  handler: async (ctx) => {
-    await requirePlatformAdmin(ctx);
-    return toolRegistry();
-  },
-});
-
 export const saveDraft = mutation({
   args: { draftId: v.optional(v.id('employeeDrafts')), ...draftFields },
   handler: async (ctx, args) => {
@@ -213,7 +206,7 @@ export const publish = mutation({
     const actor = await requirePlatformAdmin(ctx);
     const draft = await ctx.db.get(args.draftId);
     if (!draft) throw new Error('Draft not found');
-    validateCapabilities(draft.capabilities);
+    await validateCapabilities(ctx, draft.capabilities);
     validateMedia(draft.media);
     const skills = await Promise.all(
       draft.skills.map(async (item) => ({ ...item, sha256: await sha256(item.content) })),

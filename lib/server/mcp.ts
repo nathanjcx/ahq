@@ -6,16 +6,7 @@ import { approvedMcpUrl, safeFetch } from './network';
 import { oauthProvider, type StoredCredential } from './oauth';
 import { unseal, seal } from './secrets';
 import { mutate } from './backend';
-export interface PrivateConnection {
-  id: string;
-  provider: string;
-  serverUrl: string;
-  allowedTools: string[];
-  resourceScope: string;
-  credentialCiphertext: string;
-  credentialKeyVersion?: string;
-  status: string;
-}
+import type { PrivateConnection } from '../../services/types';
 export async function withMcp<T>(
   connection: Pick<PrivateConnection, 'provider' | 'serverUrl'>,
   credential: StoredCredential,
@@ -26,7 +17,7 @@ export async function withMcp<T>(
   const client = new Client({ name: 'astra-hq', version: '1.0.0' });
   const transport = new StreamableHTTPClientTransport(url, {
     fetch: safeFetch,
-    authProvider: oauthProvider(credential.oauth, async (state) => {
+    authProvider: await oauthProvider(credential.oauth, async (state) => {
       await onRefresh?.({ oauth: state });
     }),
   });
@@ -66,7 +57,7 @@ export async function connectedMcp<T>(
   const credentials = unseal<StoredCredential>(connection.credentialCiphertext);
   try {
     return await withMcp(connection, credentials, run, async (refreshed) => {
-      await mutate('services:refreshCredential', {
+      await mutate('services/integrations:refreshCredential', {
         connectionId: connection.id,
         credentialCiphertext: seal(refreshed),
       });
@@ -74,7 +65,7 @@ export async function connectedMcp<T>(
   } catch (error) {
     // A failed refresh means the provider revoked or expired the grant. Ask the owner to sign in again.
     if (error instanceof UnauthorizedError)
-      await mutate('services:markConnectionError', {
+      await mutate('services/integrations:markConnectionError', {
         connectionId: connection.id,
         error: 'Authorization expired. Reconnect this integration to continue.',
       }).catch(() => {});

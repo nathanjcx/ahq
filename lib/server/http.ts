@@ -1,4 +1,4 @@
-import { auth } from '@clerk/nextjs/server';
+import { auth, clerkClient } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { safeError } from './secrets';
 export class HttpError extends Error {
@@ -22,6 +22,27 @@ export async function actor(request?: Request) {
   if (!identity.userId) throw new HttpError(401, 'Sign in to continue.');
   return { authSubject: identity.userId, ...(identity.orgId ? { authOrgId: identity.orgId } : {}) };
 }
+/** Platform administrators are trusted by bootstrap environment, the same list Convex reads. */
+export function isPlatformAdmin(subject: string) {
+  return (process.env.PLATFORM_ADMIN_USER_IDS || '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .includes(subject);
+}
+
+export async function platformAdmin(request?: Request) {
+  const identity = await actor(request);
+  if (!isPlatformAdmin(identity.authSubject))
+    throw new HttpError(403, 'Platform administrator access required.');
+  return identity;
+}
+
+export async function displayName(subject: string) {
+  const user = await (await clerkClient()).users.getUser(subject);
+  return user.fullName || user.primaryEmailAddress?.emailAddress || 'Member';
+}
+
 export function failure(error: unknown) {
   const status = error instanceof HttpError ? error.status : 400;
   return NextResponse.json({ error: safeError(error) }, { status });

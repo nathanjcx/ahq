@@ -3,7 +3,6 @@ import { strToU8, zipSync } from 'fflate';
 import type { SessionCreateParamsNonStreaming } from 'openai/resources/beta/agents/sessions/sessions';
 import type { TokenUsage } from 'openai/resources/beta/agents/agents';
 import type { TaskContext } from '../../services/types';
-import type { ModelId } from '../contracts';
 import { requiredEnv } from './secrets';
 import { toolPolicy } from './tool-policy';
 let client: OpenAI | undefined;
@@ -30,7 +29,7 @@ export function sessionConfiguration(context: TaskContext): SessionCreateParamsN
     const allowed = connection.allowedTools.filter(
       (tool) =>
         caps.some((cap) => cap.tools.includes(tool)) &&
-        toolPolicy(connection.provider, tool).mode !== 'blocked',
+        toolPolicy(context.policies, connection.provider, tool).mode !== 'blocked',
     );
     if (!allowed.length) return [];
     return [
@@ -77,22 +76,11 @@ export function sessionConfiguration(context: TaskContext): SessionCreateParamsN
     stream: false,
   };
 }
-// Conservative standard-price estimate: uncached inputs may incur cache-write pricing.
-// Large-context premiums and separate hosted/tool charges are not included here.
-export function estimateUsage(model: ModelId, usage: TokenUsage) {
-  const rates = {
-    'gpt-5.6-luna': [0.25, 0.02, 1.2],
-    'gpt-5.6-terra': [2.5, 0.2, 12],
-    'gpt-5.6-sol': [5, 0.4, 20],
-    'gpt-6-astra': [12.5, 1, 50],
-  }[model];
-  const cached = Math.min(usage.input_tokens, usage.input_tokens_details.cached_tokens);
+/** Cumulative session token usage. The app records usage; it never prices it. */
+export function sessionUsage(usage: TokenUsage) {
   return {
     input: usage.input_tokens,
+    cached: Math.min(usage.input_tokens, usage.input_tokens_details.cached_tokens),
     output: usage.output_tokens,
-    cached,
-    estimatedCost:
-      ((usage.input_tokens - cached) * rates[0] + cached * rates[1] + usage.output_tokens * rates[2]) /
-      1_000_000,
   };
 }

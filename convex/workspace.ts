@@ -1,37 +1,20 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
-import type { Doc } from './_generated/dataModel';
-import { grantableTools } from './registry';
+import type { Doc, Id } from './_generated/dataModel';
+import { registryToolsFor } from './registry';
 import {
   authKey,
+  canDecide,
   canSeeConnection,
+  canSeeTask,
   cleanText,
   identity,
   isPlatformAdmin,
   requireWorkspace,
-  visibleTo,
+  usagePeriod,
   workspaceForIdentity,
 } from './shared';
-import { currentSpend, utcBillingPeriod } from './budget';
-
-function publicConnection(connection: Doc<'connections'>) {
-  return {
-    id: connection._id,
-    provider: connection.provider,
-    name: connection.name,
-    account: connection.account,
-    serverUrl: connection.serverUrl,
-    status: connection.status,
-    // Only reviewed tools can be granted, so that is the list the owner manages.
-    tools: grantableTools(connection.provider, connection.tools),
-    allowedTools: connection.allowedTools,
-    resourceScope: connection.resourceScope,
-    inboxResources: connection.inboxResources ?? [],
-    lastCheckedAt: connection.lastCheckedAt,
-    inboxMode: connection.inboxMode,
-    error: connection.error,
-  };
-}
+import { periodUsage } from './work';
 
 export const bootstrap = mutation({
   args: { name: v.string() },
@@ -39,29 +22,25 @@ export const bootstrap = mutation({
     const actor = await identity(ctx);
     const existing = await workspaceForIdentity(ctx, actor);
     if (existing) return { workspaceId: existing.workspace._id };
-    const now = Date.now();
     const workspaceId = await ctx.db.insert('workspaces', {
       authKey: authKey(actor.subject, actor.orgId),
       name: cleanText(args.name, 'Workspace name', 120),
-      monthlyBudget: 100,
-      spent: 0,
-      reserved: 0,
-      billingPeriod: utcBillingPeriod(now),
+      monthlyTokenCap: 0,
       nextSequence: 0,
-      createdAt: now,
+      createdAt: Date.now(),
     });
     return { workspaceId };
   },
 });
 
-export const setBudget = mutation({
-  args: { monthlyBudget: v.number() },
+export const setTokenCap = mutation({
+  args: { monthlyTokenCap: v.number() },
   handler: async (ctx, args) => {
     const { workspace, role } = await requireWorkspace(ctx);
     if (role !== 'owner' && role !== 'admin') throw new Error('Workspace administrator access required');
-    if (!Number.isFinite(args.monthlyBudget) || args.monthlyBudget < 0 || args.monthlyBudget > 1_000_000)
-      throw new Error('Invalid monthly budget');
-    await ctx.db.patch(workspace._id, { monthlyBudget: Math.round(args.monthlyBudget * 100) / 100 });
+    if (!Number.isFinite(args.monthlyTokenCap) || args.monthlyTokenCap < 0)
+      throw new Error('Invalid monthly token cap');
+    await ctx.db.patch(workspace._id, { monthlyTokenCap: Math.floor(args.monthlyTokenCap) });
     return null;
   },
 });
@@ -70,10 +49,12 @@ export const dashboard = query({
   args: {},
   handler: async (ctx) => {
     const actor = await identity(ctx);
+    const viewer = { subject: actor.subject, name: actor.name };
     const found = await workspaceForIdentity(ctx, actor);
     if (!found)
       return {
         workspace: null,
+        viewer,
         isPlatformAdmin: isPlatformAdmin(actor.subject),
         employees: [],
         connections: [],
@@ -85,7 +66,7 @@ export const dashboard = query({
         artifacts: [],
       };
     const { workspace, role } = found;
-    const [installations, allConnections, projects, tasks, events, proposals, inbox, artifacts] =
+    const [installations, allConnections, projects, tasks, events, proposals, inbox, artifacts, usage] =
       await Promise.all([
         ctx.db
           .query('installations')
@@ -124,12 +105,24 @@ export const dashboard = query({
           .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
           .order('desc')
           .take(200),
+        periodUsage(ctx, workspace._id),
       ]);
-    const connections = allConnections.filter((connection) =>
-      canSeeConnection(connection, actor.subject, role),
-    );
-    const visibleTasks = tasks.filter((task) => task.createdBy === actor.subject);
+    const connections = allConnections.filter((connection) => canSeeConnection(connection, actor.subject));
+    const connectionsById = new Map(allConnections.map((connection) => [connection._id, connection]));
+    const visibleTasks = tasks.filter((task) => canSeeTask(task, actor.subject));
     const visibleTaskIds = new Set(visibleTasks.map((task) => task._id));
+    const reviewed = new Map<string, Set<string>>();
+    for (const connection of connections) {
+      if (reviewed.has(connection.provider)) continue;
+      reviewed.set(
+        connection.provider,
+        new Set(
+          (await registryToolsFor(ctx, connection.provider))
+            .filter((tool) => tool.mode !== 'blocked')
+            .map((tool) => tool.name),
+        ),
+      );
+    }
     const connectionCapabilities = new Map<string, Set<string>>();
     for (const connection of connections) {
       if (connection.status !== 'connected') continue;
@@ -160,17 +153,55 @@ export const dashboard = query({
         };
       }),
     );
+    const openHandoffs = new Map<Id<'projects'>, number>();
+    for (const project of projects) {
+      const posts = await ctx.db
+        .query('projectPosts')
+        .withIndex('by_project_kind', (q) => q.eq('projectId', project._id).eq('kind', 'handoff'))
+        .collect();
+      openHandoffs.set(project._id, posts.filter((post) => post.handoff?.status === 'pending').length);
+    }
     return {
       workspace: {
         id: workspace._id,
         name: workspace.name,
         role,
-        monthlyBudget: workspace.monthlyBudget,
-        spent: currentSpend(workspace),
+        monthlyTokenCap: workspace.monthlyTokenCap,
+        usage: {
+          period: usagePeriod(),
+          byModel: usage.map((row) => ({
+            model: row.model,
+            input: row.input,
+            cached: row.cached,
+            output: row.output,
+            tasks: row.tasks,
+          })),
+        },
       },
+      viewer,
       isPlatformAdmin: isPlatformAdmin(actor.subject),
       employees: employees.filter(Boolean),
-      connections: connections.map(publicConnection),
+      connections: connections.map((connection) => ({
+        id: connection._id,
+        provider: connection.provider,
+        name: connection.name,
+        account: connection.account,
+        serverUrl: connection.serverUrl,
+        status: connection.status,
+        ownerSubject: connection.ownerSubject,
+        ownerName: connection.ownerName,
+        isOwner: connection.ownerSubject === actor.subject,
+        visibility: connection.visibility,
+        visibleToSubjects: connection.visibleToSubjects,
+        // Only reviewed tools can be granted, so that is the list the owner manages.
+        tools: connection.tools.filter((tool) => reviewed.get(connection.provider)?.has(tool)),
+        allowedTools: connection.allowedTools,
+        resourceScope: connection.resourceScope,
+        inboxResources: connection.inboxResources,
+        lastCheckedAt: connection.lastCheckedAt,
+        inboxMode: connection.inboxMode,
+        error: connection.error,
+      })),
       projects: projects.map((project) => ({
         id: project._id,
         name: project.name,
@@ -179,13 +210,19 @@ export const dashboard = query({
         archivedAt: project.archivedAt,
         createdAt: project.createdAt,
         updatedAt: project.updatedAt,
+        openHandoffs: openHandoffs.get(project._id) ?? 0,
       })),
       tasks: visibleTasks.map((task) => ({
         id: task._id,
         projectId: task.projectId,
         projectContext: task.projectContext,
+        sourceTaskId: task.sourceTaskId,
         employeeId: task.employeeId,
         employeeName: task.employeeName,
+        createdBy: task.createdBy,
+        createdByName: task.createdByName,
+        isOwner: task.createdBy === actor.subject,
+        visibility: task.visibility,
         title: task.title,
         prompt: task.prompt,
         status: task.status,
@@ -216,6 +253,7 @@ export const dashboard = query({
         .map((proposal) => ({
           id: proposal._id,
           taskId: proposal.taskId,
+          connectionId: proposal.connectionId,
           employeeName: proposal.employeeName,
           provider: proposal.provider,
           tool: proposal.tool,
@@ -224,12 +262,21 @@ export const dashboard = query({
           status: proposal.status,
           correction: proposal.correction,
           correctionReason: proposal.correctionReason,
+          beforeState: proposal.beforeState,
+          afterState: proposal.afterState,
           createdAt: proposal.createdAt,
+          approvedBy: proposal.approvedBy,
+          approvedByName: proposal.approvedByName,
+          approvedAt: proposal.approvedAt,
           result: proposal.result,
           originalActionId: proposal.originalActionId,
+          canDecide: canDecide(connectionsById.get(proposal.connectionId) ?? null, actor.subject, role),
         })),
       inbox: inbox
-        .filter((item) => visibleTo(item, actor.subject, role))
+        .filter((item) => {
+          const connection = connectionsById.get(item.connectionId);
+          return connection ? canSeeConnection(connection, actor.subject) : false;
+        })
         .map((item) => ({
           id: item._id,
           provider: item.provider,

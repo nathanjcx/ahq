@@ -1,77 +1,20 @@
-import { z } from 'zod';
-import type { CorrectionKind } from '../contracts';
-const readTools: Record<string, Set<string>> = {
-  linear: new Set([
-    'list_issues',
-    'get_issue',
-    'list_projects',
-    'get_project',
-    'list_teams',
-    'get_team',
-    'list_users',
-    'get_user',
-    'get_document',
-    'list_documents',
-    'list_comments',
-    'list_cycles',
-    'list_issue_statuses',
-    'get_issue_status',
-    'list_issue_labels',
-    'list_project_labels',
-    'list_project_statuses',
-    'get_project_status',
-    'search_documentation',
-  ]),
-  slack: new Set([
-    'slack_search_messages',
-    'slack_search_all',
-    'slack_read_channel',
-    'slack_read_thread',
-    'search_messages',
-    'search_all',
-    'read_channel',
-    'read_thread',
-  ]),
-  github: new Set([
-    'search_code',
-    'search_repositories',
-    'search_issues',
-    'search_pull_requests',
-    'get_file_contents',
-    'get_me',
-    'list_branches',
-    'list_commits',
-    'get_commit',
-    'list_pull_requests',
-    'pull_request_read',
-    'issue_read',
-    'get_issue_comments',
-    'list_releases',
-    'get_latest_release',
-  ]),
-};
-const correctionSchema = z.object({
-  readTool: z.string().min(1),
-  idArgument: z.string().min(1),
-  versionField: z.string().min(1),
-  expectedVersionArgument: z.string().min(1),
-  fields: z.array(z.string().min(1)).min(1),
-});
-const policySchema = z.object({
-  mode: z.enum(['read', 'write', 'blocked']),
-  correction: correctionSchema.optional(),
-  resourceArgument: z.string().min(1).optional(),
-});
-export type ToolPolicy = z.infer<typeof policySchema>;
-export function toolPolicy(provider: string, tool: string): ToolPolicy {
-  const words = tool.replace(/([a-z0-9])([A-Z])/g, '$1_$2');
-  if (/(^|[._-])(?:delete|purge|destroy)(?:[._-]|$)/i.test(words)) return { mode: 'blocked' };
-  const overrides = JSON.parse(process.env.MCP_TOOL_POLICIES_JSON || '{}') as Record<string, unknown>;
-  if (overrides[`${provider}:${tool}`]) return policySchema.parse(overrides[`${provider}:${tool}`]);
-  // Only explicitly reviewed tool names are reads. Server annotations cannot grant execution rights.
-  return { mode: readTools[provider]?.has(tool) ? 'read' : 'write' };
+import type { CorrectionKind, ProviderId } from '../contracts';
+import type { ToolPolicy } from '../../services/types';
+
+export type ResolvedPolicy = Pick<ToolPolicy, 'mode' | 'resourceArgument' | 'correction'>;
+
+/** A tool exists for agents only when the administrator's registry has a row for it. */
+export function toolPolicy(policies: ToolPolicy[], provider: string, tool: string): ResolvedPolicy {
+  const row = policies.find((policy) => policy.provider === (provider as ProviderId) && policy.name === tool);
+  if (!row) return { mode: 'blocked' };
+  return {
+    mode: row.mode,
+    ...(row.resourceArgument ? { resourceArgument: row.resourceArgument } : {}),
+    ...(row.correction ? { correction: row.correction } : {}),
+  };
 }
-export function correctionPolicy(policy: ToolPolicy): {
+
+export function correctionPolicy(policy: ResolvedPolicy): {
   correction: CorrectionKind;
   correctionReason: string;
 } {
@@ -87,6 +30,7 @@ export function correctionPolicy(policy: ToolPolicy): {
           'This MCP tool has no verified conditional correction operation. We can prepare a correction task, but cannot automatically undo its effects.',
       };
 }
+
 export function validateScope(scope: string): string[] {
   if (!scope.trim()) return [];
   const ids = scope
@@ -99,7 +43,12 @@ export function validateScope(scope: string): string[] {
     );
   return ids;
 }
-export function checkResourceScope(scope: string, args: Record<string, unknown>, policy?: ToolPolicy): void {
+
+export function checkResourceScope(
+  scope: string,
+  args: Record<string, unknown>,
+  policy?: ResolvedPolicy,
+): void {
   const ids = validateScope(scope);
   if (!ids.length) return;
   if (!policy?.resourceArgument)
@@ -110,6 +59,7 @@ export function checkResourceScope(scope: string, args: Record<string, unknown>,
   if (typeof target !== 'string' || !ids.includes(target))
     throw new Error('This request is outside the connection resource restriction.');
 }
+
 export function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
   if (value && typeof value === 'object')
@@ -119,6 +69,7 @@ export function canonical(value: unknown): string {
       .join(',')}}`;
   return JSON.stringify(value) ?? 'null';
 }
+
 export function resultObject(result: unknown): Record<string, unknown> {
   const value = result as {
     structuredContent?: Record<string, unknown>;

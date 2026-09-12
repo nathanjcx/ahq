@@ -1,69 +1,15 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
-import type { Doc, Id } from './_generated/dataModel';
-import type { MutationCtx } from './_generated/server';
-import { reserveBudget, taskReservation } from './budget';
-import { assignmentForProject } from './projects';
-import { canSeeConnection, cleanText, randomToken, requireWorkspace } from './shared';
-
-async function assertEmployeeReady(
-  ctx: MutationCtx,
-  workspace: Doc<'workspaces'>,
-  actor: { subject: string },
-  role: string,
-  employeeId: Id<'installations'>,
-) {
-  const installation = await ctx.db.get(employeeId);
-  if (!installation || installation.workspaceId !== workspace._id) throw new Error('Employee not found');
-  const version = await ctx.db.get(installation.versionId);
-  if (!version || version.retiredAt) throw new Error('Employee version is retired');
-  const connections = await ctx.db
-    .query('connections')
-    .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
-    .collect();
-  const visible = connections.filter(
-    (connection) => connection.status === 'connected' && canSeeConnection(connection, actor.subject, role),
-  );
-  for (const capability of version.capabilities) {
-    if (capability.optional) continue;
-    const candidates = visible.filter((connection) => connection.provider === capability.provider);
-    if (
-      !candidates.some((connection) =>
-        capability.tools.every((tool: string) => connection.allowedTools.includes(tool)),
-      )
-    ) {
-      throw new Error(`Connect ${capability.provider} with the required permissions first`);
-    }
-  }
-  return { installation, version };
-}
-
-async function insertJob(
-  ctx: MutationCtx,
-  values: {
-    workspaceId: Id<'workspaces'>;
-    taskId: Id<'tasks'>;
-    uniqueKey: string;
-    kind: string;
-    payload: string;
-    proposalId?: Id<'proposals'>;
-  },
-) {
-  const existing = await ctx.db
-    .query('jobs')
-    .withIndex('by_unique_key', (q) => q.eq('uniqueKey', values.uniqueKey))
-    .unique();
-  if (existing) return existing._id;
-  const now = Date.now();
-  return ctx.db.insert('jobs', {
-    ...values,
-    state: 'queued',
-    attempts: 0,
-    availableAt: now,
-    createdAt: now,
-    updatedAt: now,
-  });
-}
+import { taskVisibility } from './schema';
+import { canSeeTask, cleanText, randomToken, requireWorkspace } from './shared';
+import {
+  assertEmployeeReady,
+  assertTokenCap,
+  assignmentForProject,
+  insertJob,
+  startTask,
+  taskTimeline,
+} from './work';
 
 export const create = mutation({
   args: {
@@ -73,45 +19,20 @@ export const create = mutation({
     projectId: v.optional(v.id('projects')),
   },
   handler: async (ctx, args) => {
-    const { workspace, actor, role } = await requireWorkspace(ctx);
-    const { version } = await assertEmployeeReady(ctx, workspace, actor, role, args.employeeId);
-    const project = args.projectId
-      ? await assignmentForProject(ctx, workspace._id, args.projectId, args.employeeId)
-      : {};
-    const amount = taskReservation(version.model);
-    const now = Date.now();
-    await reserveBudget(ctx, workspace, amount, now);
-    const taskId = await ctx.db.insert('tasks', {
-      workspaceId: workspace._id,
-      ...project,
+    const { workspace, actor } = await requireWorkspace(ctx);
+    await assertTokenCap(ctx, workspace);
+    const { version } = await assertEmployeeReady(ctx, workspace, actor.subject, args.employeeId);
+    const taskId = await startTask(ctx, {
+      workspace,
       createdBy: actor.subject,
+      createdByName: actor.name,
       employeeId: args.employeeId,
-      versionId: version._id,
-      employeeName: version.name,
-      title: cleanText(args.title, 'Title', 200),
-      prompt: cleanText(args.prompt, 'Prompt', 50_000),
-      status: 'queued',
-      model: version.model,
-      createdAt: now,
-      updatedAt: now,
-      runToken: randomToken(),
-      reservedCost: amount,
-      budgetFinalized: false,
-    });
-    await ctx.db.insert('messages', {
-      workspaceId: workspace._id,
-      taskId,
-      externalId: `initial:${taskId}`,
-      role: 'user',
-      text: cleanText(args.prompt, 'Prompt', 50_000),
-      createdAt: now,
-    });
-    await insertJob(ctx, {
-      workspaceId: workspace._id,
-      taskId,
-      uniqueKey: `start:${taskId}`,
-      kind: 'start_task',
-      payload: JSON.stringify({ taskId }),
+      version,
+      title: args.title,
+      prompt: args.prompt,
+      project: args.projectId
+        ? await assignmentForProject(ctx, workspace._id, args.projectId, args.employeeId)
+        : undefined,
     });
     return { taskId };
   },
@@ -122,7 +43,7 @@ export const messages = query({
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
     const task = await ctx.db.get(args.taskId);
-    if (!task || task.workspaceId !== workspace._id || task.createdBy !== actor.subject)
+    if (!task || task.workspaceId !== workspace._id || !canSeeTask(task, actor.subject))
       throw new Error('Task not found');
     const messages = await ctx.db
       .query('messages')
@@ -150,12 +71,9 @@ export const send = mutation({
       throw new Error('Task not found');
     if (task.status === 'cancelled' || task.status === 'failed' || task.status === 'uncertain')
       throw new Error('This task cannot accept another message');
+    await assertTokenCap(ctx, workspace);
     const text = cleanText(args.text, 'Message', 50_000);
     const now = Date.now();
-    if (task.budgetFinalized) {
-      await reserveBudget(ctx, workspace, task.reservedCost, now);
-      await ctx.db.patch(task._id, { budgetFinalized: false });
-    }
     const messageId = await ctx.db.insert('messages', {
       workspaceId: workspace._id,
       taskId: task._id,
@@ -224,12 +142,31 @@ export const cancel = mutation({
       kind: 'cancel_task',
       payload: JSON.stringify({ sessionId: task.sessionId }),
     });
-    const patch: Record<string, unknown> = { status: 'cancelled', updatedAt: now };
-    if (!task.budgetFinalized) {
-      patch.budgetFinalized = true;
-      await ctx.db.patch(workspace._id, { reserved: Math.max(0, workspace.reserved - task.reservedCost) });
-    }
-    await ctx.db.patch(task._id, patch);
+    await ctx.db.patch(task._id, { status: 'cancelled', updatedAt: now });
     return null;
+  },
+});
+
+export const setVisibility = mutation({
+  args: { taskId: v.id('tasks'), visibility: taskVisibility },
+  handler: async (ctx, args) => {
+    const { workspace, actor } = await requireWorkspace(ctx);
+    const task = await ctx.db.get(args.taskId);
+    if (!task || task.workspaceId !== workspace._id || task.createdBy !== actor.subject)
+      throw new Error('Task not found');
+    await ctx.db.patch(task._id, { visibility: args.visibility });
+    return null;
+  },
+});
+
+/** The sealed timeline. Tool-call arguments and results stay encrypted until the web service unseals them. */
+export const auditTimeline = query({
+  args: { taskId: v.id('tasks') },
+  handler: async (ctx, args) => {
+    const { workspace, actor } = await requireWorkspace(ctx);
+    const task = await ctx.db.get(args.taskId);
+    if (!task || task.workspaceId !== workspace._id || !canSeeTask(task, actor.subject))
+      throw new Error('Task not found');
+    return taskTimeline(ctx, task);
   },
 });

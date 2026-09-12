@@ -4,7 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { ConvexClient } from 'convex/browser';
 import { makeFunctionReference } from 'convex/server';
 import type { AgentSessionEvent, AgentSessionItem } from 'openai/resources/beta/agents/agents';
-import { agentsClient, sessionConfiguration, estimateUsage } from '../lib/server/agents';
+import { agentsClient, sessionConfiguration, sessionUsage } from '../lib/server/agents';
 import { query, mutate } from '../lib/server/backend';
 import { requiredEnv, safeError } from '../lib/server/secrets';
 import { putArtifact } from '../lib/server/storage';
@@ -43,7 +43,7 @@ interface JournalMessage {
   completed?: boolean;
 }
 async function journal(taskId: string, event: JournalEvent) {
-  await mutate('services:recordEvents', { taskId, events: [event] });
+  await mutate('services/sessions:recordEvents', { taskId, events: [event] });
 }
 async function archiveFiles(context: SessionContext) {
   if (!context.task.sessionId) return;
@@ -59,7 +59,7 @@ async function archiveFiles(context: SessionContext) {
       });
       break;
     }
-    const storageKey = `${context.authorization.workspaceId}/${context.task.id}/${artifact.id}`;
+    const storageKey = `${context.task.workspaceId}/${context.task.id}/${artifact.id}`;
     if (archived.has(storageKey)) continue;
     if (artifact.size_bytes > 25_000_000) {
       await journal(context.task.id, {
@@ -76,7 +76,7 @@ async function archiveFiles(context: SessionContext) {
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (bytes.byteLength > 25_000_000) throw new Error('Artifact exceeded archive size limit');
     await putArtifact(storageKey, bytes, 'application/octet-stream');
-    await mutate('services:recordArtifact', {
+    await mutate('services/artifacts:recordArtifact', {
       taskId: context.task.id,
       name: artifact.path.split('/').pop() || 'file',
       mediaType: 'application/octet-stream',
@@ -100,7 +100,7 @@ function itemMessage(item: AgentSessionItem): JournalMessage | undefined {
 async function monitor(taskId: string, controller: AbortController) {
   let reconnect = 0;
   while (!stopping && !controller.signal.aborted) {
-    const context = await query<SessionContext>('services:sessionContext', { taskId });
+    const context = await query<SessionContext>('services/sessions:sessionContext', { taskId });
     if (
       context.pendingInput ||
       !context.task.sessionId ||
@@ -120,7 +120,7 @@ async function monitor(taskId: string, controller: AbortController) {
       if (!events.length && !messages.size) return flushChain;
       const batch = { taskId, events: events.splice(0), messages: [...messages.values()] };
       messages.clear();
-      flushChain = flushChain.then(() => mutate('services:recordEvents', batch)).then(() => {});
+      flushChain = flushChain.then(() => mutate('services/sessions:recordEvents', batch)).then(() => {});
       return flushChain;
     };
     try {
@@ -161,12 +161,12 @@ async function monitor(taskId: string, controller: AbortController) {
       ) {
         await flush();
         if (turn?.status === 'completed') await archiveFiles(context);
-        await mutate('services:recordEvents', {
+        await mutate('services/sessions:recordEvents', {
           taskId,
           events: [],
           inputRevision: context.inputRevision,
           status: session.status === 'failed' ? 'failed' : turn.status,
-          ...(session.usage ? { usage: estimateUsage(context.task.model, session.usage) } : {}),
+          ...(session.usage ? { usage: sessionUsage(session.usage) } : {}),
         });
         return;
       }
@@ -174,7 +174,7 @@ async function monitor(taskId: string, controller: AbortController) {
       deadline = setTimeout(
         () => {
           void (async () => {
-            const update = await mutate<{ status: string }>('services:recordEvents', {
+            const update = await mutate<{ status: string }>('services/sessions:recordEvents', {
               taskId,
               inputRevision: context.inputRevision,
               events: [
@@ -276,7 +276,7 @@ async function monitor(taskId: string, controller: AbortController) {
           await flush();
           const current = await api.beta.agents.sessions.retrieve(sessionId);
           if (event.type === 'agent.session.turn.completed') await archiveFiles(context);
-          await mutate('services:recordEvents', {
+          await mutate('services/sessions:recordEvents', {
             taskId,
             events: [],
             inputRevision: context.inputRevision,
@@ -285,7 +285,7 @@ async function monitor(taskId: string, controller: AbortController) {
               : event.type.endsWith('cancelled')
                 ? 'cancelled'
                 : 'failed',
-            ...(current.usage ? { usage: estimateUsage(context.task.model, current.usage) } : {}),
+            ...(current.usage ? { usage: sessionUsage(current.usage) } : {}),
           });
           return;
         }
@@ -318,7 +318,7 @@ function startMonitor(taskId: string) {
   monitors.set(taskId, controller);
   let heartbeat: NodeJS.Timeout | undefined;
   const claim = async () => {
-    const lease = await mutate<{ claimed: boolean }>('services:claimStream', { taskId, workerId });
+    const lease = await mutate<{ claimed: boolean }>('services/queue:claimStream', { taskId, workerId });
     if (!lease.claimed) controller.abort();
     return lease.claimed;
   };
@@ -336,7 +336,7 @@ function startMonitor(taskId: string) {
       monitors.delete(taskId);
       if (!stopping && !controller.signal.aborted)
         setTimeout(() => {
-          void query<SessionContext>('services:sessionContext', { taskId })
+          void query<SessionContext>('services/sessions:sessionContext', { taskId })
             .then((context) => {
               if (
                 !context.pendingInput &&
@@ -350,7 +350,7 @@ function startMonitor(taskId: string) {
 }
 async function run(job: Job) {
   const heartbeat = setInterval(() => {
-    void mutate('services:renewLease', { jobId: job.id, leaseToken: job.leaseToken }).catch((error) =>
+    void mutate('services/queue:renewLease', { jobId: job.id, leaseToken: job.leaseToken }).catch((error) =>
       console.error('Lease renewal failed:', safeError(error)),
     );
   }, 20_000);
@@ -368,9 +368,9 @@ async function run(job: Job) {
         });
       monitors.get(job.taskId)?.abort();
     } else if (job.kind === 'start_task' || job.kind === 'send_message') {
-      const context = await query<TaskContext>('services:taskContext', { taskId: job.taskId });
+      const context = await query<TaskContext>('services/sessions:taskContext', { taskId: job.taskId });
       if (context.task.status === 'cancelled') {
-        await mutate('services:completeJob', { jobId: job.id, leaseToken: job.leaseToken });
+        await mutate('services/queue:completeJob', { jobId: job.id, leaseToken: job.leaseToken });
         return;
       }
       let sessionId = context.task.sessionId;
@@ -388,7 +388,11 @@ async function run(job: Job) {
           const session = await api.beta.agents.sessions.create(sessionConfiguration(context));
           sessionId = session.id;
         }
-        await mutate('services:recordSession', { taskId: job.taskId, sessionId, leaseToken: job.leaseToken });
+        await mutate('services/sessions:recordSession', {
+          taskId: job.taskId,
+          sessionId,
+          leaseToken: job.leaseToken,
+        });
       }
       await api.beta.agents.sessions.events.create(sessionId, {
         events: [
@@ -410,14 +414,14 @@ async function run(job: Job) {
         ],
         'Idempotency-Key': job.id,
       });
-      await mutate('services:completeJob', { jobId: job.id, leaseToken: job.leaseToken });
+      await mutate('services/queue:completeJob', { jobId: job.id, leaseToken: job.leaseToken });
       startMonitor(job.taskId);
       return;
     } else throw new Error(`Unsupported queue job: ${job.kind}`);
-    await mutate('services:completeJob', { jobId: job.id, leaseToken: job.leaseToken });
+    await mutate('services/queue:completeJob', { jobId: job.id, leaseToken: job.leaseToken });
   } catch (error) {
     console.error('Job failed:', safeError(error));
-    await mutate('services:failJob', {
+    await mutate('services/queue:failJob', {
       jobId: job.id,
       leaseToken: job.leaseToken,
       error: safeError(error),
@@ -437,7 +441,7 @@ async function drain() {
   try {
     do {
       wakeAgain = false;
-      const jobs = await mutate<Job[]>('services:claimJobs', { workerId, limit: concurrency });
+      const jobs = await mutate<Job[]>('services/queue:claimJobs', { workerId, limit: concurrency });
       if (!jobs.length) break;
       await Promise.all(jobs.map(run));
       wakeAgain = true;
@@ -450,7 +454,7 @@ async function drain() {
   }
 }
 const unsubscribe = database.onUpdate(
-  makeFunctionReference<'query'>('services:workerState'),
+  makeFunctionReference<'query'>('services/queue:workerState'),
   { secret },
   (state: { pendingJobs: number; activeTaskIds: string[] }) => {
     lastSubscription = Date.now();

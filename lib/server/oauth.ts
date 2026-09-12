@@ -4,9 +4,12 @@ import {
   type OAuthDiscoveryState,
 } from '@modelcontextprotocol/sdk/client/auth.js';
 import type { OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js';
+import type { ProviderId } from '../contracts';
 import { randomBytes } from 'node:crypto';
 import { safeFetch } from './network';
-import { requiredEnv } from './secrets';
+import { requiredEnv, unseal } from './secrets';
+import { providerRuntimeConfig } from './config';
+import type { ProviderRuntimeConfig } from '../../services/types';
 export interface OAuthConfig {
   clientId: string;
   clientSecret?: string;
@@ -19,7 +22,7 @@ export interface OAuthState {
   nonce: string;
   subject: string;
   orgId?: string;
-  provider: string;
+  provider: ProviderId;
   name: string;
   serverUrl: string;
   /** Further servers of the same provider to connect after this one, in order. */
@@ -33,27 +36,36 @@ export interface OAuthState {
 export interface StoredCredential {
   oauth: OAuthState;
 }
-function configured(provider: string, serverUrl?: string): OAuthConfig | undefined {
-  const configs = JSON.parse(process.env.MCP_OAUTH_CONFIG_JSON || '{}') as Record<string, OAuthConfig>;
-  const value = (serverUrl ? configs[serverUrl] : undefined) || configs[provider];
-  return value?.clientId ? value : undefined;
+/** The client registered for this exact server, otherwise the provider default entry. */
+export function pickOAuthClient(config: ProviderRuntimeConfig, serverUrl?: string) {
+  return (
+    config.oauthClients.find((client) => client.serverUrl === serverUrl) ||
+    config.oauthClients.find((client) => !client.serverUrl)
+  );
 }
-export function oauthConfigured(provider: string, serverUrl?: string) {
-  return Boolean(configured(provider, serverUrl));
-}
-function config(provider: string, serverUrl?: string): OAuthConfig {
-  const value = configured(provider, serverUrl);
-  if (!value)
+
+export async function oauthClient(provider: string, serverUrl?: string): Promise<OAuthConfig> {
+  const config = await providerRuntimeConfig(provider);
+  const client = config && pickOAuthClient(config, serverUrl);
+  if (!client?.clientId)
     throw new Error(
       `Sign-in for ${provider} is not set up yet. Ask your administrator to register its OAuth client.`,
     );
-  return value;
+  return {
+    clientId: client.clientId,
+    clientSecret: client.clientSecretCiphertext ? unseal<string>(client.clientSecretCiphertext) : undefined,
+    scopes: client.scopes,
+    authorizationUrl: client.authorizationUrl,
+    tokenUrl: client.tokenUrl,
+    tokenAuthMethod: client.tokenAuthMethod,
+  };
 }
+
 function providerFor(
   state: OAuthState,
+  settings: OAuthConfig,
   onTokens?: (state: OAuthState) => Promise<void>,
 ): { provider: OAuthClientProvider; redirect: () => string | undefined } {
-  const settings = config(state.provider, state.serverUrl);
   let authorizationUrl: string | undefined;
   const callback = new URL('/api/integrations/callback', requiredEnv('APP_URL')).href;
   if (settings.authorizationUrl && settings.tokenUrl && !state.discovery) {
@@ -112,18 +124,15 @@ function providerFor(
 }
 export async function startOAuth(input: Omit<OAuthState, 'nonce' | 'createdAt'>) {
   const state: OAuthState = { ...input, nonce: randomBytes(24).toString('base64url'), createdAt: Date.now() };
-  const flow = providerFor(state);
-  await mcpAuth(flow.provider, {
-    serverUrl: state.serverUrl,
-    scope: config(state.provider, state.serverUrl).scopes,
-    fetchFn: safeFetch,
-  });
+  const settings = await oauthClient(state.provider, state.serverUrl);
+  const flow = providerFor(state, settings);
+  await mcpAuth(flow.provider, { serverUrl: state.serverUrl, scope: settings.scopes, fetchFn: safeFetch });
   const authorizationUrl = flow.redirect();
   if (!authorizationUrl) throw new Error('Provider did not return an authorization page');
   return { state, authorizationUrl };
 }
 export async function finishOAuth(state: OAuthState, code: string) {
-  const { provider } = providerFor(state);
+  const { provider } = providerFor(state, await oauthClient(state.provider, state.serverUrl));
   const result = await mcpAuth(provider, {
     serverUrl: state.serverUrl,
     authorizationCode: code,
@@ -135,8 +144,8 @@ export async function finishOAuth(state: OAuthState, code: string) {
   delete state.queue;
   return { oauth: state } satisfies StoredCredential;
 }
-export function oauthProvider(state: OAuthState, save: (state: OAuthState) => Promise<void>) {
-  return providerFor(state, save).provider;
+export async function oauthProvider(state: OAuthState, save: (state: OAuthState) => Promise<void>) {
+  return providerFor(state, await oauthClient(state.provider, state.serverUrl), save).provider;
 }
 export function oauthCookie(requestUrl: string) {
   return {

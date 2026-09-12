@@ -2,7 +2,9 @@ import type { MutationCtx, QueryCtx } from './_generated/server';
 import type { Doc } from './_generated/dataModel';
 
 export type Ctx = QueryCtx | MutationCtx;
-export type Actor = { subject: string; orgId?: string; orgRole?: string };
+/** Read-only slice shared with service modules that only touch the database. */
+export type DbCtx = Pick<QueryCtx, 'db'>;
+export type Actor = { subject: string; orgId?: string; orgRole?: string; name: string; email?: string };
 export type WorkspaceRole = 'owner' | 'admin' | 'member';
 
 export function cleanText(value: string, field: string, max: number) {
@@ -27,31 +29,40 @@ export function requireService(secret: string) {
   if (!serviceSecretMatches(secret)) throw new Error('Unauthorized service request');
 }
 
+function claimString(claims: Record<string, unknown>, name: string) {
+  const value = claims[name];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+/** Display name from Clerk claims, captured at write time for shared views. */
+function claimName(claims: Record<string, unknown>) {
+  const given = [claimString(claims, 'given_name'), claimString(claims, 'family_name')]
+    .filter(Boolean)
+    .join(' ');
+  return claimString(claims, 'name') || given || claimString(claims, 'email') || 'Member';
+}
+
 export async function identity(ctx: Ctx): Promise<Actor> {
   const value = await ctx.auth.getUserIdentity();
   if (!value) throw new Error('Authentication required');
-  const claims = value as Record<string, unknown>;
+  const claims = value as unknown as Record<string, unknown>;
   const organization =
     claims.o && typeof claims.o === 'object' && !Array.isArray(claims.o)
       ? (claims.o as Record<string, unknown>)
       : undefined;
   const orgId =
-    typeof organization?.id === 'string'
-      ? organization.id
-      : typeof claims.org_id === 'string'
-        ? claims.org_id
-        : typeof claims.orgId === 'string'
-          ? claims.orgId
-          : undefined;
+    claimString(organization || {}, 'id') || claimString(claims, 'org_id') || claimString(claims, 'orgId');
   const orgRole =
-    typeof organization?.rol === 'string'
-      ? organization.rol
-      : typeof claims.org_role === 'string'
-        ? claims.org_role
-        : typeof claims.orgRole === 'string'
-          ? claims.orgRole
-          : undefined;
-  return { subject: value.subject, orgId, orgRole };
+    claimString(organization || {}, 'rol') ||
+    claimString(claims, 'org_role') ||
+    claimString(claims, 'orgRole');
+  return {
+    subject: value.subject,
+    orgId,
+    orgRole,
+    name: claimName(claims),
+    email: claimString(claims, 'email'),
+  };
 }
 
 export function authKey(subject: string, orgId?: string) {
@@ -72,8 +83,7 @@ export async function workspaceForIdentity(
     .withIndex('by_auth_key', (q) => q.eq('authKey', authKey(actor.subject, actor.orgId)))
     .unique();
   if (!workspace) return null;
-  const role = clerkRole(actor.orgId, actor.orgRole);
-  return { workspace, role };
+  return { workspace, role: clerkRole(actor.orgId, actor.orgRole) };
 }
 
 export async function requireWorkspace(
@@ -86,11 +96,11 @@ export async function requireWorkspace(
 }
 
 export function isPlatformAdmin(subject: string) {
-  const ids = (process.env.PLATFORM_ADMIN_USER_IDS || '')
+  return (process.env.PLATFORM_ADMIN_USER_IDS || '')
     .split(',')
     .map((id) => id.trim())
-    .filter(Boolean);
-  return ids.includes(subject);
+    .filter(Boolean)
+    .includes(subject);
 }
 
 export async function requirePlatformAdmin(ctx: Ctx) {
@@ -99,9 +109,26 @@ export async function requirePlatformAdmin(ctx: Ctx) {
   return actor;
 }
 
-export function canSeeConnection(connection: Doc<'connections'>, subject: string, role: string) {
-  void role;
-  return connection.ownerSubject === subject || connection.visibleToSubjects.includes(subject);
+/** A connection is usable by its owner, by everyone when shared with the workspace, or by listed members. */
+export function canSeeConnection(connection: Doc<'connections'>, subject: string) {
+  return (
+    connection.ownerSubject === subject ||
+    connection.visibility === 'workspace' ||
+    connection.visibleToSubjects.includes(subject)
+  );
+}
+
+export function canSeeTask(task: Doc<'tasks'>, subject: string) {
+  return task.createdBy === subject || task.visibility === 'workspace';
+}
+
+/** Only the executing connection's owner, or a workspace owner or admin, decides an external write. */
+export function canDecide(connection: Doc<'connections'> | null, subject: string, role: WorkspaceRole) {
+  return role === 'owner' || role === 'admin' || connection?.ownerSubject === subject;
+}
+
+export function usagePeriod(now = Date.now()) {
+  return new Date(now).toISOString().slice(0, 7);
 }
 
 export function randomToken() {
@@ -123,13 +150,4 @@ export function stableJson(value: unknown): string {
       .join(',')}}`;
   }
   return JSON.stringify(value);
-}
-
-export function visibleTo(
-  item: { ownerSubject: string; visibleToSubjects: string[] },
-  subject: string,
-  role: string,
-) {
-  void role;
-  return item.ownerSubject === subject || item.visibleToSubjects.includes(subject);
 }

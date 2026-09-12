@@ -12,7 +12,7 @@ import {
   resultObject,
   canonical,
 } from '../lib/server/tool-policy';
-import { auditedRead } from '../lib/server/audit-mcp';
+import { auditedRead, journalDenied } from '../lib/server/audit-mcp';
 import type { TaskContext } from './types';
 requiredEnv('AHQ_SERVICE_SECRET');
 requiredEnv('CREDENTIAL_ENCRYPTION_KEY');
@@ -35,7 +35,9 @@ const server = createServer(async (req, res) => {
       res.end();
       return;
     }
-    const context = await query<TaskContext | null>('services:gatewayContext', { runToken: token });
+    const context = await query<TaskContext | null>('services/actions:gatewayContext', {
+      runToken: token,
+    });
     const connection = context?.connections.find((c) => c.id === match[1]);
     if (!context || !connection) {
       res.writeHead(403);
@@ -47,7 +49,7 @@ const server = createServer(async (req, res) => {
       (tool) =>
         capability &&
         capability.tools.includes(tool) &&
-        toolPolicy(connection.provider, tool).mode !== 'blocked',
+        toolPolicy(context.policies, connection.provider, tool).mode !== 'blocked',
     );
     const mcp = new Server({ name: 'astra-hq', version: '1.0.0' }, { capabilities: { tools: {} } });
     mcp.setRequestHandler(ListToolsRequestSchema, async () =>
@@ -61,7 +63,7 @@ const server = createServer(async (req, res) => {
             if (allowed.includes(tool.name))
               tools.push({
                 ...tool,
-                description: `${tool.description || tool.name}${toolPolicy(connection.provider, tool.name).mode === 'write' ? ' This tool prepares an action for human approval. It does not execute until approved.' : ''}`,
+                description: `${tool.description || tool.name}${toolPolicy(context.policies, connection.provider, tool.name).mode === 'write' ? ' This tool prepares an action for human approval. It does not execute until approved.' : ''}`,
               });
           }
           cursor = page.nextCursor;
@@ -73,9 +75,14 @@ const server = createServer(async (req, res) => {
     mcp.setRequestHandler(CallToolRequestSchema, async (request) => {
       const tool = request.params.name,
         args = request.params.arguments || {};
-      if (!allowed.includes(tool)) throw new Error('This employee is not authorized to use that tool.');
+      if (!allowed.includes(tool)) {
+        await journalDenied(token, connection.id, tool, args, 'policy_denied');
+        throw new Error('This employee is not authorized to use that tool.');
+      }
       // Re-read authorization at execution, including grants revoked since discovery.
-      const current = await query<TaskContext | null>('services:gatewayContext', { runToken: token });
+      const current = await query<TaskContext | null>('services/actions:gatewayContext', {
+        runToken: token,
+      });
       const activeConnection = current?.connections.find(
         (c) => c.id === connection.id && c.allowedTools.includes(tool),
       );
@@ -84,17 +91,19 @@ const server = createServer(async (req, res) => {
         !current?.employeeVersion.capabilities.some(
           (c) => c.provider === connection.provider && c.tools.includes(tool),
         )
-      )
+      ) {
+        await journalDenied(token, connection.id, tool, args, 'revoked');
         throw new Error('Integration access was revoked.');
-      checkResourceScope(activeConnection.resourceScope, args, toolPolicy(activeConnection.provider, tool));
-      const policy = toolPolicy(connection.provider, tool);
+      }
+      const policy = toolPolicy(current.policies, activeConnection.provider, tool);
+      checkResourceScope(activeConnection.resourceScope, args, policy);
       if (policy.mode === 'write') {
         let beforeState: Record<string, unknown> | undefined;
         if (policy.correction) {
           const rule = policy.correction;
           if (!connection.allowedTools.includes(rule.readTool))
             throw new Error('Correction requires access to the configured record-reading tool.');
-          const before = await auditedRead(token, activeConnection, rule.readTool, {
+          const before = await auditedRead(token, activeConnection, current.policies, rule.readTool, {
             [rule.idArgument]: args[rule.idArgument],
           });
           const record = resultObject(before);
@@ -102,15 +111,18 @@ const server = createServer(async (req, res) => {
             throw new Error('The provider did not supply the required record version.');
           beforeState = record;
         }
-        const proposal = await mutate<{ proposalId: string; status: string }>('services:proposeAction', {
-          runToken: token,
-          connectionId: connection.id,
-          tool,
-          arguments: args,
-          summary: `${tool.replace(/[._]/g, ' ')} in ${connection.provider}`,
-          ...correctionPolicy(policy),
-          ...(beforeState ? { beforeState } : {}),
-        });
+        const proposal = await mutate<{ proposalId: string; status: string }>(
+          'services/actions:proposeAction',
+          {
+            runToken: token,
+            connectionId: connection.id,
+            tool,
+            arguments: args,
+            summary: `${tool.replace(/[._]/g, ' ')} in ${connection.provider}`,
+            ...correctionPolicy(policy),
+            ...(beforeState ? { beforeState } : {}),
+          },
+        );
         return {
           content: [
             {
@@ -125,7 +137,7 @@ const server = createServer(async (req, res) => {
           ],
         };
       }
-      return auditedRead(token, activeConnection, tool, args);
+      return auditedRead(token, activeConnection, current.policies, tool, args);
     });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,

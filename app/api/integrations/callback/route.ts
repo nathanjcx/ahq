@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { actor, failure } from '@/lib/server/http';
+import { randomBytes } from 'node:crypto';
+import { actor, displayName, failure } from '@/lib/server/http';
 import { unseal, seal, equalSecret, requiredEnv } from '@/lib/server/secrets';
 import {
   finishOAuth,
@@ -17,19 +18,29 @@ export const runtime = 'nodejs';
 
 async function connect(
   identity: { authSubject: string; authOrgId?: string },
+  ownerName: string,
   state: Pick<OAuthState, 'provider' | 'serverUrl' | 'name'>,
   credential: StoredCredential,
 ) {
   const tools = await discoverTools(state, credential);
-  await mutate('services:connectIntegration', {
+  await mutate('services/integrations:connectIntegration', {
     ...identity,
     provider: state.provider,
     name: state.name,
     account: state.name,
+    ownerName,
     serverUrl: state.serverUrl,
-    tools: tools.map((t) => t.name),
+    tools: tools.map((tool) => tool.name),
+    toolAnnotations: tools.map((tool) => ({
+      name: tool.name,
+      readOnlyHint: tool.annotations?.readOnlyHint,
+      destructiveHint: tool.annotations?.destructiveHint,
+      idempotentHint: tool.annotations?.idempotentHint,
+    })),
     credentialCiphertext: seal(credential),
     credentialKeyVersion: '1',
+    // Convex cannot seal, so the relay secret is generated and sealed here.
+    inboxRelaySecretCiphertext: seal(randomBytes(32).toString('base64url')),
   });
 }
 
@@ -53,7 +64,8 @@ export async function GET(request: Request) {
     if (!code) throw new Error('Authorization was not granted.');
     const queue = [...(state.queue ?? [])];
     const credential = await finishOAuth(state, code);
-    await connect(identity, state, credential);
+    const ownerName = await displayName(identity.authSubject);
+    await connect(identity, ownerName, state, credential);
     // Remaining servers of a multi-product provider. Reuse the grant when the server accepts it;
     // otherwise send the user through consent for that server.
     const definition = getProvider(state.provider);
@@ -68,7 +80,7 @@ export async function GET(request: Request) {
         serverUrl,
       };
       try {
-        await connect(identity, next, credential);
+        await connect(identity, ownerName, next, credential);
       } catch (error) {
         if (!(error instanceof UnauthorizedError)) throw error;
         const flow = await startOAuth({ ...next, queue });

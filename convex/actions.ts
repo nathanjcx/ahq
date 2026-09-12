@@ -2,48 +2,54 @@ import { v } from 'convex/values';
 import { mutation } from './_generated/server';
 import type { Doc } from './_generated/dataModel';
 import type { MutationCtx } from './_generated/server';
-import { reserveBudget } from './budget';
-import { requireWorkspace, sha256 } from './shared';
+import { canDecide, requireWorkspace, sha256, type WorkspaceRole } from './shared';
+import { startTask } from './work';
 
-async function transition(
+async function decidable(
   ctx: MutationCtx,
-  proposal: Doc<'proposals'>,
-  to: string,
-  actor: string,
-  detail?: string,
+  workspaceId: Doc<'workspaces'>['_id'],
+  proposalId: Doc<'proposals'>['_id'],
+  subject: string,
+  role: WorkspaceRole,
 ) {
-  await ctx.db.insert('actionTransitions', {
-    workspaceId: proposal.workspaceId,
-    proposalId: proposal._id,
-    from: proposal.status,
-    to,
-    actor,
-    at: Date.now(),
-    detail,
-  });
+  const proposal = await ctx.db.get(proposalId);
+  if (!proposal || proposal.workspaceId !== workspaceId) throw new Error('Action proposal not found');
+  const task = await ctx.db.get(proposal.taskId);
+  if (!task) throw new Error('Action proposal not found');
+  const connection = await ctx.db.get(proposal.connectionId);
+  if (!canDecide(connection, subject, role))
+    throw new Error('Only the connection owner or a workspace administrator can decide this action');
+  return { proposal, task };
 }
 
 export const decide = mutation({
   args: { proposalId: v.id('proposals'), approved: v.boolean() },
   handler: async (ctx, args) => {
-    const { workspace, actor } = await requireWorkspace(ctx);
-    const proposal = await ctx.db.get(args.proposalId);
-    if (!proposal || proposal.workspaceId !== workspace._id) throw new Error('Action proposal not found');
-    const proposalTask = await ctx.db.get(proposal.taskId);
-    if (!proposalTask || proposalTask.createdBy !== actor.subject)
-      throw new Error('Action proposal not found');
+    const { workspace, actor, role } = await requireWorkspace(ctx);
+    const { proposal, task } = await decidable(ctx, workspace._id, args.proposalId, actor.subject, role);
     if (
-      ['failed', 'cancelled', 'uncertain'].includes(proposalTask.status) ||
-      (proposalTask.status === 'completed' && !proposal.originalActionId)
+      ['failed', 'cancelled', 'uncertain'].includes(task.status) ||
+      (task.status === 'completed' && !proposal.originalActionId)
     )
       throw new Error('The task is no longer active');
     const desired = args.approved ? 'approved' : 'rejected';
     if (proposal.status === desired) return null;
     if (proposal.status !== 'pending') throw new Error('This proposal has already been decided');
     const now = Date.now();
-    await transition(ctx, proposal, desired, actor.subject);
-    await ctx.db.patch(proposal._id, { status: desired, approvedBy: actor.subject, approvedAt: now });
-    const task = proposalTask;
+    await ctx.db.insert('actionTransitions', {
+      workspaceId: workspace._id,
+      proposalId: proposal._id,
+      from: proposal.status,
+      to: desired,
+      actor: actor.subject,
+      at: now,
+    });
+    await ctx.db.patch(proposal._id, {
+      status: desired,
+      approvedBy: actor.subject,
+      approvedByName: actor.name,
+      approvedAt: now,
+    });
     if (args.approved) {
       const uniqueKey = `action:${proposal._id}`;
       const existing = await ctx.db
@@ -64,7 +70,7 @@ export const decide = mutation({
           createdAt: now,
           updatedAt: now,
         });
-    } else if (task && task.status === 'awaiting_approval') {
+    } else if (task.status === 'awaiting_approval') {
       const uniqueKey = `action-decision:${proposal._id}:rejected`;
       const existing = await ctx.db
         .query('jobs')
@@ -94,12 +100,14 @@ export const decide = mutation({
 export const requestCorrection = mutation({
   args: { proposalId: v.id('proposals') },
   handler: async (ctx, args) => {
-    const { workspace, actor } = await requireWorkspace(ctx);
-    const original = await ctx.db.get(args.proposalId);
-    if (!original || original.workspaceId !== workspace._id) throw new Error('Action proposal not found');
-    const originalTask = await ctx.db.get(original.taskId);
-    if (!originalTask || originalTask.createdBy !== actor.subject)
-      throw new Error('Action proposal not found');
+    const { workspace, actor, role } = await requireWorkspace(ctx);
+    const { proposal: original, task: originalTask } = await decidable(
+      ctx,
+      workspace._id,
+      args.proposalId,
+      actor.subject,
+      role,
+    );
     if (original.status !== 'succeeded') throw new Error('Only a successful action can be corrected');
     if (original.correction === 'irreversible' || original.correction === 'unknown')
       throw new Error('This action has no supported correction');
@@ -115,51 +123,23 @@ export const requestCorrection = mutation({
         .withIndex('by_source_proposal', (q) => q.eq('sourceProposalId', original._id))
         .first();
       if (existingTask) return { kind: 'task' as const, taskId: existingTask._id };
-      const workspaceRecord = await ctx.db.get(workspace._id);
-      if (!workspaceRecord) throw new Error('Workspace not found');
-      const employeeVersion = await ctx.db.get(originalTask.versionId);
-      if (!employeeVersion || employeeVersion.retiredAt) throw new Error('Employee version is retired');
-      const amount = originalTask.reservedCost;
-      await reserveBudget(ctx, workspaceRecord, amount, now);
-      const prompt = `Review the requested correction for action ${original._id}. The original action was: ${original.summary}. Correction limits: ${original.correctionReason}. Prepare the safest supported correction or clear manual steps. Do not repeat the original action.`;
-      const taskId = await ctx.db.insert('tasks', {
-        workspaceId: workspace._id,
-        projectId: originalTask.projectId,
-        projectContext: originalTask.projectContext,
+      const version = await ctx.db.get(originalTask.versionId);
+      if (!version || version.retiredAt) throw new Error('Employee version is retired');
+      const taskId = await startTask(ctx, {
+        workspace,
         createdBy: actor.subject,
+        createdByName: actor.name,
         employeeId: originalTask.employeeId,
-        versionId: originalTask.versionId,
-        employeeName: originalTask.employeeName,
+        version,
         title: `Correct: ${original.summary}`,
-        prompt,
-        status: 'queued',
-        model: originalTask.model,
-        createdAt: now,
-        updatedAt: now,
-        runToken: crypto.randomUUID(),
-        reservedCost: amount,
-        budgetFinalized: false,
+        prompt: `Review the requested correction for action ${original._id}. The original action was: ${original.summary}. Correction limits: ${original.correctionReason}. Prepare the safest supported correction or clear manual steps. Do not repeat the original action.`,
+        project:
+          originalTask.projectId && originalTask.projectContext
+            ? { projectId: originalTask.projectId, projectContext: originalTask.projectContext }
+            : undefined,
         sourceProposalId: original._id,
-      });
-      await ctx.db.insert('messages', {
-        workspaceId: workspace._id,
-        taskId,
-        externalId: `correction:${original._id}`,
-        role: 'user',
-        text: prompt,
-        createdAt: now,
-      });
-      await ctx.db.insert('jobs', {
-        workspaceId: workspace._id,
-        taskId,
-        uniqueKey: `start:${taskId}`,
-        kind: 'start_task',
-        payload: JSON.stringify({ taskId, correctionOf: original._id }),
-        state: 'queued',
-        attempts: 0,
-        availableAt: now,
-        createdAt: now,
-        updatedAt: now,
+        messageExternalId: `correction:${original._id}`,
+        jobPayload: { correctionOf: original._id },
       });
       return { kind: 'task' as const, taskId };
     }
@@ -177,7 +157,6 @@ export const requestCorrection = mutation({
       restore: parseState(original.beforeState),
       expectedCurrentState: parseState(original.afterState),
     });
-    const argumentsHash = await sha256(argumentsValue);
     const proposalId = await ctx.db.insert('proposals', {
       workspaceId: workspace._id,
       taskId: original.taskId,
@@ -186,7 +165,7 @@ export const requestCorrection = mutation({
       provider: original.provider,
       tool: original.tool,
       arguments: argumentsValue,
-      argumentsHash,
+      argumentsHash: await sha256(argumentsValue),
       dedupeKey: `correction:${original._id}`,
       summary: `Correct: ${original.summary}`,
       status: 'pending',

@@ -1,5 +1,6 @@
 import { createHash, createHmac } from 'node:crypto';
-import { equalSecret } from './secrets';
+import { providerRuntimeConfig } from './config';
+import { equalSecret, unseal } from './secrets';
 
 export type NativeProvider = 'github' | 'linear' | 'slack';
 
@@ -7,21 +8,10 @@ export function isNativeProvider(value: string): value is NativeProvider {
   return value === 'github' || value === 'linear' || value === 'slack';
 }
 
-/** The operator's app-level webhook secret for one provider, shared by every connection. */
-export function nativeSecret(
-  provider: NativeProvider,
-  raw = process.env.NATIVE_INBOX_SECRETS_JSON,
-): string | undefined {
-  if (!raw) return undefined;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error('NATIVE_INBOX_SECRETS_JSON is invalid');
-  }
-  const secret =
-    parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>)[provider] : undefined;
-  return typeof secret === 'string' && secret.length > 0 ? secret : undefined;
+/** The administrator's app-level webhook secret for one provider, shared by every connection. */
+export async function nativeSecret(provider: NativeProvider): Promise<string | undefined> {
+  const ciphertext = (await providerRuntimeConfig(provider))?.inboxSecretCiphertext;
+  return ciphertext ? unseal<string>(ciphertext) : undefined;
 }
 
 export interface NativeInboxItem {

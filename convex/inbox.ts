@@ -1,16 +1,29 @@
 import { v } from 'convex/values';
 import { mutation } from './_generated/server';
-import { taskReservation } from './budget';
-import { assignmentForProject } from './projects';
-import { canSeeConnection, cleanText, randomToken, requireWorkspace, visibleTo } from './shared';
+import type { Doc, Id } from './_generated/dataModel';
+import type { Ctx } from './shared';
+import { canSeeConnection, requireWorkspace } from './shared';
+import { assertEmployeeReady, assertTokenCap, assignmentForProject, startTask } from './work';
+
+/** An inbox item is visible to whoever can use the connection that delivered it. */
+async function visibleItem(
+  ctx: Ctx,
+  workspaceId: Id<'workspaces'>,
+  itemId: Id<'inbox'>,
+  subject: string,
+): Promise<Doc<'inbox'>> {
+  const item = await ctx.db.get(itemId);
+  if (!item || item.workspaceId !== workspaceId) throw new Error('Inbox item not found');
+  const connection = await ctx.db.get(item.connectionId);
+  if (!connection || !canSeeConnection(connection, subject)) throw new Error('Inbox item not found');
+  return item;
+}
 
 export const markRead = mutation({
   args: { itemId: v.id('inbox') },
   handler: async (ctx, args) => {
-    const { workspace, actor, role } = await requireWorkspace(ctx);
-    const item = await ctx.db.get(args.itemId);
-    if (!item || item.workspaceId !== workspace._id || !visibleTo(item, actor.subject, role))
-      throw new Error('Inbox item not found');
+    const { workspace, actor } = await requireWorkspace(ctx);
+    const item = await visibleItem(ctx, workspace._id, args.itemId, actor.subject);
     if (item.status === 'unread') await ctx.db.patch(item._id, { status: 'read' });
     return null;
   },
@@ -23,83 +36,24 @@ export const assign = mutation({
     projectId: v.optional(v.id('projects')),
   },
   handler: async (ctx, args) => {
-    const { workspace, actor, role } = await requireWorkspace(ctx);
-    const item = await ctx.db.get(args.itemId);
-    if (!item || item.workspaceId !== workspace._id || !visibleTo(item, actor.subject, role))
-      throw new Error('Inbox item not found');
+    const { workspace, actor } = await requireWorkspace(ctx);
+    const item = await visibleItem(ctx, workspace._id, args.itemId, actor.subject);
     if (item.taskId) return { taskId: item.taskId };
-    const installation = await ctx.db.get(args.employeeId);
-    if (!installation || installation.workspaceId !== workspace._id) throw new Error('Employee not found');
-    const version = await ctx.db.get(installation.versionId);
-    if (!version || version.retiredAt) throw new Error('Employee version is retired');
-    const project = args.projectId
-      ? await assignmentForProject(ctx, workspace._id, args.projectId, args.employeeId)
-      : {};
-    const connections = await ctx.db
-      .query('connections')
-      .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
-      .collect();
-    const active = connections.filter(
-      (connection) =>
-        connection.status === 'connected' && canSeeConnection(connection, actor.subject, role),
-    );
-    for (const capability of version.capabilities) {
-      if (capability.optional) continue;
-      if (
-        !active.some(
-          (connection) =>
-            connection.provider === capability.provider &&
-            capability.tools.every((tool: string) => connection.allowedTools.includes(tool)),
-        )
-      )
-        throw new Error(`Connect ${capability.provider} with the required permissions first`);
-    }
-    const amount = taskReservation(version.model);
-    if (workspace.spent + workspace.reserved + amount > workspace.monthlyBudget)
-      throw new Error('Monthly workspace budget reached');
-    await ctx.db.patch(workspace._id, { reserved: workspace.reserved + amount });
-    const now = Date.now();
-    const prompt = cleanText(
-      `Review this ${item.provider} inbox item and handle it within your approved access.\n\n${item.title}\n${item.preview}`,
-      'Prompt',
-      50_000,
-    );
-    const taskId = await ctx.db.insert('tasks', {
-      workspaceId: workspace._id,
-      ...project,
+    await assertTokenCap(ctx, workspace);
+    const { version } = await assertEmployeeReady(ctx, workspace, actor.subject, args.employeeId);
+    const taskId = await startTask(ctx, {
+      workspace,
       createdBy: actor.subject,
-      employeeId: installation._id,
-      versionId: version._id,
-      employeeName: version.name,
+      createdByName: actor.name,
+      employeeId: args.employeeId,
+      version,
       title: item.title,
-      prompt,
-      status: 'queued',
-      model: version.model,
-      createdAt: now,
-      updatedAt: now,
-      runToken: randomToken(),
-      reservedCost: amount,
-      budgetFinalized: false,
-    });
-    await ctx.db.insert('messages', {
-      workspaceId: workspace._id,
-      taskId,
-      externalId: `inbox:${item._id}`,
-      role: 'user',
-      text: prompt,
-      createdAt: now,
-    });
-    await ctx.db.insert('jobs', {
-      workspaceId: workspace._id,
-      taskId,
-      uniqueKey: `start:${taskId}`,
-      kind: 'start_task',
-      payload: JSON.stringify({ taskId, inboxItemId: item._id }),
-      state: 'queued',
-      attempts: 0,
-      availableAt: now,
-      createdAt: now,
-      updatedAt: now,
+      prompt: `Review this ${item.provider} inbox item and handle it within your approved access.\n\n${item.title}\n${item.preview}`,
+      project: args.projectId
+        ? await assignmentForProject(ctx, workspace._id, args.projectId, args.employeeId)
+        : undefined,
+      messageExternalId: `inbox:${item._id}`,
+      jobPayload: { inboxItemId: item._id },
     });
     await ctx.db.patch(item._id, { status: 'assigned', taskId });
     return { taskId };

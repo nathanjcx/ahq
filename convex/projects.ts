@@ -1,8 +1,16 @@
 import { v } from 'convex/values';
-import { mutation } from './_generated/server';
+import { mutation, query } from './_generated/server';
 import type { Doc, Id } from './_generated/dataModel';
 import type { MutationCtx } from './_generated/server';
-import { cleanText, requireWorkspace } from './shared';
+import { canSeeTask, cleanText, requireWorkspace } from './shared';
+import {
+  assertEmployeeReady,
+  finalAssistantMessage,
+  insertHandoff,
+  insertNote,
+  requireProject,
+  startTask,
+} from './work';
 
 function projectFields(name: string, brief: string) {
   return {
@@ -24,30 +32,18 @@ async function validateEmployees(
   }
 }
 
-export async function assignmentForProject(
-  ctx: MutationCtx,
-  workspaceId: Id<'workspaces'>,
-  projectId: Id<'projects'>,
-  employeeId: Id<'installations'>,
-) {
-  const project = await ctx.db.get(projectId);
-  if (!project || project.workspaceId !== workspaceId) throw new Error('Project not found');
-  if (project.archivedAt !== undefined) throw new Error('Project is archived');
-  if (!project.employeeIds.includes(employeeId)) throw new Error('Employee is not assigned to this project');
+function publicPost(post: Doc<'projectPosts'>) {
   return {
-    projectId: project._id,
-    projectContext: { name: project.name, brief: project.brief },
+    id: post._id,
+    projectId: post.projectId,
+    kind: post.kind,
+    authorSubject: post.authorSubject,
+    authorName: post.authorName,
+    text: post.text,
+    taskId: post.taskId,
+    createdAt: post.createdAt,
+    handoff: post.handoff,
   };
-}
-
-async function requireProject(
-  ctx: MutationCtx,
-  workspaceId: Id<'workspaces'>,
-  projectId: Id<'projects'>,
-): Promise<Doc<'projects'>> {
-  const project = await ctx.db.get(projectId);
-  if (!project || project.workspaceId !== workspaceId) throw new Error('Project not found');
-  return project;
 }
 
 export const create = mutation({
@@ -96,5 +92,113 @@ export const setArchived = mutation({
       updatedAt: Date.now(),
     });
     return null;
+  },
+});
+
+export const board = query({
+  args: { projectId: v.id('projects') },
+  handler: async (ctx, args) => {
+    const { workspace } = await requireWorkspace(ctx);
+    await requireProject(ctx, workspace._id, args.projectId);
+    const posts = await ctx.db
+      .query('projectPosts')
+      .withIndex('by_project', (q) => q.eq('projectId', args.projectId))
+      .order('desc')
+      .take(200);
+    return posts.reverse().map(publicPost);
+  },
+});
+
+export const post = mutation({
+  args: { projectId: v.id('projects'), text: v.string() },
+  handler: async (ctx, args) => {
+    const { workspace, actor } = await requireWorkspace(ctx);
+    const project = await requireProject(ctx, workspace._id, args.projectId);
+    await insertNote(ctx, {
+      project,
+      authorSubject: actor.subject,
+      authorName: actor.name,
+      text: args.text,
+    });
+    return null;
+  },
+});
+
+export const requestHandoff = mutation({
+  args: {
+    projectId: v.id('projects'),
+    toEmployeeId: v.id('installations'),
+    brief: v.string(),
+    sourceTaskId: v.optional(v.id('tasks')),
+  },
+  handler: async (ctx, args) => {
+    const { workspace, actor } = await requireWorkspace(ctx);
+    const project = await requireProject(ctx, workspace._id, args.projectId);
+    if (args.sourceTaskId) {
+      const source = await ctx.db.get(args.sourceTaskId);
+      if (!source || source.workspaceId !== workspace._id || !canSeeTask(source, actor.subject))
+        throw new Error('Task not found');
+    }
+    return insertHandoff(ctx, {
+      project,
+      authorSubject: actor.subject,
+      authorName: actor.name,
+      toEmployeeId: args.toEmployeeId,
+      brief: args.brief,
+      sourceTaskId: args.sourceTaskId,
+    });
+  },
+});
+
+/** A person accepts a handoff, which starts a floor task carrying the source task's final message. */
+export const decideHandoff = mutation({
+  args: { postId: v.id('projectPosts'), accepted: v.boolean() },
+  handler: async (ctx, args) => {
+    const { workspace, actor } = await requireWorkspace(ctx);
+    const post = await ctx.db.get(args.postId);
+    if (!post || post.workspaceId !== workspace._id || !post.handoff) throw new Error('Handoff not found');
+    if (post.handoff.status !== 'pending') return { taskId: post.handoff.taskId };
+    const project = await requireProject(ctx, workspace._id, post.projectId);
+    const now = Date.now();
+    if (!args.accepted) {
+      await ctx.db.patch(post._id, {
+        handoff: { ...post.handoff, status: 'declined', decidedBy: actor.subject, decidedAt: now },
+      });
+      return {};
+    }
+    if (!project.employeeIds.includes(post.handoff.toEmployeeId))
+      throw new Error('Employee is not assigned to this project');
+    const { version } = await assertEmployeeReady(ctx, workspace, actor.subject, post.handoff.toEmployeeId);
+    let prompt = post.handoff.brief;
+    if (post.taskId) {
+      const source = await ctx.db.get(post.taskId);
+      const closing = source ? await finalAssistantMessage(ctx, source._id) : undefined;
+      if (source && closing)
+        prompt = `${prompt}\n\nContext from ${source.title}:\n${closing.slice(0, 20_000)}`;
+    }
+    const taskId = await startTask(ctx, {
+      workspace,
+      createdBy: actor.subject,
+      createdByName: actor.name,
+      employeeId: post.handoff.toEmployeeId,
+      version,
+      title: post.handoff.brief.slice(0, 200),
+      prompt,
+      project: { projectId: project._id, projectContext: { name: project.name, brief: project.brief } },
+      sourceTaskId: post.taskId,
+    });
+    await ctx.db.patch(post._id, {
+      handoff: { ...post.handoff, status: 'accepted', decidedBy: actor.subject, decidedAt: now, taskId },
+    });
+    await ctx.db.insert('projectPosts', {
+      workspaceId: workspace._id,
+      projectId: project._id,
+      kind: 'system',
+      authorName: version.name,
+      text: 'Accepted handoff → task created',
+      taskId,
+      createdAt: Date.now(),
+    });
+    return { taskId };
   },
 });
