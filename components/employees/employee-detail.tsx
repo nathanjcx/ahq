@@ -3,7 +3,7 @@
 import { Archive, ArrowUpRight, BadgeCheck, Link2, Play, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
 import type { Actions } from '../app/actions';
-import { ChannelFeed } from '../shared/channel-feed';
+import { EmployeeFeed } from '../shared/employee-feed';
 import { EmptyMini } from '../shared/empty';
 import { modelName, providerName } from '../shared/format';
 import { Avatar } from '../shared/marks';
@@ -101,26 +101,6 @@ function InstanceFindings({ employeeId, onAudit }: { employeeId: string; onAudit
       </button>
     </>
   );
-}
-
-/**
- * Everything this instance's floor has posted. A channel of an instance's own is not a thing the
- * channels module carries yet, so the feed is the floor's, read from where the instance stands.
- */
-function InstanceFeed({ employee, actions }: { employee: Employee; actions: Actions }) {
-  const channels = useUiQuery(uiApi.channels, {});
-  const channel = channels?.find(
-    (item) => item.kind === 'floor' && item.scopeId === (employee.floorId ?? ''),
-  );
-  if (!channel)
-    return (
-      <EmptyMini
-        icon={<Archive size={20} />}
-        title="No channel yet"
-        text="Move this instance onto a floor to give it somewhere to post."
-      />
-    );
-  return <ChannelFeed channelId={channel.id} actions={actions} compact />;
 }
 
 function InstanceUpgrade({
@@ -363,7 +343,7 @@ export function EmployeeDetail({
             </button>
           </>
         )}
-        {tab === 'Feed' && <InstanceFeed employee={employee} actions={actions} />}
+        {tab === 'Feed' && <EmployeeFeed employeeId={employee.id} compact />}
         {tab === 'Memory' && (
           <InstanceMemory employeeId={employee.id} onRecords={() => onPage('records')} />
         )}

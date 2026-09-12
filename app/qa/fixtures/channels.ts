@@ -141,8 +141,6 @@ const employeeFeeds: Record<string, Post[]> = {
   emp_mina: [],
 };
 
-/** The Spring launch floor's binder, in all three states a person acts on. */
-
 /** Query answers for the channels pages under the fixture route. */
 export const channelsQueries: FixtureQueries = {
   'channels:list': channels,

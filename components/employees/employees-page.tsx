@@ -13,7 +13,7 @@ import { relativeTime } from '../shared/time';
 import { useUiQuery } from '../shared/use-ui-query';
 import { EmployeeDetail } from './employee-detail';
 import { groupInstances, isReserved, readinessLabel, reservedStaff, shiftLabel } from './instances';
-import type { Employee, InstanceStatus, Listing } from '@/lib/contracts';
+import type { Employee, Floor, InstanceStatus, Listing } from '@/lib/contracts';
 import { pluralize } from '@/lib/text';
 import { uiApi } from '@/lib/ui-api';
 import './employees.css';
@@ -48,8 +48,14 @@ function InstanceCard({
 }
 
 /** Requests waiting on an owner or an administrator under the `approval` hiring policy. */
-function HireRequests({ canDecide, run, actions }: Pick<Props, 'run' | 'actions'> & { canDecide: boolean }) {
+function HireRequests({
+  canDecide,
+  floors,
+  run,
+  actions,
+}: Pick<Props, 'run' | 'actions'> & { canDecide: boolean; floors: Floor[] }) {
   const requests = useUiQuery(uiApi.hireRequests, {});
+  const floorName = (id?: string) => floors.find((floor) => floor.id === id)?.name ?? 'Lobby';
   const pending = requests?.filter((request) => request.status === 'pending') ?? [];
   if (!pending.length) return null;
   return (
@@ -68,7 +74,12 @@ function HireRequests({ canDecide, run, actions }: Pick<Props, 'run' | 'actions'
                 {request.count} × {request.listingName}
               </h3>
               <p>
-                {request.requestedByName} asked {relativeTime(request.createdAt)}
+                {request.requestedByName} asked {relativeTime(request.createdAt)} ·{' '}
+                {floorName(request.floorId)}
+              </p>
+              <p className="request-detail">
+                {request.names?.length ? request.names.join(', ') : 'Names chosen on approval'}
+                {request.overnightModel ? ` · overnight on ${modelName(request.overnightModel)}` : ''}
               </p>
             </div>
             {canDecide ? (
@@ -135,7 +146,12 @@ export function EmployeesPage({ listings, ...props }: Props) {
           </button>
         }
       />
-      <HireRequests canDecide={props.canManageWorkspace} run={run} actions={actions} />
+      <HireRequests
+        canDecide={props.canManageWorkspace}
+        floors={dashboard.floors}
+        run={run}
+        actions={actions}
+      />
       {dashboard.employees.length ? (
         <MasterDetail
           className="employee-layout"

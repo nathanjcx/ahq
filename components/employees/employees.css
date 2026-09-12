@@ -30,6 +30,9 @@
   color: var(--muted);
   font-size: var(--text-xs);
 }
+.request-list .request-detail {
+  color: var(--ink);
+}
 .request-state {
   color: var(--muted);
   font-size: var(--text-xs);
