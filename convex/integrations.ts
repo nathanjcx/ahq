@@ -1,8 +1,9 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import type { Doc } from './_generated/dataModel';
 import { canSeeConnection, requireWorkspace } from './shared';
 
-function publicConnection(connection: any) {
+function publicConnection(connection: Doc<'connections'>) {
   return {
     id: connection._id,
     provider: connection.provider,
@@ -24,10 +25,10 @@ export const connectionForServer = query({
     const { workspace, actor, role } = await requireWorkspace(ctx);
     const connections = await ctx.db
       .query('connections')
-      .withIndex('by_workspace', (q: any) => q.eq('workspaceId', workspace._id))
+      .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
       .collect();
     return connections
-      .filter((connection: any) => canSeeConnection(connection, actor.subject, role))
+      .filter((connection) => canSeeConnection(connection, actor.subject, role))
       .map(publicConnection);
   },
 });

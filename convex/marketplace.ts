@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import type { Doc } from './_generated/dataModel';
 import { cleanText, identity, requirePlatformAdmin, requireWorkspace } from './shared';
 
 const provider = v.union(
@@ -24,6 +25,89 @@ const media = v.object({
   alt: v.string(),
 });
 const skill = v.object({ name: v.string(), version: v.string(), sha256: v.string(), content: v.string() });
+const providerIds = [
+  'linear',
+  'slack',
+  'github',
+  'salesforce',
+  'servicenow',
+  'google-workspace',
+  'canva',
+] as const;
+type ProviderId = (typeof providerIds)[number];
+type RegistryTool = { name: string; description: string; mode: 'read' | 'write' | 'blocked' };
+
+function toolRegistry() {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(process.env.MCP_TOOL_REGISTRY_JSON || '{}');
+  } catch {
+    throw new Error('MCP_TOOL_REGISTRY_JSON is invalid JSON');
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+    throw new Error('MCP_TOOL_REGISTRY_JSON must be an object keyed by provider');
+  const source = raw as Record<string, unknown>;
+  for (const key of Object.keys(source)) {
+    if (!providerIds.includes(key as ProviderId))
+      throw new Error(`MCP_TOOL_REGISTRY_JSON has an unknown provider: ${key}`);
+  }
+  return providerIds.map((providerId) => {
+    const value = source[providerId];
+    if (value === undefined) return { provider: providerId, configured: false, tools: [] as RegistryTool[] };
+    if (!Array.isArray(value))
+      throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId} must be an array`);
+    if (value.length > 2_000) throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId} has too many tools`);
+    const tools = value.map((item, index): RegistryTool => {
+      if (!item || typeof item !== 'object' || Array.isArray(item))
+        throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId}[${index}] is invalid`);
+      const record = item as Record<string, unknown>;
+      if (Object.keys(record).some((key) => key !== 'name' && key !== 'description' && key !== 'mode'))
+        throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId}[${index}] has an unknown field`);
+      if (
+        typeof record.name !== 'string' ||
+        !record.name.trim() ||
+        record.name !== record.name.trim() ||
+        record.name.length > 200
+      )
+        throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId}[${index}].name is invalid`);
+      if (
+        typeof record.description !== 'string' ||
+        !record.description.trim() ||
+        record.description !== record.description.trim() ||
+        record.description.length > 2_000
+      )
+        throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId}[${index}].description is invalid`);
+      if (record.mode !== 'read' && record.mode !== 'write' && record.mode !== 'blocked')
+        throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId}[${index}].mode is invalid`);
+      return { name: record.name, description: record.description, mode: record.mode };
+    });
+    if (new Set(tools.map((tool) => tool.name)).size !== tools.length)
+      throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId} has duplicate tool names`);
+    return { provider: providerId, configured: true, tools };
+  });
+}
+
+function validateCapabilities(capabilities: Array<{ provider: ProviderId; tools: string[]; optional: boolean }>) {
+  const registry = new Map(toolRegistry().map((entry) => [entry.provider, entry]));
+  const seenProviders = new Set<ProviderId>();
+  for (const capability of capabilities) {
+    if (seenProviders.has(capability.provider))
+      throw new Error(`Employee has duplicate ${capability.provider} capability entries`);
+    seenProviders.add(capability.provider);
+    if (!capability.tools.length) throw new Error(`${capability.provider} capability requires at least one tool`);
+    if (new Set(capability.tools).size !== capability.tools.length)
+      throw new Error(`${capability.provider} capability has duplicate tools`);
+    const entry = registry.get(capability.provider);
+    if (!entry?.configured)
+      throw new Error(`${capability.provider} has no configured MCP tool registry`);
+    const tools = new Map(entry.tools.map((tool) => [tool.name, tool]));
+    for (const tool of capability.tools) {
+      const registered = tools.get(tool);
+      if (!registered) throw new Error(`${capability.provider}.${tool} is not in the MCP tool registry`);
+      if (registered.mode === 'blocked') throw new Error(`${capability.provider}.${tool} is blocked`);
+    }
+  }
+}
 const draftFields = {
   name: v.string(),
   role: v.string(),
@@ -39,7 +123,7 @@ const draftFields = {
   skills: v.array(skill),
 };
 
-function publicListing(version: any) {
+function publicListing(version: Doc<'employeeVersions'>) {
   return {
     id: version._id,
     versionId: version._id,
@@ -63,8 +147,8 @@ export const list = query({
     await identity(ctx);
     const versions = await ctx.db.query('employeeVersions').withIndex('by_published').order('desc').take(500);
     return versions
-      .filter((version: any) => !version.retiredAt)
-      .sort((a: any, b: any) => b.publishedAt - a.publishedAt)
+      .filter((version) => !version.retiredAt)
+      .sort((a, b) => b.publishedAt - a.publishedAt)
       .map(publicListing);
   },
 });
@@ -77,7 +161,7 @@ export const hire = mutation({
     if (!version || version.retiredAt) throw new Error('Employee version is unavailable');
     const existing = await ctx.db
       .query('installations')
-      .withIndex('by_workspace_version', (q: any) =>
+      .withIndex('by_workspace_version', (q) =>
         q.eq('workspaceId', workspace._id).eq('versionId', args.versionId),
       )
       .unique();
@@ -99,8 +183,8 @@ export const adminList = query({
     await requirePlatformAdmin(ctx);
     const drafts = await ctx.db.query('employeeDrafts').withIndex('by_updated').collect();
     return drafts
-      .sort((a: any, b: any) => b.updatedAt - a.updatedAt)
-      .map((draft: any) => ({
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .map((draft) => ({
         draftId: draft._id,
         name: draft.name,
         role: draft.role,
@@ -116,6 +200,14 @@ export const adminList = query({
         skills: draft.skills,
         updatedAt: draft.updatedAt,
       }));
+  },
+});
+
+export const adminToolRegistry = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePlatformAdmin(ctx);
+    return toolRegistry();
   },
 });
 
@@ -166,9 +258,10 @@ export const publish = mutation({
     const actor = await requirePlatformAdmin(ctx);
     const draft = await ctx.db.get(args.draftId);
     if (!draft) throw new Error('Draft not found');
+    validateCapabilities(draft.capabilities);
     const prior = await ctx.db
       .query('employeeVersions')
-      .withIndex('by_draft', (q: any) => q.eq('draftId', args.draftId))
+      .withIndex('by_draft', (q) => q.eq('draftId', args.draftId))
       .collect();
     const versionId = await ctx.db.insert('employeeVersions', {
       draftId: args.draftId,

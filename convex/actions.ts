@@ -1,8 +1,17 @@
 import { v } from 'convex/values';
 import { mutation } from './_generated/server';
+import type { Doc } from './_generated/dataModel';
+import type { MutationCtx } from './_generated/server';
+import { reserveBudget } from './budget';
 import { requireWorkspace, sha256 } from './shared';
 
-async function transition(ctx: any, proposal: any, to: string, actor: string, detail?: string) {
+async function transition(
+  ctx: MutationCtx,
+  proposal: Doc<'proposals'>,
+  to: string,
+  actor: string,
+  detail?: string,
+) {
   await ctx.db.insert('actionTransitions', {
     workspaceId: proposal.workspaceId,
     proposalId: proposal._id,
@@ -23,18 +32,23 @@ export const decide = mutation({
     const proposalTask = await ctx.db.get(proposal.taskId);
     if (!proposalTask || proposalTask.createdBy !== actor.subject)
       throw new Error('Action proposal not found');
+    if (
+      ['failed', 'cancelled', 'uncertain'].includes(proposalTask.status) ||
+      (proposalTask.status === 'completed' && !proposal.originalActionId)
+    )
+      throw new Error('The task is no longer active');
     const desired = args.approved ? 'approved' : 'rejected';
     if (proposal.status === desired) return null;
     if (proposal.status !== 'pending') throw new Error('This proposal has already been decided');
     const now = Date.now();
     await transition(ctx, proposal, desired, actor.subject);
     await ctx.db.patch(proposal._id, { status: desired, approvedBy: actor.subject, approvedAt: now });
-    const task = await ctx.db.get(proposal.taskId);
+    const task = proposalTask;
     if (args.approved) {
       const uniqueKey = `action:${proposal._id}`;
       const existing = await ctx.db
         .query('jobs')
-        .withIndex('by_unique_key', (q: any) => q.eq('uniqueKey', uniqueKey))
+        .withIndex('by_unique_key', (q) => q.eq('uniqueKey', uniqueKey))
         .unique();
       if (!existing)
         await ctx.db.insert('jobs', {
@@ -54,7 +68,7 @@ export const decide = mutation({
       const uniqueKey = `action-decision:${proposal._id}:rejected`;
       const existing = await ctx.db
         .query('jobs')
-        .withIndex('by_unique_key', (q: any) => q.eq('uniqueKey', uniqueKey))
+        .withIndex('by_unique_key', (q) => q.eq('uniqueKey', uniqueKey))
         .unique();
       if (!existing)
         await ctx.db.insert('jobs', {
@@ -91,14 +105,14 @@ export const requestCorrection = mutation({
       throw new Error('This action has no supported correction');
     const existing = await ctx.db
       .query('proposals')
-      .withIndex('by_original', (q: any) => q.eq('originalActionId', original._id))
+      .withIndex('by_original', (q) => q.eq('originalActionId', original._id))
       .first();
     if (existing) return { kind: 'proposal' as const, proposalId: existing._id };
     const now = Date.now();
     if (original.correction === 'manual' || original.correction === 'partial') {
       const existingTask = await ctx.db
         .query('tasks')
-        .withIndex('by_source_proposal', (q: any) => q.eq('sourceProposalId', original._id))
+        .withIndex('by_source_proposal', (q) => q.eq('sourceProposalId', original._id))
         .first();
       if (existingTask) return { kind: 'task' as const, taskId: existingTask._id };
       const workspaceRecord = await ctx.db.get(workspace._id);
@@ -106,9 +120,7 @@ export const requestCorrection = mutation({
       const employeeVersion = await ctx.db.get(originalTask.versionId);
       if (!employeeVersion || employeeVersion.retiredAt) throw new Error('Employee version is retired');
       const amount = originalTask.reservedCost;
-      if (workspaceRecord.spent + workspaceRecord.reserved + amount > workspaceRecord.monthlyBudget)
-        throw new Error('Monthly workspace budget reached');
-      await ctx.db.patch(workspace._id, { reserved: workspaceRecord.reserved + amount });
+      await reserveBudget(ctx, workspaceRecord, amount, now);
       const prompt = `Review the requested correction for action ${original._id}. The original action was: ${original.summary}. Correction limits: ${original.correctionReason}. Prepare the safest supported correction or clear manual steps. Do not repeat the original action.`;
       const taskId = await ctx.db.insert('tasks', {
         workspaceId: workspace._id,

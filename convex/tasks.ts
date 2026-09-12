@@ -1,26 +1,34 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
-import { taskReservation } from './budget';
+import type { Doc, Id } from './_generated/dataModel';
+import type { MutationCtx } from './_generated/server';
+import { reserveBudget, taskReservation } from './budget';
 import { canSeeConnection, cleanText, randomToken, requireWorkspace } from './shared';
 
-async function assertEmployeeReady(ctx: any, workspace: any, actor: any, role: string, employeeId: any) {
+async function assertEmployeeReady(
+  ctx: MutationCtx,
+  workspace: Doc<'workspaces'>,
+  actor: { subject: string },
+  role: string,
+  employeeId: Id<'installations'>,
+) {
   const installation = await ctx.db.get(employeeId);
   if (!installation || installation.workspaceId !== workspace._id) throw new Error('Employee not found');
   const version = await ctx.db.get(installation.versionId);
   if (!version || version.retiredAt) throw new Error('Employee version is retired');
   const connections = await ctx.db
     .query('connections')
-    .withIndex('by_workspace', (q: any) => q.eq('workspaceId', workspace._id))
+    .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
     .collect();
   const visible = connections.filter(
-    (connection: any) =>
+    (connection) =>
       connection.status === 'connected' && canSeeConnection(connection, actor.subject, role),
   );
   for (const capability of version.capabilities) {
     if (capability.optional) continue;
-    const candidates = visible.filter((connection: any) => connection.provider === capability.provider);
+    const candidates = visible.filter((connection) => connection.provider === capability.provider);
     if (
-      !candidates.some((connection: any) =>
+      !candidates.some((connection) =>
         capability.tools.every((tool: string) => connection.allowedTools.includes(tool)),
       )
     ) {
@@ -30,26 +38,20 @@ async function assertEmployeeReady(ctx: any, workspace: any, actor: any, role: s
   return { installation, version };
 }
 
-async function reserve(ctx: any, workspace: any, amount: number) {
-  if (workspace.spent + workspace.reserved + amount > workspace.monthlyBudget)
-    throw new Error('Monthly workspace budget reached');
-  await ctx.db.patch(workspace._id, { reserved: workspace.reserved + amount });
-}
-
 async function insertJob(
-  ctx: any,
+  ctx: MutationCtx,
   values: {
-    workspaceId: any;
-    taskId: any;
+    workspaceId: Id<'workspaces'>;
+    taskId: Id<'tasks'>;
     uniqueKey: string;
     kind: string;
     payload: string;
-    proposalId?: any;
+    proposalId?: Id<'proposals'>;
   },
 ) {
   const existing = await ctx.db
     .query('jobs')
-    .withIndex('by_unique_key', (q: any) => q.eq('uniqueKey', values.uniqueKey))
+    .withIndex('by_unique_key', (q) => q.eq('uniqueKey', values.uniqueKey))
     .unique();
   if (existing) return existing._id;
   const now = Date.now();
@@ -69,8 +71,8 @@ export const create = mutation({
     const { workspace, actor, role } = await requireWorkspace(ctx);
     const { version } = await assertEmployeeReady(ctx, workspace, actor, role, args.employeeId);
     const amount = taskReservation(version.model);
-    await reserve(ctx, workspace, amount);
     const now = Date.now();
+    await reserveBudget(ctx, workspace, amount, now);
     const taskId = await ctx.db.insert('tasks', {
       workspaceId: workspace._id,
       createdBy: actor.subject,
@@ -115,11 +117,11 @@ export const messages = query({
       throw new Error('Task not found');
     const messages = await ctx.db
       .query('messages')
-      .withIndex('by_task', (q: any) => q.eq('taskId', args.taskId))
+      .withIndex('by_task', (q) => q.eq('taskId', args.taskId))
       .collect();
     return messages
-      .sort((a: any, b: any) => a.createdAt - b.createdAt)
-      .map((message: any) => ({
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .map((message) => ({
         id: message._id,
         taskId: message.taskId,
         role: message.role,
@@ -140,11 +142,11 @@ export const send = mutation({
     if (task.status === 'cancelled' || task.status === 'failed' || task.status === 'uncertain')
       throw new Error('This task cannot accept another message');
     const text = cleanText(args.text, 'Message', 50_000);
+    const now = Date.now();
     if (task.budgetFinalized) {
-      await reserve(ctx, workspace, task.reservedCost);
+      await reserveBudget(ctx, workspace, task.reservedCost, now);
       await ctx.db.patch(task._id, { budgetFinalized: false });
     }
-    const now = Date.now();
     const messageId = await ctx.db.insert('messages', {
       workspaceId: workspace._id,
       taskId: task._id,
@@ -174,6 +176,38 @@ export const cancel = mutation({
       throw new Error('Task not found');
     if (task.status === 'cancelled') return null;
     const now = Date.now();
+    const queued = await ctx.db
+      .query('jobs')
+      .withIndex('by_task_state', (q) => q.eq('taskId', task._id).eq('state', 'queued'))
+      .collect();
+    for (const job of queued) {
+      if (job.kind === 'cancel_task') continue;
+      await ctx.db.patch(job._id, {
+        state: 'failed',
+        error: 'Task was cancelled before this command ran',
+        updatedAt: now,
+      });
+    }
+    const proposals = await ctx.db
+      .query('proposals')
+      .withIndex('by_task_status', (q) => q.eq('taskId', task._id))
+      .collect();
+    for (const proposal of proposals) {
+      if (proposal.status !== 'pending' && proposal.status !== 'approved') continue;
+      await ctx.db.patch(proposal._id, {
+        status: 'rejected',
+        result: 'Task was cancelled before this action ran',
+      });
+      await ctx.db.insert('actionTransitions', {
+        workspaceId: workspace._id,
+        proposalId: proposal._id,
+        from: proposal.status,
+        to: 'rejected',
+        actor: actor.subject,
+        at: now,
+        detail: 'Task cancelled',
+      });
+    }
     await insertJob(ctx, {
       workspaceId: workspace._id,
       taskId: task._id,

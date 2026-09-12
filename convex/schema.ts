@@ -31,6 +31,7 @@ export default defineSchema({
     monthlyBudget: v.number(),
     spent: v.number(),
     reserved: v.number(),
+    billingPeriod: v.optional(v.string()),
     nextSequence: v.number(),
     createdAt: v.number(),
   }).index('by_auth_key', ['authKey']),
@@ -235,13 +236,16 @@ export default defineSchema({
     leaseExpiresAt: v.optional(v.number()),
     result: v.optional(v.string()),
     error: v.optional(v.string()),
+    completionTokenHash: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index('by_unique_key', ['uniqueKey'])
     .index('by_state_available', ['state', 'availableAt'])
+    .index('by_state_kind_available', ['state', 'kind', 'availableAt'])
     .index('by_state_lease_expiration', ['state', 'leaseExpiresAt'])
-    .index('by_task_state', ['taskId', 'state']),
+    .index('by_task_state', ['taskId', 'state'])
+    .index('by_task_created', ['taskId', 'createdAt']),
   inbox: defineTable({
     workspaceId: v.id('workspaces'),
     connectionId: v.id('connections'),
@@ -275,6 +279,8 @@ export default defineSchema({
     taskId: v.id('tasks'),
     connectionId: v.id('connections'),
     operationId: v.string(),
+    proposalId: v.optional(v.id('proposals')),
+    leaseTokenHash: v.optional(v.string()),
     outcome: v.union(v.literal('started'), v.literal('succeeded'), v.literal('failed')),
     tool: v.string(),
     argumentsCiphertext: v.string(),
@@ -296,6 +302,7 @@ export default defineSchema({
     output: v.number(),
     cached: v.number(),
     estimatedCost: v.number(),
+    billingPeriod: v.optional(v.string()),
     createdAt: v.number(),
   }).index('by_task_external', ['taskId', 'externalId']),
 });

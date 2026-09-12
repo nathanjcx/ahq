@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import type { Doc } from './_generated/dataModel';
 import {
   authKey,
   canSeeConnection,
@@ -10,8 +11,9 @@ import {
   visibleTo,
   workspaceForIdentity,
 } from './shared';
+import { currentSpend, utcBillingPeriod } from './budget';
 
-function publicConnection(connection: any) {
+function publicConnection(connection: Doc<'connections'>) {
   return {
     id: connection._id,
     provider: connection.provider,
@@ -40,6 +42,7 @@ export const bootstrap = mutation({
       monthlyBudget: 100,
       spent: 0,
       reserved: 0,
+      billingPeriod: utcBillingPeriod(now),
       nextSequence: 0,
       createdAt: now,
     });
@@ -80,43 +83,43 @@ export const dashboard = query({
     const [installations, allConnections, tasks, events, proposals, inbox, artifacts] = await Promise.all([
       ctx.db
         .query('installations')
-        .withIndex('by_workspace', (q: any) => q.eq('workspaceId', workspace._id))
+        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
         .collect(),
       ctx.db
         .query('connections')
-        .withIndex('by_workspace', (q: any) => q.eq('workspaceId', workspace._id))
+        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
         .collect(),
       ctx.db
         .query('tasks')
-        .withIndex('by_workspace', (q: any) => q.eq('workspaceId', workspace._id))
+        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
         .order('desc')
         .take(200),
       ctx.db
         .query('events')
-        .withIndex('by_workspace_sequence', (q: any) => q.eq('workspaceId', workspace._id))
+        .withIndex('by_workspace_sequence', (q) => q.eq('workspaceId', workspace._id))
         .order('desc')
         .take(500),
       ctx.db
         .query('proposals')
-        .withIndex('by_workspace', (q: any) => q.eq('workspaceId', workspace._id))
+        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
         .order('desc')
         .take(200),
       ctx.db
         .query('inbox')
-        .withIndex('by_workspace', (q: any) => q.eq('workspaceId', workspace._id))
+        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
         .order('desc')
         .take(200),
       ctx.db
         .query('artifacts')
-        .withIndex('by_workspace', (q: any) => q.eq('workspaceId', workspace._id))
+        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
         .order('desc')
         .take(200),
     ]);
-    const connections = allConnections.filter((connection: any) =>
+    const connections = allConnections.filter((connection) =>
       canSeeConnection(connection, actor.subject, role),
     );
-    const visibleTasks = tasks.filter((task: any) => task.createdBy === actor.subject);
-    const visibleTaskIds = new Set(visibleTasks.map((task: any) => task._id));
+    const visibleTasks = tasks.filter((task) => task.createdBy === actor.subject);
+    const visibleTaskIds = new Set(visibleTasks.map((task) => task._id));
     const connectionCapabilities = new Map<string, Set<string>>();
     for (const connection of connections) {
       if (connection.status !== 'connected') continue;
@@ -125,16 +128,16 @@ export const dashboard = query({
       connectionCapabilities.set(connection.provider, existing);
     }
     const employees = await Promise.all(
-      installations.map(async (installation: any) => {
+      installations.map(async (installation) => {
         const version = await ctx.db.get(installation.versionId);
         if (!version) return null;
         const missingCapabilities = version.capabilities
-          .filter((capability: any) => {
+          .filter((capability) => {
             if (capability.optional) return false;
             const tools = connectionCapabilities.get(capability.provider);
             return !tools || capability.tools.some((tool: string) => !tools.has(tool));
           })
-          .map((capability: any) => capability.provider);
+          .map((capability) => capability.provider);
         return {
           id: installation._id,
           versionId: version._id,
@@ -153,12 +156,12 @@ export const dashboard = query({
         name: workspace.name,
         role,
         monthlyBudget: workspace.monthlyBudget,
-        spent: workspace.spent,
+        spent: currentSpend(workspace),
       },
       isPlatformAdmin: isPlatformAdmin(actor.subject),
       employees: employees.filter(Boolean),
       connections: connections.map(publicConnection),
-      tasks: visibleTasks.map((task: any) => ({
+      tasks: visibleTasks.map((task) => ({
         id: task._id,
         employeeId: task.employeeId,
         employeeName: task.employeeName,
@@ -173,11 +176,11 @@ export const dashboard = query({
         usage: task.usage,
       })),
       events: events
-        .filter((event: any) => visibleTaskIds.has(event.taskId))
-        .sort((a: any, b: any) => b.sequence - a.sequence)
+        .filter((event) => visibleTaskIds.has(event.taskId))
+        .sort((a, b) => b.sequence - a.sequence)
         .slice(0, 500)
         .reverse()
-        .map((event: any) => ({
+        .map((event) => ({
           id: event._id,
           sequence: event.sequence,
           taskId: event.taskId,
@@ -188,8 +191,8 @@ export const dashboard = query({
           gap: event.gap,
         })),
       proposals: proposals
-        .filter((proposal: any) => visibleTaskIds.has(proposal.taskId))
-        .map((proposal: any) => ({
+        .filter((proposal) => visibleTaskIds.has(proposal.taskId))
+        .map((proposal) => ({
           id: proposal._id,
           taskId: proposal.taskId,
           employeeName: proposal.employeeName,
@@ -205,8 +208,8 @@ export const dashboard = query({
           originalActionId: proposal.originalActionId,
         })),
       inbox: inbox
-        .filter((item: any) => visibleTo(item, actor.subject, role))
-        .map((item: any) => ({
+        .filter((item) => visibleTo(item, actor.subject, role))
+        .map((item) => ({
           id: item._id,
           provider: item.provider,
           title: item.title,
@@ -217,8 +220,8 @@ export const dashboard = query({
           taskId: item.taskId,
         })),
       artifacts: artifacts
-        .filter((artifact: any) => visibleTaskIds.has(artifact.taskId))
-        .map((artifact: any) => ({
+        .filter((artifact) => visibleTaskIds.has(artifact.taskId))
+        .map((artifact) => ({
           id: artifact._id,
           taskId: artifact.taskId,
           name: artifact.name,

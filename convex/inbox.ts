@@ -29,17 +29,17 @@ export const assign = mutation({
     if (!version || version.retiredAt) throw new Error('Employee version is retired');
     const connections = await ctx.db
       .query('connections')
-      .withIndex('by_workspace', (q: any) => q.eq('workspaceId', workspace._id))
+      .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
       .collect();
     const active = connections.filter(
-      (connection: any) =>
+      (connection) =>
         connection.status === 'connected' && canSeeConnection(connection, actor.subject, role),
     );
     for (const capability of version.capabilities) {
       if (capability.optional) continue;
       if (
         !active.some(
-          (connection: any) =>
+          (connection) =>
             connection.provider === capability.provider &&
             capability.tools.every((tool: string) => connection.allowedTools.includes(tool)),
         )

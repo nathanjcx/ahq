@@ -1,6 +1,9 @@
-import type { GenericMutationCtx, GenericQueryCtx, GenericDataModel } from 'convex/server';
+import type { MutationCtx, QueryCtx } from './_generated/server';
+import type { Doc } from './_generated/dataModel';
 
-export type Ctx = GenericQueryCtx<GenericDataModel> | GenericMutationCtx<GenericDataModel>;
+export type Ctx = QueryCtx | MutationCtx;
+export type Actor = { subject: string; orgId?: string; orgRole?: string };
+export type WorkspaceRole = 'owner' | 'admin' | 'member';
 
 export function cleanText(value: string, field: string, max: number) {
   const text = value.trim();
@@ -24,18 +27,26 @@ export function requireService(secret: string) {
   if (!serviceSecretMatches(secret)) throw new Error('Unauthorized service request');
 }
 
-export async function identity(ctx: Ctx) {
+export async function identity(ctx: Ctx): Promise<Actor> {
   const value = await ctx.auth.getUserIdentity();
   if (!value) throw new Error('Authentication required');
   const claims = value as Record<string, unknown>;
+  const organization =
+    claims.o && typeof claims.o === 'object' && !Array.isArray(claims.o)
+      ? (claims.o as Record<string, unknown>)
+      : undefined;
   const orgId =
-    typeof claims.org_id === 'string'
+    typeof organization?.id === 'string'
+      ? organization.id
+      : typeof claims.org_id === 'string'
       ? claims.org_id
       : typeof claims.orgId === 'string'
         ? claims.orgId
         : undefined;
   const orgRole =
-    typeof claims.org_role === 'string'
+    typeof organization?.rol === 'string'
+      ? organization.rol
+      : typeof claims.org_role === 'string'
       ? claims.org_role
       : typeof claims.orgRole === 'string'
         ? claims.orgRole
@@ -47,25 +58,27 @@ export function authKey(subject: string, orgId?: string) {
   return orgId ? `org:${orgId}` : `user:${subject}`;
 }
 
-export function clerkRole(orgId: string | undefined, orgRole: string | undefined) {
+export function clerkRole(orgId: string | undefined, orgRole: string | undefined): WorkspaceRole {
   if (!orgId) return 'owner';
   return orgRole === 'org:admin' || orgRole === 'admin' ? 'admin' : 'member';
 }
 
 export async function workspaceForIdentity(
   ctx: Ctx,
-  actor: { subject: string; orgId?: string; orgRole?: string },
-): Promise<any> {
+  actor: Actor,
+): Promise<{ workspace: Doc<'workspaces'>; role: WorkspaceRole } | null> {
   const workspace = await ctx.db
     .query('workspaces')
-    .withIndex('by_auth_key', (q: any) => q.eq('authKey', authKey(actor.subject, actor.orgId)))
+    .withIndex('by_auth_key', (q) => q.eq('authKey', authKey(actor.subject, actor.orgId)))
     .unique();
   if (!workspace) return null;
   const role = clerkRole(actor.orgId, actor.orgRole);
   return { workspace, role };
 }
 
-export async function requireWorkspace(ctx: Ctx): Promise<any> {
+export async function requireWorkspace(
+  ctx: Ctx,
+): Promise<{ workspace: Doc<'workspaces'>; role: WorkspaceRole; actor: Actor }> {
   const actor = await identity(ctx);
   const found = await workspaceForIdentity(ctx, actor);
   if (!found) throw new Error('Create a workspace first');
@@ -86,7 +99,7 @@ export async function requirePlatformAdmin(ctx: Ctx) {
   return actor;
 }
 
-export function canSeeConnection(connection: any, subject: string, role: string) {
+export function canSeeConnection(connection: Doc<'connections'>, subject: string, role: string) {
   void role;
   return connection.ownerSubject === subject || connection.visibleToSubjects.includes(subject);
 }

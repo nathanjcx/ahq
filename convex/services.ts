@@ -1,5 +1,8 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import type { Doc, Id } from './_generated/dataModel';
+import type { MutationCtx, QueryCtx } from './_generated/server';
+import { addSpend, utcBillingPeriod } from './budget';
 import { authKey, requireService, sha256, stableJson } from './shared';
 
 const provider = v.union(
@@ -28,24 +31,26 @@ const taskStatus = v.union(
   v.literal('uncertain'),
 );
 
-async function workspaceForActor(ctx: any, subject: string, orgId?: string) {
+type ReadCtx = Pick<QueryCtx, 'db'>;
+
+async function workspaceForActor(ctx: ReadCtx, subject: string, orgId?: string) {
   return ctx.db
     .query('workspaces')
-    .withIndex('by_auth_key', (q: any) => q.eq('authKey', authKey(subject, orgId)))
+    .withIndex('by_auth_key', (q) => q.eq('authKey', authKey(subject, orgId)))
     .unique();
 }
 
-function connectionVisibleToTask(connection: any, task: any) {
+function connectionVisibleToTask(connection: Doc<'connections'>, task: Doc<'tasks'>) {
   return connection.ownerSubject === task.createdBy || connection.visibleToSubjects.includes(task.createdBy);
 }
 
-function versionAllows(version: any, providerId: string, tool: string) {
+function versionAllows(version: Doc<'employeeVersions'>, providerId: string, tool: string) {
   return version.capabilities.some(
-    (capability: any) => capability.provider === providerId && capability.tools.includes(tool),
+    (capability) => capability.provider === providerId && capability.tools.includes(tool),
   );
 }
 
-function privateConnection(connection: any) {
+function privateConnection(connection: Doc<'connections'>) {
   return {
     id: connection._id,
     provider: connection.provider,
@@ -83,21 +88,21 @@ function assertApprovedServerUrl(providerId: string, serverUrl: string) {
   if (!approved.includes(url.toString())) throw new Error('MCP server URL is not in the approved registry');
 }
 
-async function activeTaskContext(ctx: any, task: any) {
+async function activeTaskContext(ctx: ReadCtx, task: Doc<'tasks'>) {
   const version = await ctx.db.get(task.versionId);
   if (!version || version.retiredAt) throw new Error('Employee version is retired');
   const connections = await ctx.db
     .query('connections')
-    .withIndex('by_workspace', (q: any) => q.eq('workspaceId', task.workspaceId))
+    .withIndex('by_workspace', (q) => q.eq('workspaceId', task.workspaceId))
     .collect();
   const visible = connections.filter(
-    (connection: any) => connection.status === 'connected' && connectionVisibleToTask(connection, task),
+    (connection) => connection.status === 'connected' && connectionVisibleToTask(connection, task),
   );
   for (const capability of version.capabilities) {
     if (capability.optional) continue;
     if (
       !visible.some(
-        (connection: any) =>
+        (connection) =>
           connection.provider === capability.provider &&
           capability.tools.every((tool: string) => connection.allowedTools.includes(tool)),
       )
@@ -106,22 +111,22 @@ async function activeTaskContext(ctx: any, task: any) {
     }
   }
   const active = visible
-    .map((connection: any) => {
+    .map((connection) => {
       const versionTools = new Set(
         version.capabilities
-          .filter((capability: any) => capability.provider === connection.provider)
-          .flatMap((capability: any) => capability.tools),
+          .filter((capability) => capability.provider === connection.provider)
+          .flatMap((capability) => capability.tools),
       );
       return {
         ...connection,
         allowedTools: connection.allowedTools.filter((tool: string) => versionTools.has(tool)),
       };
     })
-    .filter((connection: any) => connection.allowedTools.length > 0);
+    .filter((connection) => connection.allowedTools.length > 0);
   return { version, connections: active };
 }
 
-async function releaseReservation(ctx: any, task: any) {
+async function releaseReservation(ctx: MutationCtx, task: Doc<'tasks'>) {
   if (task.budgetFinalized) return;
   const workspace = await ctx.db.get(task.workspaceId);
   if (workspace)
@@ -138,37 +143,42 @@ export const workerState = query({
     const [queued, leased, queuedTasks, running, awaitingApproval, signal] = await Promise.all([
       ctx.db
         .query('jobs')
-        .withIndex('by_state_available', (q: any) => q.eq('state', 'queued'))
+        .withIndex('by_state_available', (q) => q.eq('state', 'queued'))
         .take(100),
       ctx.db
         .query('jobs')
-        .withIndex('by_state_available', (q: any) => q.eq('state', 'leased'))
+        .withIndex('by_state_available', (q) => q.eq('state', 'leased'))
         .take(100),
       ctx.db
         .query('tasks')
-        .withIndex('by_status', (q: any) => q.eq('status', 'queued'))
+        .withIndex('by_status', (q) => q.eq('status', 'queued'))
         .take(500),
       ctx.db
         .query('tasks')
-        .withIndex('by_status', (q: any) => q.eq('status', 'running'))
+        .withIndex('by_status', (q) => q.eq('status', 'running'))
         .take(500),
       ctx.db
         .query('tasks')
-        .withIndex('by_status', (q: any) => q.eq('status', 'awaiting_approval'))
+        .withIndex('by_status', (q) => q.eq('status', 'awaiting_approval'))
         .take(500),
       ctx.db
         .query('workerSignals')
-        .withIndex('by_name', (q: any) => q.eq('name', 'jobs'))
+        .withIndex('by_name', (q) => q.eq('name', 'jobs'))
         .unique(),
     ]);
+    const pendingInputTasks = new Set(
+      [...queued, ...leased]
+        .filter((job) => job.kind === 'start_task' || job.kind === 'send_message')
+        .map((job) => String(job.taskId)),
+    );
     return {
       pendingJobs: queued.length + leased.length,
-      queuedJobIds: queued.slice(0, 100).map((job: any) => String(job._id)),
+      queuedJobIds: queued.slice(0, 100).map((job) => String(job._id)),
       activeTaskIds: [...queuedTasks, ...running, ...awaitingApproval]
-        .filter((task: any) => task.sessionId)
-        .map((task: any) => String(task._id)),
+        .filter((task) => task.sessionId && !pendingInputTasks.has(String(task._id)))
+        .map((task) => String(task._id)),
       nextAvailableAt: queued.reduce(
-        (next: number | undefined, job: any) =>
+        (next: number | undefined, job) =>
           next === undefined ? job.availableAt : Math.min(next, job.availableAt),
         undefined,
       ),
@@ -183,22 +193,31 @@ export const claimJobs = mutation({
     requireService(args.secret);
     if (!args.workerId.trim()) throw new Error('workerId is required');
     const now = Date.now();
-    const [expiredJobs, fresh] = await Promise.all([
+    const [expiredJobs, cancellations, fresh] = await Promise.all([
       ctx.db
         .query('jobs')
-        .withIndex('by_state_lease_expiration', (q: any) => q.eq('state', 'leased').lt('leaseExpiresAt', now))
+        .withIndex('by_state_lease_expiration', (q) => q.eq('state', 'leased').lt('leaseExpiresAt', now))
+        .take(100),
+      ctx.db
+        .query('jobs')
+        .withIndex('by_state_kind_available', (q) =>
+          q.eq('state', 'queued').eq('kind', 'cancel_task').lte('availableAt', now),
+        )
         .take(50),
       ctx.db
         .query('jobs')
-        .withIndex('by_state_available', (q: any) => q.eq('state', 'queued').lte('availableAt', now))
-        .take(50),
+        .withIndex('by_state_available', (q) => q.eq('state', 'queued').lte('availableAt', now))
+        .take(100),
     ]);
-    const recovered: any[] = [];
+    const recovered: Doc<'jobs'>[] = [];
     for (const job of expiredJobs) {
       if (job.kind === 'execute_action') {
         await ctx.db.patch(job._id, {
           state: 'failed',
           error: 'Lease expired after external action dispatch may have begun',
+          leaseOwner: undefined,
+          leaseToken: undefined,
+          leaseExpiresAt: undefined,
           updatedAt: now,
         });
         if (job.proposalId) {
@@ -218,7 +237,7 @@ export const claimJobs = mutation({
               detail: 'Lease expired',
             });
             const task = await ctx.db.get(proposal.taskId);
-            if (task) {
+            if (task && !['completed', 'failed', 'cancelled', 'uncertain'].includes(task.status)) {
               await releaseReservation(ctx, task);
               await ctx.db.patch(task._id, {
                 status: 'uncertain',
@@ -229,6 +248,22 @@ export const claimJobs = mutation({
           }
         }
       } else {
+        const task = await ctx.db.get(job.taskId);
+        if (
+          !task ||
+          (job.kind !== 'cancel_task' &&
+            ['completed', 'failed', 'cancelled', 'uncertain'].includes(task.status))
+        ) {
+          await ctx.db.patch(job._id, {
+            state: 'failed',
+            error: 'Task became inactive before the command could be retried',
+            leaseOwner: undefined,
+            leaseToken: undefined,
+            leaseExpiresAt: undefined,
+            updatedAt: now,
+          });
+          continue;
+        }
         await ctx.db.patch(job._id, {
           state: 'queued',
           leaseOwner: undefined,
@@ -240,11 +275,78 @@ export const claimJobs = mutation({
         recovered.push({ ...job, state: 'queued', availableAt: now });
       }
     }
-    const candidates = [...fresh, ...recovered]
-      .sort((a, b) => a.createdAt - b.createdAt)
-      .slice(0, Math.max(0, Math.min(50, Math.floor(args.limit))));
-    const output = [];
+    const uniqueCandidates = new Map<Id<'jobs'>, Doc<'jobs'>>();
+    for (const job of [...cancellations, ...fresh, ...recovered]) uniqueCandidates.set(job._id, job);
+    const candidates = [...uniqueCandidates.values()].sort((a, b) => {
+      const priority = Number(b.kind === 'cancel_task') - Number(a.kind === 'cancel_task');
+      return priority || a.createdAt - b.createdAt;
+    });
+    const output: Array<{
+      id: Id<'jobs'>;
+      kind: string;
+      taskId: Id<'tasks'>;
+      payload: unknown;
+      leaseToken: string;
+      attempts: number;
+    }> = [];
+    const selectedTasks = new Set<string>();
+    const limit = Number.isFinite(args.limit) ? Math.max(0, Math.min(50, Math.floor(args.limit))) : 0;
     for (const job of candidates) {
+      if (output.length >= limit) break;
+      const taskKey = String(job.taskId);
+      if (selectedTasks.has(taskKey)) continue;
+      const activeLeases = await ctx.db
+        .query('jobs')
+        .withIndex('by_task_state', (q) => q.eq('taskId', job.taskId).eq('state', 'leased'))
+        .collect();
+      if (activeLeases.some((active) => (active.leaseExpiresAt || 0) > now)) continue;
+      const task = await ctx.db.get(job.taskId);
+      if (!task) {
+        await ctx.db.patch(job._id, { state: 'failed', error: 'Task not found', updatedAt: now });
+        continue;
+      }
+      if (
+        job.kind !== 'cancel_task' &&
+        (['failed', 'cancelled', 'uncertain'].includes(task.status) ||
+          (task.status === 'completed' && job.kind !== 'execute_action'))
+      ) {
+        await ctx.db.patch(job._id, {
+          state: 'failed',
+          error: 'Task is no longer active',
+          updatedAt: now,
+        });
+        if (job.kind === 'execute_action' && job.proposalId) {
+          const proposal = await ctx.db.get(job.proposalId);
+          if (proposal?.status === 'approved') {
+            await ctx.db.patch(proposal._id, { status: 'rejected', result: 'Task is no longer active' });
+            await ctx.db.insert('actionTransitions', {
+              workspaceId: proposal.workspaceId,
+              proposalId: proposal._id,
+              from: 'approved',
+              to: 'rejected',
+              actor: 'worker',
+              at: now,
+              detail: 'Task is no longer active',
+            });
+          }
+        }
+        continue;
+      }
+      if (job.kind === 'execute_action') {
+        const proposal = job.proposalId ? await ctx.db.get(job.proposalId) : null;
+        if (
+          !proposal ||
+          proposal.status !== 'approved' ||
+          (task.status === 'completed' && !proposal.originalActionId)
+        ) {
+          await ctx.db.patch(job._id, {
+            state: 'failed',
+            error: 'Action is no longer approved',
+            updatedAt: now,
+          });
+          continue;
+        }
+      }
       const leaseToken = crypto.randomUUID();
       const attempts = job.attempts + 1;
       await ctx.db.patch(job._id, {
@@ -257,14 +359,7 @@ export const claimJobs = mutation({
       });
       if (job.kind === 'execute_action' && job.proposalId) {
         const proposal = await ctx.db.get(job.proposalId);
-        if (!proposal || proposal.status !== 'approved') {
-          await ctx.db.patch(job._id, {
-            state: 'failed',
-            error: 'Action is no longer approved',
-            updatedAt: now,
-          });
-          continue;
-        }
+        if (!proposal) throw new Error('Approved action disappeared during claim');
         await ctx.db.patch(proposal._id, { status: 'executing' });
         await ctx.db.insert('actionTransitions', {
           workspaceId: proposal.workspaceId,
@@ -274,10 +369,6 @@ export const claimJobs = mutation({
           actor: args.workerId,
           at: now,
         });
-      } else if (job.kind === 'start_task' || job.kind === 'send_message') {
-        const task = await ctx.db.get(job.taskId);
-        if (task && task.status !== 'cancelled')
-          await ctx.db.patch(task._id, { status: 'running', updatedAt: now });
       }
       let payload: unknown = job.payload;
       try {
@@ -286,6 +377,7 @@ export const claimJobs = mutation({
         /* Old jobs may contain plain text. */
       }
       output.push({ id: job._id, kind: job.kind, taskId: job.taskId, payload, leaseToken, attempts });
+      selectedTasks.add(taskKey);
     }
     return output;
   },
@@ -298,6 +390,17 @@ export const renewLease = mutation({
     const job = await ctx.db.get(args.jobId);
     if (!job || job.state !== 'leased' || job.leaseToken !== args.leaseToken)
       throw new Error('Job lease is no longer valid');
+    const task = await ctx.db.get(job.taskId);
+    const proposal = job.proposalId ? await ctx.db.get(job.proposalId) : null;
+    const completedCorrection =
+      job.kind === 'execute_action' && task?.status === 'completed' && Boolean(proposal?.originalActionId);
+    if (
+      !task ||
+      (job.kind !== 'cancel_task' &&
+        !completedCorrection &&
+        ['completed', 'failed', 'cancelled', 'uncertain'].includes(task.status))
+    )
+      throw new Error('Task is no longer active');
     await ctx.db.patch(job._id, { leaseExpiresAt: Date.now() + 60_000, updatedAt: Date.now() });
     return null;
   },
@@ -331,6 +434,13 @@ export const completeJob = mutation({
       if (proposal && proposal.status === 'executing')
         throw new Error('Record the external action result before completing its job');
     }
+    const task = await ctx.db.get(job.taskId);
+    if (
+      task &&
+      (job.kind === 'start_task' || job.kind === 'send_message') &&
+      !['completed', 'failed', 'cancelled', 'uncertain'].includes(task.status)
+    )
+      await ctx.db.patch(task._id, { status: 'running', updatedAt: Date.now() });
     await ctx.db.patch(job._id, {
       state: 'completed',
       result: args.result,
@@ -358,7 +468,12 @@ export const failJob = mutation({
     if (!job || job.state !== 'leased' || job.leaseToken !== args.leaseToken)
       throw new Error('Job lease is no longer valid');
     const now = Date.now();
-    const canRetry = job.kind !== 'execute_action' && args.retryable === true && job.attempts < 3;
+    const task = await ctx.db.get(job.taskId);
+    const taskActive = Boolean(
+      task && !['completed', 'failed', 'cancelled', 'uncertain'].includes(task.status),
+    );
+    const canRetry =
+      job.kind !== 'execute_action' && args.retryable === true && job.attempts < 3 && taskActive;
     await ctx.db.patch(
       job._id,
       canRetry
@@ -381,8 +496,7 @@ export const failJob = mutation({
           },
     );
     if (!canRetry) {
-      const task = await ctx.db.get(job.taskId);
-      if (task && task.status !== 'cancelled') {
+      if (task && !['completed', 'failed', 'cancelled', 'uncertain'].includes(task.status)) {
         await releaseReservation(ctx, task);
         await ctx.db.patch(task._id, {
           status: args.outcomeUnknown ? 'uncertain' : 'failed',
@@ -447,6 +561,48 @@ export const taskContext = query({
   },
 });
 
+export const sessionContext = query({
+  args: { secret: v.string(), taskId: v.id('tasks') },
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new Error('Task not found');
+    const [artifacts, jobs] = await Promise.all([
+      ctx.db
+        .query('artifacts')
+        .withIndex('by_task', (q) => q.eq('taskId', task._id))
+        .take(100),
+      ctx.db
+        .query('jobs')
+        .withIndex('by_task_created', (q) => q.eq('taskId', task._id))
+        .order('desc')
+        .take(100),
+    ]);
+    const latestInput = jobs.find((job) => job.kind === 'start_task' || job.kind === 'send_message');
+    const pendingInput = jobs.some(
+      (job) =>
+        (job.kind === 'start_task' || job.kind === 'send_message') &&
+        (job.state === 'queued' || job.state === 'leased'),
+    );
+    return {
+      task: {
+        id: task._id,
+        sessionId: task.sessionId,
+        status: task.status,
+        model: task.model,
+        title: task.title,
+        prompt: task.prompt,
+        createdAt: task.createdAt,
+        updatedAt: task.updatedAt,
+      },
+      authorization: { workspaceId: task.workspaceId, userId: task.createdBy },
+      archivedStorageKeys: artifacts.map((artifact) => artifact.storageKey),
+      inputRevision: latestInput ? String(latestInput._id) : '',
+      pendingInput,
+    };
+  },
+});
+
 export const recordSession = mutation({
   args: {
     secret: v.string(),
@@ -460,20 +616,19 @@ export const recordSession = mutation({
     if (!task) throw new Error('Task not found');
     if (task.sessionId && task.sessionId !== args.sessionId)
       throw new Error('Task already has a different session');
-    await ctx.db.patch(task._id, {
-      sessionId: args.sessionId,
-      status: task.status === 'cancelled' ? 'cancelled' : 'running',
-      updatedAt: Date.now(),
-    });
     if (args.leaseToken) {
       const jobs = await ctx.db
         .query('jobs')
-        .withIndex('by_task_state', (q: any) => q.eq('taskId', task._id).eq('state', 'leased'))
+        .withIndex('by_task_state', (q) => q.eq('taskId', task._id).eq('state', 'leased'))
         .collect();
-      const job = jobs.find((candidate: any) => candidate.leaseToken === args.leaseToken);
+      const job = jobs.find((candidate) => candidate.leaseToken === args.leaseToken);
       if (!job || !job.leaseExpiresAt || job.leaseExpiresAt <= Date.now())
         throw new Error('Job lease is no longer valid');
     }
+    await ctx.db.patch(task._id, {
+      sessionId: args.sessionId,
+      updatedAt: Date.now(),
+    });
     return null;
   },
 });
@@ -517,6 +672,7 @@ export const recordEvents = mutation({
     ),
     status: v.optional(taskStatus),
     error: v.optional(v.string()),
+    inputRevision: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     requireService(args.secret);
@@ -538,7 +694,7 @@ export const recordEvents = mutation({
     for (const event of args.events) {
       const existing = await ctx.db
         .query('events')
-        .withIndex('by_task_external', (q: any) =>
+        .withIndex('by_task_external', (q) =>
           q.eq('taskId', task._id).eq('externalId', event.externalId),
         )
         .unique();
@@ -563,7 +719,7 @@ export const recordEvents = mutation({
       if (!externalId) throw new Error('Message externalId is required');
       const existing = await ctx.db
         .query('messages')
-        .withIndex('by_task_external', (q: any) => q.eq('taskId', task._id).eq('externalId', externalId))
+        .withIndex('by_task_external', (q) => q.eq('taskId', task._id).eq('externalId', externalId))
         .unique();
       if (!existing) {
         await ctx.db.insert('messages', {
@@ -585,14 +741,21 @@ export const recordEvents = mutation({
         });
       }
     }
-    const patch: Record<string, unknown> = { updatedAt: Date.now() };
+    const recordedAt = Date.now();
+    const patch: Record<string, unknown> = { updatedAt: recordedAt };
     let costDelta = 0;
     if (args.usage) {
+      if (
+        [args.usage.input, args.usage.output, args.usage.cached, args.usage.estimatedCost].some(
+          (value) => !Number.isFinite(value) || value < 0,
+        )
+      )
+        throw new Error('Usage values must be finite and non-negative');
       const current = task.usage || { input: 0, output: 0, cached: 0, estimatedCost: 0 };
       if (args.usage.externalId) {
         const prior = await ctx.db
           .query('usageReports')
-          .withIndex('by_task_external', (q: any) =>
+          .withIndex('by_task_external', (q) =>
             q.eq('taskId', task._id).eq('externalId', args.usage!.externalId!),
           )
           .unique();
@@ -606,7 +769,8 @@ export const recordEvents = mutation({
             output: args.usage.output,
             cached: args.usage.cached,
             estimatedCost: args.usage.estimatedCost,
-            createdAt: Date.now(),
+            billingPeriod: utcBillingPeriod(recordedAt),
+            createdAt: recordedAt,
           });
           patch.usage = {
             input: current.input + args.usage.input,
@@ -625,33 +789,54 @@ export const recordEvents = mutation({
         };
       }
     }
-    if (costDelta) await ctx.db.patch(workspace._id, { spent: workspace.spent + costDelta });
+    if (costDelta) await addSpend(ctx, workspace, costDelta, recordedAt);
     if (args.status) {
       let nextStatus = args.status;
-      if (args.status === 'completed') {
+      const reportedTerminal = ['completed', 'failed', 'cancelled', 'uncertain'].includes(args.status);
+      let staleTerminal = false;
+      if (reportedTerminal) {
+        if (!args.inputRevision) throw new Error('Terminal session events require an input revision');
+        const inputJobs = await ctx.db
+          .query('jobs')
+          .withIndex('by_task_created', (q) => q.eq('taskId', task._id))
+          .order('desc')
+          .take(100);
+        const latestInput = inputJobs.find(
+          (job) => job.kind === 'start_task' || job.kind === 'send_message',
+        );
+        const pendingInput = inputJobs.some(
+          (job) =>
+            (job.kind === 'start_task' || job.kind === 'send_message') &&
+            (job.state === 'queued' || job.state === 'leased'),
+        );
+        staleTerminal = pendingInput || String(latestInput?._id || '') !== args.inputRevision;
+      }
+      if (['completed', 'failed', 'cancelled', 'uncertain'].includes(task.status) || staleTerminal) {
+        nextStatus = task.status;
+      } else if (args.status === 'completed') {
         if (task.status === 'cancelled' || task.status === 'uncertain') nextStatus = task.status;
         else {
           const [activeProposals, queuedJobs, leasedJobs] = await Promise.all([
             ctx.db
               .query('proposals')
-              .withIndex('by_task_status', (q: any) => q.eq('taskId', task._id))
+              .withIndex('by_task_status', (q) => q.eq('taskId', task._id))
               .collect(),
             ctx.db
               .query('jobs')
-              .withIndex('by_task_state', (q: any) => q.eq('taskId', task._id).eq('state', 'queued'))
+              .withIndex('by_task_state', (q) => q.eq('taskId', task._id).eq('state', 'queued'))
               .collect(),
             ctx.db
               .query('jobs')
-              .withIndex('by_task_state', (q: any) => q.eq('taskId', task._id).eq('state', 'leased'))
+              .withIndex('by_task_state', (q) => q.eq('taskId', task._id).eq('state', 'leased'))
               .collect(),
           ]);
           if (
-            activeProposals.some((proposal: any) =>
+            activeProposals.some((proposal) =>
               ['pending', 'approved', 'executing'].includes(proposal.status),
             )
           )
             nextStatus = 'awaiting_approval';
-          else if ([...queuedJobs, ...leasedJobs].some((job: any) => job.kind === 'send_message'))
+          else if ([...queuedJobs, ...leasedJobs].some((job) => job.kind === 'send_message'))
             nextStatus = task.status === 'queued' ? 'queued' : 'running';
         }
       }
@@ -703,10 +888,10 @@ export const connectIntegration = mutation({
       throw new Error('Allowed tools must be discovered first');
     const owned = await ctx.db
       .query('connections')
-      .withIndex('by_owner', (q: any) => q.eq('ownerSubject', args.authSubject))
+      .withIndex('by_owner', (q) => q.eq('ownerSubject', args.authSubject))
       .collect();
     const existing = owned.find(
-      (connection: any) =>
+      (connection) =>
         connection.workspaceId === workspace._id &&
         connection.provider === args.provider &&
         connection.serverUrl === args.serverUrl &&
@@ -783,9 +968,9 @@ export const gatewayContext = query({
     requireService(args.secret);
     const task = await ctx.db
       .query('tasks')
-      .withIndex('by_run_token', (q: any) => q.eq('runToken', args.runToken))
+      .withIndex('by_run_token', (q) => q.eq('runToken', args.runToken))
       .unique();
-    if (!task || ['cancelled', 'failed', 'uncertain'].includes(task.status))
+    if (!task || ['completed', 'cancelled', 'failed', 'uncertain'].includes(task.status))
       throw new Error('Task authorization is inactive');
     const { version, connections } = await activeTaskContext(ctx, task);
     return {
@@ -814,12 +999,12 @@ export const proposeAction = mutation({
     requireService(args.secret);
     const task = await ctx.db
       .query('tasks')
-      .withIndex('by_run_token', (q: any) => q.eq('runToken', args.runToken))
+      .withIndex('by_run_token', (q) => q.eq('runToken', args.runToken))
       .unique();
     if (!task || ['completed', 'cancelled', 'failed', 'uncertain'].includes(task.status))
       throw new Error('Task authorization is inactive');
     const { version, connections } = await activeTaskContext(ctx, task);
-    const connection = connections.find((item: any) => item._id === args.connectionId);
+    const connection = connections.find((item) => item._id === args.connectionId);
     if (
       !connection ||
       !connection.allowedTools.includes(args.tool) ||
@@ -841,7 +1026,7 @@ export const proposeAction = mutation({
       : `gateway:${task._id}:${connection._id}:${args.tool}:${argumentsHash}`;
     const existing = await ctx.db
       .query('proposals')
-      .withIndex('by_dedupe', (q: any) => q.eq('dedupeKey', dedupeKey))
+      .withIndex('by_dedupe', (q) => q.eq('dedupeKey', dedupeKey))
       .unique();
     if (existing) return { proposalId: existing._id, status: existing.status };
     const now = Date.now();
@@ -884,7 +1069,7 @@ export const actionContext = query({
     if (!proposal || proposal.status !== 'executing') throw new Error('Action is not executable');
     const job = await ctx.db
       .query('jobs')
-      .withIndex('by_unique_key', (q: any) => q.eq('uniqueKey', `action:${proposal._id}`))
+      .withIndex('by_unique_key', (q) => q.eq('uniqueKey', `action:${proposal._id}`))
       .unique();
     if (
       !job ||
@@ -895,10 +1080,14 @@ export const actionContext = query({
     )
       throw new Error('Action lease is no longer valid');
     const task = await ctx.db.get(proposal.taskId);
-    if (!task || ['cancelled', 'failed', 'uncertain'].includes(task.status))
+    if (
+      !task ||
+      ['cancelled', 'failed', 'uncertain'].includes(task.status) ||
+      (task.status === 'completed' && !proposal.originalActionId)
+    )
       throw new Error('Task authorization is inactive');
     const { version, connections } = await activeTaskContext(ctx, task);
-    const connection = connections.find((item: any) => item._id === proposal.connectionId);
+    const connection = connections.find((item) => item._id === proposal.connectionId);
     if (
       !connection ||
       !connection.allowedTools.includes(proposal.tool) ||
@@ -954,18 +1143,32 @@ export const recordActionResult = mutation({
   handler: async (ctx, args) => {
     requireService(args.secret);
     const proposal = await ctx.db.get(args.proposalId);
-    if (!proposal || proposal.status !== 'executing') throw new Error('Action is not executing');
+    if (!proposal) throw new Error('Action is not executing');
     const job = await ctx.db
       .query('jobs')
-      .withIndex('by_unique_key', (q: any) => q.eq('uniqueKey', `action:${proposal._id}`))
+      .withIndex('by_unique_key', (q) => q.eq('uniqueKey', `action:${proposal._id}`))
       .unique();
+    const completionTokenHash = await sha256(args.leaseToken);
+    if (['succeeded', 'failed', 'uncertain'].includes(proposal.status)) {
+      if (
+        job?.state === 'completed' &&
+        job.completionTokenHash === completionTokenHash &&
+        proposal.status === args.status
+      )
+        return null;
+      throw new Error('Action result is already final');
+    }
+    if (proposal.status !== 'executing') throw new Error('Action is not executing');
     if (!job || job.state !== 'leased' || job.leaseToken !== args.leaseToken)
       throw new Error('Action lease is no longer valid');
+    if ((args.result?.length || 0) > 100_000) throw new Error('Action result is too large');
+    const afterState = args.afterState === undefined ? undefined : stableJson(args.afterState);
+    if ((afterState?.length || 0) > 100_000) throw new Error('Action after-state is too large');
     const now = Date.now();
     await ctx.db.patch(proposal._id, {
       status: args.status,
       result: args.result,
-      afterState: args.afterState === undefined ? undefined : stableJson(args.afterState),
+      afterState,
       providerRequestId: args.providerRequestId || proposal.providerRequestId,
     });
     await ctx.db.insert('actionTransitions', {
@@ -983,6 +1186,7 @@ export const recordActionResult = mutation({
       leaseOwner: undefined,
       leaseToken: undefined,
       leaseExpiresAt: undefined,
+      completionTokenHash,
       updatedAt: now,
     });
     if (proposal.originalActionId && args.status === 'succeeded') {
@@ -1001,8 +1205,9 @@ export const recordActionResult = mutation({
       }
     }
     const task = await ctx.db.get(proposal.taskId);
-    if (task) {
+    if (task && !['completed', 'failed', 'cancelled', 'uncertain'].includes(task.status)) {
       if (args.status === 'uncertain') {
+        await releaseReservation(ctx, task);
         await ctx.db.patch(task._id, {
           status: 'uncertain',
           error: 'External action outcome is unknown',
@@ -1012,7 +1217,7 @@ export const recordActionResult = mutation({
         const uniqueKey = `action-result:${proposal._id}:${args.status}`;
         const existing = await ctx.db
           .query('jobs')
-          .withIndex('by_unique_key', (q: any) => q.eq('uniqueKey', uniqueKey))
+          .withIndex('by_unique_key', (q) => q.eq('uniqueKey', uniqueKey))
           .unique();
         if (!existing) {
           const text =
@@ -1068,7 +1273,7 @@ export const ingestInbox = mutation({
     for (const item of args.items) {
       const existing = await ctx.db
         .query('inbox')
-        .withIndex('by_connection_external', (q: any) =>
+        .withIndex('by_connection_external', (q) =>
           q.eq('connectionId', connection._id).eq('externalId', item.externalId),
         )
         .unique();
@@ -1127,9 +1332,9 @@ export const recordArtifact = mutation({
     const existing = (
       await ctx.db
         .query('artifacts')
-        .withIndex('by_task', (q: any) => q.eq('taskId', task._id))
+        .withIndex('by_task', (q) => q.eq('taskId', task._id))
         .collect()
-    ).find((artifact: any) => artifact.storageKey === args.storageKey && artifact.sha256 === args.sha256);
+    ).find((artifact) => artifact.storageKey === args.storageKey && artifact.sha256 === args.sha256);
     if (existing) return { artifactId: existing._id };
     const artifactId = await ctx.db.insert('artifacts', {
       workspaceId: task.workspaceId,
@@ -1156,6 +1361,8 @@ export const recordToolCall = mutation({
     outcome: v.union(v.literal('started'), v.literal('succeeded'), v.literal('failed')),
     operationId: v.string(),
     sha256: v.optional(v.string()),
+    proposalId: v.optional(v.id('proposals')),
+    leaseToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     requireService(args.secret);
@@ -1164,56 +1371,99 @@ export const recordToolCall = mutation({
       throw new Error('Tool-call evidence exceeds 100 KB; store it externally and journal its digest');
     const task = await ctx.db
       .query('tasks')
-      .withIndex('by_run_token', (q: any) => q.eq('runToken', args.runToken))
+      .withIndex('by_run_token', (q) => q.eq('runToken', args.runToken))
       .unique();
-    if (!task || ['cancelled', 'failed', 'uncertain'].includes(task.status))
-      throw new Error('Task authorization is inactive');
-    const { version, connections } = await activeTaskContext(ctx, task);
-    const connection = connections.find((item: any) => item._id === args.connectionId);
+    if (!task) throw new Error('Task authorization is inactive');
+    const leaseTokenHash = args.leaseToken ? await sha256(args.leaseToken) : undefined;
+    const started = await ctx.db
+      .query('toolCalls')
+      .withIndex('by_task_operation_outcome', (q) =>
+        q.eq('taskId', task._id).eq('operationId', args.operationId).eq('outcome', 'started'),
+      )
+      .unique();
     if (
-      !connection ||
-      !connection.allowedTools.includes(args.tool) ||
-      !versionAllows(version, connection.provider, args.tool)
+      started &&
+      (started.connectionId !== args.connectionId ||
+        started.tool !== args.tool ||
+        started.argumentsCiphertext !== args.argumentsCiphertext ||
+        started.proposalId !== args.proposalId ||
+        started.leaseTokenHash !== leaseTokenHash)
     )
-      throw new Error('Tool is not authorized for this task');
+      throw new Error('Tool-call evidence does not match the recorded operation');
     const existing = await ctx.db
       .query('toolCalls')
-      .withIndex('by_task_operation_outcome', (q: any) =>
+      .withIndex('by_task_operation_outcome', (q) =>
         q.eq('taskId', task._id).eq('operationId', args.operationId).eq('outcome', args.outcome),
       )
       .unique();
-    if (existing) return { toolCallId: existing._id };
-    if (args.outcome !== 'started') {
+    if (existing && args.outcome === 'started') return { toolCallId: existing._id };
+    if (args.outcome === 'started') {
+      if (args.proposalId) {
+        if (!args.leaseToken || args.operationId !== `action:${args.proposalId}`)
+          throw new Error('Action audit requires its proposal and lease');
+        const proposal = await ctx.db.get(args.proposalId);
+        if (
+          !proposal ||
+          proposal.taskId !== task._id ||
+          proposal.connectionId !== args.connectionId ||
+          proposal.tool !== args.tool ||
+          proposal.status !== 'executing'
+        )
+          throw new Error('Action is not executable');
+        if (
+          ['cancelled', 'failed', 'uncertain'].includes(task.status) ||
+          (task.status === 'completed' && !proposal.originalActionId)
+        )
+          throw new Error('Task authorization is inactive');
+        const job = await ctx.db
+          .query('jobs')
+          .withIndex('by_unique_key', (q) => q.eq('uniqueKey', `action:${proposal._id}`))
+          .unique();
+        if (
+          !job ||
+          job.state !== 'leased' ||
+          job.leaseToken !== args.leaseToken ||
+          !job.leaseExpiresAt ||
+          job.leaseExpiresAt <= Date.now()
+        )
+          throw new Error('Action lease is no longer valid');
+      } else if (args.leaseToken) {
+        throw new Error('A lease token requires an action proposal');
+      } else if (['completed', 'cancelled', 'failed', 'uncertain'].includes(task.status)) {
+        throw new Error('Task authorization is inactive');
+      }
+      const { version, connections } = await activeTaskContext(ctx, task);
+      const connection = connections.find((item) => item._id === args.connectionId);
+      if (
+        !connection ||
+        !connection.allowedTools.includes(args.tool) ||
+        !versionAllows(version, connection.provider, args.tool)
+      )
+        throw new Error('Tool is not authorized for this task');
+    } else {
+      if (!started) throw new Error('Journal the tool call before executing it');
+      if (existing) return { toolCallId: existing._id };
+      if (started.proposalId && (!args.proposalId || !args.leaseToken))
+        throw new Error('Action audit requires its proposal and lease');
+      if (!started.proposalId && (args.proposalId || args.leaseToken))
+        throw new Error('Tool-call evidence does not match the recorded operation');
       const otherOutcome = args.outcome === 'succeeded' ? 'failed' : 'succeeded';
       const conflicting = await ctx.db
         .query('toolCalls')
-        .withIndex('by_task_operation_outcome', (q: any) =>
+        .withIndex('by_task_operation_outcome', (q) =>
           q.eq('taskId', task._id).eq('operationId', args.operationId).eq('outcome', otherOutcome),
         )
         .unique();
       if (conflicting) throw new Error('Tool call already has a different terminal outcome');
     }
-    const started = await ctx.db
-      .query('toolCalls')
-      .withIndex('by_task_operation_outcome', (q: any) =>
-        q.eq('taskId', task._id).eq('operationId', args.operationId).eq('outcome', 'started'),
-      )
-      .unique();
-    if (args.outcome !== 'started' && !started) throw new Error('Journal the tool call before executing it');
-    if (
-      started &&
-      (started.taskId !== task._id ||
-        started.connectionId !== connection._id ||
-        started.tool !== args.tool ||
-        started.argumentsCiphertext !== args.argumentsCiphertext)
-    )
-      throw new Error('Tool-call evidence does not match the recorded operation');
     const now = Date.now();
     const toolCallId = await ctx.db.insert('toolCalls', {
       workspaceId: task.workspaceId,
       taskId: task._id,
-      connectionId: connection._id,
+      connectionId: args.connectionId,
       operationId: args.operationId,
+      proposalId: args.proposalId,
+      leaseTokenHash,
       outcome: args.outcome,
       tool: args.tool,
       argumentsCiphertext: args.argumentsCiphertext,

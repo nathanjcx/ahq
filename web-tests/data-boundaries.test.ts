@@ -34,6 +34,12 @@ describe('Convex data boundaries', () => {
     process.env.AHQ_SERVICE_SECRET = 'service-test-secret';
     process.env.PLATFORM_ADMIN_USER_IDS = 'platform-admin';
     process.env.MCP_SERVER_URLS_JSON = JSON.stringify({ linear: ['https://mcp.linear.example/'] });
+    process.env.MCP_TOOL_REGISTRY_JSON = JSON.stringify({
+      linear: [
+        { name: 'get_issue', description: 'Read one issue', mode: 'read' },
+        { name: 'update_issue', description: 'Update one issue', mode: 'write' },
+      ],
+    });
   });
 
   it('keeps private employee packages server-only and denies cross-tenant task reads', async () => {
@@ -112,6 +118,17 @@ describe('Convex data boundaries', () => {
       prompt: 'Update OPS-7 after review.',
     });
     const taskContext = await t.query(api.services.taskContext, { secret: 'service-test-secret', taskId });
+    const [startJob] = await t.mutation(api.services.claimJobs, {
+      secret: 'service-test-secret',
+      workerId: 'worker-1',
+      limit: 10,
+    });
+    if (!startJob) throw new Error('Expected start job');
+    await t.mutation(api.services.completeJob, {
+      secret: 'service-test-secret',
+      jobId: startJob.id,
+      leaseToken: startJob.leaseToken,
+    });
     const { proposalId } = await t.mutation(api.services.proposeAction, {
       secret: 'service-test-secret',
       runToken: taskContext.runToken,
@@ -139,6 +156,7 @@ describe('Convex data boundaries', () => {
     });
     const actionJob = jobs.find((job: { kind: string }) => job.kind === 'execute_action');
     expect(actionJob).toBeTruthy();
+    if (!actionJob) throw new Error('Expected action job');
     await user.mutation(api.integrations.disconnect, { connectionId });
     await expect(
       t.query(api.services.actionContext, {
@@ -196,6 +214,148 @@ describe('Convex data boundaries', () => {
     await expect(colleague.query(api.tasks.messages, { taskId })).rejects.toThrow('Task not found');
     await expect(colleague.mutation(api.integrations.disconnect, { connectionId })).rejects.toThrow(
       'Connection not found',
+    );
+  });
+
+  it('reads Clerk JWT v2 organization claims without granting colleagues access to private data', async () => {
+    const t = convexTest(schema, modules);
+    const owner = t.withIdentity({
+      subject: 'jwt-v2-owner',
+      tokenIdentifier: 'test|jwt-v2-owner',
+      issuer: 'test',
+      o: { id: 'org-v2', rol: 'member' },
+    } as any);
+    const admin = t.withIdentity({
+      subject: 'jwt-v2-admin',
+      tokenIdentifier: 'test|jwt-v2-admin',
+      issuer: 'test',
+      o: { id: 'org-v2', rol: 'admin' },
+    } as any);
+    await owner.mutation(api.workspace.bootstrap, { name: 'JWT v2 company' });
+    await admin.mutation(api.workspace.setBudget, { monthlyBudget: 250 });
+    const dashboard = await admin.query(api.workspace.dashboard, {});
+    expect(dashboard.workspace).toMatchObject({ name: 'JWT v2 company', role: 'admin', monthlyBudget: 250 });
+    expect(dashboard.tasks).toEqual([]);
+    const workspaces = await t.run((ctx) => ctx.db.query('workspaces').collect());
+    expect(workspaces).toHaveLength(1);
+    expect(workspaces[0].authKey).toBe('org:org-v2');
+  });
+
+  it('rolls the UTC monthly spend forward while preserving live reservations', async () => {
+    const t = convexTest(schema, modules);
+    const { versionId } = await publishEmployee(t);
+    const user = t.withIdentity(userIdentity);
+    await user.mutation(api.workspace.bootstrap, { name: 'Monthly budget' });
+    const { employeeId } = await user.mutation(api.marketplace.hire, { versionId });
+    await t.run(async (ctx) => {
+      const workspace = await ctx.db.query('workspaces').first();
+      if (!workspace) throw new Error('Expected workspace');
+      await ctx.db.patch(workspace._id, {
+        billingPeriod: '2020-01',
+        spent: 99,
+        reserved: 1,
+        monthlyBudget: 2,
+      });
+    });
+
+    const before = await user.query(api.workspace.dashboard, {});
+    expect(before.workspace?.spent).toBe(0);
+    const { taskId } = await user.mutation(api.tasks.create, {
+      employeeId,
+      title: 'Current month task',
+      prompt: 'Use this month budget.',
+    });
+    await t.mutation(api.services.recordEvents, {
+      secret: 'service-test-secret',
+      taskId,
+      events: [],
+      usage: { externalId: 'usage-1', input: 1, output: 1, cached: 0, estimatedCost: 0.5 },
+    });
+    const { workspace, usage } = await t.run(async (ctx) => ({
+      workspace: await ctx.db.query('workspaces').first(),
+      usage: await ctx.db.query('usageReports').first(),
+    }));
+    expect(workspace?.billingPeriod).toBe(new Date().toISOString().slice(0, 7));
+    expect(workspace).toMatchObject({ spent: 0.5, reserved: 2 });
+    expect(usage?.billingPeriod).toBe(workspace?.billingPeriod);
+  });
+
+  it('keeps session monitoring available after grants and the employee version are retired', async () => {
+    const t = convexTest(schema, modules);
+    const { versionId } = await publishEmployee(t, [
+      { provider: 'linear', tools: ['get_issue'], optional: false },
+    ]);
+    const user = t.withIdentity(userIdentity);
+    const admin = t.withIdentity(adminIdentity);
+    await user.mutation(api.workspace.bootstrap, { name: 'Monitoring' });
+    const { connectionId } = await t.mutation(api.services.connectIntegration, {
+      secret: 'service-test-secret',
+      authSubject: 'user-a',
+      provider: 'linear',
+      name: 'Linear',
+      account: 'acme',
+      tools: ['get_issue'],
+      allowedTools: ['get_issue'],
+      resourceScope: '',
+      inboxMode: 'on-demand',
+      serverUrl: 'https://mcp.linear.example',
+      credentialCiphertext: 'encrypted-token',
+      credentialKeyVersion: 'v1',
+    });
+    const { employeeId } = await user.mutation(api.marketplace.hire, { versionId });
+    const { taskId } = await user.mutation(api.tasks.create, {
+      employeeId,
+      title: 'Monitor me',
+      prompt: 'Read the issue.',
+    });
+    await user.mutation(api.integrations.disconnect, { connectionId });
+    await admin.mutation(api.marketplace.retire, { versionId });
+
+    const context = await t.query(api.services.sessionContext, {
+      secret: 'service-test-secret',
+      taskId,
+    });
+    expect(context.authorization).toMatchObject({ userId: 'user-a' });
+    expect(context.task).toMatchObject({ id: taskId, status: 'queued', title: 'Monitor me' });
+    expect(context).not.toHaveProperty('connections');
+    await expect(
+      t.query(api.services.taskContext, { secret: 'service-test-secret', taskId }),
+    ).rejects.toThrow('Employee version is retired');
+  });
+
+  it('publishes only registered MCP tools and exposes the registry only to platform admins', async () => {
+    const t = convexTest(schema, modules);
+    const admin = t.withIdentity(adminIdentity);
+    const user = t.withIdentity(userIdentity);
+    const registry = await admin.query(api.marketplace.adminToolRegistry, {});
+    expect(registry.find((entry) => entry.provider === 'linear')).toMatchObject({
+      configured: true,
+      tools: [{ name: 'get_issue', description: 'Read one issue', mode: 'read' }, expect.anything()],
+    });
+    expect(registry.find((entry) => entry.provider === 'slack')).toMatchObject({
+      configured: false,
+      tools: [],
+    });
+    await expect(user.query(api.marketplace.adminToolRegistry, {})).rejects.toThrow(
+      'Platform administrator',
+    );
+
+    const { draftId } = await admin.mutation(api.marketplace.saveDraft, {
+      name: 'Unregistered employee',
+      role: 'Analyst',
+      description: 'Uses an unregistered tool.',
+      category: 'Operations',
+      strengths: [],
+      limitations: [],
+      capabilities: [{ provider: 'linear', tools: ['unknown_tool'], optional: true }],
+      model: 'gpt-5.6-luna',
+      color: '#000000',
+      media: [],
+      instructions: 'Review records.',
+      skills: [],
+    });
+    await expect(admin.mutation(api.marketplace.publish, { draftId })).rejects.toThrow(
+      'linear.unknown_tool is not in the MCP tool registry',
     );
   });
 });
