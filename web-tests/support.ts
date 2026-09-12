@@ -1,5 +1,6 @@
 import { convexTest } from 'convex-test';
 import { api } from '../convex/_generated/api';
+import type { Id } from '../convex/_generated/dataModel';
 import schema from '../convex/schema';
 import type { ProviderId, ToolMode } from '../lib/contracts';
 
@@ -9,6 +10,8 @@ export const linearUrl = 'https://mcp.linear.app/mcp';
 export const githubUrl = 'https://api.githubcopilot.com/mcp/';
 
 export type Harness = ReturnType<typeof convexTest>;
+/** A harness or one of its identities: everything tests hire through. */
+type Actor = Pick<Harness, 'mutation'>;
 
 export function identity(subject: string, orgId?: string, orgRole = 'org:member') {
   return {
@@ -114,4 +117,16 @@ export async function connectLinear(
     credentialCiphertext: 'encrypted-token',
     credentialKeyVersion: 'v1',
   });
+}
+
+/** Hires one instance from a listing and returns it, the shape most tests want. */
+export async function hireOne(
+  actor: Actor,
+  listingId: Id<'listings'>,
+  input: { floorId?: Id<'floors'>; name?: string } = {},
+) {
+  const { employeeIds } = await actor.mutation(api.marketplace.hire, { listingId, ...input });
+  const [employeeId] = employeeIds;
+  if (!employeeId) throw new Error('Hiring produced no instance');
+  return { employeeId };
 }

@@ -14,7 +14,7 @@ import { seal, unseal } from '../lib/server/secrets';
 import { executeAction } from '../services/actions';
 import { createGateway } from '../services/gateway/create';
 import type { Job } from '../services/types';
-import { harness, identity, publishEmployee, secret, type Harness } from './support';
+import { harness, hireOne, identity, publishEmployee, secret, type Harness } from './support';
 
 // The fake upstream runs on loopback HTTP, which every production network rule rejects.
 process.env.ALLOW_INSECURE_MCP_FOR_TESTS = '1';
@@ -283,10 +283,10 @@ beforeAll(async () => {
       createdAt: 1,
     });
   });
-  const { versionId } = await publishEmployee(t, {
+  const { listingId } = await publishEmployee(t, {
     capabilities: [{ provider: 'linear', tools: capability, optional: false }],
   });
-  const { employeeId } = await user.mutation(api.marketplace.hire, { versionId });
+  const { employeeId } = await hireOne(user, listingId);
   await t.run(async (ctx) => {
     const rows = await ctx.db.query('registryTools').collect();
     const blocked = rows.find((tool) => tool.name === 'delete_issue');

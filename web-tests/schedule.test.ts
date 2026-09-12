@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { api, internal } from '../convex/_generated/api';
 import type { Id } from '../convex/_generated/dataModel';
 import { defaultWorkspaceSettings, type WorkspaceSettings } from '../lib/contracts';
-import { harness, identity as orgIdentity, publishEmployee, secret, type Harness } from './support';
+import { harness, hireOne, identity as orgIdentity, publishEmployee, secret, type Harness } from './support';
 
 type SettingsArgs = Omit<WorkspaceSettings, 'updatedAt'>;
 /** The harness as one signed-in person sees it. */
@@ -28,12 +28,12 @@ function afterHours(extra: Partial<SettingsArgs> = {}): SettingsArgs {
 }
 
 async function workspace(t: Harness, settings: SettingsArgs = alwaysWorking) {
-  const { versionId } = await publishEmployee(t);
+  const { versionId, listingId } = await publishEmployee(t);
   const owner = t.withIdentity(orgIdentity('owner', 'acme', 'org:admin'));
   await owner.mutation(api.workspace.bootstrap, { name: 'Acme' });
-  const { employeeId } = await owner.mutation(api.marketplace.hire, { versionId });
+  const { employeeId } = await hireOne(owner, listingId);
   const colleagueVersion = await publishEmployee(t, { name: 'Copy editor' });
-  const second = await owner.mutation(api.marketplace.hire, { versionId: colleagueVersion.versionId });
+  const second = await hireOne(owner, colleagueVersion.listingId);
   await owner.mutation(api.schedule.updateSettings, settings);
   return { owner, employeeId, colleagueId: second.employeeId, versionId };
 }
@@ -171,7 +171,9 @@ describe('the scheduler tick', () => {
     await t.mutation(internal.services.schedule.tick, {});
     const reserved = async () =>
       t.run(async (ctx) =>
-        (await ctx.db.query('installations').collect()).filter((one) => one.kind).map((one) => one.kind),
+        (await ctx.db.query('installations').collect())
+          .filter((one) => one.kind && one.kind !== 'worker')
+          .map((one) => one.kind),
       );
     expect([...(await reserved())].sort()).toEqual(['auditor', 'janitor', 'triage']);
     const sessions = async () =>
@@ -191,7 +193,7 @@ describe('the scheduler tick', () => {
     expect((await owner.query(api.workspace.dashboard, {})).tasks).toEqual([]);
     expect(
       (await owner.query(api.workspace.dashboard, {})).employees
-        .filter((one) => one.kind)
+        .filter((one) => one.kind && one.kind !== 'worker')
         .map((one) => one.kind),
     ).toHaveLength(3);
 

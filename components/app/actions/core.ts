@@ -16,7 +16,7 @@ export type CorrectionResult = { kind: 'task'; taskId: string } | { kind: 'propo
 export type CoreActions = {
   bootstrap: (name: string) => Promise<unknown>;
   setTokenCap: (monthlyTokenCap: number) => Promise<unknown>;
-  hire: (versionId: string) => Promise<unknown>;
+  hire: (listingId: string) => Promise<unknown>;
   createTask: (employeeId: string, prompt: string, title: string, floorId?: string) => Promise<unknown>;
   createFloor: (name: string, brief: string, employeeIds: string[]) => Promise<unknown>;
   updateFloor: (floorId: string, name: string, brief: string, employeeIds: string[]) => Promise<unknown>;
@@ -135,7 +135,7 @@ export function useCoreActions(): CoreActions {
   return {
     bootstrap: (name) => bootstrap({ name }),
     setTokenCap: (monthlyTokenCap) => setTokenCap({ monthlyTokenCap }),
-    hire: (versionId) => hire({ versionId: asId(versionId) }),
+    hire: (listingId) => hire({ listingId: asId(listingId) }),
     createTask: (employeeId, prompt, title, floorId) =>
       createTask({
         employeeId: asId(employeeId),

@@ -7,6 +7,7 @@ import {
   identity,
   linearUrl,
   linearWorkspace,
+  hireOne,
   publishEmployee,
   secret,
 } from './support';
@@ -17,10 +18,10 @@ describe('Convex data boundaries', () => {
   it('keeps private employee packages server-only and denies cross-tenant task reads', async () => {
     const t = harness();
     await linearWorkspace(t);
-    const { versionId } = await publishEmployee(t);
+    const { listingId } = await publishEmployee(t);
     const user = t.withIdentity(userIdentity);
     await user.mutation(api.workspace.bootstrap, { name: 'Acme' });
-    const { employeeId } = await user.mutation(api.marketplace.hire, { versionId });
+    const { employeeId } = await hireOne(user, listingId);
     const { taskId } = await user.mutation(api.tasks.create, {
       employeeId,
       title: 'Review queue',
@@ -67,13 +68,13 @@ describe('Convex data boundaries', () => {
   it('creates one approval job and rechecks a revoked grant before execution', async () => {
     const t = harness();
     await linearWorkspace(t);
-    const { versionId } = await publishEmployee(t, {
+    const { listingId } = await publishEmployee(t, {
       capabilities: [{ provider: 'linear', tools: ['update_issue'], optional: false }],
     });
     const user = t.withIdentity(userIdentity);
     await user.mutation(api.workspace.bootstrap, { name: 'Acme' });
     const { connectionId } = await connectLinear(t, { subject: 'user-a' });
-    const { employeeId } = await user.mutation(api.marketplace.hire, { versionId });
+    const { employeeId } = await hireOne(user, listingId);
     const { taskId } = await user.mutation(api.tasks.create, {
       employeeId,
       title: 'Update issue',
@@ -134,7 +135,7 @@ describe('Convex data boundaries', () => {
   it('does not treat membership in the same Clerk organization as source-data access', async () => {
     const t = harness();
     await linearWorkspace(t);
-    const { versionId } = await publishEmployee(t);
+    const { listingId } = await publishEmployee(t);
     const owner = t.withIdentity(identity('org-user-a', 'org-acme'));
     const colleague = t.withIdentity(identity('org-user-b', 'org-acme', 'org:admin'));
     await owner.mutation(api.workspace.bootstrap, { name: 'Acme organization' });
@@ -143,7 +144,7 @@ describe('Convex data boundaries', () => {
       orgId: 'org-acme',
       tools: ['get_issue'],
     });
-    const { employeeId } = await owner.mutation(api.marketplace.hire, { versionId });
+    const { employeeId } = await hireOne(owner, listingId);
     const { taskId } = await owner.mutation(api.tasks.create, {
       employeeId,
       title: 'Private review',
@@ -194,14 +195,14 @@ describe('Convex data boundaries', () => {
   it('keeps session monitoring available after grants and the employee version are retired', async () => {
     const t = harness();
     await linearWorkspace(t);
-    const { versionId } = await publishEmployee(t, {
+    const { versionId, listingId } = await publishEmployee(t, {
       capabilities: [{ provider: 'linear', tools: ['get_issue'], optional: false }],
     });
     const user = t.withIdentity(userIdentity);
     const admin = t.withIdentity(adminIdentity);
     await user.mutation(api.workspace.bootstrap, { name: 'Monitoring' });
     const { connectionId } = await connectLinear(t, { subject: 'user-a', tools: ['get_issue'] });
-    const { employeeId } = await user.mutation(api.marketplace.hire, { versionId });
+    const { employeeId } = await hireOne(user, listingId);
     const { taskId } = await user.mutation(api.tasks.create, {
       employeeId,
       title: 'Monitor me',

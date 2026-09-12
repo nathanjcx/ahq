@@ -108,6 +108,11 @@ export const severity = v.union(
 );
 export const overnightPolicy = v.union(v.literal('off'), v.literal('audits_only'), v.literal('cheap'));
 export const hiringPolicy = v.union(v.literal('anyone'), v.literal('admins'), v.literal('approval'));
+export const listingVisibility = v.union(
+  v.literal('published'),
+  v.literal('hidden'),
+  v.literal('retired'),
+);
 export const attendee = v.object({
   kind: v.union(v.literal('employee'), v.literal('person')),
   id: v.string(),
@@ -246,9 +251,43 @@ export default defineSchema({
   })
     .index('by_published', ['publishedAt'])
     .index('by_draft', ['draftId']),
+  /**
+   * The marketplace unit: one listing per employee draft, pinned to the version it currently offers.
+   * Publishing a draft again moves `currentVersionId`; instances stay on the version they were hired
+   * on until someone upgrades them.
+   */
+  listings: defineTable({
+    draftId: v.id('employeeDrafts'),
+    currentVersionId: v.id('employeeVersions'),
+    visibility: listingVisibility,
+    /** What this employee has actually done, written by a platform administrator. */
+    evidence: v.optional(
+      v.object({ sampleTask: v.string(), sampleOutput: v.string(), link: v.optional(v.string()) }),
+    ),
+    /** Instances hired from any version of this draft, and tasks they have completed. */
+    hires: v.number(),
+    completedTasks: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_draft', ['draftId'])
+    .index('by_visibility', ['visibility']),
+  /** A member's request to hire under the `approval` hiring policy, decided by an owner or admin. */
+  hireRequests: defineTable({
+    workspaceId: v.id('workspaces'),
+    listingId: v.id('listings'),
+    floorId: v.optional(v.id('floors')),
+    count: v.number(),
+    requestedBy: v.string(),
+    requestedByName: v.string(),
+    status: v.union(v.literal('pending'), v.literal('approved'), v.literal('declined')),
+    decidedBy: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index('by_workspace', ['workspaceId']),
   installations: defineTable({
     workspaceId: v.id('workspaces'),
     versionId: v.id('employeeVersions'),
+    /** The listing this instance was hired from; absent on reserved instances the workspace made. */
+    listingId: v.optional(v.id('listings')),
     hiredBy: v.string(),
     status: v.union(v.literal('ready'), v.literal('blocked'), v.literal('retired')),
     /** One instance lives on one floor; undefined means the lobby. */

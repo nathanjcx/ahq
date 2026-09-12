@@ -3,7 +3,14 @@ import { api } from '../convex/_generated/api';
 import type { Id } from '../convex/_generated/dataModel';
 import { estimateTask } from '../convex/lib/projects';
 import type { RoadmapProposal } from '../lib/contracts';
-import { harness, identity as orgIdentity, linearWorkspace, publishEmployee, secret } from './support';
+import {
+  harness,
+  hireOne,
+  identity as orgIdentity,
+  linearWorkspace,
+  publishEmployee,
+  secret,
+} from './support';
 import type { Harness } from './support';
 
 const DAY = 24 * 60 * 60 * 1_000;
@@ -15,10 +22,10 @@ const estimate = { workingHours: 4, tokens: 1_000, confidence: 0.3, model: 'gpt-
 async function setup() {
   const t = harness();
   await linearWorkspace(t);
-  const { versionId } = await publishEmployee(t);
+  const { versionId, listingId } = await publishEmployee(t);
   const user = t.withIdentity(orgIdentity('owner', 'acme'));
   await user.mutation(api.workspace.bootstrap, { name: 'Acme' });
-  const { employeeId } = await user.mutation(api.marketplace.hire, { versionId });
+  const { employeeId } = await hireOne(user, listingId);
   const { floorId } = await user.mutation(api.floors.create, {
     name: 'Marketing',
     brief: 'Own the launch.',
@@ -287,8 +294,8 @@ describe('task dependencies', () => {
     const { t, user, employeeId } = await setup();
     const outsider = t.withIdentity(orgIdentity('outsider', 'other'));
     await outsider.mutation(api.workspace.bootstrap, { name: 'Other' });
-    const { versionId } = await publishEmployee(t, { name: 'Outside analyst' });
-    const { employeeId: outsideEmployeeId } = await outsider.mutation(api.marketplace.hire, { versionId });
+    const { listingId: outsideListingId } = await publishEmployee(t, { name: 'Outside analyst' });
+    const { employeeId: outsideEmployeeId } = await hireOne(outsider, outsideListingId);
     const { taskId: foreignId } = await outsider.mutation(api.tasks.create, {
       employeeId: outsideEmployeeId,
       title: 'Their task',

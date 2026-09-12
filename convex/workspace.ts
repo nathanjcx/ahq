@@ -166,6 +166,7 @@ export const dashboard = query({
       installations.map(async (installation) => {
         const version = await ctx.db.get(installation.versionId);
         if (!version) return null;
+        const listing = installation.listingId ? await ctx.db.get(installation.listingId) : null;
         const missingCapabilities = version.capabilities
           .filter((capability) => {
             if (capability.optional) return false;
@@ -176,8 +177,13 @@ export const dashboard = query({
         return {
           id: installation._id,
           versionId: version._id,
+          listingId: installation.listingId,
+          version: version.version,
+          // The listing has moved on; this instance stays on its version until someone upgrades it.
+          updateAvailable: listing !== null && listing.currentVersionId !== version._id,
           // The instance's own name when hiring a count or the workspace gave it one.
           name: installation.name ?? version.name,
+          instanceOf: version.name,
           role: version.role,
           color: version.color,
           model: version.model,

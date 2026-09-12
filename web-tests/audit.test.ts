@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { api } from '../convex/_generated/api';
 import type { Id } from '../convex/_generated/dataModel';
 import { ensureAuditRun } from '../convex/lib/audit';
-import { harness, identity as orgIdentity, publishEmployee, secret, type Harness } from './support';
+import { harness, hireOne, identity as orgIdentity, publishEmployee, secret, type Harness } from './support';
 
 const date = '2026-09-12';
 const yesterday = '2026-09-11';
@@ -10,10 +10,10 @@ const noon = Date.parse(`${yesterday}T12:00:00Z`);
 
 /** A workspace with one finished shift on the audited day, and its nightly auditor run. */
 async function auditedDay(t: Harness) {
-  const { versionId } = await publishEmployee(t);
+  const { listingId } = await publishEmployee(t);
   const owner = t.withIdentity(orgIdentity('owner', 'acme'));
   await owner.mutation(api.workspace.bootstrap, { name: 'Acme' });
-  const { employeeId } = await owner.mutation(api.marketplace.hire, { versionId });
+  const { employeeId } = await hireOne(owner, listingId);
   const { taskId } = await owner.mutation(api.tasks.create, {
     employeeId,
     title: 'Draft the release notes',

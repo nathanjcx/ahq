@@ -36,9 +36,24 @@ export interface Persona {
   traits: string[];
   catchphrase?: string;
 }
+/** What this employee has actually done, written by a platform administrator. */
+export interface ListingEvidence {
+  sampleTask: string;
+  sampleOutput: string;
+  link?: string;
+}
+export type ListingVisibility = 'published' | 'hidden' | 'retired';
 export interface Listing {
   id: string;
+  listingId: string;
   versionId: string;
+  /** Version number of the listing's current version, the one hiring installs. */
+  currentVersion: number;
+  visibility: ListingVisibility;
+  evidence?: ListingEvidence;
+  /** Instances hired from any version of this listing, and tasks they have completed. */
+  hires: number;
+  completedTasks: number;
   name: string;
   role: string;
   description: string;
@@ -55,7 +70,14 @@ export interface Listing {
 export interface Employee {
   id: string;
   versionId: string;
+  /** The listing this instance was hired from; absent on the reserved instances a workspace makes. */
+  listingId?: string;
+  /** Version number this instance runs, and whether its listing has published a newer one. */
+  version: number;
+  updateAvailable: boolean;
+  /** The instance's own name; `instanceOf` is the version it is an instance of. */
   name: string;
+  instanceOf: string;
   role: string;
   color: string;
   model: ModelId;
@@ -65,6 +87,19 @@ export interface Employee {
   /** Undefined means the lobby. */
   floorId?: string;
   kind?: 'worker' | 'janitor' | 'auditor' | 'triage';
+}
+/** A member's request to hire, waiting on an owner or admin under the `approval` hiring policy. */
+export interface HireRequest {
+  id: string;
+  listingId: string;
+  listingName: string;
+  floorId?: string;
+  count: number;
+  requestedBy: string;
+  requestedByName: string;
+  status: 'pending' | 'approved' | 'declined';
+  decidedBy?: string;
+  createdAt: number;
 }
 export interface Member {
   subject: string;

@@ -180,7 +180,7 @@ export function MarketplacePage({
           configured={configured}
           missing={missingRequiredCapabilities(selected, connections)}
           onClose={() => setSelected(null)}
-          onHire={() => onHire(selected.versionId)}
+          onHire={() => onHire(selected.listingId)}
         />
       )}
     </div>

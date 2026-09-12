@@ -1,20 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { api } from '../convex/_generated/api';
 import type { Doc, Id } from '../convex/_generated/dataModel';
-import { harness, identity as orgIdentity, publishEmployee, secret, type Harness } from './support';
+import { harness, hireOne, identity as orgIdentity, publishEmployee, secret, type Harness } from './support';
 
 /** A workspace with two employees on one floor and a scheduled meeting between them. */
 async function boardroom(t: Harness) {
-  const [{ versionId }, { versionId: secondVersionId }] = await Promise.all([
+  const [{ listingId }, { listingId: secondListingId }] = await Promise.all([
     publishEmployee(t),
     publishEmployee(t, { name: 'Writer' }),
   ]);
   const owner = t.withIdentity(orgIdentity('owner', 'acme'));
   await owner.mutation(api.workspace.bootstrap, { name: 'Acme' });
-  const { employeeId } = await owner.mutation(api.marketplace.hire, { versionId });
-  const { employeeId: writerId } = await owner.mutation(api.marketplace.hire, {
-    versionId: secondVersionId,
-  });
+  const { employeeId } = await hireOne(owner, listingId);
+  const { employeeId: writerId } = await hireOne(owner, secondListingId);
   const { floorId } = await owner.mutation(api.floors.create, {
     name: 'Launch',
     brief: 'Prepare the launch.',

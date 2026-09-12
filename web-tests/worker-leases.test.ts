@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { api } from '../convex/_generated/api';
 import type { Id } from '../convex/_generated/dataModel';
-import { harness, identity, publishEmployee, secret, type Harness } from './support';
+import { harness, hireOne, identity, publishEmployee, secret, type Harness } from './support';
 
 const subject = 'lease-user';
 
@@ -9,8 +9,8 @@ const subject = 'lease-user';
 async function monitorableTask(t: Harness) {
   const user = t.withIdentity(identity(subject));
   await user.mutation(api.workspace.bootstrap, { name: 'Acme' });
-  const { versionId } = await publishEmployee(t);
-  const { employeeId } = await user.mutation(api.marketplace.hire, { versionId });
+  const { listingId } = await publishEmployee(t);
+  const { employeeId } = await hireOne(user, listingId);
   const { taskId } = await user.mutation(api.tasks.create, {
     employeeId,
     title: 'Watch me',
