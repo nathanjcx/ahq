@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation } from 'convex/react';
+import type { DraftInput } from '../../admin/draft-input';
 import type {
   ConnectionVisibility,
   CorrectionDescriptor,
@@ -34,7 +35,7 @@ export type CoreActions = {
   ) => Promise<unknown>;
   markRead: (itemId: string) => Promise<unknown>;
   assign: (itemId: string, employeeId: string, floorId?: string) => Promise<unknown>;
-  saveDraft: (draft: Record<string, unknown>) => Promise<unknown>;
+  saveDraft: (draft: DraftInput) => Promise<unknown>;
   publish: (draftId: string) => Promise<unknown>;
   retire: (versionId: string) => Promise<unknown>;
   // Sharing
@@ -172,8 +173,8 @@ export function useCoreActions(): CoreActions {
         employeeId: asId(employeeId),
         floorId: floorId ? asId<'floors'>(floorId) : undefined,
       }),
-    // The employee editor still builds an untyped record; Convex validates every field on arrival.
-    saveDraft: (draft) => saveDraft(draft as Parameters<typeof saveDraft>[0]),
+    saveDraft: ({ draftId, ...draft }) =>
+      saveDraft({ ...draft, draftId: draftId ? asId<'employeeDrafts'>(draftId) : undefined }),
     publish: (draftId) => publish({ draftId: asId(draftId) }),
     retire: (versionId) => retire({ versionId: asId(versionId) }),
     setTaskVisibility: (taskId, visibility) => setTaskVisibility({ taskId: asId(taskId), visibility }),
