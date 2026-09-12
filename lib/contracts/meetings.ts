@@ -13,6 +13,11 @@ export interface MeetingTurn {
   addressedTo?: string[];
   inReplyTo?: string;
   text: string;
+  /**
+   * Tokens this turn cost. Set per turn once the runtime records it there; until then the meeting
+   * carries the only total and a turn shows no price of its own.
+   */
+  usage?: TokenUsage;
   outcome?: { kind: OutcomeKind; payload: string; status: 'proposed' | 'confirmed' | 'dismissed' };
   createdAt: number;
 }

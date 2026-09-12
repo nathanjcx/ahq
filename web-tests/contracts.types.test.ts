@@ -5,7 +5,9 @@ import type { AuditResponse } from '../lib/api/schemas';
 import type {
   AuditTimeline,
   Dashboard,
+  CalendarEntry,
   Listing,
+  Meeting,
   Message,
   FloorPost,
   ProviderConfig,
@@ -27,6 +29,8 @@ test('every Convex query the interface reads satisfies its UI contract', () => {
   expectTypeOf<FunctionReturnType<typeof api.admin.providerConfigs>>().toExtend<ProviderConfig[]>();
   expectTypeOf<FunctionReturnType<typeof api.admin.registryTools>>().toExtend<RegistryTool[]>();
   expectTypeOf<FunctionReturnType<typeof api.tasks.messages>>().toExtend<Message[]>();
+  expectTypeOf<FunctionReturnType<typeof api.calendar.entries>>().toExtend<CalendarEntry[]>();
+  expectTypeOf<FunctionReturnType<typeof api.meetings.get>>().toExtend<Meeting | null>();
 });
 
 /** The audit route unseals the Convex journal into the contract shape, plus its truncation flag. */
