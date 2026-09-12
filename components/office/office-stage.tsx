@@ -5,7 +5,7 @@ import { useQuery } from 'convex/react';
 import { useEffect, useMemo, useState } from 'react';
 import type { Dashboard, ProjectPost } from '@/lib/contracts';
 import { providers as providerCatalog } from '@/lib/providers';
-import { uiApi } from '@/lib/ui-api';
+import { asId, uiApi } from '@/lib/ui-api';
 import { deriveActivities, type EmployeeActivity } from './activity';
 import { useActivityCues } from './sound';
 import type { OfficeEmployee, OfficeProvider } from './office-scene';
@@ -117,7 +117,10 @@ function useNow(intervalMs: number) {
 
 function LiveStage(props: Omit<OfficeStageProps, 'live' | 'scene'>) {
   const dashboard = useQuery(uiApi.dashboard, {});
-  const posts = useQuery(uiApi.projectBoard, props.projectId ? { projectId: props.projectId } : 'skip');
+  const posts = useQuery(
+    uiApi.projectBoard,
+    props.projectId ? { projectId: asId<'projects'>(props.projectId) } : 'skip',
+  );
   const now = useNow(5_000);
   const scene = useMemo(
     () => (dashboard ? deriveScene(dashboard, posts ?? [], props.projectId, now) : emptyScene),

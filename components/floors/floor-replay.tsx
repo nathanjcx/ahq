@@ -5,7 +5,8 @@ import { History, Pause, Play, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionProposal, ActivityEvent, AuditTimeline, Task } from '@/lib/contracts';
 import { providers as providerCatalog } from '@/lib/providers';
-import { uiApi, webApi } from '@/lib/ui-api';
+import { uiApi } from '@/lib/ui-api';
+import { webClient } from '@/lib/api/client';
 import { deriveActivities, providerForTool } from '../office/activity';
 import type { OfficeSceneData } from '../office/office-stage';
 import type { OfficeProvider } from '../office/office-view';
@@ -177,9 +178,9 @@ function LiveReplay({ projectId, employeeIds, onScene }: FloorReplayProps) {
     let cancelled = false;
     setError(null);
     setTimeline(null);
-    fetch(webApi.audit(taskId))
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error('unavailable'))))
-      .then((data: AuditTimeline) => {
+    webClient
+      .audit(taskId)
+      .then((data) => {
         if (cancelled) return;
         setTimeline(data);
         setAt(data.entries[0]?.at ?? 0);

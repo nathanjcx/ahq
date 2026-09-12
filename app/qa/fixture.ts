@@ -636,6 +636,7 @@ export const drafts: EditorDraft[] = [
   {
     id: 'draft_scribe',
     draftId: asId('draft_scribe'),
+    persona: undefined,
     name: 'Scribe',
     role: 'Meeting notes',
     description: 'Turns a transcript into decisions and owners.',
