@@ -1,4 +1,6 @@
-import { mutate } from './backend';
+import webpush, { WebPushError } from 'web-push';
+import { mutate, query } from './backend';
+import { safeError, unseal } from './secrets';
 
 /** One recorded attempt to reach one person, exactly as `services/notifications:attempt` returns it. */
 export interface NotificationAttempt {
@@ -12,21 +14,112 @@ export interface NotificationAttempt {
   attempt: number;
 }
 
+/** A stored browser endpoint, with its keys still sealed. */
+interface PushTarget {
+  id: string;
+  endpoint: string;
+  keysCiphertext: string;
+}
+
 /**
- * Delivery per channel. `in_app` is the row itself, so it always lands. The other three are not
- * configured in this deployment and say so rather than pretending:
+ * The VAPID identity this deployment pushes under.
  *
- * - `push`: Web Push needs the `web-push` package and a VAPID key pair, and this repository has
- *   neither. Subscriptions are still stored, so turning it on is a dependency and a key, not a
- *   migration. Until then a push channel delivers nothing.
- * - `slack` and `email`: connector stubs. No transport is wired, and no message is invented.
+ * Push is optional: a deployment without the key pair simply has no push channel, and says so rather
+ * than reporting a delivery it never made. `VAPID_SUBJECT` is the `mailto:` address or origin a push
+ * service contacts when something is wrong with this application's notifications.
+ */
+function pushConfigured() {
+  const { VAPID_PUBLIC_KEY: publicKey, VAPID_PRIVATE_KEY: privateKey, VAPID_SUBJECT: subject } = process.env;
+  if (!publicKey || !privateKey || !subject) return false;
+  webpush.setVapidDetails(subject, publicKey, privateKey);
+  return true;
+}
+
+/** A push service saying the endpoint is gone. The subscription is dead and is pruned, not retried. */
+function subscriptionGone(error: unknown) {
+  return error instanceof WebPushError && (error.statusCode === 404 || error.statusCode === 410);
+}
+
+/**
+ * Web Push to every endpoint this person has registered.
+ *
+ * The keys are unsealed here, as with every other credential: Convex holds ciphertext and never the
+ * key. An attempt counts as delivered when at least one endpoint accepted it, so a person with a
+ * stale subscription beside a live one is still reached, and the stale one is removed on the way.
+ */
+async function sendPush(attempt: NotificationAttempt) {
+  if (!pushConfigured()) return false;
+  const targets = await query<PushTarget[]>('services/notifications:pushTargets', {
+    subject: attempt.subject,
+  });
+  let delivered = false;
+  for (const target of targets) {
+    try {
+      const keys = unseal<{ p256dh: string; auth: string }>(target.keysCiphertext);
+      await webpush.sendNotification(
+        { endpoint: target.endpoint, keys },
+        JSON.stringify({
+          id: attempt.id,
+          kind: attempt.kind,
+          title: attempt.title,
+          body: attempt.text,
+          ...(attempt.alertId ? { alertId: attempt.alertId } : {}),
+        }),
+        { TTL: 600 },
+      );
+      delivered = true;
+    } catch (error) {
+      if (subscriptionGone(error)) {
+        await mutate('services/notifications:unsubscribePush', {
+          authSubject: attempt.subject,
+          endpoint: target.endpoint,
+        }).catch((failure: unknown) =>
+          console.error(`push prune failed reason=${safeError(failure)}`),
+        );
+        continue;
+      }
+      console.error(`push delivery failed reason=${safeError(error)}`);
+    }
+  }
+  return delivered;
+}
+
+/**
+ * Delivery per channel. `in_app` is the row itself, so it always lands. `push` is Web Push when the
+ * deployment carries a VAPID key pair. `slack` and `email` are connector stubs: no transport is
+ * wired, and no message is invented, so they report no delivery and say why.
  */
 async function send(channel: string, attempt: NotificationAttempt) {
   if (channel === 'in_app') return true;
+  if (channel === 'push') {
+    if (await sendPush(attempt)) return true;
+    console.warn(
+      `push delivered nothing configured=${pushConfigured()} kind=${attempt.kind} attempt=${attempt.attempt}`,
+    );
+    return false;
+  }
   console.warn(
     `notification channel not configured channel=${channel} kind=${attempt.kind} attempt=${attempt.attempt}`,
   );
   return false;
+}
+
+/**
+ * The order channels are tried in, whatever order the workspace listed them.
+ *
+ * `in_app` is last on purpose: it is a row in a database nobody has necessarily looked at, and an
+ * attempt that settles for it would never have reached a person's phone. A real transport is tried
+ * first, and the in-app row remains the fallback that always lands.
+ */
+const CHANNEL_ORDER = ['push', 'slack', 'email', 'in_app'];
+
+function rank(channel: string) {
+  const index = CHANNEL_ORDER.indexOf(channel);
+  return index === -1 ? CHANNEL_ORDER.length : index;
+}
+
+function inOrder(channels: string[]) {
+  return [...channels].sort((a, b) => rank(a) - rank(b));
 }
 
 /**
@@ -36,7 +129,7 @@ async function send(channel: string, attempt: NotificationAttempt) {
 export async function deliverNotifications(attempts: NotificationAttempt[]) {
   let delivered = 0;
   for (const attempt of attempts) {
-    for (const channel of attempt.channels) {
+    for (const channel of inOrder(attempt.channels)) {
       if (!(await send(channel, attempt))) continue;
       await mutate('services/notifications:markDelivered', { id: attempt.id, channel });
       delivered += 1;
