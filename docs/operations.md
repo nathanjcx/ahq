@@ -34,6 +34,10 @@ The gateway turns write tools into immutable action proposals. The UI must show 
 
 The action ledger distinguishes succeeded, failed, outcome unknown, and correction states. If a dispatch times out, stop dependent work and reconcile using the provider. Do not blindly retry a non-idempotent operation. A correction may restore selected fields only when the provider and tool supply a verified conditional operation. It may be manual, partial, or unavailable. There is no universal undo for messages, notifications, workflow side effects, or files copied outside the application.
 
+## Expired credentials
+
+When an MCP call fails with an authorization error after a refresh attempt, the provider has revoked or expired the grant. The connection is marked `degraded` with the error `Authorization expired. Reconnect this integration to continue.` The owner sees a Reconnect button on the connection, which runs OAuth again; a successful reconnect restores `connected`. Tasks that require that connection stay blocked until then. Reconnecting does not widen access, because allowed tools are recomputed as the intersection of discovered tools and the reviewed registry.
+
 ## Inbox relay
 
 The webhook endpoint is `POST /api/webhooks/inbox/<connectionId>`. A relay signs the exact raw JSON body with the connection's secret:
@@ -45,6 +49,8 @@ hex(HMAC-SHA256(secret, timestamp + "." + rawBody))
 Send the Unix timestamp in `x-ahq-timestamp` and the hex digest in `x-ahq-signature`. The timestamp must be within five minutes. The body accepts no more than 100 normalized items and an optional cursor. The endpoint has no provider subscription management. Operators must configure each provider's relay, watch, or Pub/Sub path separately and filter events to the connection owner before signing.
 
 To rotate a relay secret, pause delivery, deploy the new value in `INBOX_WEBHOOK_SECRETS_JSON`, update the relay with the same value, then resume delivery and send a signed test item. Each connection accepts one secret at a time. A connection ID is a Convex identifier, so do not guess it or reuse one across accounts.
+
+GitHub, Linear, and Slack use native webhooks at `POST /api/webhooks/native/<provider>` instead. Each provider has one app-level secret in `NATIVE_INBOX_SECRETS_JSON`, configured once in the GitHub App webhook settings, the Linear OAuth application webhook settings, and the Slack app's Event Subscriptions. A verified delivery is routed to every connected user whose connection lists the event's resource in its Inbox resources: a GitHub repository as `owner/name` or its numeric ID, a Linear team ID, or a Slack channel ID. Owners set those resources on the connection's Manage access panel. Rotating one of these secrets changes delivery for every connection of that provider, so update the provider app and the variable in the same window. See [inbox delivery](inbox-delivery.md).
 
 ## Secrets and rotation
 
@@ -64,7 +70,7 @@ The initial worker subscription reads pending jobs across the deployment. Before
 
 If sign-in returns a configuration error, compare `APP_URL`, the Clerk publishable and secret keys, organization membership, and `CLERK_JWT_ISSUER_DOMAIN` in Convex. If the dashboard is empty, check that the browser was built with the correct `NEXT_PUBLIC_CONVEX_URL` and that the signed-in organization has a workspace.
 
-If a connection is rejected, compare its URL byte for byte with `MCP_SERVER_URLS_JSON` in Convex. For custom ServiceNow endpoints, also check `MCP_APPROVED_HOSTS`, HTTPS, DNS, and the standard port. If discovery works but a task cannot call a tool, inspect the employee capability, connection allowed tools, `MCP_TOOL_POLICIES_JSON`, and the resource scope. A non-empty restricted scope requires a configured resource argument and matching permitted IDs.
+If a connection is rejected, compare its URL byte for byte with `MCP_SERVER_URLS_JSON` in Convex. Only the registry URLs in `lib/providers.ts` are accepted, so a URL absent from either list cannot be connected. When the Integrations page reports a provider as not ready, it names the missing piece: the enabled server URL, a non-blocked tool in `MCP_TOOL_REGISTRY_JSON`, or an OAuth client in `MCP_OAUTH_CONFIG_JSON`. If discovery works but a task cannot call a tool, inspect the employee capability, connection allowed tools, `MCP_TOOL_POLICIES_JSON`, and the resource scope. A non-empty restricted scope requires a configured resource argument and matching permitted IDs.
 
 If OAuth returns to an error, check the exact callback URI, provider client, `APP_URL`, `MCP_OAUTH_CONFIG_JSON`, consent audience, and provider scopes. If a Google connection works for reads but a push inbox is empty, configure the external watch and relay. Connecting MCP does not create that subscription.
 

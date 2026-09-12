@@ -94,11 +94,10 @@ The exact names come from the current web, worker, gateway, and Convex code. Add
 | `MCP_SERVER_URLS_JSON`              | no                   | yes    | yes                    | Exact provider URL admission allowlist                                   |
 | `MCP_TOOL_REGISTRY_JSON`            | no                   | yes    | yes for publishing     | Exact reviewed provider tools allowed in published employee capabilities |
 | `PLATFORM_ADMIN_USER_IDS`           | no                   | yes    | yes for publishing     | Clerk user IDs allowed to publish                                        |
-| `NATIVE_INBOX_CONFIG_JSON`          | web                  | no     | for native inbox       | Per-connection provider, signing secret, and resource IDs                |
 | `INBOX_WEBHOOK_SECRETS_JSON`        | web                  | no     | only for push inbox    | Connection ID to HMAC secret map                                         |
-| `MCP_APPROVED_HOSTS`                | web, worker, gateway | no     | no                     | Additional approved MCP hostnames                                        |
+| `NATIVE_INBOX_SECRETS_JSON`         | web                  | no     | for native inbox       | One app-level webhook secret per provider                                |
 | `MCP_TOOL_POLICIES_JSON`            | web, worker, gateway | no     | no                     | Explicit tool policy overrides                                           |
-| `MCP_OAUTH_CONFIG_JSON`             | web, worker, gateway | no     | for OAuth              | Provider OAuth clients                                                   |
+| `MCP_OAUTH_CONFIG_JSON`             | web, worker, gateway | no     | yes for integrations   | Provider OAuth clients                                                   |
 | `WORKER_CONCURRENCY`                | worker               | no     | no                     | Defaults to 4, capped at 16                                              |
 | `MAX_TURN_SECONDS`                  | worker               | no     | no                     | Defaults to 900, bounded to 60 through 3600                              |
 | `TASK_RESERVED_COST_USD`            | no                   | yes    | no                     | Global reservation override                                              |
@@ -107,13 +106,21 @@ The exact names come from the current web, worker, gateway, and Convex code. Add
 | `TASK_RESERVED_COST_USD_SOL`        | no                   | yes    | no                     | Sol reservation override                                                 |
 | `TASK_RESERVED_COST_USD_ASTRA`      | no                   | yes    | no                     | Astra reservation override                                               |
 
-Railway supplies `PORT`. Leave it unset so each process binds to Railway's assigned port. Set `MCP_SERVER_URLS_JSON` in Convex even when the same value exists in Railway. Convex rejects a connection when its URL is absent from the exact provider array. For ServiceNow or any custom server, set both its hostname in Railway's `MCP_APPROVED_HOSTS` and its exact HTTPS URL in Convex's `MCP_SERVER_URLS_JSON` for that provider. Neither setting alone admits a custom endpoint. The code still requires HTTPS and blocks IP addresses, credentials, fragments, and non-standard ports.
+Railway supplies `PORT`. Leave it unset so each process binds to Railway's assigned port. Only the server URLs in the built-in provider registry (`lib/providers.ts`) are accepted, and each one must also be listed in Convex's `MCP_SERVER_URLS_JSON` for that provider before a connection is saved. There is no custom server URL. The code also requires HTTPS and blocks IP addresses, credentials, fragments, and non-standard ports.
 
 `MCP_TOOL_POLICIES_JSON` is fail-closed for restricted resources. An entry can set `mode` to `read`, `write`, or `blocked`; a restricted non-empty `resourceScope` also needs a configured `resourceArgument` such as `projectId`. Only the configured comma-separated IDs are accepted. The gateway never infers a resource argument from arbitrary tool parameters. A correction descriptor must name the read tool, ID argument, version field, expected version argument, and fields. Default approval rules vary by provider, so review each discovered tool before enabling it.
 
 ### OAuth client registration
 
-Register one OAuth client per provider that supports OAuth. Use this exact callback for every client:
+Every provider is connected by OAuth. A user clicks "Connect <provider>" and signs in; the user never pastes a token, chooses a server URL, picks tools, or types a resource scope. The web service refuses to start OAuth for a provider unless all three of these are true:
+
+1. The server URL is listed for that provider in Convex's `MCP_SERVER_URLS_JSON`.
+2. The provider has an entry in `MCP_TOOL_REGISTRY_JSON` with at least one tool whose `mode` is not `blocked`.
+3. `MCP_OAUTH_CONFIG_JSON` has a client for that provider id, or for that exact server URL.
+
+The Integrations page shows per-provider readiness so an operator can see which of the three is missing. Workspace owners and admins and platform administrators see the specific missing items.
+
+Register one OAuth client per provider. Use this exact callback for every client:
 
 ```text
 https://your-web-origin.example.com/api/integrations/callback
@@ -134,7 +141,19 @@ Put the resulting client IDs and secrets in `MCP_OAUTH_CONFIG_JSON`. The applica
 }
 ```
 
-`clientSecret`, `authorizationUrl`, `tokenUrl`, and `tokenAuthMethod` are optional when the provider's MCP server publishes compatible OAuth metadata. `tokenAuthMethod` is `client_secret_basic`, `client_secret_post`, or `none`. Use the provider's documented values. A Google Workspace example is in [the Google Workspace MCP guide](google-workspace-mcp.md). Do not paste a provider access token into this JSON. Access tokens entered by a user are sealed with `CREDENTIAL_ENCRYPTION_KEY` before Convex stores them.
+`clientSecret`, `authorizationUrl`, `tokenUrl`, and `tokenAuthMethod` are optional when the provider's MCP server publishes compatible OAuth metadata. `tokenAuthMethod` is `client_secret_basic`, `client_secret_post`, or `none`. Use the provider's documented values. A key may also be an exact server URL, which overrides the provider-id entry for that server; use that only when one product needs different scopes. A Google Workspace example is in [the Google Workspace MCP guide](google-workspace-mcp.md). Do not paste a provider access token into this JSON. The credential returned by consent is sealed with `CREDENTIAL_ENCRYPTION_KEY` before Convex stores it.
+
+After consent, the connection's allowed tools are the intersection of the tools discovered on the server and the non-blocked tools in `MCP_TOOL_REGISTRY_JSON` for that provider. Connecting fails when that intersection is empty, so review and register tools before asking a user to connect. The connection owner can narrow the tools further and set a resource scope afterwards on the connection's "Manage access" panel.
+
+### Provider prerequisites
+
+Each provider needs one-time setup by the operator before any user can connect it.
+
+- Linear: create an OAuth application in Linear settings with the callback above and put its client id and secret under `linear`. No further provider approval is required.
+- GitHub: create a GitHub App (preferred) or an OAuth App with the same callback. Organization repositories require an organization owner to install or approve the app. Organizations that enforce SAML require SSO authorization on first sign-in.
+- Slack: create a Slack app with the needed scopes and the same callback. Slack MCP only allows internal apps or apps listed in the Slack Marketplace; unlisted distributed apps are prohibited. An internal app works immediately for the operator's own Slack workspace. Serving other companies requires a Marketplace listing, after which each customer's Slack administrator approves the install.
+- Google Workspace: a Google Cloud project with the product APIs and MCP services enabled, a configured consent screen, and a `Web application` OAuth client. Developer Preview. Gmail and Drive scopes are restricted: an external audience requires Google OAuth verification and a security assessment, and until that completes only listed test users can connect and they see an unverified-app warning. Workspace administrators may block third-party apps. See [the Google Workspace MCP guide](google-workspace-mcp.md).
+- Canva: apply on Canva's MCP waitlist. After approval, add the redirect URI to Canva's allowlist. Until then only the developer's own team can connect.
 
 ## 5. Configure artifact storage
 
@@ -146,17 +165,23 @@ Use a private bucket. The application authorizes downloads through Convex before
 
 The built-in registry currently contains these providers:
 
-| Provider         | MCP server URL                                                                                        | Current note                                                                               |
-| ---------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Linear           | `https://mcp.linear.app/mcp`                                                                          | External changes are reviewed.                                                             |
-| Slack            | `https://mcp.slack.com/mcp`                                                                           | Requires an internal or marketplace-published Slack app.                                   |
-| Google Workspace | Gmail, Drive, Docs, Sheets, Slides, Calendar endpoints in [the Google guide](google-workspace-mcp.md) | Developer Preview. Connect each product separately. Gmail prepares drafts and cannot send. |
-| GitHub           | `https://api.githubcopilot.com/mcp/`                                                                  | Use a token restricted to needed repositories.                                             |
-| Salesforce       | `https://api.salesforce.com/platform/mcp/v1/platform/sobject-all`                                     | Hosted MCP access and Salesforce object and field restrictions are required.               |
-| ServiceNow       | administrator supplied                                                                                | Approve the instance hostname and MCP URL before use.                                      |
-| Canva            | `https://mcp.canva.com/mcp`                                                                           | Tools depend on the Canva account.                                                         |
+| Provider         | MCP server URL                                                                                        | Current note                                                                                           |
+| ---------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Linear           | `https://mcp.linear.app/mcp`                                                                          | External changes are reviewed.                                                                         |
+| Slack            | `https://mcp.slack.com/mcp`                                                                           | Requires an internal or marketplace-listed Slack app.                                                  |
+| Google Workspace | Gmail, Drive, Docs, Sheets, Slides, Calendar endpoints in [the Google guide](google-workspace-mcp.md) | Developer Preview. The user selects products and signs in once. Gmail prepares drafts and cannot send. |
+| GitHub           | `https://api.githubcopilot.com/mcp/`                                                                  | Organization repositories need the app installed or approved by an organization owner.                 |
+| Canva            | `https://mcp.canva.com/mcp`                                                                           | Waitlist approval required. Tools depend on the Canva account.                                         |
 
-Connecting an MCP server does not create an inbox subscription. Slack, Linear, and GitHub have native signature-verified webhook endpoints. Configure `NATIVE_INBOX_CONFIG_JSON` and provider subscriptions using [inbox delivery](inbox-delivery.md). Salesforce, ServiceNow, and Google Workspace use the normalized relay below. For each push connection, generate a random secret and add it to the web variable like this:
+Connecting an MCP server does not create an inbox subscription. GitHub, Linear, and Slack have native signature-verified webhook endpoints at `POST /api/webhooks/native/<provider>`. Set `NATIVE_INBOX_SECRETS_JSON` on the web service with one app-level secret per provider:
+
+```json
+{ "github": "...", "linear": "...", "slack": "..." }
+```
+
+Configure the same secret once in the GitHub App's webhook settings, the Linear OAuth application's webhook settings, and the Slack app's Event Subscriptions. A delivery is routed to every connected user whose connection lists the event's resource in its "Inbox" resources on the Manage access panel: a GitHub repository as `owner/name` or its numeric ID, a Linear team ID, or a Slack channel ID. See [inbox delivery](inbox-delivery.md) for the signature, normalization, and testing details.
+
+Google Workspace uses the normalized relay below. For each push connection, generate a random secret and add it to the web variable like this:
 
 ```json
 { "<connectionId>": "<random-relay-secret>" }
@@ -196,8 +221,8 @@ Google push ingestion needs a separately configured Google Pub/Sub and provider 
 Complete these steps with a test account and a test provider workspace:
 
 1. Sign in through Clerk and create or join the intended organization. Bootstrap the workspace in the UI.
-2. Open Integrations, choose a provider and its exact approved server URL, run discovery, and select the smallest useful tool set. Apply resource restrictions only when the tool has a configured `resourceArgument`; otherwise use a provider account restricted to the intended records. OAuth consent does not grant every discovered tool to every employee.
-3. Review the discovered tools and add their exact names, descriptions, and modes to Convex's `MCP_TOOL_REGISTRY_JSON`. Configure execution policies on Railway separately. As a platform administrator, create a marketplace draft with its required and optional capabilities, private instructions, skills, and public media. Publish it, then hire the published employee.
+2. Open Integrations, click Connect for the provider, and sign in. Confirm the connection shows the reviewed tools. OAuth consent does not grant every discovered tool to every employee.
+3. Add the exact names, descriptions, and modes of the tools you reviewed to Convex's `MCP_TOOL_REGISTRY_JSON`. Configure execution policies on Railway separately. As a platform administrator, create a marketplace draft with its required and optional capabilities, private instructions, skills, and public media. Publish it, then hire the published employee.
 4. Run a read-only task. Verify live task updates, the worker's session, and the recorded MCP read. Revoke a required connection and verify the next task is blocked before an Agents session starts.
 5. Restore the connection and run a write-capable task against a test record. Confirm the UI shows a proposal and correction limits, with no provider mutation before approval. Approve it, inspect the result, then exercise its documented correction path.
 6. Configure native inbox webhooks or the normalized relay after provider visibility and signature verification pass. Send one signed event twice and confirm deduplication.
