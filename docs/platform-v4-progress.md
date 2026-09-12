@@ -44,3 +44,5 @@ Phase 2b outcome (`agent/integrate`): one reserved-instance helper in `convex/li
 ## Phase 3: infrastructure (in progress)
 
 Four Opus agents: worker turns and internal tool servers with role enforcement (`agent/runtime`); marketplace listings, instances, hiring policy, studio preview (`agent/marketplace`); code quality helpers, lint to zero outside the office, CSS consolidation, typed boundaries (`agent/quality`); 3D rooms and props with new baselines (`agent/rooms`, started with phase 2b).
+
+- Merged `agent/marketplace` (commits through `2ba4453`): listings as the unit with visibility, evidence, and counters; instances hired by count with names and floor staffing; hiring policy with requests; upgrade with readiness rollback; studio preview and version diff; `lib/instructions.ts` as the shared instruction composer. 236 tests. Note: `capacity.instances` in the plan projection still counts reserved instances while the hiring cap counts workers only; reconcile in the UI phase.
