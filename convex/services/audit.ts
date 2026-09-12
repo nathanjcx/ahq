@@ -1,6 +1,5 @@
 import { v } from 'convex/values';
-import type { AuditDocument } from '../../lib/contracts';
-import type { Doc, Id } from '../_generated/dataModel';
+import type { Id } from '../_generated/dataModel';
 import { mutation, query, type MutationCtx } from '../_generated/server';
 import {
   dateRange,
@@ -10,6 +9,7 @@ import {
   previousDate,
   publicFinding,
   validateFinding,
+  type FindingInput,
 } from '../lib/audit';
 import { employeeName } from '../lib/meetings';
 import { channelFor, insertPost, type ChannelScope } from '../lib/posts';
@@ -33,14 +33,17 @@ async function requireAuditorRun(ctx: Ctx, runToken: string, workspaceId: Id<'wo
 async function postFindings(
   ctx: MutationCtx,
   workspaceId: Id<'workspaces'>,
-  document: AuditDocument,
-  findings: Doc<'auditFindings'>[],
+  date: string,
+  employeeId: Id<'installations'>,
+  findings: FindingInput[],
 ) {
-  const installation = await ctx.db.get(document.employeeId as Id<'installations'>);
+  const installation = await ctx.db.get(employeeId);
+  if (!installation) return;
+  const name = await employeeName(ctx, installation);
   const scopes: ChannelScope[] = [['audit', '']];
-  if (installation?.floorId) scopes.push(['floor', installation.floorId]);
+  if (installation.floorId) scopes.push(['floor', installation.floorId]);
   const text = [
-    `${document.employeeName} — audit of ${document.auditDate}`,
+    `${name} — audit of ${date}`,
     ...findings.map(
       (finding) => `${finding.severity.toUpperCase()}: ${finding.claim} → ${finding.requiredAction}`,
     ),
@@ -49,8 +52,8 @@ async function postFindings(
     await insertPost(ctx, {
       channel: await channelFor(ctx, workspaceId, kind, scopeId),
       kind: 'finding',
-      authorEmployeeId: document.employeeId as Id<'installations'>,
-      authorName: document.employeeName,
+      authorEmployeeId: employeeId,
+      authorName: name,
       text,
     });
 }
@@ -187,14 +190,14 @@ export const recordFindings = mutation({
     dateRange(args.date);
     const existing = await findingsOn(ctx, args.workspaceId, args.date);
     const seen = new Set(existing.map((finding) => `${finding.employeeId}:${finding.claim}`));
-    const added = new Map<string, Doc<'auditFindings'>[]>();
+    const added = new Map<Id<'installations'>, FindingInput[]>();
     for (const input of args.findings.slice(0, 200)) {
       const fields = await validateFinding(ctx, args.workspaceId, input);
       const key = `${fields.employeeId}:${fields.claim}`;
       if (seen.has(key)) continue;
       seen.add(key);
       const now = Date.now();
-      const findingId = await ctx.db.insert('auditFindings', {
+      await ctx.db.insert('auditFindings', {
         workspaceId: args.workspaceId,
         ...fields,
         auditDate: args.date,
@@ -202,19 +205,15 @@ export const recordFindings = mutation({
         createdAt: now,
         updatedAt: now,
       });
-      const inserted = await ctx.db.get(findingId);
-      if (inserted) added.set(fields.employeeId, [...(added.get(fields.employeeId) ?? []), inserted]);
+      added.set(fields.employeeId, [...(added.get(fields.employeeId) ?? []), fields]);
     }
     const findings = await Promise.all(
       (await findingsOn(ctx, args.workspaceId, args.date)).map((finding) => publicFinding(ctx, finding)),
     );
-    const documents = groupFindings(findings);
     // Only what this run added is posted, so re-running the same audit does not repeat itself.
-    for (const document of documents) {
-      const fresh = added.get(document.employeeId);
-      if (fresh?.length) await postFindings(ctx, args.workspaceId, document, fresh);
-    }
-    return documents;
+    for (const [employeeId, fresh] of added)
+      await postFindings(ctx, args.workspaceId, args.date, employeeId, fresh);
+    return groupFindings(findings);
   },
 });
 

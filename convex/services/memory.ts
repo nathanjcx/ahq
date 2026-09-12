@@ -22,12 +22,6 @@ import { memoryKind, memoryScope } from '../schema';
 import { cleanText, requireService, type Ctx } from '../shared';
 import { taskForRunToken } from './context';
 
-/** Where a contested claim is argued out: its own floor or project, otherwise the workspace. */
-function contestedChannel(entry: Doc<'memories'>): ChannelScope {
-  if (entry.scope === 'floor' || entry.scope === 'project') return [entry.scope, entry.scopeId];
-  return ['workspace', ''];
-}
-
 const RECALL_LIMIT = 20;
 const CURATION_LIMIT = 200;
 const JANITOR_NAME = 'The Janitor';
@@ -372,6 +366,12 @@ export const merge = mutation({
     return { memoryId };
   },
 });
+
+/** Where a contested claim is argued out: its own floor or project, otherwise the workspace. */
+function contestedChannel(entry: Doc<'memories'>): ChannelScope {
+  if (entry.scope === 'floor' || entry.scope === 'project') return [entry.scope, entry.scopeId];
+  return ['workspace', ''];
+}
 
 /**
  * Marks a claim as contested so it reaches no model. Naming the competing claim contests both sides

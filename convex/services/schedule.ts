@@ -47,12 +47,9 @@ const STANDING_PROMPTS: Record<ReservedKind, string> = {
  * and found again on every one after it.
  */
 async function ensureReservedStaff(ctx: MutationCtx, workspace: Doc<'workspaces'>) {
-  const [janitor, auditor, triage] = await Promise.all([
-    ensureJanitorFor(ctx, workspace._id),
-    ensureAuditor(ctx, workspace._id),
-    ensureTriageStaff(ctx, workspace, 'system'),
-  ]);
-  return [janitor, auditor, { installation: triage.installation, version: triage.version }];
+  await ensureJanitorFor(ctx, workspace._id);
+  await ensureAuditor(ctx, workspace._id);
+  await ensureTriageStaff(ctx, workspace, 'system');
 }
 
 /**
@@ -105,8 +102,8 @@ async function meetingsInLead(
     const attendees = [];
     for (const installation of await attendeeEmployees(ctx, entry))
       attendees.push({
-        employeeId: String(installation._id),
-        taskId: String(await meetingTaskFor(ctx, meeting, entry, installation)),
+        employeeId: installation._id,
+        taskId: await meetingTaskFor(ctx, meeting, entry, installation),
       });
     meetings.push({ entryId: entry._id, meetingId, startsAt: entry.startsAt, attendees });
   }
