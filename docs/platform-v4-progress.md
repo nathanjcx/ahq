@@ -14,18 +14,23 @@ Branch `platform-v4`, commit `f99ef34`.
 - Office lab: `app/office-lab` (guarded by `QA_FIXTURE=1`), five deterministic baselines under `web-tests/lab/baselines`, a frame-time probe with a configurable budget, `npm run test:lab`.
 - Verification: typecheck, lint, 121 unit tests, production build, two clean baseline runs.
 
-## Phase 2: backend (in progress)
+## Phase 2: backend (merged, September 12, 2026)
 
 Five Opus agents in isolated worktrees: memory and janitor; schedule, calendar, plan; projects, roadmap, dependencies; meetings and audit findings; channels, alerts, notifications, triage. Known reconciliation points at integration: `ensureReservedInstance` (memory, meetings, channels each carry a copy), `isAttendedTime` (schedule owns `lib/time.ts`; triage carries a private copy), `Dashboard` contract additions from the schedule workstream, additive schema changes reported by each agent.
 
-### Merged so far
+### Merged
 
 - `agent/memory` (commit `6fc05cd`): memory tables, people and janitor operations, the working memory compiler, 11 new tests. Follow-up merged (`fcb0b4d`): `contest` names the competing entry and `resolveContest` acts on both sides.
 - `agent/meetings` (commits through `170bb56`): meetings engine on hidden per-attendee session tasks, audit findings lifecycle, `ensureReservedInstance`. Job kinds for the worker: `meeting_prep`, `meeting_answer`, `meeting_wrapup`, `audit_run`.
 
 - `agent/projects` (commit `54b3c95`): projects, milestones, roadmap proposal validation, task dependencies with waiting and blocked states released from `recordEvents` and `tasks:cancel`, 20 new tests.
 
-### Reconciliation list for the end of phase 2
+- `agent/channels` (commits through `863cc63`): channels and posts replace floor boards, alerts with signed intake and dedupe, notifications ledger, triage floor and authority, five new routes, 9 new tests.
+- `agent/schedule` (commits through `33fdeec`): pure time math and planner, settings, five-minute tick, shifts and reports, calendar with derived entries and agenda suggestions, plan projection, 46 new tests. Job kinds: `start_shift`, `review_shift`, `prep_turn`, `curation_run`, `audit_run`, `triage_run`, plus `meeting_prep`, `meeting_answer`, `meeting_wrapup`, `email_classify`.
+- Integration fixes by the primary thread: same-millisecond ties in post paging, unread markers, and memory ordering made deterministic on Convex creation time.
+- State after merge: typecheck clean, 213 unit tests, 36 files.
+
+### Reconciliation (phase 2b, in progress)
 
 - `tasks.kind` field (`work | meeting | audit | curation | triage`) so the dashboard hides session-only tasks; one shared "session task without a start job" helper in `convex/lib/tasks.ts` for meetings, audits, curation, and triage.
 - Janitor creation onto `ensureReservedInstance` (convex/lib/audit.ts); triage's private copy too.
