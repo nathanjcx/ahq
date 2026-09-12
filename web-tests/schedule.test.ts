@@ -165,20 +165,90 @@ describe('the scheduler tick', () => {
     expect(await jobsOfKind(t, 'start_shift')).toHaveLength(1);
   });
 
-  it('opens one standing session per reserved employee and audits in it after hours', async () => {
+  it('creates the reserved employees once and opens one standing session each', async () => {
     const t = harness();
-    const { employeeId } = await workspace(t, afterHours());
-    await t.run(async (ctx) => ctx.db.patch(employeeId, { kind: 'auditor' }));
+    const { owner } = await workspace(t, afterHours());
     await t.mutation(internal.services.schedule.tick, {});
-    const standing = await t.run(async (ctx) => ctx.db.query('tasks').collect());
-    expect(standing.map((task) => task.title)).toEqual(['Operations analyst standing session']);
-    const audits = await jobsOfKind(t, 'audit_run');
-    expect(audits).toHaveLength(1);
-    expect(audits[0].taskId).toBe(standing[0]._id);
+    const reserved = async () =>
+      t.run(async (ctx) =>
+        (await ctx.db.query('installations').collect()).filter((one) => one.kind).map((one) => one.kind),
+      );
+    expect([...(await reserved())].sort()).toEqual(['auditor', 'janitor', 'triage']);
+    const sessions = async () =>
+      t.run(async (ctx) =>
+        (await ctx.db.query('tasks').collect())
+          .filter((task) => task.kind === 'standing')
+          .map((task) => task.title)
+          .sort(),
+      );
+    expect(await sessions()).toEqual([
+      'The Auditor standing session',
+      'The Janitor standing session',
+      'Triage standing session',
+    ]);
+    // Reserved instances and their sessions are the workspace's, not the marketplace's or the board's.
+    expect(await owner.query(api.marketplace.list, {})).toHaveLength(2);
+    expect((await owner.query(api.workspace.dashboard, {})).tasks).toEqual([]);
+    expect(
+      (await owner.query(api.workspace.dashboard, {})).employees
+        .filter((one) => one.kind)
+        .map((one) => one.kind),
+    ).toHaveLength(3);
 
     await t.mutation(internal.services.schedule.tick, {});
-    expect(await t.run(async (ctx) => (await ctx.db.query('tasks').collect()).length)).toBe(1);
+    expect(await reserved()).toHaveLength(3);
+    expect(await sessions()).toHaveLength(3);
+  });
+
+  it('audits after hours in the night’s own task', async () => {
+    const t = harness();
+    await workspace(t, afterHours());
+    await t.mutation(internal.services.schedule.tick, {});
+    const audits = await jobsOfKind(t, 'audit_run');
+    expect(audits).toHaveLength(1);
+    const task = await t.run(async (ctx) => ctx.db.get(audits[0].taskId as Id<'tasks'>));
+    expect(task).toMatchObject({ kind: 'audit', title: expect.stringContaining('Audit: ') });
+    expect(JSON.parse(audits[0].payload)).toMatchObject({ date: task!.sessionKey });
+
+    await t.mutation(internal.services.schedule.tick, {});
     expect(await jobsOfKind(t, 'audit_run')).toHaveLength(1);
+    expect(
+      await t.run(async (ctx) =>
+        (await ctx.db.query('tasks').collect()).filter((one) => one.kind === 'audit'),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('prepares a meeting at the lead, on the attendee’s own hidden session', async () => {
+    const t = harness();
+    const { owner, employeeId } = await workspace(t);
+    const { floorId } = await owner.mutation(api.floors.create, {
+      name: 'Launch',
+      brief: 'Prepare the launch.',
+      employeeIds: [employeeId],
+    });
+    await t.run(async (ctx) => ctx.db.patch(employeeId, { floorId }));
+    const { entryId } = await owner.mutation(api.calendar.createMeeting, {
+      title: 'Launch review',
+      startsAt: Date.now() + 30 * 60_000,
+      endsAt: Date.now() + 60 * 60_000,
+      floorId,
+      attendees: [{ kind: 'employee', id: employeeId, name: 'Operations analyst' }],
+      agenda: ['Launch readiness'],
+    });
+    await t.mutation(internal.services.schedule.tick, {});
+    const prep = await jobsOfKind(t, 'meeting_prep');
+    expect(prep).toHaveLength(1);
+    const task = await t.run(async (ctx) => ctx.db.get(prep[0].taskId as Id<'tasks'>));
+    expect(task).toMatchObject({ kind: 'meeting', employeeId, title: 'Meeting: Launch review' });
+    const meetingId = await t.run(
+      async (ctx) =>
+        (await ctx.db.query('meetings').collect()).find((one) => one.calendarEntryId === entryId)!._id,
+    );
+    expect(JSON.parse(prep[0].payload)).toMatchObject({ meetingId, employeeId });
+
+    await t.mutation(internal.services.schedule.tick, {});
+    expect(await jobsOfKind(t, 'meeting_prep')).toHaveLength(1);
   });
 
   it('answers an open alert whatever the hour, and stops at the daily cap', async () => {
@@ -289,6 +359,61 @@ describe('shifts and reports', () => {
     const again = await t.mutation(api.services.schedule.endShift, { secret, shiftId });
     expect(again.reportId).toBe(reportId);
     expect(await t.run(async (ctx) => (await ctx.db.query('reports').collect()).length)).toBe(1);
+  });
+
+  it('posts the report to the floor and the project the task belongs to', async () => {
+    const t = harness();
+    const { owner, employeeId } = await workspace(t);
+    const { floorId } = await owner.mutation(api.floors.create, {
+      name: 'Launch',
+      brief: 'Prepare the launch.',
+      employeeIds: [employeeId],
+    });
+    const { projectId } = await owner.mutation(api.projects.create, {
+      name: 'Relaunch',
+      brief: 'Ship the new site.',
+      floorIds: [floorId],
+    });
+    const { taskId } = await owner.mutation(api.tasks.create, {
+      floorId,
+      employeeId,
+      projectId,
+      title: 'Ship the launch page',
+      prompt: 'Move the work forward and report at the end of the shift.',
+    });
+    await t.run(async (ctx) => ctx.db.patch(taskId, { cadence: 'daily' }));
+    const { shiftId } = await startShift(t, taskId);
+    const { reportId } = await t.mutation(api.services.schedule.endShift, {
+      secret,
+      shiftId,
+      report: {
+        done: ['Hero section'],
+        inProgress: [],
+        blockedOn: [],
+        next: ['Footer'],
+        risks: [],
+      },
+    });
+
+    for (const scope of [
+      { kind: 'floor' as const, scopeId: floorId },
+      { kind: 'project' as const, scopeId: projectId },
+    ]) {
+      const { channelId } = await owner.mutation(api.channels.open, scope);
+      const reports = (await owner.query(api.channels.posts, { channelId })).filter(
+        (post) => post.kind === 'report',
+      );
+      expect(reports).toHaveLength(1);
+      expect(reports[0].text).toContain('Done: Hero section');
+      expect(reports[0].text).toContain('Next: Footer');
+    }
+    // Posting the same report again is a no-op, whoever asks.
+    await t.mutation(api.services.channels.postReport, { secret, taskId, reportId: reportId! });
+    expect(
+      await t.run(async (ctx) =>
+        (await ctx.db.query('posts').collect()).filter((post) => post.kind === 'report'),
+      ),
+    ).toHaveLength(2);
   });
 
   it('reads pacing from the employee’s own last report and the hours left', async () => {

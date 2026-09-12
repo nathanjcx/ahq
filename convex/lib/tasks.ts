@@ -187,9 +187,7 @@ export async function releaseDependents(ctx: MutationCtx, task: Doc<'tasks'>, st
   // Nothing indexes `dependsOn`, so the workspace's waiting set is scanned; those tasks are few.
   const waiting = await ctx.db
     .query('tasks')
-    .withIndex('by_workspace_status', (q) =>
-      q.eq('workspaceId', task.workspaceId).eq('status', 'waiting'),
-    )
+    .withIndex('by_workspace_status', (q) => q.eq('workspaceId', task.workspaceId).eq('status', 'waiting'))
     .collect();
   const candidates = waiting.map((doc) => ({
     id: String(doc._id),

@@ -122,11 +122,13 @@ export const list = query({
   handler: async (ctx) => {
     await identity(ctx);
     const versions = await ctx.db.query('employeeVersions').withIndex('by_published').order('desc').take(500);
-    return versions
-      // Reserved employees are made by a workspace for itself and are never hired from here.
-      .filter((version) => !version.retiredAt && !isReservedVersion(version))
-      .sort((a, b) => b.publishedAt - a.publishedAt)
-      .map(publicListing);
+    return (
+      versions
+        // Reserved employees are made by a workspace for itself and are never hired from here.
+        .filter((version) => !version.retiredAt && !isReservedVersion(version))
+        .sort((a, b) => b.publishedAt - a.publishedAt)
+        .map(publicListing)
+    );
   },
 });
 

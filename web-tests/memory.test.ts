@@ -200,6 +200,16 @@ describe('workspace memory', () => {
     expect(inputs.entries.floor).toEqual([]);
     expect(compileWorkingMemory(inputs).text).not.toContain('We ship on');
 
+    // The conflict is argued out where it was filed: a question in that floor's channel.
+    const { channelId } = await owner.mutation(api.channels.open, { kind: 'floor', scopeId: floorId });
+    const [question] = (await owner.query(api.channels.posts, { channelId })).filter(
+      (post) => post.kind === 'decision',
+    );
+    expect(question).toMatchObject({ authorName: 'The Janitor' });
+    expect(question.text).toContain('Contested: We ship on Thursday.');
+    expect(question.text).toContain('Against: We ship on Friday.');
+    expect(question.text).toContain('Reason: Two ship dates.');
+
     // Keeping the competing claim retires this one, pointing at what replaced it.
     await owner.mutation(api.memory.resolveContest, { id: thursday.memoryId, keep: 'other' });
     const [retired, kept] = await t.run(async (ctx) => [

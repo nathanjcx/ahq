@@ -1,9 +1,6 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
-import { cadence, taskVisibility } from './schema';
-
-const messageRole = v.union(v.literal('user'), v.literal('assistant'), v.literal('system'));
-import { canSeeTask, cleanText, randomToken, requireWorkspace } from './shared';
+import { requireProject, requireProjectMilestone } from './lib/projects';
 import {
   assertDependencies,
   assertEmployeeReady,
@@ -17,7 +14,10 @@ import {
   startTask,
   taskTimeline,
 } from './lib/tasks';
-import { requireProject, requireProjectMilestone } from './lib/projects';
+import { cadence, taskVisibility } from './schema';
+import { canSeeTask, cleanText, randomToken, requireWorkspace } from './shared';
+
+const messageRole = v.union(v.literal('user'), v.literal('assistant'), v.literal('system'));
 
 export const create = mutation({
   args: {

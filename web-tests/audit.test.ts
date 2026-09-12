@@ -73,13 +73,13 @@ async function auditedDay(t: Harness) {
   });
   const auditTaskId = await t.run(async (ctx) => ensureAuditRun(ctx, workspaceId, date));
   const runToken = await t.run(async (ctx) => (await ctx.db.get(auditTaskId))!.runToken);
-  return { owner, workspaceId, employeeId, taskId, runToken };
+  return { owner, workspaceId, employeeId, taskId, auditTaskId, runToken };
 }
 
 describe('audit findings', () => {
   it('runs one auditor over the day and records findings once', async () => {
     const t = harness();
-    const { owner, workspaceId, employeeId, taskId, runToken } = await auditedDay(t);
+    const { owner, workspaceId, employeeId, taskId, auditTaskId, runToken } = await auditedDay(t);
 
     const auditors = await t.run(async (ctx) =>
       (await ctx.db.query('installations').collect()).filter(
@@ -95,7 +95,11 @@ describe('audit findings', () => {
     expect(sameAuditor).toBe(auditors[0]._id);
     const version = await t.run(async (ctx) => ctx.db.get(auditors[0].versionId));
     expect(version?.capabilities).toEqual([]);
-    expect(await jobKinds(t)).toContain('audit_run');
+    // The night's task holds the session; the scheduler is what enqueues the run into it.
+    expect(await t.run(async (ctx) => ctx.db.get(auditTaskId))).toMatchObject({
+      kind: 'audit',
+      sessionKey: date,
+    });
 
     const workerRunToken = await t.run(async (ctx) => (await ctx.db.get(taskId))!.runToken);
     await expect(
@@ -157,6 +161,92 @@ describe('audit findings', () => {
     const open = await t.query(api.services.audit.openFindingsFor, { secret, employeeId });
     expect(open).toHaveLength(2);
     expect(open[0].prompt).toContain('Required action: Produce the notes');
+  });
+
+  it('posts the night’s findings to the audit channel and the instance’s floor', async () => {
+    const t = harness();
+    const { owner, workspaceId, employeeId, taskId, runToken } = await auditedDay(t);
+    const { floorId } = await owner.mutation(api.floors.create, {
+      name: 'Launch',
+      brief: 'Prepare the launch.',
+      employeeIds: [employeeId],
+    });
+    await t.run(async (ctx) => ctx.db.patch(employeeId, { floorId }));
+    const finding = {
+      employeeId,
+      taskId,
+      severity: 'medium' as const,
+      claim: 'The report claims release notes the journal does not show.',
+      evidence: 'No artifact and no tool call for the notes.',
+      requiredAction: 'Produce the notes or correct the report.',
+    };
+    const record = () =>
+      t.mutation(api.services.audit.recordFindings, {
+        secret,
+        runToken,
+        workspaceId,
+        date,
+        findings: [finding],
+      });
+    await record();
+
+    const posts = async (kind: 'audit' | 'floor', scopeId: string) => {
+      const { channelId } = await owner.mutation(api.channels.open, { kind, scopeId });
+      return (await owner.query(api.channels.posts, { channelId })).filter((post) => post.kind === 'finding');
+    };
+    for (const found of [await posts('audit', ''), await posts('floor', floorId)]) {
+      expect(found).toHaveLength(1);
+      expect(found[0].text).toContain('MEDIUM: The report claims release notes');
+      expect(found[0].text).toContain('Produce the notes or correct the report.');
+      expect(found[0].authorName).toBe('Operations analyst');
+    }
+    // The same audit run again records nothing new, so it posts nothing new either.
+    await record();
+    expect(await posts('audit', '')).toHaveLength(1);
+  });
+
+  it('escalates to the workspace channel and the next meeting’s agenda', async () => {
+    const t = harness();
+    const { owner, workspaceId, employeeId, taskId, runToken } = await auditedDay(t);
+    const boss = t.withIdentity(orgIdentity('boss', 'acme', 'org:admin'));
+    const { entryId } = await boss.mutation(api.calendar.createMeeting, {
+      title: 'Launch review',
+      startsAt: Date.now() + 86_400_000,
+      endsAt: Date.now() + 86_400_000 + 1_800_000,
+      attendees: [],
+      agenda: ['Launch readiness'],
+    });
+    await t.mutation(api.services.audit.recordFindings, {
+      secret,
+      runToken,
+      workspaceId,
+      date,
+      findings: [
+        {
+          employeeId,
+          taskId,
+          severity: 'high' as const,
+          claim: 'A test was reported as passing without a run.',
+          evidence: 'No tool call ran the suite.',
+          requiredAction: 'Run the suite and report the result.',
+        },
+      ],
+    });
+    const [open] = await owner.query(api.audit.findings, { status: 'open' });
+    await boss.mutation(api.audit.escalate, { id: open.id as Id<'auditFindings'> });
+
+    const { channelId } = await owner.mutation(api.channels.open, { kind: 'workspace', scopeId: '' });
+    const [posted] = await owner.query(api.channels.posts, { channelId });
+    expect(posted.text).toContain('Escalated finding against Operations analyst');
+    expect(posted.text).toContain('Required action: Run the suite');
+    expect(await t.run(async (ctx) => (await ctx.db.get(entryId))!.agenda)).toEqual([
+      'Launch readiness',
+      'Escalated finding: A test was reported as passing without a run.',
+    ]);
+
+    // A second escalation of the same finding changes nothing and says nothing twice.
+    await boss.mutation(api.audit.escalate, { id: open.id as Id<'auditFindings'> });
+    expect(await owner.query(api.channels.posts, { channelId })).toHaveLength(1);
   });
 
   it('moves a finding from open to addressed, verified, or escalated', async () => {
@@ -240,7 +330,3 @@ describe('audit findings', () => {
     expect((await owner.query(api.audit.findings, { status: 'addressed' }))[0].id).toBe(ignored.id);
   });
 });
-
-async function jobKinds(t: Harness) {
-  return t.run(async (ctx) => (await ctx.db.query('jobs').collect()).map((job) => job.kind));
-}

@@ -68,7 +68,7 @@ function upstream() {
       ],
     }));
     mcp.setRequestHandler(CallToolRequestSchema, async (call) => {
-      const args = (call.params.arguments || {});
+      const args = call.params.arguments || {};
       const issue = issues.get(String(args.id));
       if (!issue) return failure('No such issue.');
       if (call.params.name === 'get_issue') return record(issue);

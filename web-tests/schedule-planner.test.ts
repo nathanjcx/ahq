@@ -146,13 +146,13 @@ describe('hours and the zone', () => {
 });
 
 describe('the reserved teams', () => {
-  it('audits after hours, once per date', () => {
+  it('audits after hours in the night’s own task, once per date', () => {
     const plan = input({
       now: mondayNight,
-      instances: [worker('aud', { kind: 'auditor', standingTaskId: 'audit-task' })],
+      instances: [worker('aud', { kind: 'auditor', auditTaskId: 'audit-task' })],
     });
-    expect(planTick(plan).map((job) => [job.kind, job.uniqueKey])).toEqual([
-      ['audit', 'audit:aud:2026-06-01'],
+    expect(planTick(plan).map((job) => [job.kind, job.taskId, job.uniqueKey])).toEqual([
+      ['audit', 'audit-task', 'audit:aud:2026-06-01'],
     ]);
     expect(planTick({ ...plan, now: monday })).toEqual([]);
   });
@@ -171,12 +171,15 @@ describe('the reserved teams', () => {
     );
   });
 
-  it('leaves an auditor or janitor without a standing task alone', () => {
+  it('leaves an auditor without tonight’s task, or a janitor without a session, alone', () => {
     expect(
       planTick(
         input({
           now: mondayNight,
-          instances: [worker('aud', { kind: 'auditor' }), worker('jan', { kind: 'janitor' })],
+          instances: [
+            worker('aud', { kind: 'auditor', standingTaskId: 'standing' }),
+            worker('jan', { kind: 'janitor' }),
+          ],
         }),
       ),
     ).toEqual([]);
@@ -218,17 +221,23 @@ describe('triage and preparation', () => {
 
   it('prepares each attendee once, sixty working minutes out', () => {
     const meetings = [
-      { entryId: 'm1', startsAt: monday + 90 * 60_000, attendees: [{ employeeId: 'ann', taskId: 'one' }] },
+      {
+        entryId: 'e1',
+        meetingId: 'm1',
+        startsAt: monday + 90 * 60_000,
+        attendees: [{ employeeId: 'ann', taskId: 'hidden' }],
+      },
     ];
     const plan = input({ instances: [worker('ann')], meetings });
     expect(planTick(plan)).toEqual([]);
     const soon = { ...plan, meetings: [{ ...meetings[0], startsAt: monday + 45 * 60_000 }] };
+    // The turn runs on the meeting's own hidden task, under the one `meeting_prep` job kind.
     expect(planTick(soon).map((job) => [job.kind, job.taskId, job.uniqueKey])).toEqual([
-      ['prep_turn', 'one', 'prep:m1:ann'],
+      ['meeting_prep', 'hidden', 'meeting_prep:m1:ann'],
     ]);
     // Preparation comes before the day's own work when the instance can only do one.
     const busyDay = { ...soon, tasks: [daily('one', 'ann')] };
-    expect(shape(planTick(busyDay))).toEqual([['prep_turn', 'one']]);
+    expect(shape(planTick(busyDay))).toEqual([['meeting_prep', 'hidden']]);
     // A meeting already under way is not prepared for.
     expect(planTick({ ...plan, meetings: [{ ...meetings[0], startsAt: monday - 60_000 }] })).toEqual([]);
   });

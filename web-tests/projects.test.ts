@@ -7,6 +7,8 @@ import { harness, identity as orgIdentity, linearWorkspace, publishEmployee, sec
 import type { Harness } from './support';
 
 const DAY = 24 * 60 * 60 * 1_000;
+/** Meeting points are booked on the real calendar, so the roadmap names a time near today. */
+const MEETING_AT = Date.now() + DAY;
 const estimate = { workingHours: 4, tokens: 1_000, confidence: 0.3, model: 'gpt-5.6-terra' as const };
 
 /** A workspace with one floor, one staffed employee, and one project in planning. */
@@ -72,7 +74,7 @@ function roadmap(floorId: string, employeeId: string): RoadmapProposal {
         ],
       },
     ],
-    meetings: [{ title: 'Kickoff', startsAt: DAY, purpose: 'Agree the plan.', milestoneKey: 'm2' }],
+    meetings: [{ title: 'Kickoff', startsAt: MEETING_AT, purpose: 'Agree the plan.', milestoneKey: 'm2' }],
     prompts: [],
     projectedTokens: 2_000,
   };
@@ -111,15 +113,21 @@ describe('projects and roadmaps', () => {
     const confirmed = await user.mutation(api.projects.confirmProposal, { projectId, proposal });
     expect(confirmed.milestoneIds).toHaveLength(2);
     expect(confirmed.taskIds).toHaveLength(2);
+    // The roadmap's meeting point is a real calendar entry on the project, staffed by its instances.
     expect(confirmed.meetings).toEqual([
-      {
-        title: 'Kickoff',
-        startsAt: DAY,
-        endsAt: DAY + 30 * 60_000,
-        purpose: 'Agree the plan.',
-        milestoneId: confirmed.milestoneIds[1],
-      },
+      { entryId: expect.anything(), milestoneId: confirmed.milestoneIds[1] },
     ]);
+    const entry = await t.run(async (ctx) => ctx.db.get(confirmed.meetings[0].entryId));
+    expect(entry).toMatchObject({
+      kind: 'meeting',
+      title: 'Kickoff',
+      startsAt: MEETING_AT,
+      endsAt: MEETING_AT + 30 * 60_000,
+      purpose: 'Agree the plan.',
+      projectId,
+      status: 'scheduled',
+      attendees: [{ kind: 'employee', id: employeeId, name: 'Operations analyst' }],
+    });
 
     const project = await user.query(api.projects.get, { projectId });
     expect(project).toMatchObject({ status: 'active', openTasks: 2 });
@@ -403,6 +411,27 @@ describe('planner inputs', () => {
         text: 'Marketing has 2 tasks due in the week of 1970-01-01 and 1 instance(s). Hire more or move the deadline.',
       },
     ]);
+  });
+
+  it('carries the roadmap’s fields onto the dashboard’s tasks', async () => {
+    const { user, floorId, employeeId, projectId } = await setup();
+    const { taskIds, milestoneIds } = await user.mutation(api.projects.confirmProposal, {
+      projectId,
+      proposal: roadmap(floorId, employeeId),
+    });
+    const tasks = (await user.query(api.workspace.dashboard, {})).tasks;
+    expect(tasks.map((task) => task.id).sort()).toEqual([...taskIds].sort());
+    const review = tasks.find((task) => task.id === taskIds[1]);
+    expect(review).toMatchObject({
+      projectId,
+      milestoneId: milestoneIds[1],
+      cadence: 'daily',
+      deadlineAt: 9 * DAY,
+      dependsOn: [taskIds[0]],
+      status: 'waiting',
+    });
+    // A work task carries no kind; the office reads that as the ordinary meaning.
+    expect(review?.kind).toBeUndefined();
   });
 
   it('carries the project, milestone, and dependencies into working memory', async () => {

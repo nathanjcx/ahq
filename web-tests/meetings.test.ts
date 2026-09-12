@@ -59,16 +59,18 @@ describe('meetings', () => {
     const { owner, employeeId, writerId, calendarEntryId } = await boardroom(t);
 
     const { meetingId } = await owner.mutation(api.meetings.ensure, { calendarEntryId });
-    // Ensuring again is idempotent: the same meeting, the same hidden tasks, the same prep jobs.
+    // Ensuring again is idempotent: the same meeting and the same hidden session per attendee.
     expect(await owner.mutation(api.meetings.ensure, { calendarEntryId })).toEqual({ meetingId });
-    const prep = await jobsOfKind(t, 'meeting_prep');
-    expect(prep).toHaveLength(2);
     const tasks = await t.run(async (ctx) => ctx.db.query('tasks').collect());
-    expect(tasks.map((task) => [task.title, task.visibility, task.cadence, task.status])).toEqual([
-      ['Meeting: Launch review', 'workspace', 'once', 'queued'],
-      ['Meeting: Launch review', 'workspace', 'once', 'queued'],
+    expect(tasks.map((task) => [task.title, task.kind, task.visibility, task.cadence, task.status])).toEqual([
+      ['Meeting: Launch review', 'meeting', 'workspace', 'once', 'queued'],
+      ['Meeting: Launch review', 'meeting', 'workspace', 'once', 'queued'],
     ]);
     expect(new Set(tasks.map((task) => task.employeeId))).toEqual(new Set([employeeId, writerId]));
+    // Preparation is the scheduler's to enqueue at the lead, so booking alone starts no turn.
+    expect(await jobsOfKind(t, 'meeting_prep')).toEqual([]);
+    // The hidden sessions are reachable through the meeting, never through the dashboard.
+    expect((await owner.query(api.workspace.dashboard, {})).tasks).toEqual([]);
 
     await t.mutation(api.services.meetings.recordReport, {
       secret,

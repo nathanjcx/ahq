@@ -122,21 +122,19 @@ async function recordUsage(
     .collect();
   const prior = reports.find((report) => report.externalId === externalId);
   const firstOfPeriod = !reports.some((report) => report.period === period);
-  let next = current;
-  if (usage.externalId) {
-    if (prior) return undefined;
-    next = {
-      input: current.input + usage.input,
-      cached: current.cached + usage.cached,
-      output: current.output + usage.output,
-    };
-  } else {
-    next = {
-      input: Math.max(current.input, usage.input),
-      cached: Math.max(current.cached, usage.cached),
-      output: Math.max(current.output, usage.output),
-    };
-  }
+  // A report with an external id is one more call's tokens; one without is the session total so far.
+  if (usage.externalId && prior) return undefined;
+  const next = usage.externalId
+    ? {
+        input: current.input + usage.input,
+        cached: current.cached + usage.cached,
+        output: current.output + usage.output,
+      }
+    : {
+        input: Math.max(current.input, usage.input),
+        cached: Math.max(current.cached, usage.cached),
+        output: Math.max(current.output, usage.output),
+      };
   const delta = {
     input: next.input - current.input,
     cached: next.cached - current.cached,
@@ -279,7 +277,7 @@ export const recordEvents = mutation({
       }
     }
     const recordedAt = Date.now();
-    const patch: Record<string, unknown> = { updatedAt: recordedAt };
+    const patch: Partial<Doc<'tasks'>> = { updatedAt: recordedAt };
     if (args.usage) {
       const usage = await recordUsage(ctx, task, args.usage, recordedAt);
       if (usage) patch.usage = usage;
@@ -319,7 +317,7 @@ export const recordEvents = mutation({
       patch.status = nextStatus;
     }
     if (args.error !== undefined) patch.error = args.error.slice(0, 2_000);
-    const status = patch.status ? String(patch.status) : task.status;
+    const status = patch.status ?? task.status;
     const becameTerminal = isTerminal(status) && !isTerminal(task.status);
     if (becameTerminal) {
       patch.streamOwner = undefined;
