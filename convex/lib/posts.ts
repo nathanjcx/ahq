@@ -3,10 +3,9 @@ import type { MutationCtx } from '../_generated/server';
 import { cleanText, type Ctx } from '../shared';
 
 export type ChannelKind = Doc<'channels'>['kind'];
-export type PostKind = Doc<'posts'>['kind'];
-export type Handoff = NonNullable<Doc<'posts'>['handoff']>;
+export type ChannelScope = [kind: ChannelKind, scopeId: string];
 
-export const POST_TEXT_LIMIT = 5_000;
+const POST_TEXT_LIMIT = 5_000;
 
 /** Channels for a whole workspace carry no scope; floor and project channels carry their id. */
 const WORKSPACE_SCOPE_NAMES: Record<'workspace' | 'triage' | 'audit', string> = {
@@ -60,7 +59,7 @@ export async function channelFor(
 
 export interface PostInput {
   channel: Doc<'channels'>;
-  kind: PostKind;
+  kind: Doc<'posts'>['kind'];
   authorSubject?: string;
   authorEmployeeId?: Id<'installations'>;
   authorName: string;
@@ -68,7 +67,7 @@ export interface PostInput {
   taskId?: Id<'tasks'>;
   toEmployeeId?: Id<'installations'>;
   reportId?: Id<'reports'>;
-  handoff?: Handoff;
+  handoff?: Doc<'posts'>['handoff'];
 }
 
 /** The one path that writes a post. Text is trimmed and capped; the channel fixes the workspace. */
@@ -90,13 +89,17 @@ export async function insertPost(ctx: MutationCtx, input: PostInput) {
   return { postId };
 }
 
-/** A task's own trace: its floor channel, and its project channel when the task belongs to one. */
-export async function systemPost(ctx: MutationCtx, task: Doc<'tasks'>, text: string) {
-  const scopes: [ChannelKind, string][] = [
-    ...(task.floorId ? ([['floor', task.floorId]] as [ChannelKind, string][]) : []),
-    ...(task.projectId ? ([['project', task.projectId]] as [ChannelKind, string][]) : []),
+/** The channels a task belongs to: its floor, and its project when it has one. */
+export function taskScopes(task: Doc<'tasks'>): ChannelScope[] {
+  return [
+    ...(task.floorId ? [['floor', task.floorId] as ChannelScope] : []),
+    ...(task.projectId ? [['project', task.projectId] as ChannelScope] : []),
   ];
-  for (const [kind, scopeId] of scopes) {
+}
+
+/** A task's own trace, written to every channel it belongs to. */
+export async function systemPost(ctx: MutationCtx, task: Doc<'tasks'>, text: string) {
+  for (const [kind, scopeId] of taskScopes(task)) {
     await insertPost(ctx, {
       channel: await channelFor(ctx, task.workspaceId, kind, scopeId),
       kind: 'system',

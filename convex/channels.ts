@@ -159,10 +159,7 @@ export const employeeFeed = query({
       .withIndex('by_employee', (q) => q.eq('authorEmployeeId', args.employeeId))
       .order('desc')
       .take(PAGE_LIMIT);
-    return rows
-      .filter((row) => row.workspaceId === workspace._id)
-      .reverse()
-      .map(publicPost);
+    return rows.reverse().map(publicPost);
   },
 });
 

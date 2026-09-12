@@ -739,6 +739,7 @@ export default defineSchema({
   })
     .index('by_workspace_fingerprint', ['workspaceId', 'fingerprint'])
     .index('by_workspace_status', ['workspaceId', 'status'])
+    .index('by_workspace_created', ['workspaceId', 'createdAt'])
     .index('by_triage_task', ['triageTaskId']),
   notifications: defineTable({
     workspaceId: v.id('workspaces'),

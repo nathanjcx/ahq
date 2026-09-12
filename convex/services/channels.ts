@@ -10,7 +10,8 @@ import {
   insertNote,
   insertPost,
   recentPosts,
-  type ChannelKind,
+  taskScopes,
+  type ChannelScope,
 } from '../lib/posts';
 import { requireFloor } from '../lib/tasks';
 import { requireService, type Ctx } from '../shared';
@@ -56,11 +57,7 @@ export async function handoffFromRun(
 }
 
 async function channelRows(ctx: Ctx, task: Doc<'tasks'>, limit: number) {
-  const scopes: [ChannelKind, string][] = [
-    ...(task.floorId ? ([['floor', task.floorId]] as [ChannelKind, string][]) : []),
-    ...(task.projectId ? ([['project', task.projectId]] as [ChannelKind, string][]) : []),
-    ['workspace', ''],
-  ];
+  const scopes: ChannelScope[] = [...taskScopes(task), ['workspace', '']];
   const rows = [];
   for (const [kind, scopeId] of scopes) {
     const channel = await findChannel(ctx, task.workspaceId, kind, scopeId);
@@ -121,7 +118,7 @@ function reportLines(label: string, items: string[]) {
 /** One shift report rendered as a `report` post. Recording the same report twice posts once. */
 export const postReport = mutation({
   args: { secret: v.string(), taskId: v.id('tasks'), reportId: v.id('reports') },
-  returns: v.object({ postId: v.optional(v.id('posts')) }),
+  returns: v.object({ postId: v.id('posts') }),
   handler: async (ctx, args) => {
     requireService(args.secret);
     const existing = await ctx.db

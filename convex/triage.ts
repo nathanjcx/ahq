@@ -49,7 +49,7 @@ export const alerts = query({
           .take(200)
       : await ctx.db
           .query('alerts')
-          .withIndex('by_workspace_fingerprint', (q) => q.eq('workspaceId', workspace._id))
+          .withIndex('by_workspace_created', (q) => q.eq('workspaceId', workspace._id))
           .order('desc')
           .take(200);
     return rows.sort((a, b) => b.updatedAt - a.updatedAt).map(publicAlert);
