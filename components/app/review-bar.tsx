@@ -26,6 +26,10 @@ export function ReviewBar({
 }) {
   const [open, setOpen] = useState(false);
   const pending = reviewable(proposals);
+  // Decisions land while the sheet is open; the last one closes it.
+  useEffect(() => {
+    if (!pending.length) setOpen(false);
+  }, [pending.length]);
   if (!pending.length) return null;
   return (
     <>
@@ -71,10 +75,6 @@ function ReviewSheet({
 }) {
   const [chosenId, setChosenId] = useState(proposals[0].id);
   const active = proposals.find((proposal) => proposal.id === chosenId) ?? proposals[0];
-  // The list shrinks as decisions land; once it empties there is nothing left to review.
-  useEffect(() => {
-    if (!proposals.length) onClose();
-  }, [proposals.length, onClose]);
 
   return (
     <Sheet

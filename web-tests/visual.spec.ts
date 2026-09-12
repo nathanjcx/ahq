@@ -162,9 +162,7 @@ for (const viewport of viewports) {
   });
 }
 
-test('a phone opens details, reviews actions, and switches floors without leaving the viewport', async ({
-  page,
-}) => {
+test('a phone opens a detail and comes back to the list', async ({ page }) => {
   const errors = watchErrors(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await open(page);
@@ -201,6 +199,13 @@ test('a phone opens details, reviews actions, and switches floors without leavin
   await shoot(page, 'mobile', 'employees-detail');
   await page.locator('.md-back').click();
   await expect(layout).toHaveAttribute('data-detail', 'closed');
+  expect(errors).toEqual([]);
+});
+
+test('a phone reviews pending actions and switches floors without leaving the viewport', async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page);
 
   // The review bar is the route to a pending action from anywhere.
   await page.getByRole('button', { name: 'Review', exact: true }).click();

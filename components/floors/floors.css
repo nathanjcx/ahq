@@ -450,6 +450,10 @@
   .region-board {
     height: 520px;
   }
+  /* Keyboard advice a phone cannot follow, in a row that has no space for it. */
+  .board-composer > div > span {
+    display: none;
+  }
   .handoff-form select,
   .handoff-form textarea {
     font-size: 16px;
