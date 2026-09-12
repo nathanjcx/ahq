@@ -136,6 +136,9 @@ export function PageContent(props: PageContentProps) {
         onUpdateAccess={(id, tools, scope, inbox) =>
           run(() => actions.updateConnectionAccess(id, tools, scope, inbox), 'Integration access updated')
         }
+        onSetSharing={(id, visibility, subjects) =>
+          run(() => actions.setConnectionSharing(id, visibility, subjects), 'Sharing updated')
+        }
         onNotice={props.onNotice}
       />
     );
