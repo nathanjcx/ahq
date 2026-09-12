@@ -1638,6 +1638,25 @@ p {
   object-fit: contain;
   background: #172019;
 }
+.market-media-error {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  color: #687767;
+  text-align: center;
+}
+.market-media-error strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+.market-media-error a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--sage-700);
+  font-size: 9px;
+  font-weight: 700;
+}
 .market-thumbnails {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -2601,13 +2620,20 @@ p {
   padding-top: 17px;
   border-top: 1px solid var(--line);
 }
+.editor-footer > div {
+  margin-right: auto;
+}
 .editor-footer p {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-right: auto;
   color: var(--muted);
   font-size: 8px;
+}
+.editor-footer .editor-error {
+  margin-bottom: 6px;
+  color: #9b4f42;
+  font-weight: 700;
 }
 .sr-only {
   position: absolute;

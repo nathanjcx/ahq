@@ -1232,7 +1232,23 @@ function MessageBubble({ message }: { message: Message }) {
       <div>
         <span>{message.role === 'user' ? 'You' : message.phase || 'Employee'}</span>
         <div className="message-markdown">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              img: ({ src, alt }) => {
+                const href = safeHttpsUrl(src);
+                return href ? (
+                  <a href={href} target="_blank" rel="noreferrer">
+                    {alt || 'Open image'}
+                  </a>
+                ) : (
+                  <span>{alt || 'Image unavailable'}</span>
+                );
+              },
+            }}
+          >
+            {message.text}
+          </ReactMarkdown>
         </div>
         <time>{relativeTime(message.createdAt)}</time>
       </div>
@@ -1268,6 +1284,12 @@ function ProposalCard({
         <span>Proposed change</span>
         <pre>{args}</pre>
       </div>
+      {proposal.result && (
+        <div className="proposal-diff">
+          <span>Result</span>
+          <pre>{safeJson(proposal.result)}</pre>
+        </div>
+      )}
       <p className="correction-note">
         <RotateCcw size={14} />
         <span>
@@ -1568,15 +1590,38 @@ function MarketplaceDetail({
   onHire: () => void;
 }) {
   const [mediaIndex, setMediaIndex] = useState(0);
+  const [mediaFailed, setMediaFailed] = useState(false);
   const media = listing.media[mediaIndex];
   const canHire = configured && !hired && missing.length === 0;
+  useEffect(() => setMediaFailed(false), [mediaIndex]);
   return (
     <Sheet wide title={listing.name} subtitle={listing.role} onClose={onClose}>
       <div className="market-detail">
         <div className="market-gallery" style={{ '--listing-color': listing.color } as CSSProperties}>
           <div className="market-gallery-stage">
-            {media?.type === 'image' && <img src={media.url} alt={media.alt} />}
-            {media?.type === 'video' && <video src={media.url} controls aria-label={media.alt} />}
+            {media && mediaFailed && (
+              <div className="market-media-error">
+                <Archive size={24} />
+                <strong>Preview unavailable</strong>
+                {media.url.startsWith('https://') && (
+                  <a href={media.url} target="_blank" rel="noreferrer">
+                    Open source <ExternalLink size={13} />
+                  </a>
+                )}
+              </div>
+            )}
+            {media?.type === 'image' && !mediaFailed && (
+              <img src={media.url} alt={media.alt} onError={() => setMediaFailed(true)} />
+            )}
+            {media?.type === 'video' && !mediaFailed && (
+              <video
+                src={media.url}
+                controls
+                preload="metadata"
+                aria-label={media.alt}
+                onError={() => setMediaFailed(true)}
+              />
+            )}
             {!media && (
               <span className="listing-orbit">
                 <Bot size={48} />
@@ -2235,8 +2280,39 @@ function EmployeeEditor({
     (draft?.media ?? []).map((item) => ({ ...item, rowId: editorRowId() })),
   );
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const skillCharacters = skills.reduce((total, skill) => total + skill.content.length, 0);
+  const skillLimitError =
+    skills.length > 10
+      ? 'An employee can have at most 10 skills.'
+      : skillCharacters > 600_000
+        ? 'Private skill content must total 600,000 characters or less.'
+        : null;
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (![name, role, description, category, color, instructions].every((value) => value.trim())) {
+      setFormError('Complete every required listing and runtime field.');
+      return;
+    }
+    const longStrength = lines(strengths).find((item) => item.length > 200);
+    if (longStrength) {
+      setFormError('Each strength must be 200 characters or less.');
+      return;
+    }
+    const longLimitation = lines(limitations).find((item) => item.length > 300);
+    if (longLimitation) {
+      setFormError('Each limitation must be 300 characters or less.');
+      return;
+    }
+    if (skills.some((skill) => !skill.name.trim() || !skill.version.trim())) {
+      setFormError('Every skill needs a name and version.');
+      return;
+    }
+    if (skillLimitError) {
+      setFormError(skillLimitError);
+      return;
+    }
+    setFormError(null);
     setSaving(true);
     try {
       const hashedSkills = await Promise.all(
@@ -2282,25 +2358,30 @@ function EmployeeEditor({
         <div className="form-grid">
           <label>
             Name
-            <input value={name} onChange={(e) => setName(e.target.value)} required />
+            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required />
           </label>
           <label>
             Role
-            <input value={role} onChange={(e) => setRole(e.target.value)} required />
+            <input value={role} onChange={(e) => setRole(e.target.value)} maxLength={120} required />
           </label>
           <label className="full-field">
             Description
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} required />
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              maxLength={2000}
+              required
+            />
           </label>
           <label>
             Category
-            <input value={category} onChange={(e) => setCategory(e.target.value)} required />
+            <input value={category} onChange={(e) => setCategory(e.target.value)} maxLength={80} required />
           </label>
           <label>
             Accent color
             <span className="color-input">
               <input type="color" value={color} onChange={(e) => setColor(e.target.value)} />
-              <input value={color} onChange={(e) => setColor(e.target.value)} />
+              <input value={color} onChange={(e) => setColor(e.target.value)} maxLength={40} required />
             </span>
           </label>
           <label>
@@ -2335,6 +2416,7 @@ function EmployeeEditor({
               className="code-area"
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
+              maxLength={100_000}
               required
               spellCheck={false}
               placeholder="Describe the role, operating rules, and handoff requirements…"
@@ -2491,6 +2573,7 @@ function EmployeeEditor({
           <button
             type="button"
             className="secondary-button editor-add"
+            disabled={skills.length >= 10}
             onClick={() =>
               setSkills((items) => [
                 ...items,
@@ -2520,6 +2603,7 @@ function EmployeeEditor({
                   Name
                   <input
                     value={skill.name}
+                    maxLength={120}
                     required
                     onChange={(event) =>
                       setSkills((items) =>
@@ -2535,6 +2619,7 @@ function EmployeeEditor({
                   Version
                   <input
                     value={skill.version}
+                    maxLength={80}
                     required
                     onChange={(event) =>
                       setSkills((items) =>
@@ -2624,7 +2709,7 @@ function EmployeeEditor({
                   </select>
                 </label>
                 <label>
-                  Public URL
+                  {item.type === 'video' ? 'Direct MP4/WebM URL' : 'Image URL'}
                   <input
                     type="url"
                     required
@@ -2666,14 +2751,21 @@ function EmployeeEditor({
           )}
         </div>
         <div className="editor-footer">
-          <p>
-            <LockKeyhole size={14} />
-            Instructions and skills are never returned by public marketplace APIs.
-          </p>
+          <div>
+            {(formError || skillLimitError) && (
+              <p className="editor-error" role="alert">
+                {formError || skillLimitError}
+              </p>
+            )}
+            <p>
+              <LockKeyhole size={14} />
+              Instructions and skills are never returned by public marketplace APIs.
+            </p>
+          </div>
           <button type="button" className="secondary-button" onClick={onClose}>
             Cancel
           </button>
-          <button className="primary-button" disabled={saving}>
+          <button className="primary-button" disabled={saving || Boolean(skillLimitError)}>
             <Check size={15} />
             {saving ? 'Saving…' : 'Save draft'}
           </button>
@@ -3176,6 +3268,15 @@ function fileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+function safeHttpsUrl(value: unknown) {
+  if (typeof value !== 'string' || !value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' ? url.href : null;
+  } catch {
+    return null;
+  }
 }
 function lines(value: string) {
   return value
