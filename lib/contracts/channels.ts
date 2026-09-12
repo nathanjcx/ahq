@@ -18,7 +18,9 @@ export interface Post {
   authorEmployeeId?: string;
   text: string;
   taskId?: string;
+  /** The instance this post is addressed to, and the task accepting it started. */
   toEmployeeId?: string;
+  acceptedTaskId?: string;
   handoff?: {
     toEmployeeId: string;
     toEmployeeName: string;

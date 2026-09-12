@@ -68,7 +68,6 @@ export type CoreActions = {
     visibleToSubjects: string[],
   ) => Promise<unknown>;
   // Floors
-  postToBoard: (floorId: string, text: string) => Promise<unknown>;
   requestHandoff: (
     floorId: string,
     toEmployeeId: string,
@@ -123,7 +122,6 @@ export const offlineCoreActions: CoreActions = {
   retire: unavailable,
   setTaskVisibility: unavailable,
   setConnectionSharing: unavailable,
-  postToBoard: unavailable,
   requestHandoff: unavailable,
   decideHandoff: unavailable,
   setEnabledUrls: unavailable,
@@ -159,7 +157,6 @@ export function useCoreActions(): CoreActions {
   const retire = useMutation(uiApi.retireVersion);
   const setTaskVisibility = useMutation(uiApi.setTaskVisibility);
   const setConnectionSharing = useMutation(uiApi.setConnectionSharing);
-  const postToBoard = useMutation(uiApi.postToBoard);
   const requestHandoff = useMutation(uiApi.requestHandoff);
   const decideHandoff = useMutation(uiApi.decideHandoff);
   const setEnabledUrls = useMutation(uiApi.setEnabledUrls);
@@ -232,7 +229,6 @@ export function useCoreActions(): CoreActions {
     setTaskVisibility: (taskId, visibility) => setTaskVisibility({ taskId: asId(taskId), visibility }),
     setConnectionSharing: (connectionId, visibility, visibleToSubjects) =>
       setConnectionSharing({ connectionId: asId(connectionId), visibility, visibleToSubjects }),
-    postToBoard: (floorId, text) => postToBoard({ floorId: asId(floorId), text }),
     requestHandoff: (floorId, toEmployeeId, brief, sourceTaskId) =>
       requestHandoff({
         floorId: asId(floorId),

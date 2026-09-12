@@ -3,6 +3,18 @@ import type { Severity } from './audit';
 export type AlertSource = 'github' | 'webhook' | 'email' | 'manual';
 export type AlertStatus = 'open' | 'triaging' | 'fixed' | 'closed' | 'dismissed';
 
+/**
+ * How far the emergency rule has run on one alert: delivered pages nobody answered inside the
+ * twenty-minute window, and when the emergency allow-list opens if nobody answers.
+ */
+export interface AlertPaging {
+  attempts: number;
+  required: number;
+  firstAttemptAt?: number;
+  lastAttemptAt?: number;
+  opensAt?: number;
+  acknowledged: boolean;
+}
 export interface Alert {
   id: string;
   source: AlertSource;
@@ -15,8 +27,41 @@ export interface Alert {
   triageTaskId?: string;
   affectedFloorIds: string[];
   occurrences: number;
+  paging: AlertPaging;
   createdAt: number;
   updatedAt: number;
+}
+/** One step in an alert's history, from the delivery that opened it to the report that closed it. */
+export interface TriageEvent {
+  id: string;
+  at: number;
+  kind: 'intake' | 'run' | 'tool' | 'page' | 'post';
+  title: string;
+  detail?: string;
+  /** For a provider call: whether the workspace's ordinary allow-list admitted it, or the emergency one. */
+  authority?: 'allow_list' | 'emergency';
+  outcome?: string;
+  taskId?: string;
+  postId?: string;
+}
+/** A post-mortem, or the report the emergency rule requires when triage acted without permission. */
+export interface IncidentReport {
+  id: string;
+  alertId?: string;
+  alertTitle?: string;
+  severity?: Severity;
+  authorName: string;
+  text: string;
+  taskId?: string;
+  emergency: boolean;
+  createdAt: number;
+}
+/** How alerts reach this workspace. The signing secret is never read back, only whether one is set. */
+export interface TriageIntake {
+  signedEndpointReady: boolean;
+  rules: string[];
+  github: string[];
+  emailClassification: boolean;
 }
 export interface Notification {
   id: string;

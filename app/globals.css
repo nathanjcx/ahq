@@ -587,6 +587,9 @@ p {
   color: var(--muted);
   font-size: var(--text-xs);
 }
+.empty-pane p + * {
+  margin-top: 14px;
+}
 .empty-mini {
   min-height: 100px;
   display: flex;

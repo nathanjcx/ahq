@@ -145,6 +145,8 @@ export function WorkspaceShell({
             setSelectedTask(taskId);
             go('tasks');
           }}
+          notificationActions={actions}
+          onOpen={go}
         />
 
         <ReviewBar

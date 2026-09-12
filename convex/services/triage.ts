@@ -7,15 +7,12 @@ import { channelFor, insertPost } from '../lib/posts';
 import { ensureSettings, settingsFor } from '../lib/schedule';
 import { assignmentForFloor, insertJob, openSessionTask, startTask } from '../lib/tasks';
 import { isAttendedTime } from '../lib/time';
-import { ensureTriageStaff, matchesTriageRules } from '../lib/triage';
+import { ATTEMPT_WINDOW_MS, ensureTriageStaff, isOpenAlert, matchesTriageRules } from '../lib/triage';
 import { policiesFor } from '../registry';
 import { severity as severityValidator } from '../schema';
 import { cleanText, requireService, untrustedBlock, type Ctx } from '../shared';
 import { privateConnection, taskForRunToken } from './context';
 
-/** Attempts stop counting past this window, so an old unanswered page cannot authorize anything. */
-const ATTEMPT_WINDOW_MS = 20 * 60 * 1_000;
-const OPEN_STATUSES = ['open', 'triaging', 'fixed'] as const;
 const alertSource = v.union(
   v.literal('github'),
   v.literal('webhook'),
@@ -51,7 +48,7 @@ async function ingestAlert(ctx: MutationCtx, workspace: Doc<'workspaces'>, input
         q.eq('workspaceId', workspace._id).eq('fingerprint', fingerprint),
       )
       .collect()
-  ).find((row) => (OPEN_STATUSES as readonly string[]).includes(row.status));
+  ).find(isOpenAlert);
   if (open) {
     await ctx.db.patch(open._id, { occurrences: open.occurrences + 1, updatedAt: now });
     return { alertId: open._id, taskId: open.triageTaskId, created: false };
@@ -357,7 +354,7 @@ export const authority = query({
     const alert = await alertForTask(ctx, task._id);
     const since = Date.now() - ATTEMPT_WINDOW_MS;
     const attempts =
-      alert && (OPEN_STATUSES as readonly string[]).includes(alert.status)
+      alert && isOpenAlert(alert)
         ? (
             await ctx.db
               .query('notifications')

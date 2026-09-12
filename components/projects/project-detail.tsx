@@ -1,7 +1,7 @@
 'use client';
 
 import { AlertTriangle, MessagesSquare, RefreshCw } from 'lucide-react';
-import type { ChannelsActions } from '../app/actions/channels';
+import type { ChannelFeedActions } from '../shared/channel-feed';
 import { ChannelFeed } from '../shared/channel-feed';
 import { EmptyMini } from '../shared/empty';
 import { OverflowMenu } from '../shared/overflow-menu';
@@ -38,7 +38,7 @@ export function ProjectDetail({
   tasks: ProjectTask[];
   floors: Floor[];
   /** Passed through to the project's channel. */
-  actions: ChannelsActions;
+  actions: ChannelFeedActions;
   busy: boolean;
   onOpenTask: (taskId: string) => void;
   onReplan: () => void;

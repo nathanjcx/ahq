@@ -1,0 +1,400 @@
+/*
+ * === components/channels: the feed every channel is rendered with ===
+ *
+ * `components/shared/channel-feed.tsx` imports this file. The feed is shared, but its rules belong
+ * to one place rather than to globals, because no page outside a channel draws a post.
+ */
+
+.channel-feed {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.channel-stream {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+  overflow-y: auto;
+}
+.channel-stream .empty-pane {
+  margin: auto;
+}
+.channel-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.channel-older {
+  align-self: center;
+  padding: 5px 13px;
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  font-size: var(--text-base);
+  font-weight: 650;
+}
+.channel-day {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.channel-day::before,
+.channel-day::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+.channel-unread-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--terra);
+  font-size: var(--text-sm);
+  font-weight: 780;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.channel-unread-line::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--terra);
+  opacity: 0.55;
+}
+
+/* Posts */
+.channel-post {
+  padding: 11px 13px;
+  border: 1px solid #e6e9e0;
+  border-left: 3px solid var(--sage-200);
+  border-radius: 9px;
+  background: var(--paper);
+}
+.channel-post[data-kind='report'] {
+  border-left-color: var(--sage-400);
+}
+.channel-post[data-kind='feedback'] {
+  border-left-color: #8fa7bd;
+}
+.channel-post[data-kind='finding'] {
+  border-left-color: var(--amber);
+}
+.channel-post[data-kind='alert'] {
+  border-left-color: var(--red);
+  background: #fdf5f3;
+}
+.channel-post[data-kind='decision'] {
+  border-left-color: var(--terra);
+}
+.channel-post[data-contested='true'] {
+  border-color: #e4cbb9;
+  background: #fdf3ea;
+}
+.channel-post > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.channel-post > header strong {
+  overflow: hidden;
+  font-size: var(--text-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.channel-post > header small {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.channel-post .text-button {
+  margin: 8px 0 0 -4px;
+}
+.channel-author {
+  display: inline-flex;
+  width: 21px;
+  height: 21px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: var(--sage-800);
+  border-radius: 6px;
+  background: var(--sage-100);
+}
+.channel-author[data-who='person'] {
+  color: #fffdf5;
+  background: var(--sage-600);
+}
+.channel-author[data-who='workspace'] {
+  color: var(--muted);
+  background: var(--cream-deep);
+}
+.channel-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  color: var(--ink-soft);
+  border-radius: 999px;
+  background: var(--sage-50);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.channel-post[data-kind='alert'] .channel-kind,
+.channel-post[data-contested='true'] .channel-kind {
+  color: #8c4a3c;
+  background: #f7e3db;
+}
+.post-text p {
+  margin-top: 7px;
+  color: #4d5b50;
+  font-size: var(--text-md);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+.post-text a {
+  color: var(--terra-dark);
+  text-decoration: underline;
+  word-break: break-word;
+}
+.post-text[data-clamp='true'] p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+.channel-system {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 3px;
+  color: var(--muted);
+  font-size: var(--text-base);
+}
+.channel-system > i {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #c3cbbf;
+}
+.channel-system > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.channel-system > small {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: #a3ada2;
+  font-size: var(--text-sm);
+}
+.channel-system .text-button {
+  flex: 0 0 auto;
+  padding: 2px 4px;
+}
+.channel-handoff {
+  padding: 12px 13px;
+  border: 1px solid #e1d4bc;
+  border-radius: 9px;
+  background: #fffcf3;
+}
+.channel-handoff > header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.channel-handoff > header small {
+  margin-left: auto;
+  color: #a2977f;
+  font-size: var(--text-sm);
+}
+.channel-handoff > p {
+  margin-top: 8px;
+  color: #4d5b50;
+  font-size: var(--text-md);
+  line-height: 1.55;
+}
+.handoff-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--text-sm);
+  font-weight: 720;
+  text-transform: capitalize;
+}
+.handoff-pill[data-status='pending'] {
+  color: #8c6632;
+  background: #f7efdf;
+}
+.handoff-pill[data-status='accepted'] {
+  color: #476e47;
+  background: #e6f0e2;
+}
+.handoff-pill[data-status='declined'] {
+  color: #8d5049;
+  background: #f6e6e3;
+}
+.handoff-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 11px;
+}
+
+/* Composer */
+.channel-composer {
+  position: relative;
+}
+.channel-composer > div {
+  gap: 10px;
+}
+.channel-composer .text-button {
+  flex: 0 0 auto;
+}
+.channel-composer > div > span {
+  margin-left: auto;
+  text-align: right;
+}
+.channel-addressed {
+  color: var(--terra-dark);
+  font-weight: 680;
+}
+/* Outranks the composer's own row layout in globals, which would lay the list out sideways. */
+.composer .channel-mentions {
+  position: absolute;
+  bottom: calc(100% - 6px);
+  left: 16px;
+  z-index: 3;
+  display: grid;
+  max-height: 210px;
+  min-width: 210px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: var(--shadow-sm);
+}
+.composer .channel-mentions button {
+  display: grid;
+  padding: 8px 12px;
+  text-align: left;
+  border: 0;
+  background: none;
+}
+.channel-mentions button:hover {
+  background: var(--sage-50);
+}
+.channel-mentions strong {
+  font-size: var(--text-md);
+}
+.channel-mentions small {
+  color: var(--muted);
+  font-size: var(--text-base);
+}
+
+/* Compact: a side column shows the same posts with less room around them. */
+.channel-feed[data-compact='true'] .channel-stream {
+  gap: 9px;
+  padding: 13px 14px;
+}
+.channel-feed[data-compact='true'] .channel-post {
+  padding: 9px 11px;
+}
+
+/* === components/channels: the floor's feeds view === */
+.floor-feeds {
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+}
+.floor-feeds-list {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+  background: #fbfaf4;
+}
+.floor-feeds-list > button {
+  display: grid;
+  gap: 2px;
+  padding: 11px 14px;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+}
+.floor-feeds-list > button[aria-pressed='true'] {
+  background: var(--paper);
+  box-shadow: inset 3px 0 0 var(--sage-600);
+}
+.floor-feeds-list strong {
+  font-size: var(--text-md);
+}
+.floor-feeds-list small {
+  color: var(--muted);
+  font-size: var(--text-base);
+}
+.floor-feed-stream {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  overflow-y: auto;
+}
+.floor-feed-stream .empty-pane {
+  margin: auto;
+}
+
+@media (max-width: 900px) {
+  .floor-feeds {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .floor-feeds-list {
+    flex-direction: row;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .floor-feeds-list > button {
+    flex: 0 0 auto;
+    border-bottom: 0;
+  }
+  .floor-feeds-list > button[aria-pressed='true'] {
+    box-shadow: inset 0 -3px 0 var(--sage-600);
+  }
+}
+@media (max-width: 640px) {
+  .channel-mentions button,
+  .floor-feeds-list > button {
+    min-height: var(--tap);
+  }
+  .channel-composer > div > span {
+    margin-left: auto;
+    text-align: right;
+  }
+}
+
+.channel-error {
+  margin: 0 20px;
+  padding: 7px 11px;
+  color: #8c4a3c;
+  border-radius: var(--radius-sm);
+  background: #f7e3db;
+  font-size: var(--text-base);
+  font-weight: 650;
+}

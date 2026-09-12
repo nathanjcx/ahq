@@ -8,15 +8,17 @@ import { relativeTime } from '../shared/time';
 import type { FloorSummary } from './floor-stats';
 import { FloorTeam } from './floor-team';
 import { FloorWork } from './floor-work';
-import type { ActionProposal, Employee, Floor, Task } from '@/lib/contracts';
+import type { ActionProposal, Employee, Floor, ScheduleSummary, Task } from '@/lib/contracts';
 import { pluralize } from '@/lib/text';
 
-type Region = 'board' | 'work' | 'team';
+type Region = 'board' | 'feeds' | 'work' | 'team' | 'binder';
 
 const REGIONS: { id: Region; label: string }[] = [
   { id: 'board', label: 'Board' },
+  { id: 'feeds', label: 'Feeds' },
   { id: 'work', label: 'Work' },
   { id: 'team', label: 'Team' },
+  { id: 'binder', label: 'Binder' },
 ];
 
 const BRIEF_CLAMP = 220;
@@ -29,7 +31,10 @@ export function FloorView({
   officeEmployees,
   tasks,
   proposals,
+  schedule,
   board,
+  feeds,
+  binder,
   configured,
   onEmployee,
   onTask,
@@ -45,8 +50,13 @@ export function FloorView({
   officeEmployees: OfficeEmployee[];
   tasks: Task[];
   proposals: ActionProposal[];
-  /** The board for this floor, supplied by the page so this view stays independent of its data source. */
+  /** The workspace's hours, so the team can say who is off shift. */
+  schedule?: ScheduleSummary;
+  /** This floor's channel, its instance feeds, and its memory binder, supplied by the page so this
+   * view stays independent of their data sources. */
   board: ReactNode;
+  feeds: ReactNode;
+  binder: ReactNode;
   configured: boolean;
   onEmployee: (id: string) => void;
   onTask: (id: string) => void;
@@ -131,8 +141,11 @@ export function FloorView({
       </div>
 
       <div className="floor-regions" data-region={region}>
-        <section className="floor-region region-board" aria-label="Floor board">
+        <section className="floor-region region-board" aria-label="Floor channel">
           {board}
+        </section>
+        <section className="floor-region region-feeds" aria-label="Instance feeds">
+          {feeds}
         </section>
         <section className="floor-region region-team" aria-label="Floor team">
           <FloorTeam
@@ -141,12 +154,17 @@ export function FloorView({
             configured={configured}
             archived={archived}
             staff={staff}
+            tasks={tasks}
+            schedule={schedule}
             officeEmployees={officeEmployees}
             canAssign={canAct}
             onEmployee={onEmployee}
             onNewTask={onNewTask}
             onEditFloor={onEditFloor}
           />
+        </section>
+        <section className="floor-region region-binder" aria-label="Floor memory binder">
+          {binder}
         </section>
         <section className="floor-region region-work" aria-label="Floor work">
           <FloorWork
