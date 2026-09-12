@@ -3,6 +3,7 @@ import { api } from '../convex/_generated/api';
 import type { Id } from '../convex/_generated/dataModel';
 import { defaultWorkspaceSettings, type Capability, type WorkspaceSettings } from '../lib/contracts';
 import { FLOOR_RULES, MEMORY_PLACEHOLDER, OPERATING_RULES, composeInstructions } from '../lib/instructions';
+import { ensureReservedInstance } from '../convex/lib/reserved';
 import {
   adminIdentity,
   connectLinear,
@@ -442,5 +443,94 @@ describe('studio', () => {
     await expect(owner.query(api.marketplace.versionDiff, { draftId })).rejects.toThrow(
       'Platform administrator',
     );
+  });
+});
+
+describe('instance status and versions', () => {
+  it('hires with chosen names and an overnight model, and refuses a name already on the floor', async () => {
+    const t = harness();
+    const { owner, listingId } = await marketplace(t);
+    const { floorId } = await owner.mutation(api.floors.create, {
+      name: 'Launch',
+      brief: 'Prepare the launch.',
+      employeeIds: [],
+    });
+
+    const { employeeIds } = await owner.mutation(api.marketplace.hire, {
+      listingId,
+      floorId,
+      count: 2,
+      names: ['Ada', 'Grace'],
+      overnightModel: 'gpt-5.6-luna',
+    });
+    const dashboard = await owner.query(api.workspace.dashboard, {});
+    expect(dashboard.employees.map((employee) => employee.name)).toEqual(['Ada', 'Grace']);
+
+    const status = await owner.query(api.marketplace.instanceStatus, {});
+    expect(status).toHaveLength(2);
+    expect(status[0]).toMatchObject({
+      employeeId: employeeIds[0],
+      overnightModel: 'gpt-5.6-luna',
+      shift: { state: 'off' },
+      shiftsToday: 0,
+      tokensToday: 0,
+    });
+
+    await expect(
+      owner.mutation(api.marketplace.hire, { listingId, floorId, names: ['Grace'] }),
+    ).rejects.toThrow('already called Grace');
+    await expect(
+      owner.mutation(api.marketplace.hire, { listingId, floorId, count: 2, names: ['Hopper'] }),
+    ).rejects.toThrow('one name per instance');
+
+    await owner.mutation(api.marketplace.setOvernightModel, { employeeId: employeeIds[0] });
+    expect((await owner.query(api.marketplace.instanceStatus, {}))[0].overnightModel).toBeUndefined();
+  });
+
+  it('previews an upgrade before it happens and lists every published version', async () => {
+    const t = harness();
+    const { owner, draftId, listingId } = await marketplace(t);
+    const { employeeId } = await hireOne(owner, listingId);
+    expect(await owner.query(api.marketplace.instanceUpgrade, { employeeId })).toBeNull();
+
+    await publishVersion(t, { draftId, description: 'Reviews work and writes the weekly update.' });
+    expect(await owner.query(api.marketplace.instanceUpgrade, { employeeId })).toMatchObject({
+      fromVersion: 1,
+      toVersion: 2,
+      changed: ['description'],
+    });
+
+    const versions = await owner.query(api.marketplace.listingVersions, { listingId });
+    expect(versions.map((version) => version.version)).toEqual([2, 1]);
+    expect(versions[0].changed).toEqual(['description']);
+    // Nothing came before the first version, so all of it is new.
+    expect(versions[1].changed).toContain('instructions');
+
+    // The preview named what the upgrade then reports, and nothing is left to upgrade after it.
+    expect(await owner.mutation(api.marketplace.upgrade, { employeeId })).toEqual({
+      version: 2,
+      changed: ['description'],
+    });
+    expect(await owner.query(api.marketplace.instanceUpgrade, { employeeId })).toBeNull();
+  });
+
+  it('projects capacity against workers only, as the hiring cap counts them', async () => {
+    const t = harness();
+    const { owner, listingId } = await marketplace(t);
+    const { workspaceId } = await owner.mutation(api.workspace.bootstrap, { name: 'Acme' });
+    await saveSettings(owner, { maxConcurrentInstances: 4 });
+    await owner.mutation(api.marketplace.hire, { listingId, count: 2 });
+    await t.run(async (ctx) =>
+      ensureReservedInstance(ctx, workspaceId, 'janitor', 'The janitor', {
+        voice: 'Terse.',
+        traits: ['terse'],
+      }),
+    );
+
+    const projection = await owner.query(api.plan.projection, { projectedTokens: 0 });
+    expect(projection.capacity).toMatchObject({ instances: 2, maxConcurrentInstances: 4 });
+    // The cap agrees: two more workers fit, and the janitor does not take one of those places.
+    await owner.mutation(api.marketplace.hire, { listingId, count: 2 });
+    expect((await owner.query(api.plan.projection, { projectedTokens: 0 })).capacity.instances).toBe(4);
   });
 });

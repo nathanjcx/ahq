@@ -53,7 +53,11 @@ export const projection = query({
     const dearest = settings.rates.reduce((worst, rate) => Math.max(worst, rate.input, rate.output), 0);
     const estimatedCost = settings.rates.length ? recordedCost + projectedTokens * dearest : undefined;
 
-    const instances = installations.filter((installation) => installation.status !== 'retired').length;
+    // Workers only, so the count and the cap it is shown against mean the same thing: the janitor,
+    // the auditors, and the triage employees are made by the workspace and never consume the cap.
+    const instances = installations.filter(
+      (installation) => installation.status !== 'retired' && (installation.kind ?? 'worker') === 'worker',
+    ).length;
     const runningShifts = todaysShifts.filter((shift) => shift.endedAt === undefined).length;
     return {
       plan: settings.plan,

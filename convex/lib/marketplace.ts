@@ -1,3 +1,4 @@
+import type { ModelId } from '../../lib/contracts';
 import type { Doc, Id } from '../_generated/dataModel';
 import type { MutationCtx } from '../_generated/server';
 import { cleanText, stableJson, type Ctx } from '../shared';
@@ -52,6 +53,16 @@ export async function recordCompletedTask(ctx: MutationCtx, employeeId: Id<'inst
   const installation = await ctx.db.get(employeeId);
   const listing = installation?.listingId ? await ctx.db.get(installation.listingId) : null;
   if (listing) await ctx.db.patch(listing._id, { completedTasks: listing.completedTasks + 1 });
+}
+
+/** Names the hirer typed, each free on the destination floor and distinct from the others. */
+export function chosenNames(names: string[], taken: Set<string>): string[] {
+  return names.map((value) => {
+    const name = cleanText(value, 'Employee name', 120);
+    if (taken.has(name)) throw new Error(`Another instance here is already called ${name}`);
+    taken.add(name);
+    return name;
+  });
 }
 
 /** `Ada`, `Ada 2`, `Ada 3`: the first free names from `base`, reserved in `taken` as they are used. */
@@ -142,7 +153,15 @@ export async function createInstances(
   workspace: Doc<'workspaces'>,
   listing: Doc<'listings'>,
   hiredBy: string,
-  input: { floorId?: Id<'floors'>; count: number; name?: string },
+  input: {
+    floorId?: Id<'floors'>;
+    count: number;
+    /** Stem for auto-numbered names; the version's own name when absent. */
+    name?: string;
+    /** One name per instance, when the hirer named them. */
+    names?: string[];
+    overnightModel?: ModelId;
+  },
 ) {
   const version = await ctx.db.get(listing.currentVersionId);
   if (!version || version.retiredAt) throw new Error('Employee version is unavailable');
@@ -157,7 +176,10 @@ export async function createInstances(
   const floor = input.floorId ? await requireFloor(ctx, workspace._id, input.floorId) : null;
   if (floor && floor.archivedAt !== undefined) throw new Error('Floor is archived');
   const base = input.name ? cleanText(input.name, 'Employee name', 120) : version.name;
-  const names = instanceNames(base, await namesOnFloor(ctx, workspace._id, input.floorId), input.count);
+  const taken = await namesOnFloor(ctx, workspace._id, input.floorId);
+  const names = input.names
+    ? chosenNames(input.names, taken)
+    : instanceNames(base, taken, input.count);
   const now = Date.now();
   const employeeIds: Id<'installations'>[] = [];
   for (const name of names)
@@ -171,6 +193,7 @@ export async function createInstances(
         floorId: input.floorId,
         name,
         kind: 'worker',
+        overnightModel: input.overnightModel,
         createdAt: now,
       }),
     );
