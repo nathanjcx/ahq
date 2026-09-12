@@ -6,7 +6,14 @@ import type { Backend } from '../lib/server/backend';
 import { installBackend } from '../lib/server/backend';
 import { resetRateLimits } from '../lib/server/rate-limit';
 import { seal } from '../lib/server/secrets';
-import { harness, identity as orgIdentity, linearWorkspace, publishEmployee, secret } from './support';
+import {
+  harness,
+  hireOne,
+  identity as orgIdentity,
+  linearWorkspace,
+  publishEmployee,
+  secret,
+} from './support';
 
 const appUrl = 'https://hq.example.com';
 const alertSecret = 'alert-signing-secret-that-is-long-enough';
@@ -41,10 +48,10 @@ function testBackend(t: Harness): Backend {
 async function workspace() {
   const t = harness();
   await linearWorkspace(t);
-  const { versionId } = await publishEmployee(t);
+  const { listingId } = await publishEmployee(t);
   const user = t.withIdentity(orgIdentity('owner', 'acme', 'org:admin'));
   const { workspaceId } = await user.mutation(api.workspace.bootstrap, { name: 'Acme' });
-  const { employeeId } = await user.mutation(api.marketplace.hire, { versionId });
+  const { employeeId } = await hireOne(user, listingId);
   const { floorId } = await user.mutation(api.floors.create, {
     name: 'Launch',
     brief: 'Prepare the launch.',

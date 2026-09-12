@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { api } from '../convex/_generated/api';
 import { defaultWorkspaceSettings } from '../lib/contracts';
-import { harness, identity as orgIdentity, publishEmployee, secret, type Harness } from './support';
+import { harness, hireOne, identity as orgIdentity, publishEmployee, secret, type Harness } from './support';
 
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
 
 async function workspace(t: Harness) {
-  const { versionId } = await publishEmployee(t);
+  const { listingId } = await publishEmployee(t);
   const owner = t.withIdentity(orgIdentity('owner', 'acme', 'org:admin'));
   await owner.mutation(api.workspace.bootstrap, { name: 'Acme' });
-  const { employeeId } = await owner.mutation(api.marketplace.hire, { versionId });
+  const { employeeId } = await hireOne(owner, listingId);
   await owner.mutation(api.schedule.updateSettings, {
     ...defaultWorkspaceSettings,
     timezone: 'UTC',

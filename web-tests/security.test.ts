@@ -6,7 +6,7 @@ import type { Backend } from '../lib/server/backend';
 import { installBackend } from '../lib/server/backend';
 import { contentSecurityPolicy, nonceValue } from '../lib/server/csp';
 import { safeError, serviceSecret } from '../lib/server/secrets';
-import { harness, identity, publishEmployee, secret, type Harness } from './support';
+import { harness, hireOne, identity, publishEmployee, secret, type Harness } from './support';
 
 const appUrl = 'https://hq.example.com';
 const viewer = 'viewer-user';
@@ -74,8 +74,8 @@ describe('audit route', () => {
     installBackend(testBackend(t));
     const writer = t.withIdentity(identity(author));
     await writer.mutation(api.workspace.bootstrap, { name: 'Acme' });
-    const { versionId } = await publishEmployee(t);
-    const { employeeId } = await writer.mutation(api.marketplace.hire, { versionId });
+    const { listingId } = await publishEmployee(t);
+    const { employeeId } = await hireOne(writer, listingId);
     const { taskId } = await writer.mutation(api.tasks.create, {
       employeeId,
       title: 'Quiet work',
@@ -128,8 +128,8 @@ describe('untrusted text in prompts', () => {
     const t = harness();
     const user = t.withIdentity(identity(author));
     await user.mutation(api.workspace.bootstrap, { name: 'Acme' });
-    const { versionId } = await publishEmployee(t);
-    const { employeeId } = await user.mutation(api.marketplace.hire, { versionId });
+    const { listingId } = await publishEmployee(t);
+    const { employeeId } = await hireOne(user, listingId);
     const { floorId } = await user.mutation(api.floors.create, {
       name: 'Launch',
       brief: 'Ship the release.',

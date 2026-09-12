@@ -5,6 +5,7 @@ import {
   harness,
   identity as orgIdentity,
   linearWorkspace,
+  hireOne,
   publishEmployee,
   secret,
 } from './support';
@@ -13,13 +14,13 @@ describe('workspace floors', () => {
   it('shares floor tasks in one workspace while keeping private tasks and tenants apart', async () => {
     const t = harness();
     await linearWorkspace(t);
-    const { versionId } = await publishEmployee(t);
+    const { listingId } = await publishEmployee(t);
     const owner = t.withIdentity(orgIdentity('owner', 'acme'));
     const colleague = t.withIdentity(orgIdentity('colleague', 'acme'));
     const outsider = t.withIdentity(orgIdentity('outsider', 'other'));
     await owner.mutation(api.workspace.bootstrap, { name: 'Acme' });
     await outsider.mutation(api.workspace.bootstrap, { name: 'Other' });
-    const { employeeId } = await owner.mutation(api.marketplace.hire, { versionId });
+    const { employeeId } = await hireOne(owner, listingId);
     const { floorId } = await owner.mutation(api.floors.create, {
       name: 'Launch',
       brief: 'Prepare the launch.',
@@ -63,7 +64,7 @@ describe('workspace floors', () => {
   it('validates staffing and blocks new floor work after archive', async () => {
     const t = harness();
     await linearWorkspace(t);
-    const [{ versionId }, { versionId: secondVersionId }] = await Promise.all([
+    const [{ listingId }, { listingId: secondListingId }] = await Promise.all([
       publishEmployee(t),
       publishEmployee(t, { name: 'Writer' }),
     ]);
@@ -71,11 +72,9 @@ describe('workspace floors', () => {
     const outsider = t.withIdentity(orgIdentity('outsider', 'other'));
     await user.mutation(api.workspace.bootstrap, { name: 'Acme' });
     await outsider.mutation(api.workspace.bootstrap, { name: 'Other' });
-    const { employeeId } = await user.mutation(api.marketplace.hire, { versionId });
-    const { employeeId: secondEmployeeId } = await user.mutation(api.marketplace.hire, {
-      versionId: secondVersionId,
-    });
-    const { employeeId: foreignEmployeeId } = await outsider.mutation(api.marketplace.hire, { versionId });
+    const { employeeId } = await hireOne(user, listingId);
+    const { employeeId: secondEmployeeId } = await hireOne(user, secondListingId);
+    const { employeeId: foreignEmployeeId } = await hireOne(outsider, listingId);
     const { floorId: foreignProjectId } = await outsider.mutation(api.floors.create, {
       name: 'Other floor',
       brief: 'Belongs to another workspace.',
@@ -182,10 +181,10 @@ describe('workspace floors', () => {
   it('keeps the original floor context on correction tasks after edits and archive', async () => {
     const t = harness();
     await linearWorkspace(t);
-    const { versionId } = await publishEmployee(t);
+    const { listingId } = await publishEmployee(t);
     const user = t.withIdentity(orgIdentity('owner', 'acme'));
     await user.mutation(api.workspace.bootstrap, { name: 'Acme' });
-    const { employeeId } = await user.mutation(api.marketplace.hire, { versionId });
+    const { employeeId } = await hireOne(user, listingId);
     const { floorId } = await user.mutation(api.floors.create, {
       name: 'Original floor',
       brief: 'Use the original floor rules.',

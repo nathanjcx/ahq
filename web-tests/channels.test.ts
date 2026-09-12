@@ -1,14 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { api } from '../convex/_generated/api';
-import { harness, identity as orgIdentity, linearWorkspace, publishEmployee, secret } from './support';
+import {
+  harness,
+  hireOne,
+  identity as orgIdentity,
+  linearWorkspace,
+  publishEmployee,
+  secret,
+} from './support';
 
 async function workspace() {
   const t = harness();
   await linearWorkspace(t);
-  const { versionId } = await publishEmployee(t);
+  const { listingId } = await publishEmployee(t);
   const user = t.withIdentity(orgIdentity('owner', 'acme'));
   await user.mutation(api.workspace.bootstrap, { name: 'Acme' });
-  const { employeeId } = await user.mutation(api.marketplace.hire, { versionId });
+  const { employeeId } = await hireOne(user, listingId);
   return { t, user, employeeId };
 }
 

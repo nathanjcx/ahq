@@ -1,15 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { api } from '../convex/_generated/api';
-import { harness, identity, linearWorkspace, publishEmployee, secret, type Harness } from './support';
+import {
+  harness,
+  hireOne,
+  identity,
+  linearWorkspace,
+  publishEmployee,
+  secret,
+  type Harness,
+} from './support';
 
 const user = identity('user-a');
 
 async function employee(t: Harness) {
   await linearWorkspace(t);
-  const { versionId } = await publishEmployee(t);
+  const { listingId } = await publishEmployee(t);
   const actor = t.withIdentity(user);
   await actor.mutation(api.workspace.bootstrap, { name: 'Usage' });
-  const { employeeId } = await actor.mutation(api.marketplace.hire, { versionId });
+  const { employeeId } = await hireOne(actor, listingId);
   return { actor, employeeId };
 }
 

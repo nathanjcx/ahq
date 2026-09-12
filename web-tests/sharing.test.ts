@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { api } from '../convex/_generated/api';
-import { harness, identity, linearWorkspace, publishEmployee, secret, type Harness } from './support';
+import {
+  harness,
+  hireOne,
+  identity,
+  linearWorkspace,
+  publishEmployee,
+  secret,
+  type Harness,
+} from './support';
 
 const alice = identity('alice', 'acme');
 const bob = identity('bob', 'acme');
@@ -9,7 +17,7 @@ const carol = identity('carol', 'acme', 'org:admin');
 /** One organization workspace where Alice owns a shared Linear connection. */
 async function sharedWorkspace(t: Harness, visibleToSubjects: string[] = ['bob']) {
   await linearWorkspace(t);
-  const { versionId } = await publishEmployee(t, {
+  const { listingId } = await publishEmployee(t, {
     capabilities: [{ provider: 'linear', tools: ['update_issue'], optional: false }],
   });
   await t.withIdentity(alice).mutation(api.workspace.bootstrap, { name: 'Acme' });
@@ -29,7 +37,7 @@ async function sharedWorkspace(t: Harness, visibleToSubjects: string[] = ['bob']
   await t
     .withIdentity(alice)
     .mutation(api.integrations.setSharing, { connectionId, visibility: 'members', visibleToSubjects });
-  const { employeeId } = await t.withIdentity(bob).mutation(api.marketplace.hire, { versionId });
+  const { employeeId } = await hireOne(t.withIdentity(bob), listingId);
   return { connectionId, employeeId };
 }
 
@@ -190,15 +198,13 @@ describe('sharing, authority, and the audit timeline', () => {
   it('creates a floor task from an accepted handoff with the source task context', async () => {
     const t = harness();
     const { employeeId } = await sharedWorkspace(t, ['bob', 'carol']);
-    const { versionId: writerVersionId } = await publishEmployee(t, {
+    const { listingId: writerListingId } = await publishEmployee(t, {
       name: 'Writer',
       capabilities: [{ provider: 'linear', tools: ['update_issue'], optional: false }],
     });
     const author = t.withIdentity(bob);
     const accepter = t.withIdentity(carol);
-    const { employeeId: writerId } = await author.mutation(api.marketplace.hire, {
-      versionId: writerVersionId,
-    });
+    const { employeeId: writerId } = await hireOne(author, writerListingId);
     const { floorId } = await author.mutation(api.floors.create, {
       name: 'Launch',
       brief: 'Prepare the launch.',

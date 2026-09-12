@@ -2,6 +2,7 @@ import { v } from 'convex/values';
 import type { Doc } from '../_generated/dataModel';
 import { mutation, query } from '../_generated/server';
 import type { MutationCtx } from '../_generated/server';
+import { recordCompletedTask } from '../lib/marketplace';
 import { systemPost } from '../lib/posts';
 import { finalAssistantMessage, releaseDependents } from '../lib/tasks';
 import { taskStatus, tokenUsage } from '../schema';
@@ -332,6 +333,9 @@ export const recordEvents = mutation({
         `${task.employeeName} ${status}: ${task.title}${closing ? `\n${closing.slice(0, 500)}` : ''}`,
       );
     }
+    // Marketplace usage count, owned by the marketplace workstream: a completed task is the one
+    // signal a listing reports beyond its hires.
+    if (becameTerminal && status === 'completed') await recordCompletedTask(ctx, task.employeeId);
     // Dependency release, owned by the projects workstream: a task that just finished either frees
     // the tasks waiting on it or blocks them with the reason. Nothing else here reads the graph.
     if (becameTerminal) await releaseDependents(ctx, task, status);

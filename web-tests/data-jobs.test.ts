@@ -4,6 +4,7 @@ import {
   adminIdentity,
   connectLinear,
   harness,
+  hireOne,
   identity,
   linearWorkspace,
   secret,
@@ -29,10 +30,10 @@ async function setupEmployee(t: Harness, tools: string[] = []) {
     instructions: 'Work only on the assigned issue.',
     skills: [],
   });
-  const { versionId } = await admin.mutation(api.marketplace.publish, { draftId });
+  const { listingId } = await admin.mutation(api.marketplace.publish, { draftId });
   await user.mutation(api.workspace.bootstrap, { name: 'Acme' });
   if (tools.length) await connectLinear(t, { subject: 'user-a' });
-  const { employeeId } = await user.mutation(api.marketplace.hire, { versionId });
+  const { employeeId } = await hireOne(user, listingId);
   return { admin, user, employeeId };
 }
 

@@ -13,9 +13,15 @@ export const coreApi = {
   bootstrapWorkspace: api.workspace.bootstrap,
   setTokenCap: api.workspace.setTokenCap,
 
-  // Marketplace
+  // Marketplace and instances
   listings: api.marketplace.list,
   hire: api.marketplace.hire,
+  hireRequests: api.marketplace.hireRequests,
+  decideHire: api.marketplace.decideHire,
+  renameEmployee: api.marketplace.rename,
+  moveEmployee: api.marketplace.move,
+  retireEmployee: api.marketplace.retireInstance,
+  upgradeEmployee: api.marketplace.upgrade,
 
   // Floors
   createFloor: api.floors.create,
@@ -52,6 +58,10 @@ export const coreApi = {
   saveDraft: api.marketplace.saveDraft,
   publishDraft: api.marketplace.publish,
   retireVersion: api.marketplace.retire,
+  setListingVisibility: api.marketplace.setVisibility,
+  setListingEvidence: api.marketplace.setEvidence,
+  previewInstructions: api.marketplace.previewInstructions,
+  versionDiff: api.marketplace.versionDiff,
 
   // Operations, platform administrators. Secrets go through /api/admin/* so the web service seals them.
   providerConfigs: api.admin.providerConfigs,

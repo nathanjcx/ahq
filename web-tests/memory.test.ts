@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { api } from '../convex/_generated/api';
 import { compileWorkingMemory } from '../lib/server/memory';
-import { harness, identity as orgIdentity, publishEmployee, secret, type Harness } from './support';
+import { harness, hireOne, identity as orgIdentity, publishEmployee, secret, type Harness } from './support';
 
 const admin = orgIdentity('owner', 'acme', 'org:admin');
 const colleague = orgIdentity('colleague', 'acme');
 
 /** One workspace with a staffed floor and a running task, which is what memory hangs off. */
 async function tower(t: Harness) {
-  const { versionId } = await publishEmployee(t);
+  const { listingId } = await publishEmployee(t);
   const owner = t.withIdentity(admin);
   const member = t.withIdentity(colleague);
   await owner.mutation(api.workspace.bootstrap, { name: 'Acme' });
-  const { employeeId } = await owner.mutation(api.marketplace.hire, { versionId });
+  const { employeeId } = await hireOne(owner, listingId);
   const { floorId } = await owner.mutation(api.floors.create, {
     name: 'Launch',
     brief: 'Prepare the launch.',

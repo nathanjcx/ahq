@@ -55,6 +55,7 @@ import type * as lib_projects from "../lib/projects.js";
 import type * as triage from "../triage.js";
 import type * as lib_triage from "../lib/triage.js";
 import type * as lib_schedule from "../lib/schedule.js";
+import type * as lib_marketplace from "../lib/marketplace.js";
 import type * as lib_tasks from "../lib/tasks.js";
 import type * as lib_time from "../lib/time.js";
 import type * as workspace from "../workspace.js";
@@ -113,6 +114,7 @@ declare const fullApi: ApiFromModules<{
   triage: typeof triage;
   "lib/triage": typeof lib_triage;
   "lib/schedule": typeof lib_schedule;
+  "lib/marketplace": typeof lib_marketplace;
   "lib/tasks": typeof lib_tasks;
   "lib/time": typeof lib_time;
   workspace: typeof workspace;
