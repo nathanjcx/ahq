@@ -15,8 +15,8 @@ export function ClientProviders({ children, config }: { children: ReactNode; con
 
   return <ConfiguredProviders config={config as Required<PublicConfig>}>{children}</ConfiguredProviders>;
 }
-function ConfiguredProviders({children,config}:{children:ReactNode;config:Required<PublicConfig>}){
-  const [convex] = useState(()=>new ConvexReactClient(config.convexUrl));
+function ConfiguredProviders({ children, config }: { children: ReactNode; config: Required<PublicConfig> }) {
+  const [convex] = useState(() => new ConvexReactClient(config.convexUrl));
   return (
     <ClerkProvider publishableKey={config.clerkPublishableKey}>
       <ConvexProviderWithClerk client={convex} useAuth={useAuth}>

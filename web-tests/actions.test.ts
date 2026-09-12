@@ -5,7 +5,11 @@ const mocks = vi.hoisted(() => ({
   connectedMcp: vi.fn(),
   callTool: vi.fn(),
 }));
-vi.mock('../lib/server/backend', () => ({ query: mocks.query, mutate: mocks.mutate }));
+vi.mock('../lib/server/backend', () => ({
+  query: mocks.query,
+  mutate: mocks.mutate,
+  journalMutation: mocks.mutate,
+}));
 vi.mock('../lib/server/mcp', () => ({ connectedMcp: mocks.connectedMcp }));
 import { executeAction } from '../services/actions';
 const job = {
@@ -22,6 +26,7 @@ const context = () => ({
   task: { id: 'task', runToken: 'run' },
 });
 beforeEach(() => {
+  process.env.CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
   vi.resetAllMocks();
   mocks.query.mockResolvedValue(context());
   mocks.mutate.mockResolvedValue(null);

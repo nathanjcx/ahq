@@ -35,13 +35,7 @@ function detectWebGL(): boolean {
   }
 }
 
-function Fallback({
-  employees,
-  onSelect,
-}: {
-  employees: OfficeEmployee[];
-  onSelect?: (id: string) => void;
-}) {
+function Fallback({ employees, onSelect }: { employees: OfficeEmployee[]; onSelect?: (id: string) => void }) {
   const present = employees.filter(isActiveEmployee);
   return (
     <div className="office-view-fallback">
@@ -177,7 +171,12 @@ export default function OfficeView({ employees, onSelect }: OfficeViewProps) {
           <svg width="15" height="15" viewBox="0 0 15 15" aria-hidden="true">
             <circle cx="6.5" cy="6.5" r="4.6" fill="none" stroke="currentColor" strokeWidth="1.4" />
             <path d="M10 10l3.4 3.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-            <path d="M4.2 6.5h4.6M6.5 4.2v4.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <path
+              d="M4.2 6.5h4.6M6.5 4.2v4.6"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+            />
           </svg>
         </button>
         <span aria-hidden="true" />
@@ -194,7 +193,13 @@ export default function OfficeView({ employees, onSelect }: OfficeViewProps) {
               strokeWidth="1.4"
               strokeLinecap="round"
             />
-            <path d="M10.9 1.4l-.3 2.8-2.7-.7" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+            <path
+              d="M10.9 1.4l-.3 2.8-2.7-.7"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.3"
+              strokeLinejoin="round"
+            />
           </svg>
         </button>
         <button
@@ -210,7 +215,13 @@ export default function OfficeView({ employees, onSelect }: OfficeViewProps) {
               strokeWidth="1.4"
               strokeLinecap="round"
             />
-            <path d="M4.1 1.4l.3 2.8 2.7-.7" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+            <path
+              d="M4.1 1.4l.3 2.8 2.7-.7"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.3"
+              strokeLinejoin="round"
+            />
           </svg>
         </button>
         <span aria-hidden="true" />

@@ -1,6 +1,6 @@
 # Astra HQ
 
-Astra HQ is moving from the Electron demo to a Next.js web application. The web build uses Clerk organizations for sign-in, Convex for workspace data and live subscriptions, a persistent Node worker for Agents sessions, and an MCP gateway for provider access.
+Astra HQ is a Next.js application for directing AI employees. The web build uses Clerk organizations for sign-in, Convex for workspace data and live subscriptions, a persistent Node worker for Agents sessions, and an MCP gateway for provider access.
 
 This checkout contains the migration work. It is not a production deployment record. No production credentials or customer data belong in the repository, and the deployment procedure does not seed demo records.
 
@@ -21,17 +21,17 @@ Railway runs three services from the same Node 22 Docker image:
 
 | Service | Start command     | Exposure                       | Health endpoint |
 | ------- | ----------------- | ------------------------------ | --------------- |
-| web     | `npm start`       | public HTTPS                   | `/`             |
+| web     | `npm start`       | public HTTPS                   | `/health`       |
 | worker  | `npm run worker`  | private                        | `/health`       |
 | gateway | `npm run gateway` | public HTTPS, bearer protected | `/health`       |
 
-The web UI subscribes to Convex over its WebSocket connection. The worker consumes the Convex queue and reads Agents session events over SSE. The Agents session runs in an OpenAI hosted environment with network access disabled. MCP calls go through the application gateway using a short-lived task token. Subagents are disabled in the session configuration. Provider access is admitted by the Convex URL registry and employee capabilities are admitted by the separately reviewed tool registry; the browser never receives credentials or private employee instructions.
+The web UI subscribes to Convex over its WebSocket connection. The worker consumes the Convex queue and reads Agents session events over SSE. The Agents session runs in an OpenAI hosted environment with network access disabled. MCP calls go through the application gateway using a task-scoped token. Subagents are disabled in the session configuration. Provider access is admitted by the Convex URL registry and employee capabilities are admitted by the separately reviewed tool registry; the browser never receives credentials or private employee instructions.
 
 The available model IDs are `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, and `gpt-6-astra`. The names shown to users are Luna, Terra, Sol, and Astra.
 
 ## Demo branch
 
-Keep the pre-migration demo at commit `110d2ba` on `origin/demo`. Check that branch before changing the deployment branch. The migration does not import its sample records or create an employee automatically.
+The pre-migration demo is preserved at commit `110d2ba` on `origin/demo`. Check that branch before changing the deployment branch. The migration does not import its sample records or create an employee automatically.
 
 ## Current limits
 

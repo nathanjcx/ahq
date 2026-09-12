@@ -9,7 +9,7 @@ import { query, mutate } from '../lib/server/backend';
 import { requiredEnv, safeError } from '../lib/server/secrets';
 import { putArtifact } from '../lib/server/storage';
 import { executeAction } from './actions';
-import type { Job, TaskContext } from './types';
+import type { Job, TaskContext, SessionContext } from './types';
 const secret = requiredEnv('AHQ_SERVICE_SECRET'),
   workerId = randomUUID(),
   api = agentsClient();
@@ -19,7 +19,13 @@ let stopping = false,
   draining = false,
   wakeAgain = false,
   lastSubscription = 0;
-const concurrency = Math.max(1, Math.min(16, Number(process.env.WORKER_CONCURRENCY || 4)));
+function boundedSetting(name: string, fallback: number, min: number, max: number) {
+  const value = Number(process.env[name] || fallback);
+  if (!Number.isFinite(value)) throw new Error(`${name} must be a number`);
+  return Math.max(min, Math.min(max, Math.floor(value)));
+}
+const concurrency = boundedSetting('WORKER_CONCURRENCY', 4, 1, 16);
+const maxRuntime = boundedSetting('MAX_TURN_SECONDS', 900, 60, 3600) * 1000;
 interface JournalEvent {
   externalId: string;
   type: string;
@@ -38,9 +44,22 @@ interface JournalMessage {
 async function journal(taskId: string, event: JournalEvent) {
   await mutate('services:recordEvents', { taskId, events: [event] });
 }
-async function archiveFiles(context: TaskContext) {
+async function archiveFiles(context: SessionContext) {
   if (!context.task.sessionId) return;
+  const archived = new Set(context.archivedStorageKeys || []);
+  let count = 0;
   for await (const artifact of api.beta.agents.sessions.artifacts.list(context.task.sessionId)) {
+    if (++count > 100) {
+      await journal(context.task.id, {
+        externalId: 'artifact-count-limit',
+        type: 'artifact.unavailable',
+        text: 'This task reached the 100-file archive limit. Keep additional deliverables in a new task.',
+        createdAt: Date.now(),
+      });
+      break;
+    }
+    const storageKey = `${context.authorization.workspaceId}/${context.task.id}/${artifact.id}`;
+    if (archived.has(storageKey)) continue;
     if (artifact.size_bytes > 25_000_000) {
       await journal(context.task.id, {
         externalId: `artifact-limit:${artifact.id}`,
@@ -55,7 +74,6 @@ async function archiveFiles(context: TaskContext) {
     });
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (bytes.byteLength > 25_000_000) throw new Error('Artifact exceeded archive size limit');
-    const storageKey = `${context.authorization.workspaceId}/${context.task.id}/${artifact.id}`;
     await putArtifact(storageKey, bytes, 'application/octet-stream');
     await mutate('services:recordArtifact', {
       taskId: context.task.id,
@@ -81,8 +99,9 @@ function itemMessage(item: AgentSessionItem): JournalMessage | undefined {
 async function monitor(taskId: string, controller: AbortController) {
   let reconnect = 0;
   while (!stopping && !controller.signal.aborted) {
-    const context = await query<TaskContext>('services:taskContext', { taskId });
+    const context = await query<SessionContext>('services:sessionContext', { taskId });
     if (
+      context.pendingInput ||
       !context.task.sessionId ||
       ['completed', 'failed', 'cancelled', 'uncertain'].includes(context.task.status)
     )
@@ -93,6 +112,7 @@ async function monitor(taskId: string, controller: AbortController) {
     let events: JournalEvent[] = [],
       messages = new Map<string, JournalMessage>();
     const completed = new Set<string>(),
+      recoveredPartial = new Set<string>(),
       parts = new Map<string, Map<number, string>>();
     let flushChain = Promise.resolve();
     const flush = () => {
@@ -115,6 +135,7 @@ async function monitor(taskId: string, controller: AbortController) {
         if (message) {
           messages.set(message.externalId, message);
           if (item.type === 'message' && item.status === 'completed') completed.add(message.externalId);
+          else recoveredPartial.add(message.externalId);
         }
         if (messages.size >= 50) await flush();
       }
@@ -132,13 +153,29 @@ async function monitor(taskId: string, controller: AbortController) {
         { signal: controller.signal },
       );
       const turn = latest.data[0];
-      const maxRuntime = Math.max(60, Math.min(3600, Number(process.env.MAX_TURN_SECONDS || 900))) * 1000;
+      // An idle session with no turn is still waiting for its first message.
+      if (
+        session.status === 'failed' ||
+        (session.status === 'idle' && turn && ['completed', 'failed', 'cancelled'].includes(turn.status))
+      ) {
+        await flush();
+        if (turn?.status === 'completed') await archiveFiles(context);
+        await mutate('services:recordEvents', {
+          taskId,
+          events: [],
+          inputRevision: context.inputRevision,
+          status: session.status === 'failed' ? 'failed' : turn.status,
+          ...(session.usage ? { usage: estimateUsage(context.task.model, session.usage) } : {}),
+        });
+        return;
+      }
       const started = turn?.started_at ? turn.started_at * 1000 : Date.now();
       deadline = setTimeout(
         () => {
           void (async () => {
-            await mutate('services:recordEvents', {
+            const update = await mutate<{ status: string }>('services:recordEvents', {
               taskId,
+              inputRevision: context.inputRevision,
               events: [
                 {
                   externalId: `timeout:${turn?.id || sessionId}`,
@@ -149,6 +186,10 @@ async function monitor(taskId: string, controller: AbortController) {
               ],
               status: 'cancelled',
             });
+            if (update.status !== 'cancelled') {
+              controller.abort();
+              return;
+            }
             try {
               await api.beta.agents.sessions.events.create(sessionId, {
                 events: [{ type: 'agent.session.input.cancel' }],
@@ -167,21 +208,6 @@ async function monitor(taskId: string, controller: AbortController) {
         },
         Math.max(1, maxRuntime - (Date.now() - started)),
       );
-      // An idle session with no turn is still waiting for its first message.
-      if (
-        session.status === 'failed' ||
-        (session.status === 'idle' && turn && ['completed', 'failed', 'cancelled'].includes(turn.status))
-      ) {
-        await flush();
-        if (turn?.status === 'completed') await archiveFiles(context);
-        await mutate('services:recordEvents', {
-          taskId,
-          events: [],
-          status: session.status === 'failed' ? 'failed' : turn.status,
-          ...(session.usage ? { usage: estimateUsage(context.task.model, session.usage) } : {}),
-        });
-        return;
-      }
       await flush();
       timer = setInterval(() => {
         void flush().catch(() => controller.abort());
@@ -192,7 +218,10 @@ async function monitor(taskId: string, controller: AbortController) {
           event.type === 'agent.session.turn.output_text.delta' ||
           event.type === 'agent.session.turn.output_text.done'
         ) {
-          if (!completed.has(event.item_id)) {
+          if (
+            !completed.has(event.item_id) &&
+            !(event.type === 'agent.session.turn.output_text.delta' && recoveredPartial.has(event.item_id))
+          ) {
             const content = parts.get(event.item_id) || new Map<number, string>();
             content.set(
               event.content_index,
@@ -249,6 +278,7 @@ async function monitor(taskId: string, controller: AbortController) {
           await mutate('services:recordEvents', {
             taskId,
             events: [],
+            inputRevision: context.inputRevision,
             status: event.type.endsWith('completed')
               ? 'completed'
               : event.type.endsWith('cancelled')
@@ -305,9 +335,13 @@ function startMonitor(taskId: string) {
       monitors.delete(taskId);
       if (!stopping && !controller.signal.aborted)
         setTimeout(() => {
-          void query<TaskContext>('services:taskContext', { taskId })
+          void query<SessionContext>('services:sessionContext', { taskId })
             .then((context) => {
-              if (context.task.status === 'running' || context.task.status === 'queued') startMonitor(taskId);
+              if (
+                !context.pendingInput &&
+                (context.task.status === 'running' || context.task.status === 'queued')
+              )
+                startMonitor(taskId);
             })
             .catch(() => {});
         }, 1000);
@@ -374,7 +408,9 @@ async function run(job: Job) {
         ],
         'Idempotency-Key': job.id,
       });
+      await mutate('services:completeJob', { jobId: job.id, leaseToken: job.leaseToken });
       startMonitor(job.taskId);
+      return;
     } else throw new Error(`Unsupported queue job: ${job.kind}`);
     await mutate('services:completeJob', { jobId: job.id, leaseToken: job.leaseToken });
   } catch (error) {
@@ -422,7 +458,7 @@ const unsubscribe = database.onUpdate(
   (error) => console.error('Queue subscription failed:', safeError(error)),
 );
 const health = createServer((_req, res) => {
-  const connected = lastSubscription > 0 && !stopping;
+  const connected = lastSubscription > 0 && database.connectionState().isWebSocketConnected && !stopping;
   res.writeHead(connected ? 200 : 503, { 'Content-Type': 'application/json' });
   res.end(
     JSON.stringify({

@@ -18,7 +18,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 COPY --from=dependencies /app/node_modules ./node_modules
-COPY --from=build /app/.next ./.next
+COPY --from=build --chown=node:node /app/.next ./.next
 COPY --from=build /app/public ./public
 COPY --from=build /app/app ./app
 COPY --from=build /app/components ./components
@@ -28,4 +28,5 @@ COPY --from=build /app/services ./services
 COPY --from=build /app/next.config.ts ./next.config.ts
 COPY --from=build /app/proxy.ts ./proxy.ts
 COPY --from=build /app/tsconfig.json ./tsconfig.json
+USER node
 CMD ["npm", "start"]

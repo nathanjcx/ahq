@@ -34,9 +34,9 @@ export interface StoredCredential {
   accessToken?: string;
   oauth?: OAuthState;
 }
-function config(provider: string): OAuthConfig {
+function config(provider: string, serverUrl?: string): OAuthConfig {
   const configs = JSON.parse(process.env.MCP_OAUTH_CONFIG_JSON || '{}') as Record<string, OAuthConfig>;
-  const value = configs[provider];
+  const value = (serverUrl ? configs[serverUrl] : undefined) || configs[provider];
   if (!value?.clientId)
     throw new Error(
       `OAuth for ${provider} is not configured. An administrator must register its OAuth client, or you can connect with a scoped access token.`,
@@ -47,7 +47,7 @@ function providerFor(
   state: OAuthState,
   onTokens?: (state: OAuthState) => Promise<void>,
 ): { provider: OAuthClientProvider; redirect: () => string | undefined } {
-  const settings = config(state.provider);
+  const settings = config(state.provider, state.serverUrl);
   let authorizationUrl: string | undefined;
   const callback = new URL('/api/integrations/callback', requiredEnv('APP_URL')).href;
   if (settings.authorizationUrl && settings.tokenUrl && !state.discovery) {
@@ -83,7 +83,7 @@ function providerFor(
     state: () => state.nonce,
     tokens: () => state.tokens,
     saveTokens: async (tokens) => {
-      state.tokens = tokens;
+      state.tokens = { ...tokens, refresh_token: tokens.refresh_token || state.tokens?.refresh_token };
       state.tokenExpiresAt = tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : undefined;
       await onTokens?.(state);
     },
@@ -109,7 +109,7 @@ export async function startOAuth(input: Omit<OAuthState, 'nonce' | 'createdAt'>)
   const flow = providerFor(state);
   await mcpAuth(flow.provider, {
     serverUrl: state.serverUrl,
-    scope: config(state.provider).scopes,
+    scope: config(state.provider, state.serverUrl).scopes,
     fetchFn: safeFetch,
   });
   const authorizationUrl = flow.redirect();

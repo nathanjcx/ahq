@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Html, RoundedBox } from '@react-three/drei';
@@ -871,7 +863,8 @@ function appearanceFor(id: string): Appearance {
     seed ^= id.charCodeAt(i);
     seed = Math.imul(seed, 16777619);
   }
-  const next = (offset: number, modulus: number) => (Math.imul(seed + offset * 2654435761, 40503) >>> 0) % modulus;
+  const next = (offset: number, modulus: number) =>
+    (Math.imul(seed + offset * 2654435761, 40503) >>> 0) % modulus;
   return {
     gender: (['neutral', 'feminine', 'masculine'] as const)[next(1, 3)],
     skin: SKIN_TONES[next(2, SKIN_TONES.length)],
@@ -903,7 +896,11 @@ function Figure({
     <group>
       <Round
         p={[0, seated ? 0.91 : 1.12, 0]}
-        s={[appearance.gender === 'masculine' ? 0.51 : appearance.gender === 'feminine' ? 0.43 : 0.47, 0.57, 0.29]}
+        s={[
+          appearance.gender === 'masculine' ? 0.51 : appearance.gender === 'feminine' ? 0.43 : 0.47,
+          0.57,
+          0.29,
+        ]}
         color={color}
         radius={0.105}
       />
@@ -918,7 +915,12 @@ function Figure({
       <Cylinder p={[0, headY - 0.23, 0]} radius={0.075} height={0.15} color={appearance.skin} />
       <Round p={[0, headY, 0]} s={[0.35, 0.4, 0.33]} color={appearance.skin} radius={0.11} />
       {appearance.hairstyle !== 'bald' && (
-        <Round p={[0, headY + 0.135, -0.025]} s={[0.368, 0.175, 0.352]} color={appearance.hair} radius={0.07} />
+        <Round
+          p={[0, headY + 0.135, -0.025]}
+          s={[0.368, 0.175, 0.352]}
+          color={appearance.hair}
+          radius={0.07}
+        />
       )}
       {appearance.hairstyle !== 'bald' && (
         <Box p={[0, headY + 0.055, -0.156]} s={[0.35, 0.2, 0.045]} color={appearance.hair} />
@@ -936,7 +938,10 @@ function Figure({
           {appearance.glasses && (
             <Box p={[side * 0.087, headY + 0.012, 0.175]} s={[0.13, 0.075, 0.018]} color="#454d46" />
           )}
-          <group position={[side * 0.14, seated ? 0.56 : 0.85, 0]} rotation={[seated ? -Math.PI / 2 : 0, 0, 0]}>
+          <group
+            position={[side * 0.14, seated ? 0.56 : 0.85, 0]}
+            rotation={[seated ? -Math.PI / 2 : 0, 0, 0]}
+          >
             <Round
               p={[0, -0.22, 0]}
               s={[0.175, 0.47, 0.195]}
@@ -1104,9 +1109,7 @@ function EmployeeAvatar({
               boxShadow: `0 0 8px ${color}60`,
             }}
           />
-          <span
-            style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}
-          >
+          <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
             <span>{employee.name.split(' ')[0]}</span>
             <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.85 }}>{employee.role}</span>
           </span>
@@ -1144,11 +1147,7 @@ function FileCabinet() {
             <group>
               {[-0.08, 0.04, 0.16].map((z, i) => (
                 <group key={z}>
-                  <Box
-                    p={[0, y + 0.23, z]}
-                    s={[0.75, 0.13, 0.027]}
-                    color={i === 1 ? '#d4bd83' : '#b0b89b'}
-                  />
+                  <Box p={[0, y + 0.23, z]} s={[0.75, 0.13, 0.027]} color={i === 1 ? '#d4bd83' : '#b0b89b'} />
                   <Box
                     p={[-0.22 + i * 0.2, y + 0.32, z]}
                     s={[0.2, 0.07, 0.028]}
@@ -1175,12 +1174,7 @@ function OfficeSpeakers() {
         </mesh>
         <mesh position={[0, 0, 0.92]} rotation={[Math.PI / 2, 0, 0]} castShadow>
           <cylinderGeometry args={[1.07, 0.29, 1.42, 48, 1, true]} />
-          <meshStandardMaterial
-            color="#ece7d6"
-            roughness={0.38}
-            metalness={0.18}
-            side={THREE.DoubleSide}
-          />
+          <meshStandardMaterial color="#ece7d6" roughness={0.38} metalness={0.18} side={THREE.DoubleSide} />
         </mesh>
         <mesh position={[0, 0, 1.63]} castShadow>
           <torusGeometry args={[1.07, 0.075, 12, 64]} />
@@ -1218,7 +1212,7 @@ export function OfficeScene({
     let seat = 0;
     const planned = active.map((employee, index) => {
       let own = assigned.get(employee.id);
-      if (own === undefined || taken.has(own)) {
+      if (own === undefined) {
         while (taken.has(seat)) seat += 1;
         own = seat;
         taken.add(own);

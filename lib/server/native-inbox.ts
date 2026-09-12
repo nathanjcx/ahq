@@ -108,12 +108,7 @@ function github(body: string, headers: Headers, config: NativeConfig): NativeDel
     !config.resourceIds.some((id) => id === repositoryId || id === repositoryName)
   )
     return { kind: 'ignored' };
-  const subject =
-    event === 'pull_request'
-      ? payload.pull_request
-      : event === 'issue_comment'
-        ? payload.issue
-        : payload.issue;
+  const subject = event === 'pull_request' ? payload.pull_request : payload.issue;
   if (!subject || typeof subject !== 'object') return { kind: 'ignored' };
   const subjectTitle = clip(subject.title, 500) || `${event} in ${repositoryName}`;
   const action = clip(payload.action, 80) || 'updated';

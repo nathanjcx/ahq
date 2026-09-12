@@ -1,6 +1,7 @@
-import { query, mutate } from '../lib/server/backend';
+import { query, journalMutation } from '../lib/server/backend';
 import { connectedMcp } from '../lib/server/mcp';
 import { canonical, checkResourceScope, resultObject, toolPolicy } from '../lib/server/tool-policy';
+import { toolEvidence } from '../lib/server/audit-mcp';
 import { safeError } from '../lib/server/secrets';
 import type { PrivateConnection } from '../lib/server/mcp';
 import type { Job } from './types';
@@ -13,6 +14,9 @@ interface ExecutableAction {
 export async function executeAction(job: Job) {
   const proposalId = String(job.payload.proposalId);
   let dispatched = false;
+  let audit: Record<string, unknown> | undefined;
+  let terminal: Record<string, unknown>;
+  let auditResult: unknown;
   try {
     const context = await query<ExecutableAction>('services:actionContext', {
       proposalId,
@@ -60,6 +64,16 @@ export async function executeAction(job: Job) {
         args,
         toolPolicy(current.connection.provider, action.tool),
       );
+      audit = {
+        runToken: current.task.runToken,
+        connectionId: current.connection.id,
+        tool: action.tool,
+        operationId: `action:${proposalId}`,
+        proposalId,
+        leaseToken: job.leaseToken,
+        argumentsCiphertext: toolEvidence(args).ciphertext,
+      };
+      await journalMutation('services:recordToolCall', { ...audit, outcome: 'started' });
       dispatched = true;
       return client.callTool({ name: action.tool, arguments: args }, undefined, { timeout: 45_000 });
     });
@@ -74,7 +88,8 @@ export async function executeAction(job: Job) {
       }
     }
     const serialized = canonical(result);
-    await mutate('services:recordActionResult', {
+    auditResult = result;
+    terminal = {
       proposalId,
       leaseToken: job.leaseToken,
       status: 'succeeded',
@@ -83,13 +98,24 @@ export async function executeAction(job: Job) {
           ? serialized
           : 'The provider confirmed success; the response exceeded the journal display limit.',
       ...(afterState ? { afterState } : {}),
-    });
+    };
   } catch (error) {
-    await mutate('services:recordActionResult', {
+    auditResult = { error: safeError(error), outcomeUnknown: dispatched };
+    terminal = {
       proposalId,
       leaseToken: job.leaseToken,
       status: dispatched ? 'uncertain' : 'failed',
       result: safeError(error),
+    };
+  }
+  if (audit && dispatched) {
+    const evidence = toolEvidence(auditResult);
+    await journalMutation('services:recordToolCall', {
+      ...audit,
+      outcome: terminal.status === 'succeeded' ? 'succeeded' : 'failed',
+      resultCiphertext: evidence.ciphertext,
+      sha256: evidence.sha256,
     });
   }
+  await journalMutation('services:recordActionResult', terminal);
 }

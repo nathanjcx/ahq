@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { connectedMcp, type PrivateConnection } from './mcp';
-import { mutate } from './backend';
+import { journalMutation, query } from './backend';
 import { canonical, checkResourceScope, toolPolicy } from './tool-policy';
 import { seal, safeError } from './secrets';
-function evidence(value: unknown) {
+export function toolEvidence(value: unknown) {
   const serialized = canonical(value),
     sha256 = createHash('sha256').update(serialized).digest('hex');
   return {
@@ -25,7 +25,7 @@ export async function auditedRead(
     throw new Error('The configured read tool is not approved as read-only.');
   checkResourceScope(connection.resourceScope, args, toolPolicy(connection.provider, tool));
   const operationId = randomUUID(),
-    request = evidence(args);
+    request = toolEvidence(args);
   const base = {
     runToken,
     connectionId: connection.id,
@@ -33,25 +33,35 @@ export async function auditedRead(
     operationId,
     argumentsCiphertext: request.ciphertext,
   };
-  await mutate('services:recordToolCall', { ...base, outcome: 'started' });
+  let started = false;
+  let result;
   try {
-    const result = await connectedMcp(connection, (client) =>
-      client.callTool({ name: tool, arguments: args }, undefined, { timeout: 45_000 }),
-    );
-    const output = evidence(result);
-    await mutate('services:recordToolCall', {
-      ...base,
-      outcome: result.isError ? 'failed' : 'succeeded',
-      resultCiphertext: output.ciphertext,
-      sha256: output.sha256,
+    result = await connectedMcp(connection, async (client) => {
+      const current = await query<{ connections: PrivateConnection[] }>('services:gatewayContext', {
+        runToken,
+      });
+      const active = current.connections.find((item) => item.id === connection.id);
+      if (!active) throw new Error('Connection was revoked');
+      checkResourceScope(active.resourceScope, args, toolPolicy(active.provider, tool));
+      await journalMutation('services:recordToolCall', { ...base, outcome: 'started' });
+      started = true;
+      return client.callTool({ name: tool, arguments: args }, undefined, { timeout: 45_000 });
     });
-    return result;
   } catch (error) {
-    await mutate('services:recordToolCall', {
-      ...base,
-      outcome: 'failed',
-      resultCiphertext: seal({ error: safeError(error) }),
-    });
+    if (started)
+      await journalMutation('services:recordToolCall', {
+        ...base,
+        outcome: 'failed',
+        resultCiphertext: seal({ error: safeError(error) }),
+      });
     throw new Error('The integration could not complete the read. Check its connection and permissions.');
   }
+  const output = toolEvidence(result);
+  await journalMutation('services:recordToolCall', {
+    ...base,
+    outcome: result.isError ? 'failed' : 'succeeded',
+    resultCiphertext: output.ciphertext,
+    sha256: output.sha256,
+  });
+  return result;
 }

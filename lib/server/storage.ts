@@ -5,7 +5,7 @@ function storage() {
   return (client ??= new S3Client({
     endpoint: requiredEnv('S3_ENDPOINT'),
     region: process.env.S3_REGION || 'auto',
-    forcePathStyle: true,
+    forcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true',
     credentials: {
       accessKeyId: requiredEnv('S3_ACCESS_KEY_ID'),
       secretAccessKey: requiredEnv('S3_SECRET_ACCESS_KEY'),

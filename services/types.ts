@@ -29,19 +29,8 @@ export interface TaskContext {
   runToken: string;
   authorization: { workspaceId: string; userId: string };
 }
-export interface ActionContext {
-  proposal: {
-    id: string;
-    taskId: string;
-    connectionId: string;
-    tool: string;
-    arguments: string;
-    beforeState?: string;
-    originalActionId?: string;
-    status: string;
-  };
-  connection: PrivateConnection;
-  task: TaskContext['task'];
-  runToken: string;
-  original?: { arguments: string; beforeState?: string; afterState?: string; tool: string };
-}
+export type SessionContext = Pick<TaskContext, 'task' | 'authorization'> & {
+  archivedStorageKeys?: string[];
+  inputRevision: string;
+  pendingInput: boolean;
+};

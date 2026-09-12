@@ -694,9 +694,7 @@ export const recordEvents = mutation({
     for (const event of args.events) {
       const existing = await ctx.db
         .query('events')
-        .withIndex('by_task_external', (q) =>
-          q.eq('taskId', task._id).eq('externalId', event.externalId),
-        )
+        .withIndex('by_task_external', (q) => q.eq('taskId', task._id).eq('externalId', event.externalId))
         .unique();
       if (existing) continue;
       sequence += 1;
@@ -801,9 +799,7 @@ export const recordEvents = mutation({
           .withIndex('by_task_created', (q) => q.eq('taskId', task._id))
           .order('desc')
           .take(100);
-        const latestInput = inputJobs.find(
-          (job) => job.kind === 'start_task' || job.kind === 'send_message',
-        );
+        const latestInput = inputJobs.find((job) => job.kind === 'start_task' || job.kind === 'send_message');
         const pendingInput = inputJobs.some(
           (job) =>
             (job.kind === 'start_task' || job.kind === 'send_message') &&
@@ -831,9 +827,7 @@ export const recordEvents = mutation({
               .collect(),
           ]);
           if (
-            activeProposals.some((proposal) =>
-              ['pending', 'approved', 'executing'].includes(proposal.status),
-            )
+            activeProposals.some((proposal) => ['pending', 'approved', 'executing'].includes(proposal.status))
           )
             nextStatus = 'awaiting_approval';
           else if ([...queuedJobs, ...leasedJobs].some((job) => job.kind === 'send_message'))
@@ -856,7 +850,7 @@ export const recordEvents = mutation({
       patch.streamLeaseExpiresAt = undefined;
     }
     await ctx.db.patch(task._id, patch);
-    return { inserted, lastSequence: sequence };
+    return { inserted, lastSequence: sequence, status: patch.status || task.status };
   },
 });
 

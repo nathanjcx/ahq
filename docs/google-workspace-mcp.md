@@ -10,10 +10,8 @@ Create or choose a Google Cloud project owned by the organization that will test
 gcloud services enable \
   gmail.googleapis.com drive.googleapis.com docs.googleapis.com \
   sheets.googleapis.com slides.googleapis.com calendar-json.googleapis.com \
-  chat.googleapis.com people.googleapis.com \
   gmailmcp.googleapis.com drivemcp.googleapis.com docsmcp.googleapis.com \
   sheetsmcp.googleapis.com slidesmcp.googleapis.com calendarmcp.googleapis.com \
-  chatmcp.googleapis.com people.googleapis.com \
   --project=PROJECT_ID
 ```
 
@@ -53,10 +51,8 @@ Put the exact URLs for the products that the organization has enabled in `MCP_SE
 | Sheets   | `https://sheetsmcp.googleapis.com/mcp/v1`   |
 | Slides   | `https://slidesmcp.googleapis.com/mcp/v1`   |
 | Calendar | `https://calendarmcp.googleapis.com/mcp/v1` |
-| Chat     | `https://chatmcp.googleapis.com/mcp/v1`     |
-| People   | `https://people.googleapis.com/mcp/v1`      |
 
-The current provider registry shows Gmail as the default URL and lists the other product URLs. Keep the exact trailing path. A URL in `MCP_SERVER_URLS_JSON` is an admission allowlist, not a grant to any tool. After discovery, select only the tools and resources needed for that connection. The employee capability and per-connection tool grant must both allow a call.
+The current provider registry shows Gmail as the default URL and lists the five other supported product URLs. Keep the exact trailing path. A URL in `MCP_SERVER_URLS_JSON` is an admission allowlist, not a grant to any tool. After discovery, select only the tools and resources needed for that connection. The employee capability and per-connection tool grant must both allow a call.
 
 ## Gmail and write safety
 
@@ -87,3 +83,5 @@ If OAuth fails, inspect the Google OAuth logs and check the callback, consent au
 - [Configure Google Workspace MCP servers](https://developers.google.com/workspace/guides/configure-mcp-servers)
 - [Google Workspace event subscriptions](https://developers.google.com/workspace/events)
 - [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy)
+
+When products need different scopes, use their full MCP URL as the key in `MCP_OAUTH_CONFIG_JSON`. Endpoint entries override the `google-workspace` default. For example, a Drive entry under `https://drivemcp.googleapis.com/mcp/v1` can request Drive scopes without adding Gmail scopes. Set this configuration on web, gateway, and worker so refreshes use the same client.
