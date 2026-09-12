@@ -1,174 +1,313 @@
 # Operations
 
-A runbook for a deployment configured with [the deployment guide](deployment.md). It does not replace provider incident procedures, and no restart reverses an external action.
+A runbook for a deployment configured with [the deployment guide](deployment.md). It does not replace
+provider incident procedures, and no restart reverses an external action. The shape of the system is
+in [architecture](architecture.md).
 
 ## Service map
 
-| Component            | Role                                                                                                                     | Check                                          |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
-| Convex               | All state, the job queue, the journal, operational configuration, subscriptions                                          | Convex dashboard deployment and function logs  |
-| web                  | Clerk sessions, UI, API routes, OAuth callback, audit unsealing, file downloads, webhooks, sealing administrator secrets | Railway web deployment and `/health`           |
-| worker               | Queue jobs, Agents sessions, session monitoring, artifact archive                                                        | Railway worker `/health`                       |
-| gateway              | The only MCP server an agent can reach                                                                                   | Railway gateway `/health`                      |
-| S3-compatible bucket | Private artifact archive                                                                                                 | Bucket metrics and an authorized file download |
+| Component            | Role                                                                                        | Check                                          |
+| -------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Convex               | Every table, the job queue, the journal, the schedule, the crons, subscriptions             | Convex dashboard deployment and function logs  |
+| web                  | Clerk sessions, the UI, API routes, OAuth callback, webhooks, alert intake, sealing secrets | Railway web deployment and `/health`           |
+| worker               | Queue jobs and turns, Agents sessions, session monitoring, artifact archive                 | Railway worker `/health`                       |
+| gateway              | The only MCP server an agent can reach                                                      | Railway gateway `/health`                      |
+| S3-compatible bucket | Private artifact archive                                                                    | Bucket metrics and an authorized file download |
 
-The browser receives live state through Convex subscriptions. The worker reads Agents session events over SSE and writes journal batches to Convex. Sessions run in an OpenAI hosted environment with network access disabled, `connection_origin: "service"` MCP transports, and `multi_agent.enabled: false`.
+Sessions run in an OpenAI hosted environment with network access disabled,
+`connection_origin: "service"` MCP transports, and `multi_agent.enabled: false`.
 
-### The worker is replica-safe
+## Configuration
 
-Run as many worker replicas as you need. All coordination is Convex leases, and nothing depends on a replica's local state.
+Operational configuration is data in Convex, edited on the Operations page by platform
+administrators. Environment variables are for bootstrap trust and tunables.
 
-- **Jobs.** `services/queue:claimJobs(workerId, limit)` where the limit is the replica's free job slots, capped at 50 per call. A claim mints a lease token, stored on the job; every later mutation for that attempt must present it, so a second replica cannot complete, renew, or fail the same attempt. The lease lasts 60 seconds and the running job renews it every 20 seconds. At most one job per task is leased at a time; a job for a task with a live lease is pushed out to that lease's expiry.
-- **Session streams.** `claimStreams(workerId, limit)` returns tasks whose stream lease is empty, expired, or already this replica's, and stamps a 120 second lease inside the same mutation. Tasks with a pending input job are skipped, because a monitor would race the job that sends the input. The monitor heartbeat is `renewStream` every 40 seconds; a heartbeat that reports another owner aborts the monitor immediately.
-- **Slots.** `WORKER_CONCURRENCY` (default 4, bounded 1 to 16) sizes job slots. `WORKER_MONITORS` (default 16, bounded 1 to 64) sizes monitor slots. Claims are sized by free slots, so a replica never takes work it cannot run.
-- **Wake signal.** The subscription carries counts and a wake revision only. Workers pull. A Convex cron bumps the revision every minute so due jobs and expired leases are picked up even if a push is missed, and each worker also pulls every 15 seconds.
+| Variable                                                     | Where                        | Notes                             |
+| ------------------------------------------------------------ | ---------------------------- | --------------------------------- |
+| `AHQ_SERVICE_SECRET`                                         | Convex, web, worker, gateway | At least 32 characters            |
+| `CREDENTIAL_ENCRYPTION_KEY`                                  | web, worker, gateway         | 32 bytes, base64; never in Convex |
+| `OPENAI_API_KEY`                                             | worker                       |                                   |
+| `MCP_GATEWAY_URL`                                            | worker                       | Base URL the sessions call        |
+| `APP_URL`, Clerk keys, `CLERK_JWT_ISSUER_DOMAIN`             | web, Convex                  |                                   |
+| `NEXT_PUBLIC_CONVEX_URL`, `CONVEX_URL`                       | browser, services            |                                   |
+| `PLATFORM_ADMIN_USER_IDS`                                    | web and Convex               | Must match in both                |
+| `WORKER_CONCURRENCY` (4, 1–16), `WORKER_MONITORS` (16, 1–64) | worker                       | Slot pools                        |
+| `MAX_TURN_SECONDS`                                           | worker                       | Wall-clock bound on one turn      |
+| S3 endpoint, region, bucket, keys                            | web, worker                  |                                   |
+| `QA_FIXTURE`                                                 | never on a deployment        | Builds `/qa` and `/office-lab`    |
 
-Health is JSON on `/health`, HTTP 200 while the Convex subscription is live and HTTP 503 otherwise:
+Per-provider configuration — enabled server URLs, OAuth clients, the native inbox secret — lives in
+`providerConfigs`; the reviewed tool registry and its policy live in `registryTools`. Each connection
+carries its own sealed relay secret. Each workspace carries its own sealed alert-intake secret.
+Secrets entered in the browser go to a web route that seals them before Convex sees them; afterwards
+the page shows only whether one is set.
 
-```json
-{
-  "status": "ok",
-  "service": "worker",
-  "workerId": "…",
-  "connected": true,
-  "inFlightJobs": 0,
-  "activeMonitors": 0,
-  "freeJobSlots": 4,
-  "freeMonitorSlots": 16,
-  "lastClaimAt": 0,
-  "lastSubscriptionAt": 0
-}
+## Workspace settings
+
+One row per workspace (`workspaceSettings`), read through `settingsFor`. Until an administrator saves
+it, a workspace answers with these defaults (`defaultWorkspaceSettings` in `lib/contracts/plan.ts`,
+timezone `UTC`). `schedule:updateSettings` writes every field at once, so a partial write can never
+leave the hours inconsistent, and only a workspace owner or admin may call it.
+
+| Field                                   | Default                                                                   | Meaning                                                     |
+| --------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `timezone`                              | `UTC`                                                                     | Must be a zone this runtime knows                           |
+| `workingDays`                           | `[1,2,3,4,5]` (Monday–Friday, 0 is Sunday)                                | At least one day                                            |
+| `startHour` / `endHour`                 | 9 / 18                                                                    | Whole local hours; the end must be after the start          |
+| `attendedStartHour` / `attendedEndHour` | 9 / 18                                                                    | Must sit inside working hours                               |
+| `overnightPolicy`                       | `audits_only`                                                             | `off`, `audits_only`, or `cheap`                            |
+| `dailyTokenCap`                         | 0 (no cap)                                                                | Input plus output recorded today; stops the planner         |
+| `triageAllowance`                       | 500,000                                                                   | Today's triage tokens; triage stops here and nowhere else   |
+| `memoryBudgets`                         | workspace 2,000, project 3,000, floor 4,000, agent 1,500, summaries 1,500 | Estimated tokens per section                                |
+| `hiringPolicy`                          | `anyone`                                                                  | `anyone`, `admins`, or `approval`                           |
+| `auditPolicy`                           | `soft`                                                                    | Stored; nothing reads it today                              |
+| `triageRules`                           | empty                                                                     | GitHub labels or keywords that make a delivery an alert     |
+| `triageAllowList`                       | empty                                                                     | Tools a triage run executes without a proposal              |
+| `emergencyAllowList`                    | empty                                                                     | Tools the emergency rule admits                             |
+| `notificationChannels`                  | `['in_app']`                                                              | `in_app`, `push`, `slack`, `email`                          |
+| `plan`                                  | `subscription`                                                            | `subscription` or `byok`                                    |
+| `monthlyAllowance`                      | 0                                                                         | Tokens per period on a subscription                         |
+| `maxConcurrentInstances`                | 4                                                                         | Worker instances, and the planner's free slots              |
+| `rates`                                 | empty                                                                     | Per-model input, cached, output rates for a BYOK estimate   |
+| `standards`                             | empty                                                                     | The copy and code standard the auditor reads as instruction |
+
+**Hours.** `isWorkingTime` decides whether the planner runs ordinary work. `isAttendedTime` decides
+whether a person is expected to be reachable, which is the gate on the emergency allow-list. Both are
+pure and take the zone explicitly (`lib/time.ts`), so the planner, Convex, and the browser answer the
+same question the same way; DST is resolved in two passes so an hour lands on the real instant.
+
+**Overnight.** `cheap` lets work shifts run outside hours on each instance's `overnightModel`.
+`audits_only` and `off` both stop work shifts; today they also both still run the nightly audit.
+
+**Caps.** `dailyTokenCap` stops everything except triage on the next tick. `triageAllowance` stops
+triage. The workspace's older `monthlyTokenCap` still refuses new task creation, follow-up messages,
+and inbox assignment for the calendar month. Nothing is reserved, so in-flight work overshoots by its
+own usage.
+
+**Plan and cost.** Usage stays token-based. `plan.projection` reports tokens used this period, the
+share of `monthlyAllowance` a projection would consume, and — on `byok`, once rates exist — an
+estimate. Projected tokens carry no model, so they are priced at the dearest configured rate and the
+estimate never reads lower than the work will be. Models with recorded usage and no rate come back in
+`unpricedModels` so the interface can say the estimate is incomplete.
+
+**Hiring.** `anyone` lets any member hire. `admins` refuses a member outright. `approval` files a
+`hireRequests` row an owner or admin decides. Hiring takes a count of 1 to 20 and refuses to push the
+worker-instance total past `maxConcurrentInstances`.
+
+**Allow-lists.** Both triage lists are checked against the reviewed registry when they are saved: a
+name that is not a non-blocked `registryTools` row is refused, so a typo cannot silently widen or
+narrow what triage may do. Lists hold at most 50 entries.
+
+## Alert intake
+
+Three ways an alert reaches a workspace. All three go through `ingestAlert`, which deduplicates on
+fingerprint: a repeat bumps `occurrences` on the open alert and changes nothing else.
+
+**Signed webhook.** A platform administrator sets the workspace's alert secret through
+`/api/admin/alert-secret`. Senders post to `/api/alerts` with:
+
+```text
+POST https://your-web-origin.example.com/api/alerts
+x-astra-workspace: <workspaceId>
+x-astra-timestamp: <unix-milliseconds>
+x-astra-signature: hex(HMAC_SHA256(secret, timestamp + "." + rawBody))
 ```
 
-`status` is `connecting` before the first subscription update, `ok` once connected, and `stopping` during shutdown. On `SIGTERM` or `SIGINT` the worker stops claiming, unsubscribes, waits up to 30 seconds for in-flight jobs, releases every stream lease so another replica takes the sessions over without waiting the lease out, closes health, and exits. A replica killed without that grace period loses its sessions for at most the remaining 120 seconds of each stream lease; an expired job lease on an approved write is not retried, it is marked uncertain.
+The body is `{ source, fingerprint, severity, title, detail, url?, floorIds? }`; `severity` is `low`,
+`medium`, `high`, or `critical`, `url` must be HTTPS, and `detail` is capped at 10,000 characters.
+The timestamp must be within five minutes, the body at most 100 KB, and the rate limit is 120 per
+workspace per window. A new `high` or `critical` alert records and delivers one notification attempt
+per reachable person. The response is `{ accepted: true, alertId, duplicate }`.
 
-## Office signals
+**GitHub.** The existing native webhook at `/api/webhooks/native/github` also feeds triage: the
+delivery is matched against each following workspace's `triageRules`, case-insensitively, against the
+issue or pull-request labels, the title, and the body or comment. A match opens a `high` alert
+fingerprinted `github:<owner/name>#<number>`. Without rules, nothing is an alert.
 
-The Office page is a reading of the journal, not a separate source of truth. Four signals matter when something looks wrong.
+**Gmail.** Mail arriving through the relay for a `google-workspace` connection enqueues
+`email_classify` at most once an hour. The classifier turn has no tools at all, reads at most twenty
+unchecked items, and answers with one JSON object. Items it is not confident about are left unchecked
+for the next run rather than silently marked.
 
-- **The lectern glows and carries a count.** Work is waiting on a person: pending proposals this viewer can decide. Check the Tasks list and the review bar; the count is the same set.
-- **A ring breathes under a figure's feet.** That employee has something waiting on a person. A faster, redder ring means an approval has sat undecided for more than 30 minutes. Find out who owns the connection that would execute it.
-- **A provider console's bars sputter, and the status device stutters amber.** At least one connection for that provider is `degraded` or `revoked`. Usually an expired grant; see [Expired credentials](#expired-credentials).
-- **The room is dimmer than the hour explains.** The workspace is approaching its monthly token cap; at the cap the room is 35 percent darker. Daylight is separate and follows the viewer's local clock.
+## Notifications
 
-A furnished but empty room means no live data reached the browser. Check the Convex subscription and `NEXT_PUBLIC_CONVEX_URL` before looking at anything else.
+`services/notifications:attempt` records one row per reachable subject before anything is sent, then
+the caller delivers them. Reachable means the owner of a personal workspace plus everyone who created
+a floor or a project here; Convex has no membership list of its own.
 
-`QA_FIXTURE` must never be set on a deployed service. It is the development-only switch that builds `/qa`, a fake workspace with fake employees, tasks and proposals; without it that route answers 404.
+An attempt counts only once a channel reports delivery, and the first channel that lands marks the
+row. Today only `in_app` delivers: `push`, `slack`, and `email` log that they are not configured and
+report nothing. Push subscriptions are stored sealed, so enabling push is a dependency and a VAPID
+key pair rather than a migration.
 
-## Routine checks
+Acknowledging a notification — `/api/notifications/<id>/ack` or `notifications:acknowledge` — is what
+the emergency rule counts as an answer.
 
-After a deployment, read the startup logs of all three services. Request `/mcp/<connectionId>` on the gateway without a bearer token and expect HTTP 401 with `reason: "unauthorized"`. Request the gateway's `/health` and expect `{"status":"ok","service":"mcp-gateway"}`.
+## Triage authority
 
-Then sign in with a test organization, run one read-only task, and confirm the worker claims a job, the gateway lists only the reviewed tools inside the employee's capability, and the Audit tab shows the read. Do not log prompts, credentials, raw MCP responses, or inbox payloads while diagnosing.
+A triage run's provider tools are decided per call by the gateway from `services/triage:authority`:
 
-## Gateway failure taxonomy
+- The **triage allow-list** is always open to a triage task. Those tools execute without a proposal.
+- The **emergency allow-list** opens only when the clock is outside attended hours _and_ at least
+  three delivered, unacknowledged notification attempts for that alert sit in the last twenty
+  minutes. Attempts older than twenty minutes stop counting, so an old unanswered page cannot
+  authorize anything.
+- Both are recomputed on every call. A person acknowledging a page between discovery and use closes
+  the emergency list again mid-incident.
+- Every emergency call is journaled with started and terminal outcomes against the connection it
+  used, and the tool result instructs the agent to verify the fix and file the incident report.
 
-Protocol failures are JSON-RPC errors with a stable `reason` and the request id. Tool failures come back as an MCP result with `isError` and structured content `{ code, reason, message, retryable, requestId }`, because the model has to reason about them. The gateway logs the reason and the request id only.
+Today nothing in production sends the second and third page: the worker pages once, when the
+unanswered count is zero, and no cron re-pages. Treat the emergency path as unreachable without an
+operator sending further attempts. Merging and deploying inside attended hours need a person, as
+ordinary proposals.
 
-| Code   | Reason              | HTTP | Retryable | Raised when                                                                                                              |
-| ------ | ------------------- | ---- | --------- | ------------------------------------------------------------------------------------------------------------------------ |
-| -32001 | `unauthorized`      | 401  | no        | No bearer token, an unknown run token, or the authorization query failed                                                 |
-| -32002 | `revoked`           | 403  | no        | The connection is not available to this task, not connected, the grant was revoked, or the task is not on a floor        |
-| -32003 | `policy_denied`     | 403  | no        | Tool blocked or outside the capability, outside the resource restriction, or a correction whose read tool is not granted |
-| -32004 | `provider_error`    | 502  | yes       | The upstream MCP server failed, or returned an unusable result                                                           |
-| -32005 | `approval_required` | 200  | no        | A write became a proposal; informational, not an error                                                                   |
-| -32006 | `provider_timeout`  | 504  | yes       | The upstream did not answer in time                                                                                      |
-| -32700 | `malformed_request` | 400  | no        | The body is not valid JSON, or the endpoint path is unknown                                                              |
-| -32600 | `request_too_large` | 413  | no        | The request body is larger than 1 MB                                                                                     |
-| -32602 | `invalid_arguments` | 400  | no        | A required floor tool argument is missing or not a string                                                                |
+## The crons
 
-`policy_denied` and `revoked` raised while authorizing a call are also journaled as denied attempts. A failure to list tools is not, because discovery is not a call attempt.
+| Cron                      | Interval  | What it does                                                         |
+| ------------------------- | --------- | -------------------------------------------------------------------- |
+| `maintenance:wakeWorkers` | 1 minute  | Bumps the wake revision so due jobs and expired leases are picked up |
+| `services/schedule:tick`  | 5 minutes | Plans and enqueues the day's runs for every workspace                |
 
-## Audit trail
+The tick reads at most 200 workspaces and 500 tasks, entries, alerts, and proposed claims per
+workspace. It creates the reserved janitor, auditor, and triage staff on first run, opens the night's
+audit task after hours, and prepares meetings at the lead. It enqueues; it never runs a turn. Every
+job it inserts carries a unique key, so a repeated tick is a no-op.
 
-Every task has a timeline that merges four sources in time order: session events, messages, tool calls, and proposals with their transitions. The web service unseals it for viewers who can see the task; the Audit tab renders it and exports the same JSON.
+## The worker
 
-Journaled for each tool call: the operation id, the connection, the tool, the outcome (`started`, `succeeded`, `failed`, `denied`), a reason code on failures and denials, the duration, sealed arguments, a sealed result, and the result's SHA-256. An approved write also carries its proposal id and the SHA-256 of the lease token that authorized it, so the ledger shows which attempt dispatched it. Evidence over 50,000 bytes is replaced by its digest, byte count, and a truncation marker; a single field over 100 KB is refused outright.
+Replica-safe by construction; all coordination is Convex leases.
 
-Denied attempts are journaled with the reason before the refusal reaches the agent, so the timeline shows what was tried and why it was stopped. A terminal outcome cannot contradict a recorded one: a `started` row must exist before a success or failure, its arguments and proposal must match, and a second, different terminal outcome for the same operation is refused.
+- **Jobs.** `services/queue:claimJobs(workerId, limit)`, limit sized by free slots, capped at 50 per
+  call. A claim mints a lease token stored on the job; every later mutation for that attempt must
+  present it. The lease lasts 60 seconds and is renewed every 20. At most one job per task is leased.
+- **Session streams.** `claimStreams` returns tasks whose stream lease is empty, expired, or already
+  this replica's, and stamps a 120-second lease in the same mutation. `renewStream` every 40 seconds
+  is the heartbeat; a heartbeat reporting another owner aborts the monitor.
+- **Slots.** `WORKER_CONCURRENCY` sizes job slots, `WORKER_MONITORS` monitor slots.
+- **Wake signal.** The subscription carries counts and a revision only. Workers pull, and also pull
+  every 15 seconds.
+- **Shutdown.** On `SIGTERM` or `SIGINT` the worker stops claiming, unsubscribes, waits up to 30
+  seconds for in-flight jobs, releases every stream lease, and exits.
 
-Sealed evidence is readable only by a service holding `CREDENTIAL_ENCRYPTION_KEY`. Convex holds ciphertext. An entry that cannot be decrypted with the current key is displayed as unavailable rather than dropped.
+Health is JSON on `/health`, HTTP 200 while the Convex subscription is live and 503 otherwise, with
+`status`, `workerId`, `connected`, `inFlightJobs`, `activeMonitors`, free slots, and last claim time.
 
-## Corrections
+## The gateway
 
-A correction is a new, separately approved write that compensates for a previous one. What is possible depends on the tool's registry row.
+One process, `createGateway({ backend })`, so the same code runs against Convex in production and
+`convex-test` in the harness. `/health` answers `{"status":"ok","service":"mcp-gateway"}`. Every
+other request is `/mcp/<segment>` with the task run token as bearer:
 
-- **Supported.** The registry row has a correction descriptor, so the original proposal captured the record through the audited read tool before the write and stored the version the write returned. Requesting the correction builds a proposal that restores only the configured fields, conditioned on that version. When it is executed, the worker first re-reads the live record through the configured read tool, under the correction's own lease, journaled as `precondition:<proposalId>`. If the version moved, the correction fails cleanly instead of dispatching a write that the provider would reject. One correction per original action; a second is refused.
-- **Partial and manual.** No verified conditional operation exists. Requesting a correction creates a correction task for the same employee, on the same floor, with the original action's summary and its stated limits. The employee prepares the safest supported correction or clear manual steps and never repeats the original action.
-- **Irreversible and unknown.** The request is refused and the UI shows the reason with no button.
+- An internal segment (`floor`, `memory`, `shift`, `audit`, `triage`, `janitor`) is checked against
+  the role matrix before anything else, and again on every tool call.
+- Any other segment is matched against this task's own connection ids.
+- An unknown token and an unreachable authorization query are both `unauthorized`; the gateway fails
+  closed.
 
-Today the gateway records a write as `supported` when its registry row has a descriptor and as `manual` when it does not. `partial`, `irreversible`, and `unknown` are accepted by the schema and handled by the UI, but nothing currently assigns them.
+Failures use a fixed taxonomy. Protocol failures are JSON-RPC errors with a stable `reason` and the
+request id. Tool failures come back as an MCP result with `isError` and
+`{ code, reason, message, retryable, requestId }`.
 
-A correction restores fields. It does not recall notifications, webhooks, downstream automation, or anything a person already read. Do not describe any action as undoable.
+| Code   | Reason              | HTTP | Retryable | Raised when                                                                  |
+| ------ | ------------------- | ---- | --------- | ---------------------------------------------------------------------------- |
+| -32001 | `unauthorized`      | 401  | no        | No bearer token, an unknown run token, or the authorization query failed     |
+| -32002 | `revoked`           | 403  | no        | Connection not available, not connected, grant revoked, or no floor          |
+| -32003 | `policy_denied`     | 403  | no        | Blocked tool, outside the capability or the role, outside the resource scope |
+| -32004 | `provider_error`    | 502  | yes       | The upstream MCP server failed or returned an unusable result                |
+| -32005 | `approval_required` | 200  | no        | A write became a proposal; informational                                     |
+| -32006 | `provider_timeout`  | 504  | yes       | The upstream did not answer in time                                          |
+| -32700 | `malformed_request` | 400  | no        | Body is not valid JSON, or the endpoint is unknown                           |
+| -32600 | `request_too_large` | 413  | no        | Body larger than 1 MB                                                        |
+| -32602 | `invalid_arguments` | 400  | no        | A required tool argument is missing or the wrong type                        |
 
-Two outcomes are not the same thing:
+`policy_denied` and `revoked` raised while authorizing a call are journaled as denied attempts.
+Discovery is not a call attempt, so a failure to list tools is not journaled. Logs carry the reason
+and the request id only, never arguments, prompts, or provider content.
 
-- **failed** means the write never reached the provider. Nothing changed externally. It is safe to decide again.
-- **uncertain** means the request was dispatched and the result is unknown: a timeout, a transport error after dispatch, or a worker lease that expired mid-flight. The proposal and the task both go to `uncertain`, and the write is never retried automatically. Reconcile with provider evidence before doing anything else.
+## Corrections and outcomes
 
-## Usage, not cost
+A provider write becomes a proposal with its arguments hash, the policy's correction level, and —
+where the registry row has a correction descriptor — a `beforeState` read through the audited read
+tool. Approval enqueues one execute job that rechecks the lease, grant, and scope, dispatches once,
+and records `afterState`. A correction restores the configured fields conditioned on the captured
+version, re-reading the live record first under its own lease; if the version moved it fails cleanly.
+One correction per original action. Manual and partial corrections become tasks; irreversible and
+unknown are refused with the reason.
 
-The app records token usage. It stores no dollar figure and shows none.
+- **failed** means the write never reached the provider. Nothing changed externally.
+- **uncertain** means it was dispatched and the outcome is unknown. It is never retried
+  automatically. Reconcile against provider evidence before anything else.
 
-Each usage report from a session is recorded against the task, in a per-report journal keyed by the report's external id, and in a per workspace, period, and model aggregate: `input`, `cached`, `output`, and a task count. A report with no external id is treated as the session total and takes the maximum rather than adding. The period is the calendar month, `YYYY-MM`. Cache hit rate is `cached / input`. Workspace settings shows usage by model for the current period.
+A triage write under the allow-list is the one path where an agent's write reaches a provider without
+a proposal. It is journaled identically, and the emergency case says so in the result.
 
-A workspace owner or admin may set an optional monthly token cap on `input + output`. Nothing is reserved: the cap is checked when new work is accepted, and it refuses task creation, follow-up messages, and inbox assignment once the period's recorded usage has reached it. Accepting a handoff and creating a correction task are not checked, so a capped workspace can still finish and unwind work in flight. An in-flight task can overshoot the cap by its own usage. A cap of 0 means no cap.
+## What to watch
 
-Upstream charges are separate from all of this: OpenAI model and hosted-session charges, Railway compute, egress and storage, and any provider's own fees. Missing upstream usage is unknown, not zero.
+- **Jobs sit queued.** Look at the tick first: it is the only thing that enqueues a shift. Confirm
+  the workspace has working hours now (`schedule:summary` answers `working` and `attended`), that the
+  daily token cap is not reached, that free slots are not zero, and that the tasks are `daily` with
+  their dependencies complete.
+- **Jobs sit leased.** Look for a stale replica before touching the queue. Expired leases are
+  recovered on the next claim pass: ordinary commands are requeued, an approved write is not, because
+  its outcome is unknown.
+- **A task sits `waiting`.** Its dependencies have not all completed. It should still take one review
+  shift per working day; if it does not, check that the dependency ids resolve inside the workspace.
+- **A task sits `blocked`.** A dependency failed or was cancelled; the reason is on `task.error`.
+  Requeue it deliberately once the dependency is settled.
+- **A shift never ends.** `closeShift` is idempotent and returns the existing report; a shift row with
+  no `endedAt` means the turn died before the worker could close it. The next tick will not start
+  another shift for that task that day, because `uniqueKey` is per task per date.
+- **Reports all read `inferred`.** The turns are not calling `submit_report`. Check that the session
+  is getting `astra_shift` — a non-work, non-meeting task still gets it, a reserved kind does not.
+- **Contested memory.** A contested claim reaches no model and stays until a person resolves it in
+  `memory:resolveContest`, which acts on both sides of the conflict at once. The question is posted in
+  the channel of the scope it was filed against.
+- **A finding will not close.** `verifyFindings` only verifies an `addressed` finding whose task has a
+  later report naming the finding id. A finding with no task never verifies; an administrator
+  escalates it instead.
+- **Replanning.** `projects:replan` sends a project back to `planning`, drops the stale proposal, and
+  enqueues a fresh `plan_project`. Work already created stays. Nothing changes until a person confirms
+  the new roadmap.
+- **Office signals.** The lectern's tray glows and carries a count when work waits on a person; a ring
+  breathes under a figure the floor is waiting on, faster and redder past 30 minutes; a provider
+  console sputters when one of that provider's connections is degraded or revoked; the room dims as
+  the workspace approaches its monthly token cap. A furnished but empty room means no live data
+  reached the browser — check the Convex subscription and `NEXT_PUBLIC_CONVEX_URL` first.
 
-## Expired credentials
+## Recovering
 
-When a refresh fails with an authorization error, the provider has revoked or expired the grant. The connection is marked `degraded` with `Authorization expired. Reconnect this integration to continue.`, and the agent's call fails with `revoked`. The owner reconnects from Integrations, which runs OAuth again and restores `connected`. Tasks needing that connection stay blocked until then.
+**Expired credentials.** A refresh that fails with an authorization error marks the connection
+`degraded` and the agent's call fails `revoked`. The owner reconnects from Integrations. Reconnecting
+recomputes allowed tools as the intersection of what the server offers and the non-blocked registry,
+which resets a narrowed tool list; the resource restriction, inbox resources, sharing, and relay
+secret are preserved.
 
-Reconnecting never widens access beyond the registry: allowed tools are recomputed as the intersection of the tools discovered on the server and the non-blocked rows in the registry. That recomputation resets a narrowed tool list back to the full intersection, so an owner who had switched tools off must switch them off again on Manage access. The resource restriction, inbox resources, sharing, and relay secret are preserved.
+**Secret rotation.** `CREDENTIAL_ENCRYPTION_KEY` seals provider credentials, OAuth client secrets,
+native inbox secrets, each connection's relay secret, each workspace's alert secret, push
+subscription keys, and the audit journal. The code reads exactly one key, so rotating without a
+migration makes everything not re-sealed unreadable. Either migrate, or: pause delivery and
+approvals; swap the key on web, worker, and gateway together; re-enter every OAuth client secret,
+native inbox secret, and alert secret; rotate every relay secret; have each owner reconnect; resume
+and confirm with one read task and one signed test delivery. Audit evidence written under the old key
+shows as undecryptable rather than being dropped. Rotate `AHQ_SERVICE_SECRET` across Convex and all
+three services in one window.
 
-## Secret rotation
+**Rolling back.** Stop new dispatch, let active writes settle, and reconcile every uncertain action
+against provider evidence. Then restore the previous release and its variables. Provider
+configuration and workspace settings are data and do not roll back with the code; a schema change
+touching `providerConfigs`, `registryTools`, or `workspaceSettings` needs its own plan. Deploy Convex
+functions first, then the three services on the same commit.
 
-`CREDENTIAL_ENCRYPTION_KEY` now seals four kinds of stored secret plus the audit journal:
+## Known gaps
 
-1. Provider credentials on each connection.
-2. OAuth client secrets in the provider configuration.
-3. Native inbox signing secrets in the provider configuration.
-4. Each connection's inbox relay secret.
-5. Tool-call arguments and results in the audit trail, and the short-lived OAuth state cookie.
-
-The code reads exactly one key. `credentialKeyVersion` is stored on a connection but the unseal path ignores it, so there is no dual-key reader: whatever is not re-sealed becomes unreadable the moment the key changes. Either write a migration that reads the old key and re-seals with the new one before swapping, or accept the manual path and re-establish each secret in this order:
-
-1. Pause webhook delivery at the providers and stop approving writes.
-2. Swap the key on web, worker, and gateway together. They must never run with different keys.
-3. Re-enter each OAuth client secret and each native inbox secret on the Operations page. Re-entering seals under the new key, and the provider-side value does not change.
-4. Rotate every connection's relay secret from Manage access, and give the new value to each relay. Rotation generates a new secret and seals it under the new key.
-5. Have each connection owner reconnect, which re-seals the provider credential. Until then those connections fail with an authorization error.
-6. Resume delivery and approvals, and confirm one read task and one signed test delivery.
-
-Audit evidence written under the old key stays sealed. It is shown as undecryptable rather than lost, which is the reason to prefer the migration over the manual path.
-
-Rotate `AHQ_SERVICE_SECRET` by updating Convex and all three services in the same window, then run a task and the health checks. Keep `OPENAI_API_KEY` on the worker, `CLERK_SECRET_KEY` on the web service, and S3 keys on web and worker.
-
-## Failure guide
-
-Provider configuration lives in Convex, so most of these are answered on the Operations page rather than in a variable.
-
-- **Sign-in fails.** Compare `APP_URL`, the Clerk keys, and `CLERK_JWT_ISSUER_DOMAIN` in Convex. An empty dashboard usually means the browser bundle has the wrong `NEXT_PUBLIC_CONVEX_URL`, or the signed-in organization has no workspace yet.
-- **Operations page is missing or read-only.** The signed-in Clerk user ID must be in `PLATFORM_ADMIN_USER_IDS` in both Convex and the web service. Convex rejects the queries otherwise, and the web routes that seal secrets reject the writes.
-- **A provider cannot be connected.** The readiness card names the first missing item: no enabled server, no OAuth client covering an enabled server, no reviewed tool, or no native inbox secret. `This MCP server is not enabled by your administrator` means the URL is not ticked; `Sign-in for this server is not set up yet` means no client covers it; `None of the tools on this server are in the reviewed tool registry yet` means every discovered tool is blocked or absent.
-- **OAuth returns an error.** Check the callback is exactly `https://<web-origin>/api/integrations/callback`, that `APP_URL` matches the origin the user is on, and that the client id, secret, and scopes on Operations match the provider. A second consent prompt for one product of a multi-product provider means the client's scopes do not cover that product.
-- **Discovery works but a call is refused.** Read the reason in the Audit tab. `policy_denied` points at the registry row's mode, the employee capability, or the resource restriction. A non-empty restriction also requires a `resourceArgument` on the registry row; without one the gateway refuses rather than guessing which argument names the resource.
-- **A write is stuck awaiting approval.** Only the owner of the connection that would execute it, or a workspace owner or admin, can decide it. The creator of a task borrowing someone else's shared connection cannot.
-- **Webhooks return 404.** The native endpoint 404s for an unknown provider path and for a provider whose inbox secret is not set. The relay endpoint 404s when the connection has no relay secret; rotate it once from Manage access to create one.
-- **Artifacts are missing.** Check the S3 endpoint, region, bucket, and key permissions on both web and worker. Files over 25 MB and files past the 100-file limit are skipped with a journal entry, not silently.
-- **Jobs sit leased.** Look for a stale replica before touching the queue. Expired leases are recovered on the next claim pass: ordinary commands are requeued, an approved write is not, because its outcome is unknown.
-
-## Safe deploy and rollback
-
-Deploy Convex functions first, then the three services on the same commit with matching variables. Verify the health endpoints and one read-only task before approving a write.
-
-To roll back, stop new dispatch, let active writes settle, and reconcile every uncertain action with provider evidence. Then restore the previous release and its variables. Provider configuration is data and does not roll back with the code; a schema change that alters `providerConfigs` or `registryTools` needs its own plan.
-
-## References
-
-- [OpenAI Agents sessions](https://developers.openai.com/api/docs/guides/agents-api/sessions)
-- [OpenAI Agents events and items](https://developers.openai.com/api/docs/guides/agents-api/sessions/events)
-- [Convex deployment settings](https://docs.convex.dev/dashboard/deployments/deployment-settings)
-- [Railway healthchecks](https://docs.railway.com/deployments/healthchecks)
-- [Railway variables](https://docs.railway.com/variables)
+- The emergency notification path stops at one page in production; see
+  [Triage authority](#triage-authority).
+- Only the in-app notification channel delivers.
+- `auditPolicy` is stored and never read; `overnightPolicy: 'off'` still runs the nightly audit.
+- There is no interface yet for the schedule, the policies, the allow-lists, the standards text, or
+  memory administration: `schedule:updateSettings`, `memory:*`, `triage:setRules`, and the rest exist
+  as Convex functions with no page behind them (page lands with phase four). Until then they are set
+  through the Convex dashboard or a script.
+- The alert secret is written through `/api/admin/alert-secret`, which requires a _platform_
+  administrator, not a workspace administrator.
