@@ -5,7 +5,8 @@ import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState } from 'react';
 import { deriveActivities, type EmployeeActivity } from './activity';
 import type { LabelMode } from './office-labels';
-import type { OfficeEmployee, OfficeProvider } from './office-scene';
+import type { SelectProp } from './office-props';
+import type { OfficeDressing, OfficeEmployee, OfficeProvider } from './office-scene';
 import { useActivityCues } from './sound';
 import type { Dashboard, FloorPost } from '@/lib/contracts';
 import { providers as providerCatalog } from '@/lib/providers';
@@ -27,7 +28,7 @@ export type OfficeSceneData = {
   lightBudget: number;
   /** Local hour override, for replay and tests. */
   hour?: number;
-};
+} & OfficeDressing;
 
 const emptyScene: OfficeSceneData = { activities: new Map(), providers: [], lightBudget: 0 };
 
@@ -46,6 +47,8 @@ export type OfficeStageProps = {
   /** What the legend's Labels control is set to. */
   labels?: LabelMode;
   onSelect?: (id: string) => void;
+  /** Called when a prop is clicked: the binder, a notebook, a card, a shelf, a lamp. */
+  onSelectProp?: SelectProp;
 };
 
 /** Turns one dashboard and one board into everything the room shows. */
@@ -139,6 +142,7 @@ function Stage({
   emptyMessage,
   labels,
   onSelect,
+  onSelectProp,
 }: Omit<OfficeStageProps, 'live' | 'floorId'> & { scene: OfficeSceneData }) {
   const dressed = useMemo(
     () =>
@@ -161,6 +165,8 @@ function Stage({
       note={scene.note}
       lightBudget={scene.lightBudget}
       hour={scene.hour}
+      dressing={scene}
+      onSelectProp={onSelectProp}
     />
   );
 }

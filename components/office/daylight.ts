@@ -180,3 +180,38 @@ export function daylight(hour: number): Daylight {
     night: t < 0.5 ? from.night : to.night,
   };
 }
+
+/**
+ * Outside working hours. The sun is still where the clock says it is, but the
+ * room runs on its own lamps: the interior term is what the desk lamps, the
+ * pendants and the window glow all read.
+ */
+export function afterHours(light: Daylight): Daylight {
+  return {
+    ...light,
+    ambientIntensity: light.ambientIntensity * 0.62,
+    hemisphere: light.hemisphere * 0.5,
+    sunIntensity: light.sunIntensity * 0.38,
+    fillIntensity: light.fillIntensity * 0.45,
+    interior: Math.max(light.interior, 0.85),
+  };
+}
+
+/** A room with no windows, such as the basement: no sun at all, lamps at full. */
+export function windowless(light: Daylight): Daylight {
+  return {
+    ...light,
+    background: '#1b2321',
+    ground: '#232b29',
+    grid: '#333d3a',
+    ambient: '#ffe0ba',
+    ambientIntensity: 0.92,
+    hemisphere: 0.3,
+    sun: '#b7c3b8',
+    sunIntensity: 0.45,
+    fill: '#8f9a94',
+    fillIntensity: 0.4,
+    interior: 1,
+    night: true,
+  };
+}

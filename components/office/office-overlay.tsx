@@ -24,6 +24,8 @@ export type OverlayEntry = {
 export type Overlay = {
   register: (id: string) => OverlayEntry;
   release: (id: string) => void;
+  /** Lay the overlay out again on the next frame: an element has arrived or gone. */
+  relayout: () => void;
 };
 
 const OverlayContext = createContext<Overlay | null>(null);
@@ -33,6 +35,16 @@ export function useOverlayEntry(id: string): OverlayEntry | null {
   const entry = useMemo(() => overlay?.register(id) ?? null, [overlay, id]);
   useEffect(() => () => overlay?.release(id), [overlay, id]);
   return entry;
+}
+
+/**
+ * Asks for another declutter pass. Cards mount into their own roots a tick after
+ * the scene does, and the office runs on demand when motion is reduced, so
+ * whoever attaches an element says so rather than trusting a timer.
+ */
+export function useOverlayRelayout(): () => void {
+  const overlay = useContext(OverlayContext);
+  return useCallback(() => overlay?.relayout(), [overlay]);
 }
 
 /** The pass runs at 20fps; the figures themselves animate at the frame rate. */
@@ -55,6 +67,8 @@ export function OfficeOverlay({ children }: { children: ReactNode }) {
   const rects = useRef<LabelInput[]>([]);
   const cards = useRef<LabelInput[]>([]);
   const last = useRef(-1);
+  const run = useRef<() => void>(() => {});
+  const queued = useRef(0);
 
   const overlay = useMemo<Overlay>(
     () => ({
@@ -74,6 +88,13 @@ export function OfficeOverlay({ children }: { children: ReactNode }) {
       },
       release(id) {
         entries.current.delete(id);
+      },
+      relayout() {
+        if (queued.current) return;
+        queued.current = requestAnimationFrame(() => {
+          queued.current = 0;
+          run.current();
+        });
       },
     }),
     [],
@@ -143,12 +164,15 @@ export function OfficeOverlay({ children }: { children: ReactNode }) {
       }
   }, [camera, size]);
 
-  // The office runs on demand when motion is reduced, so lay the labels out
-  // once the elements exist as well as on the frames that do arrive.
+  // The office runs on demand when motion is reduced, so lay the labels out once
+  // the elements exist as well as on the frames that do arrive.
   useEffect(() => {
+    run.current = pass;
     const timer = setTimeout(pass, 0);
     return () => clearTimeout(timer);
   }, [pass]);
+
+  useEffect(() => () => cancelAnimationFrame(queued.current), []);
 
   useFrame((state) => {
     if (state.clock.elapsedTime - last.current < PASS_SECONDS) return;

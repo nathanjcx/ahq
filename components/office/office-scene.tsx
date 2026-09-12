@@ -4,15 +4,45 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { EmployeeActivity } from './activity';
-import { daylight, type Daylight } from './daylight';
+import { afterHours, daylight, windowless, type Daylight } from './daylight';
 import { FileCabinet, OfficeSpeakers } from './office-furniture';
 import { rankBubbles, type LabelMode } from './office-labels';
+import {
+  boardroomSeats,
+  defaultShelves,
+  recordsStations,
+  type BoardCard,
+  type CalendarEntry,
+  type ShelfSpec,
+} from './office-layout';
 import { OfficeOverlay } from './office-overlay';
 import { useOfficePan } from './office-pan';
-import { EmployeeAvatar } from './office-people';
-import { Halo, SurfaceContext, useSurfaceTextures, type Point } from './office-primitives';
+import { EmployeeAvatar, type EmployeeKind } from './office-people';
+import { C, Halo, SurfaceContext, useSurfaceTextures, type Point } from './office-primitives';
+import {
+  AlertBoard,
+  CalendarWall,
+  ContestedFolder,
+  DeskNotebook,
+  FindingsFolder,
+  IncidentLamp,
+  LiftDoor,
+  MemoryBinder,
+  OvernightLamp,
+  StatusLamp,
+  TaskBoard,
+  type SelectProp,
+} from './office-props';
 import { Architecture } from './office-room';
-import { BoardNote, ProviderConsole, ReviewLectern, StatusDevice } from './office-signals';
+import { Boardroom, RecordsRoom } from './office-rooms';
+import {
+  BoardNote,
+  CalendarCard,
+  ProviderConsole,
+  ReviewLectern,
+  StatusDevice,
+  TaskCards,
+} from './office-signals';
 import { CONSOLE_X, CONSOLE_Z, LECTERN, deskGrid, layoutStations, type Station } from './office-stations';
 
 /** The one employee shape this component understands. */
@@ -26,6 +56,33 @@ export type OfficeEmployee = {
   state?: EmployeeActivity;
   /** Persona traits. They only ever tune the idle. */
   traits?: string[];
+  /** Reserved kinds get their own kit: a cart, a dark coat, a high-visibility vest. */
+  kind?: EmployeeKind;
+};
+
+/** Which room of the tower the stage is showing. */
+export type OfficeRoom = 'floor' | 'lobby' | 'records' | 'boardroom' | 'triage';
+
+/**
+ * Everything the rooms dress themselves with beyond their people: memory, the
+ * board, findings, the schedule, the meeting, and which room this is. All of it
+ * is optional, and a room with none of it is the office as it was.
+ */
+export type OfficeDressing = {
+  /** How full the floor's memory is, and each employee's own notebook. */
+  memory?: { floorFill: number; agentFills: Map<string, number>; contested: number };
+  board?: { cards: BoardCard[] };
+  /** Open audit findings per employee. */
+  findings?: Map<string, number>;
+  incident?: boolean;
+  /** Open incidents, for the triage floor's alert board. */
+  incidentCount?: number;
+  schedule?: { working: boolean; attended: boolean; overnightCheap: boolean };
+  meeting?: { attendeeIds: string[]; speakingId?: string };
+  /** Named shelves for the records room. Without them the room derives them from memory. */
+  records?: { shelves: ShelfSpec[] };
+  calendar?: CalendarEntry[];
+  room?: OfficeRoom;
 };
 
 /** A provider this floor can reach, shown as a console the figures walk to. */
@@ -58,6 +115,10 @@ export type OfficeSceneProps = {
   lightBudget?: number;
   /** Local hour, 0 to 24. Defaults to the viewer's clock. */
   hour?: number;
+  /** The rooms and the props they hold. */
+  dressing?: OfficeDressing;
+  /** Called when a prop is clicked: the binder, a notebook, a card, a shelf, a lamp. */
+  onSelectProp?: SelectProp;
 };
 
 const ACTIVE_STATUSES = new Set(['working', 'review', 'ready']);
@@ -148,11 +209,30 @@ type Placed = {
   index: number;
   state: EmployeeActivity;
   station: Station;
+  /** Which home station this person owns, so their desk can carry their paper. */
+  home: number;
   accent?: string;
 };
 
+const EMPTY_DRESSING: OfficeDressing = {};
+/** The floor's props, in the room's coordinates. Desk props are in the desk's own. */
+const BINDER: Point = [4.55, 0.99, -3.95];
+const TASK_BOARD: Point = [-0.9, 0, 2.55];
+const INCIDENT_LAMP: Point = [0.6, 0, 5.15];
+const CALENDAR_WALL: Point = [2.75, 1.72, -0.6];
+/** The overlay cards hang above the props they belong to. */
+const TASK_CARDS: Point = [-2.3, 3.4, 2.55];
+const CALENDAR_CARD: Point = [2.75, 2.85, -0.6];
+const LIFT_DOOR: Point = [-8.5, 0, -5.88];
+/** The triage signals stack on the window wall's pier: the board, then the lamp. */
+const ALERT_BOARD: Point = [-8.86, 1.4, -0.8];
+const STATUS_LAMP: Point = [-8.8, 2.66, -0.8];
+const NOTEBOOK: Point = [-1, 0.985, -0.3];
+const FINDINGS: Point = [0.3, 0.985, 0.33];
+const DESK_LAMP: Point = [0.76, 1.328, -0.32];
+
 /** Directional and ambient light follow the viewer's clock, and dim as the cap fills. */
-function Lighting({ light, budget }: { light: Daylight; budget: number }) {
+function Lighting({ light, budget, sky = true }: { light: Daylight; budget: number; sky?: boolean }) {
   const ambient = useRef<THREE.AmbientLight>(null);
   const sun = useRef<THREE.DirectionalLight>(null);
   // A cap that is nearly spent quietly takes the lights down.
@@ -198,17 +278,21 @@ function Lighting({ light, budget }: { light: Daylight; budget: number }) {
         shadow-radius={4}
       />
       <directionalLight position={[10, 9, -2]} intensity={light.fillIntensity * dim} color={light.fill} />
-      {/* Sun or moon, seen through the window wall. */}
-      <mesh position={[-11.6, light.skyHeight, 4.2]} rotation={[0, -Math.PI / 2, 0]}>
-        <circleGeometry args={[light.night ? 0.78 : 0.95, 32]} />
-        <meshBasicMaterial color={light.disc} toneMapped={false} />
-      </mesh>
-      <Halo
-        p={[-11.5, light.skyHeight, 4.2]}
-        size={[4.6, 4.6]}
-        color={light.disc}
-        opacity={light.interior * 0.55}
-      />
+      {/* Sun or moon, seen through the window wall. A basement has neither. */}
+      {sky && (
+        <>
+          <mesh position={[-11.6, light.skyHeight, 4.2]} rotation={[0, -Math.PI / 2, 0]}>
+            <circleGeometry args={[light.night ? 0.78 : 0.95, 32]} />
+            <meshBasicMaterial color={light.disc} toneMapped={false} />
+          </mesh>
+          <Halo
+            p={[-11.5, light.skyHeight, 4.2]}
+            size={[4.6, 4.6]}
+            color={light.disc}
+            opacity={light.interior * 0.55}
+          />
+        </>
+      )}
     </>
   );
 }
@@ -227,15 +311,43 @@ export function OfficeScene({
   note,
   lightBudget = 0,
   hour,
+  dressing = EMPTY_DRESSING,
+  onSelectProp,
 }: OfficeSceneProps) {
   const { size } = useThree();
   const surfaces = useSurfaceTextures();
   const seats = useRef(new Map<string, number>());
-  const light = useMemo(() => daylight(hour ?? new Date().getHours()), [hour]);
-  const present = useMemo(() => employees.filter(isActiveEmployee), [employees]);
+  const room = dressing.room ?? 'floor';
+  const { schedule, meeting } = dressing;
+  const light = useMemo(() => {
+    const clock = daylight(hour ?? new Date().getHours());
+    if (room === 'records') return windowless(clock);
+    return schedule && !schedule.working ? afterHours(clock) : clock;
+  }, [hour, room, schedule]);
+  const onFloor = room !== 'records' && room !== 'boardroom';
+  const active = useMemo(() => employees.filter(isActiveEmployee), [employees]);
+  // A boardroom only holds the meeting's attendees, in the order they were invited.
+  const present = useMemo(() => {
+    if (room !== 'boardroom') return active;
+    const ids = meeting?.attendeeIds ?? [];
+    return ids.flatMap((id) => active.filter((employee) => employee.id === id));
+  }, [room, active, meeting]);
   const desks = useMemo(() => deskGrid(present.length), [present.length]);
   const people: Placed[] = useMemo(() => {
     const states = present.map((employee) => employee.state ?? IDLE);
+    if (!onFloor) {
+      const stations =
+        room === 'boardroom' ? boardroomSeats(present.length) : recordsStations(present.length);
+      return present.slice(0, stations.length).map((employee, index) => {
+        const seat = stations[index];
+        // The figure with the floor rises a little out of their chair.
+        const station =
+          employee.id === meeting?.speakingId
+            ? { ...seat, at: [seat.at[0], seat.at[1] + 0.09, seat.at[2]] as Point }
+            : seat;
+        return { employee, index, state: states[index], station, home: -1 };
+      });
+    }
     const stations = layoutStations({
       people: present.map((employee, index) => ({ id: employee.id, state: states[index] })),
       providers,
@@ -246,9 +358,15 @@ export function OfficeScene({
       index,
       state: states[index],
       station: stations[index].station,
+      home: stations[index].home,
       ...(stations[index].accent ? { accent: stations[index].accent } : {}),
     }));
-  }, [present, providers]);
+  }, [present, providers, room, onFloor, meeting]);
+  const shelves = useMemo(
+    () =>
+      dressing.records?.shelves ?? (dressing.memory ? defaultShelves(dressing.memory) : ([] as ShelfSpec[])),
+    [dressing.records, dressing.memory],
+  );
 
   // The desks are where a floor's work happens, so a phone opens on them.
   const cluster = useMemo((): Point => {
@@ -260,42 +378,80 @@ export function OfficeScene({
   const stuck = waiting.some((person) => person.state.attention === 'stuck');
   const degraded = providers.some((provider) => provider.degraded);
   const speaking = useSpeaking(people, size.width);
+  const contested = dressing.memory?.contested ?? 0;
+  // Whoever has the floor in a meeting sits a little higher and keeps their name.
+  const speakingInMeeting = room === 'boardroom' ? meeting?.speakingId : undefined;
 
   return (
     <>
       <color attach="background" args={[light.background]} />
       <Framing zoom={zoom} angle={angle} resetKey={resetKey} source={eventSource} cluster={cluster} />
       <SurfaceContext.Provider value={surfaces}>
-        <Lighting light={light} budget={lightBudget} />
-        <Architecture desks={desks} interior={light.interior} />
-        <FileCabinet />
-        <OfficeSpeakers />
-        <group position={LECTERN} rotation={[0, Math.PI, 0]}>
-          <ReviewLectern
-            position={[0, 0, 0]}
-            waiting={waiting.length}
-            stuck={stuck}
-            motion={motion}
-            onSelect={() => {
-              if (waiting.length) onSelect?.(waiting[0].employee.id);
-            }}
-          />
-        </group>
-        {providers.slice(0, CONSOLE_Z.length).map((provider, index) => (
-          // The console stands against the window wall with its screen facing the room.
-          <group key={provider.id} position={[CONSOLE_X, 0, CONSOLE_Z[index]]} rotation={[0, Math.PI / 2, 0]}>
-            <ProviderConsole
-              position={[0, 0, 0]}
-              color={provider.color}
-              name={provider.name}
-              degraded={provider.degraded}
-              motion={motion}
+        <Lighting light={light} budget={lightBudget} sky={room !== 'records'} />
+        {room === 'records' && (
+          <RecordsRoom shelves={shelves} interior={light.interior} onSelectProp={onSelectProp} />
+        )}
+        {room === 'boardroom' && <Boardroom interior={light.interior} onSelectProp={onSelectProp} />}
+        {onFloor && (
+          <>
+            <Architecture desks={desks} interior={light.interior} />
+            <FileCabinet />
+            <OfficeSpeakers />
+            <group position={LECTERN} rotation={[0, Math.PI, 0]}>
+              <ReviewLectern
+                position={[0, 0, 0]}
+                waiting={waiting.length}
+                stuck={stuck}
+                motion={motion}
+                onSelect={() => {
+                  if (waiting.length) onSelect?.(waiting[0].employee.id);
+                }}
+              />
+              {contested > 0 && (
+                // The folder lies on the lectern's sloped reading surface, in front of the tray.
+                <group position={[0, 1.02, 0.01]} rotation={[0.5, 0, 0]}>
+                  <ContestedFolder
+                    position={[0, 0.045, 0.07]}
+                    count={contested}
+                    onSelectProp={onSelectProp}
+                  />
+                </group>
+              )}
+            </group>
+            {providers.slice(0, CONSOLE_Z.length).map((provider, index) => (
+              // The console stands against the window wall with its screen facing the room.
+              <group
+                key={provider.id}
+                position={[CONSOLE_X, 0, CONSOLE_Z[index]]}
+                rotation={[0, Math.PI / 2, 0]}
+              >
+                <ProviderConsole
+                  position={[0, 0, 0]}
+                  color={provider.color}
+                  name={provider.name}
+                  degraded={provider.degraded}
+                  motion={motion}
+                />
+              </group>
+            ))}
+            <StatusDevice position={STATUS_DEVICE} degraded={degraded} motion={motion} />
+            <FloorDressing
+              room={room}
+              dressing={dressing}
+              desks={desks}
+              people={people}
+              onSelectProp={onSelectProp}
             />
-          </group>
-        ))}
-        <StatusDevice position={STATUS_DEVICE} degraded={degraded} motion={motion} />
+          </>
+        )}
         <OfficeOverlay>
-          <BoardNote position={BOARD_NOTE} note={note} />
+          {onFloor && <BoardNote position={BOARD_NOTE} note={note} />}
+          {onFloor && dressing.board && (
+            <TaskCards position={TASK_CARDS} cards={dressing.board.cards} onSelectProp={onSelectProp} />
+          )}
+          {room === 'lobby' && dressing.calendar && (
+            <CalendarCard position={CALENDAR_CARD} entries={dressing.calendar} onSelectProp={onSelectProp} />
+          )}
           {people.map((person) => (
             <EmployeeAvatar
               key={person.employee.id}
@@ -308,6 +464,7 @@ export function OfficeScene({
               mode={labels}
               selected={person.employee.id === selectedId}
               speaking={speaking.has(person.employee.id)}
+              pinned={person.employee.id === speakingInMeeting}
               onSelect={onSelect}
             />
           ))}
@@ -356,4 +513,79 @@ function useSpeaking(people: Placed[], width: number): Set<string> {
       Array.from({ length: Math.min(slots, ranked.length) }, (_, i) => ranked[(start + i) % ranked.length]),
     );
   }, [ranked, slots, turn]);
+}
+
+/**
+ * The paper and the lamps a floor is carrying today. Everything here is optional:
+ * a floor with nothing to say renders none of it.
+ */
+function FloorDressing({
+  room,
+  dressing,
+  desks,
+  people,
+  onSelectProp,
+}: {
+  room: OfficeRoom;
+  dressing: OfficeDressing;
+  desks: Point[];
+  people: Placed[];
+  onSelectProp?: SelectProp;
+}) {
+  const { memory, board, findings, incident, incidentCount = 0, schedule, calendar = [] } = dressing;
+  const overnight = Boolean(schedule && !schedule.working && schedule.overnightCheap);
+  return (
+    <group>
+      {memory && <MemoryBinder position={BINDER} fill={memory.floorFill} onSelectProp={onSelectProp} />}
+      {people.map((person) => {
+        const desk = person.home >= 0 && person.home < desks.length ? desks[person.home] : undefined;
+        if (!desk) return null;
+        const fill = memory?.agentFills.get(person.employee.id);
+        const open = findings?.get(person.employee.id) ?? 0;
+        const working = overnight && person.state.activity !== 'idle';
+        if (fill === undefined && open <= 0 && !working) return null;
+        return (
+          <group key={person.employee.id} position={desk}>
+            {fill !== undefined && (
+              <DeskNotebook
+                position={NOTEBOOK}
+                fill={fill}
+                color={person.employee.color ?? C.sage}
+                employeeId={person.employee.id}
+                onSelectProp={onSelectProp}
+              />
+            )}
+            {open > 0 && (
+              <FindingsFolder
+                position={FINDINGS}
+                count={open}
+                employeeId={person.employee.id}
+                onSelectProp={onSelectProp}
+              />
+            )}
+            {working && <OvernightLamp position={DESK_LAMP} />}
+          </group>
+        );
+      })}
+      {board && <TaskBoard position={TASK_BOARD} cards={board.cards} onSelectProp={onSelectProp} />}
+      {incident && <IncidentLamp position={INCIDENT_LAMP} onSelectProp={onSelectProp} />}
+      {room === 'lobby' && (
+        <>
+          <CalendarWall position={CALENDAR_WALL} entries={calendar} onSelectProp={onSelectProp} />
+          <LiftDoor position={LIFT_DOOR} onSelectProp={onSelectProp} />
+        </>
+      )}
+      {room === 'triage' && (
+        <>
+          <AlertBoard position={ALERT_BOARD} count={incidentCount} onSelectProp={onSelectProp} />
+          <StatusLamp
+            position={STATUS_LAMP}
+            rotation={[0, Math.PI / 2, 0]}
+            alert={incidentCount > 0}
+            onSelectProp={onSelectProp}
+          />
+        </>
+      )}
+    </group>
+  );
 }
