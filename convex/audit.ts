@@ -2,7 +2,7 @@ import { v } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import { groupFindings, publicFinding } from './lib/audit';
-import { requireWorkspace, type WorkspaceRole } from './shared';
+import { requireWorkspace, type Ctx, type WorkspaceRole } from './shared';
 
 const findingStatus = v.union(
   v.literal('open'),
@@ -11,18 +11,14 @@ const findingStatus = v.union(
   v.literal('escalated'),
 );
 
-async function workspaceFindings(
-  ctx: Parameters<typeof publicFinding>[0],
-  workspaceId: Id<'workspaces'>,
-  date?: string,
-) {
-  const query = ctx.db
+async function workspaceFindings(ctx: Ctx, workspaceId: Id<'workspaces'>, date?: string) {
+  return ctx.db
     .query('auditFindings')
     .withIndex('by_workspace_date', (q) =>
       date ? q.eq('workspaceId', workspaceId).eq('auditDate', date) : q.eq('workspaceId', workspaceId),
     )
-    .order('desc');
-  return query.take(500);
+    .order('desc')
+    .take(500);
 }
 
 /** Findings the interface lists, filtered by employee, status, or audit date. */
@@ -58,11 +54,7 @@ function canDecideFinding(task: Doc<'tasks'> | null, subject: string, role: Work
   return role === 'owner' || role === 'admin' || task?.createdBy === subject;
 }
 
-async function decidableFinding(
-  ctx: Parameters<typeof publicFinding>[0],
-  workspaceId: Id<'workspaces'>,
-  findingId: Id<'auditFindings'>,
-) {
+async function decidableFinding(ctx: Ctx, workspaceId: Id<'workspaces'>, findingId: Id<'auditFindings'>) {
   const finding = await ctx.db.get(findingId);
   if (!finding || finding.workspaceId !== workspaceId) throw new Error('Finding not found');
   return finding;

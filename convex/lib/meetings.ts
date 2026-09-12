@@ -58,12 +58,12 @@ export function transcriptText(turns: Doc<'meetingTurns'>[], limit = TRANSCRIPT_
     .join('\n');
 }
 
-function meetingPrompt(entry: Doc<'calendarEntries'>, attendeeNames: string[]) {
+function meetingPrompt(entry: Doc<'calendarEntries'>) {
   const lines = [
     `You are attending the meeting "${entry.title}".`,
     entry.purpose ? `Purpose: ${entry.purpose}` : '',
     entry.agenda.length ? `Agenda:\n${entry.agenda.map((item) => `- ${item}`).join('\n')}` : '',
-    attendeeNames.length ? `Attendees: ${attendeeNames.join(', ')}.` : '',
+    entry.attendees.length ? `Attendees: ${entry.attendees.map((one) => one.name).join(', ')}.` : '',
     'This session carries your preparation, your answers, and your wrap-up for this meeting.',
   ];
   return lines.filter(Boolean).join('\n\n');
@@ -78,7 +78,6 @@ export async function meetingTaskFor(
   ctx: MutationCtx,
   meeting: Doc<'meetings'>,
   entry: Doc<'calendarEntries'>,
-  attendees: Doc<'installations'>[],
   installation: Doc<'installations'>,
 ) {
   const uniqueKey = `meeting_prep:${meeting._id}:${installation._id}`;
@@ -90,7 +89,6 @@ export async function meetingTaskFor(
   const version = await ctx.db.get(installation.versionId);
   if (!version) throw new Error('Employee version not found');
   const floor = installation.floorId ? await ctx.db.get(installation.floorId) : null;
-  const names = await Promise.all(attendees.map((attendee) => employeeName(ctx, attendee)));
   const now = Date.now();
   const taskId = await ctx.db.insert('tasks', {
     workspaceId: entry.workspaceId,
@@ -104,7 +102,7 @@ export async function meetingTaskFor(
     versionId: version._id,
     employeeName: installation.name || version.name,
     title: `Meeting: ${entry.title}`.slice(0, 200),
-    prompt: meetingPrompt(entry, names),
+    prompt: meetingPrompt(entry),
     status: 'queued',
     model: version.model,
     createdAt: now,
@@ -131,20 +129,21 @@ export async function ensureMeeting(ctx: MutationCtx, entry: Doc<'calendarEntrie
     .query('meetings')
     .withIndex('by_entry', (q) => q.eq('calendarEntryId', entry._id))
     .unique();
-  const meetingId =
-    existing?._id ??
-    (await ctx.db.insert('meetings', {
-      workspaceId: entry.workspaceId,
-      calendarEntryId: entry._id,
-      status: 'preparing',
-      createdAt: Date.now(),
-    }));
-  const meeting = existing ?? (await ctx.db.get(meetingId));
+  const meeting =
+    existing ??
+    (await ctx.db.get(
+      await ctx.db.insert('meetings', {
+        workspaceId: entry.workspaceId,
+        calendarEntryId: entry._id,
+        status: 'preparing',
+        createdAt: Date.now(),
+      }),
+    ));
   if (!meeting) throw new Error('Meeting not found');
-  if (meeting.status === 'closed') return meetingId;
-  const attendees = await attendeeEmployees(ctx, entry);
-  for (const attendee of attendees) await meetingTaskFor(ctx, meeting, entry, attendees, attendee);
-  return meetingId;
+  if (meeting.status !== 'closed')
+    for (const attendee of await attendeeEmployees(ctx, entry))
+      await meetingTaskFor(ctx, meeting, entry, attendee);
+  return meeting._id;
 }
 
 /** Adds one turn's reported tokens to the meeting total, so the boardroom can price a question. */

@@ -6,6 +6,8 @@ import {
   addMeetingUsage,
   employeeName,
   employeeWork,
+  meetingContext,
+  meetingTurns,
   ownReport,
   parseOutcomePayload,
   transcriptText,
@@ -25,10 +27,11 @@ const outcomeKind = v.union(
 
 /** The attendee's own row and name, checked against the meeting before any turn is written. */
 async function attendeeFor(ctx: MutationCtx, meetingId: Id<'meetings'>, employeeId: Id<'installations'>) {
-  const { meeting, attendees, turns } = await turnInputs(ctx, meetingId, employeeId);
+  const { meeting, attendees } = await meetingContext(ctx, meetingId);
   const attendee = attendees.find((one) => one._id === employeeId);
   if (!attendee) throw new Error('Employee is not an attendee of this meeting');
-  return { meeting, attendees, turns, attendee, name: await employeeName(ctx, attendee) };
+  const turns = await meetingTurns(ctx, meetingId);
+  return { meeting, attendees, turns, name: await employeeName(ctx, attendee) };
 }
 
 /** What a preparation turn reads: the agenda, the attendees, and that employee's recent work. */

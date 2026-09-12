@@ -138,7 +138,7 @@ export const ask = mutation({
       createdAt: Date.now(),
     });
     for (const attendee of addressed) {
-      const taskId = await meetingTaskFor(ctx, meeting, entry, attendees, attendee);
+      const taskId = await meetingTaskFor(ctx, meeting, entry, attendee);
       await insertJob(ctx, {
         workspaceId: workspace._id,
         taskId,
@@ -161,7 +161,7 @@ export const close = mutation({
     if (meeting.status === 'closed') throw new Error('Meeting is already closed');
     await ctx.db.patch(meeting._id, { status: 'closing' });
     for (const attendee of attendees) {
-      const taskId = await meetingTaskFor(ctx, meeting, entry, attendees, attendee);
+      const taskId = await meetingTaskFor(ctx, meeting, entry, attendee);
       await insertJob(ctx, {
         workspaceId: workspace._id,
         taskId,
@@ -196,6 +196,7 @@ export const finalize = mutation({
           .unique(),
       ),
     );
+    // A failed wrap-up has landed as far as the meeting is concerned; the job carries the error.
     if (wrapups.some((job) => !job || job.state === 'queued' || job.state === 'leased'))
       return { closed: false };
     const now = Date.now();
