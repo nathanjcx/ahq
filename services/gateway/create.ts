@@ -60,8 +60,10 @@ export function createGateway(options: GatewayOptions = {}) {
       return;
     }
     try {
-      const match = /^\/mcp\/([A-Za-z0-9_-]{1,128})$/.exec((req.url || '').split('?')[0]);
+      const match = /^\/mcp\/([^/]{1,256})$/.exec((req.url || '').split('?')[0]);
       if (!match) throw new GatewayError('malformed_request', 'Unknown gateway endpoint.');
+      // The path segment is only ever compared against this task's own connection ids.
+      const target = decodeURIComponent(match[1]);
       const runToken = bearer(req);
       if (!runToken) throw new GatewayError('unauthorized', 'A task run token is required.');
       // Fail closed: an unknown token and an unreachable authorization service are both unauthorized.
@@ -71,7 +73,6 @@ export function createGateway(options: GatewayOptions = {}) {
       if (!context)
         throw new GatewayError('unauthorized', 'This run token does not belong to an active task.');
       const request: GatewayRequest = { backend, requestId, runToken };
-      const target = match[1];
       let mcp;
       if (target === 'floor') {
         mcp = floorServer(request, context.task.id);
