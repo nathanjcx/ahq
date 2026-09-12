@@ -30,7 +30,7 @@ describe('native inbox deliveries', () => {
     });
   });
 
-  it('deduplicates by preserving the GitHub delivery ID', () => {
+  it('deduplicates by hashing the signed GitHub body', () => {
     const body = JSON.stringify({
       action: 'opened',
       issue: {
@@ -49,7 +49,9 @@ describe('native inbox deliveries', () => {
     const first = parseNativeDelivery(config('github', ['acme/repo']), body, headers, now);
     const second = parseNativeDelivery(config('github', ['acme/repo']), body, headers, now);
     expect(first).toEqual(second);
-    expect(first.kind === 'items' && first.items[0].externalId).toBe('github:delivery-1');
+    expect(first.kind === 'items' && first.items[0].externalId).toMatch(/^github:[0-9a-f]{64}$/);
+    headers.set('x-github-delivery', 'delivery-2');
+    expect(parseNativeDelivery(config('github', ['acme/repo']), body, headers, now)).toEqual(first);
   });
 
   it('rejects stale Linear deliveries and enforces exact team scope', () => {
@@ -77,19 +79,26 @@ describe('native inbox deliveries', () => {
     expect(parseNativeDelivery(config('linear', ['team-b']), fresh, headers, now)).toEqual({
       kind: 'ignored',
     });
+    const allowed = parseNativeDelivery(config('linear', ['team-a']), fresh, headers, now);
+    headers.set('linear-delivery', 'different-unsigned-header');
+    expect(parseNativeDelivery(config('linear', ['team-a']), fresh, headers, now)).toEqual(allowed);
   });
 
   it('verifies Slack signatures, handles URL verification, and filters channels', () => {
-    const body = JSON.stringify({ type: 'url_verification', team_id: 'T1', challenge: 'challenge-1' });
+    const body = JSON.stringify({
+      token: 'legacy-token',
+      type: 'url_verification',
+      challenge: 'challenge-1',
+    });
     const timestamp = Math.floor(now / 1_000).toString();
     const signature = `v0=${createHmac('sha256', config('slack', []).secret).update(`v0:${timestamp}:${body}`).digest('hex')}`;
     const headers = new Headers({ 'x-slack-request-timestamp': timestamp, 'x-slack-signature': signature });
-    expect(parseNativeDelivery(config('slack', ['T1']), body, headers, now)).toEqual({
+    expect(parseNativeDelivery(config('slack', ['C1']), body, headers, now)).toEqual({
       kind: 'challenge',
       challenge: 'challenge-1',
     });
     headers.set('x-slack-signature', 'v0=' + '0'.repeat(64));
-    expect(() => parseNativeDelivery(config('slack', ['T1']), body, headers, now)).toThrow();
+    expect(() => parseNativeDelivery(config('slack', ['C1']), body, headers, now)).toThrow();
     const staleTimestamp = String(Number(timestamp) - 301);
     headers.set('x-slack-request-timestamp', staleTimestamp);
     headers.set(
@@ -99,11 +108,25 @@ describe('native inbox deliveries', () => {
     expect(() => parseNativeDelivery(config('slack', ['T1']), body, headers, now)).toThrow('stale');
     expect(
       parseNativeDelivery(
-        config('slack', ['T2']),
+        config('slack', ['C2']),
         body,
         new Headers({ 'x-slack-request-timestamp': timestamp, 'x-slack-signature': signature }),
         now,
       ),
-    ).toEqual({ kind: 'ignored' });
+    ).toEqual({ kind: 'challenge', challenge: 'challenge-1' });
+
+    const eventBody = JSON.stringify({
+      type: 'event_callback',
+      team_id: 'T1',
+      event_id: 'event-1',
+      event: { type: 'message', channel: 'C2', user: 'U1', text: 'hello', ts: '1800000000.000001' },
+    });
+    const eventHeaders = new Headers({
+      'x-slack-request-timestamp': timestamp,
+      'x-slack-signature': `v0=${createHmac('sha256', config('slack', []).secret).update(`v0:${timestamp}:${eventBody}`).digest('hex')}`,
+    });
+    expect(parseNativeDelivery(config('slack', ['C1']), eventBody, eventHeaders, now)).toEqual({
+      kind: 'ignored',
+    });
   });
 });

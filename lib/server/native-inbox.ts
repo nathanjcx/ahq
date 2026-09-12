@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { z } from 'zod';
 import { equalSecret } from './secrets';
 
@@ -8,12 +8,14 @@ const configSchema = z.object({
   provider: z.enum(['github', 'linear', 'slack']),
   secret: z.string().min(16).max(500),
   resourceIds: z.array(z.string().min(1).max(300)).min(1).max(500),
+  teamId: z.string().min(1).max(300).optional(),
 });
 
 export interface NativeConfig {
   provider: NativeProvider;
   secret: string;
   resourceIds: string[];
+  teamId?: string;
 }
 
 export interface NativeInboxItem {
@@ -86,6 +88,10 @@ function httpsUrl(value: unknown) {
   }
 }
 
+function signedBodyId(provider: NativeProvider, body: string) {
+  return `${provider}:${createHash('sha256').update(body).digest('hex')}`;
+}
+
 function github(body: string, headers: Headers, config: NativeConfig): NativeDelivery {
   verifyHmac(body, config.secret, header(headers, 'x-hub-signature-256'), 'sha256=');
   const delivery = header(headers, 'x-github-delivery');
@@ -119,11 +125,17 @@ function github(body: string, headers: Headers, config: NativeConfig): NativeDel
     kind: 'items',
     items: [
       {
-        externalId: `github:${delivery}`,
+        externalId: signedBodyId('github', body),
         title: `GitHub ${event === 'pull_request' ? 'pull request' : event === 'issue_comment' ? 'issue comment' : 'issue'}: ${subjectTitle}`,
         preview,
-        ...(httpsUrl(subject.html_url || payload.comment?.html_url)
-          ? { sourceUrl: httpsUrl(subject.html_url || payload.comment?.html_url) }
+        ...(httpsUrl(
+          event === 'issue_comment' ? payload.comment?.html_url || subject.html_url : subject.html_url,
+        )
+          ? {
+              sourceUrl: httpsUrl(
+                event === 'issue_comment' ? payload.comment?.html_url || subject.html_url : subject.html_url,
+              ),
+            }
           : {}),
         createdAt,
       },
@@ -157,7 +169,7 @@ function linear(body: string, headers: Headers, config: NativeConfig, now: numbe
     kind: 'items',
     items: [
       {
-        externalId: `linear:${delivery}`,
+        externalId: signedBodyId('linear', body),
         title: `Linear ${type.toLowerCase()}: ${title}`,
         preview,
         ...(sourceUrl ? { sourceUrl } : {}),
@@ -181,8 +193,7 @@ function slack(body: string, headers: Headers, config: NativeConfig, now: number
   if (!equalSecret(signature.toLowerCase(), expected)) throw new Error('Invalid webhook signature');
   const payload = parseJson(body);
   if (payload.type === 'url_verification') {
-    if (typeof payload.challenge !== 'string' || !config.resourceIds.includes(String(payload.team_id || '')))
-      return { kind: 'ignored' };
+    if (typeof payload.challenge !== 'string') return { kind: 'ignored' };
     return { kind: 'challenge', challenge: payload.challenge };
   }
   if (payload.type !== 'event_callback') return { kind: 'ignored' };
@@ -196,7 +207,8 @@ function slack(body: string, headers: Headers, config: NativeConfig, now: number
   if (
     !teamId ||
     !channelId ||
-    (!config.resourceIds.includes(teamId) && !config.resourceIds.includes(channelId))
+    (config.teamId && config.teamId !== teamId) ||
+    !config.resourceIds.includes(channelId)
   )
     return { kind: 'ignored' };
   const eventId = clip(payload.event_id, 300);
@@ -210,7 +222,7 @@ function slack(body: string, headers: Headers, config: NativeConfig, now: number
     kind: 'items',
     items: [
       {
-        externalId: `slack:${eventId}`,
+        externalId: signedBodyId('slack', body),
         title: `Slack message in ${channelId}`,
         preview: text,
         createdAt,
@@ -225,7 +237,7 @@ export function parseNativeDelivery(
   headers: Headers,
   now = Date.now(),
 ): NativeDelivery {
-  if (body.length > 1_000_000) throw new Error('Request is too large');
+  if (Buffer.byteLength(body, 'utf8') > 1_000_000) throw new Error('Request is too large');
   if (config.provider === 'github') return github(body, headers, config);
   if (config.provider === 'linear') return linear(body, headers, config, now);
   return slack(body, headers, config, now);

@@ -27,7 +27,8 @@ Set `NATIVE_INBOX_CONFIG_JSON` on the web service. Each key is a real Convex con
   "slack_connection_id": {
     "provider": "slack",
     "secret": "a-long-random-signing-secret",
-    "resourceIds": ["T01234567", "C01234567"]
+    "teamId": "T01234567",
+    "resourceIds": ["C01234567"]
   }
 }
 ```
@@ -36,7 +37,7 @@ Do not reuse one provider secret across connections. Keep this variable sealed i
 
 ## GitHub
 
-In the repository's Settings → Webhooks, add the endpoint above, choose `application/json`, set the secret to the configured value, and subscribe to `Issues`, `Pull requests`, and `Issue comments`. GitHub signs the exact body with `X-Hub-Signature-256`; the endpoint also requires `X-GitHub-Delivery` and `X-GitHub-Event`. Configure a repository full name such as `acme/repo` or its numeric repository ID. Events from other repositories are acknowledged and ignored. GitHub does not provide a delivery timestamp, so replay protection comes from its stable delivery ID and Convex deduplication; do not treat a repeated delivery as a new inbox item.
+In the repository's Settings → Webhooks, add the endpoint above, choose `application/json`, set the secret to the configured value, and subscribe to `Issues`, `Pull requests`, and `Issue comments`. GitHub signs the exact body with `X-Hub-Signature-256`; the endpoint also requires `X-GitHub-Delivery` and `X-GitHub-Event`. Configure a repository full name such as `acme/repo` or its numeric repository ID. Events from other repositories are acknowledged and ignored. GitHub does not provide a delivery timestamp. The normalized external ID is derived from the signed body, while the delivery header is retained only for validation and diagnostics; Convex deduplicates repeated deliveries without trusting that unsigned header.
 
 The endpoint normalizes issue, pull request, and issue comment deliveries. It stores the provider URL and a short preview. It does not copy the full webhook payload.
 
@@ -48,7 +49,7 @@ The endpoint normalizes `Issue` and `Comment` deliveries. Other Linear event typ
 
 ## Slack
 
-In the Slack app's Event Subscriptions screen, set the Request URL to the endpoint above and subscribe only to the message events the app needs, beginning with `message.channels`. Add private-channel events only when the app is explicitly a member of those channels. Slack sends `url_verification` during setup; the endpoint verifies `X-Slack-Signature` first and returns the signed challenge. Runtime events require `X-Slack-Request-Timestamp` within five minutes and the versioned `v0` HMAC signature. Configure the exact team ID and, where possible, exact channel IDs. A configured team ID permits that team's message events; a configured channel ID permits only that channel.
+In the Slack app's Event Subscriptions screen, set the Request URL to the endpoint above and subscribe only to the message events the app needs, beginning with `message.channels`. Add private-channel events only when the app is explicitly a member of those channels. Slack sends a `url_verification` payload containing `type`, `token`, and `challenge` during setup; the endpoint verifies `X-Slack-Signature` first and returns the signed challenge even when Slack omits a team ID. Runtime events require `X-Slack-Request-Timestamp` within five minutes and the versioned `v0` HMAC signature. Configure exact channel IDs in `resourceIds`. An optional `teamId` adds a workspace check; it never grants access to channels by itself.
 
 The endpoint normalizes human `message` events with an `event_id` and non-empty text. Deleted messages and unsupported event subtypes are acknowledged and ignored. Slack payloads do not include a canonical permalink for every event, so the normalized item does not invent one.
 
