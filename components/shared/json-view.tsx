@@ -1,7 +1,7 @@
 'use client';
 
 import { Check, Copy } from 'lucide-react';
-import { useState } from 'react';
+import { useCopy } from './use-copy';
 
 /** Pretty-prints JSON, or already-serialized JSON, without throwing on odd values. */
 export function jsonText(value: unknown): string {
@@ -28,23 +28,11 @@ function describe(value: unknown): string {
 }
 
 function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
+  const { state, copy } = useCopy();
   return (
-    <button
-      type="button"
-      className="json-copy"
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text);
-          setCopied(true);
-          window.setTimeout(() => setCopied(false), 1500);
-        } catch {
-          setCopied(false);
-        }
-      }}
-    >
-      {copied ? <Check size={12} /> : <Copy size={12} />}
-      {copied ? 'Copied' : 'Copy JSON'}
+    <button type="button" className="json-copy" onClick={() => copy(text)}>
+      {state === 'copied' ? <Check size={12} /> : <Copy size={12} />}
+      {state === 'copied' ? 'Copied' : 'Copy JSON'}
     </button>
   );
 }
