@@ -84,7 +84,13 @@ runtime edges facing a model fence them:
   report, a journal line, an archived file, or a memory claim (`untrusted()` in
   `services/gateway/servers/shared.ts`).
 - The **worker**, for every such string it puts into a turn input: the task prompt, dependency
-  reviews, meeting questions, planner inputs, classifier items, artifacts (`services/worker/turns/*`).
+  reviews, meeting questions, planner inputs, classifier items, artifacts (`services/worker/turns/*`),
+  the compiled Working memory block (`compileWorkingMemory` in `lib/server/memory.ts`, which fences
+  each scope's claims and the recent task summaries), and a meeting agenda wherever one reaches a
+  prompt — the Schedule section, the meeting section of a meeting turn, and the meeting session's own
+  prompt in `convex/lib/meetings.ts`. An escalated audit finding lands on an agenda verbatim, so the
+  agenda is material rather than instruction. The Schedule section around it is this platform's own
+  words and stays outside the fence.
 
 Four Convex reads fence their own material and are passed through unchanged:
 `services/meetings:prepInputs` and `answerInputs` (`recentWork`, `transcript`),
@@ -98,10 +104,15 @@ administrator's `standards` text handed to the auditor, and an employee version'
 
 - **Nothing unapproved reaches a model.** The compiler takes `active` claims only, and expiry is
   applied on read. `proposed` and `contested` claims are excluded by construction, so a claim a person
-  has not accepted cannot influence a turn.
+  has not accepted cannot influence a turn. `recall` holds the same line: an archived claim, including
+  the loser of a resolved contest, is not returned.
 - **An agent cannot promote itself.** `remember` writes its own notebook as `active` and a floor or
   project claim as `proposed`. The janitor's `promote` files a workspace copy as `proposed` and says
-  so in the tool result; only `memory:approve`, an administrator action, activates it.
+  so in the tool result; only `memory:approve`, an administrator action, activates it. A `merge`
+  inherits the standing of what it merged: unless every input was active, the merged claim is
+  `proposed` too, so curation cannot activate what nobody approved. And a claim that arrives
+  `proposed` cannot supersede: `remember` refuses `supersedesId` rather than archive a rule a person
+  agreed to and leave the replacement waiting.
 - **Nobody decides a conflict alone.** `contest` marks both sides, links them, and posts the conflict
   as a question in the channel of the scope it was filed against. A person resolves it in
   `memory:resolveContest`, which acts on both sides at once.
@@ -119,14 +130,22 @@ The one place an agent's write reaches a provider unattended. Its guardrails:
 1. **Named tools only.** Both allow-lists hold tool names, validated against the reviewed registry
    when they are saved, at most 50 each. A name that is not a non-blocked `registryTools` row is
    refused, so a typo cannot widen what triage may do.
-2. **Triage tasks only.** `services/triage:writeConnections` refuses a run token whose instance is
-   not of kind `triage`, and narrows each connection's granted tools to the admitted set.
+2. **Triage tasks only, through the workspace's own connections.** `services/triage:writeConnections`
+   refuses a run token whose instance is not of kind `triage`, and narrows each connection's granted
+   tools to the admitted set. Only connections whose visibility is `workspace` are offered, and
+   `triageMayWrite` holds the same line before a call is journaled: a member's `private` credential is
+   theirs, not the workspace's to merge with unattended.
 3. **The emergency list is shut while a person can answer.** It opens only outside attended hours,
    only once three delivered, unacknowledged pages for that alert stand, and only once the first of
-   them is twenty minutes old. The count runs from the first page that still stands rather than over a
-   rolling window, so it cannot be reset by the passage of time — only by an answer, which spends every
-   page before it and starts the count again at zero. The rule is one pure function (`lib/paging.ts`)
-   read by the scheduler that sends the pages, the authority query, and the interface.
+   them is twenty minutes old. A page is one round of paging, however many people it reached: the rows
+   of one batch share their `sentAt` and count once, so a workspace with three people does not reach
+   the gate on a single page. A page counts only if `push`, `slack`, or `email` delivered it; the
+   in-app row always lands and says nothing about whether anybody was told, and Settings refuses to
+   save a non-empty emergency allow-list unless the workspace lists one of those three. The count runs
+   from the first page that still stands rather than over a rolling window, so it cannot be reset by
+   the passage of time — only by an answer, which spends every page before it and starts the count
+   again at zero. The rule is one pure function (`lib/paging.ts`) read by the scheduler that sends the
+   pages, the authority query, and the interface.
 4. **Recomputed per call.** `admittedTools` runs on every listing and every dispatch. An
    acknowledgement between discovery and use closes the list again mid-incident.
 5. **Every gate re-checked at dispatch.** The tool is still admitted, a connected connection still
@@ -139,7 +158,10 @@ The one place an agent's write reaches a provider unattended. Its guardrails:
    same thing, so the model sees it before it calls. Enforcement is at run close, not on trust:
    `services/triage:closeRun` runs at the end of every triage turn, and a run with a succeeded
    emergency-only call and no report has a placeholder filed in its name, marked `missing`, with an
-   escalation posted to the workspace channel. Silence is recorded, not tolerated.
+   escalation posted to the workspace channel. The journal is read newest first, so a hundred ordinary
+   calls after the fact cannot hide the one that mattered, and the report has to be newer than the call
+   it answers for, so an earlier incident's report does not stand in for a later action. Silence is
+   recorded, not tolerated.
 7. **Closing is a person's.** `resolve_alert` marks the alert `fixed` and says in its result that a
    person confirms the incident is closed.
 
@@ -149,8 +171,11 @@ The one place an agent's write reaches a provider unattended. Its guardrails:
 workspace's own owner or administrator (`services/triage:setAlertSecretForActor`, which decides the
 role from the caller's Clerk claims), and an HMAC over `timestamp + "." + rawBody`. The
 signature covers the timestamp, so a replayed body with a fresh timestamp does not verify and a stale
-timestamp is refused outright; the window is five minutes. Bodies are capped at 100 KB, `url` must be
-HTTPS, and the rate limit is 120 per workspace per window. A workspace with no secret answers 404.
+timestamp is refused outright; the window is five minutes, and an exact replay inside it is answered
+from the first result rather than opening a second incident somebody has closed. Bodies are capped at
+100 KB and `url` must be HTTPS. Unsigned traffic is metered by sender address, and the workspace's own
+limit of 120 per window is charged only after the signature verifies, so knowing a workspace id is not
+enough to spend its allowance. A workspace with no secret answers 404.
 
 Deduplication is by fingerprint inside the workspace: a repeat bumps `occurrences` on the open alert
 and opens no second task. GitHub intake is the same path, matched against the workspace's own triage
@@ -170,7 +195,13 @@ the worker unseals them to send. Push is on only where `VAPID_PUBLIC_KEY`, `VAPI
 `VAPID_SUBJECT` are all set; the private key never leaves the server. An endpoint that reports itself
 gone (404 or 410) is deleted rather than retried, so a revoked browser stops being a delivery target.
 Real transports are tried before the in-app row, so a delivered attempt means something left the
-building where it can.
+building where it can, and only those transports count toward the emergency rule.
+
+A push endpoint is a URL a member registered, so it is treated like any other outbound address. `web-push`
+signs and sends over plain Node HTTPS rather than through `safeFetch`, so it carries an agent using the
+same `publicOnlyLookup` the provider dispatcher uses: a hostname that resolves inside this network is
+refused, and a literal address, which never reaches DNS, is refused before the request is made. A
+subject may register at most ten endpoints.
 
 Who a workspace can reach is derived, not claimed: the owner of a personal workspace plus everyone
 who created a floor or project there, with `system` removed so the platform never pages itself.
@@ -216,8 +247,10 @@ gateway and worker log reason codes and request ids, never arguments, prompts, o
 
 **Size and shape.** Bodies are capped at 1 MB, alert bodies at 100 KB. Convex mutations cap prompts,
 messages, events, tool-call evidence, proposal arguments, claims, findings, agendas, and error
-strings. `v.any()` arguments — the roadmap proposal is the only one — are parsed and normalized, and
-rejected past their size cap. Nothing uses `dangerouslySetInnerHTML`, and markdown-lite links go
+strings; an alert title too long for a notification row is truncated where the row is written rather
+than throwing after the alert exists. The `v.any()` arguments — the roadmap proposal, and the action
+journal's `arguments`, `beforeState`, and `afterState`, which are service-only — are parsed or
+normalized and rejected past their size cap. Nothing uses `dangerouslySetInnerHTML`, and markdown-lite links go
 through `safeHttpsUrl`.
 
 **Files.** Archive keys are `<workspace>/<task>/<file id>` with the file id checked against
@@ -226,15 +259,17 @@ Downloads answer `application/octet-stream` with `nosniff` and `no-store`. The a
 `read_artifact` resolves an artifact through `services/artifacts:artifactForRun`, which scopes it to
 the run token's workspace.
 
-**Rate limits.** In-process fixed windows: alert intake 120 per workspace, relay-secret reveal 10 per
-person per connection, starting an OAuth flow 20 per person, and 600 per provider or connection on
-the two webhook routes. Health endpoints are unlimited by design.
+**Rate limits.** In-process fixed windows: alert intake 600 per sender address before the signature is
+checked and 120 per workspace after it, relay-secret reveal 10 per person per connection, starting an
+OAuth flow 20 per person, and 600 per provider or connection on the two webhook routes. Every window
+is keyed in one bounded map: past 10,000 entries the expired ones go first and then the oldest live
+ones, so an unauthenticated caller inventing keys cannot grow it without limit. Health endpoints are
+unlimited by design.
 
 ## Known gaps
 
-- **The ledger is the only gate on the emergency rule.** Three delivered pages and twenty minutes
-  open merge and deploy. There is no second factor and no per-tool ceiling, and a workspace whose only
-  channel is `in_app` satisfies "delivered" with three database writes nobody read. Configure push.
+- **The ledger is the only gate on the emergency rule.** Three pages delivered away from the app and
+  twenty minutes open merge and deploy. There is no second factor and no per-tool ceiling.
 - **A missing incident report is recorded, not prevented.** The emergency call has already executed
   by the time `closeRun` notices no report was filed.
 - **Memory hygiene is instruction, not enforcement.** Nothing scans a claim for a credential before

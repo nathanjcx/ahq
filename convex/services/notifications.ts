@@ -57,8 +57,10 @@ export async function recordAttempts(
 ) {
   const settings = await settingsFor(ctx, workspace._id);
   const subjects = input.subjects?.length ? input.subjects : await workspaceSubjects(ctx, workspace);
-  const title = cleanText(input.title, 'Notification title', 200);
-  const text = cleanText(input.text, 'Notification text', 2_000);
+  // An alert title is allowed to be longer than a notification row holds. Truncating is right where
+  // failing is not: a long title must not be the reason nobody is paged, here or on a re-page.
+  const title = cleanText(input.title.slice(0, 200), 'Notification title', 200);
+  const text = cleanText(input.text.slice(0, 2_000), 'Notification text', 2_000);
   const sentAt = Date.now();
   const alertId = input.alertId;
   const rows = [];
@@ -157,13 +159,19 @@ export const acknowledgeForSubject = mutation({
   },
 });
 
-async function subscriptionFor(ctx: Ctx, subject: string, endpoint: string) {
-  const rows = await ctx.db
+async function subscriptionsFor(ctx: Ctx, subject: string) {
+  return ctx.db
     .query('pushSubscriptions')
     .withIndex('by_subject', (q) => q.eq('subject', subject))
     .collect();
-  return rows.find((row) => row.endpoint === endpoint) ?? null;
 }
+
+/**
+ * How many browsers one person can register. Every endpoint is one outbound request the web service
+ * makes inside an alert's own intake, so an unbounded list is both a fan-out and a way to slow that
+ * request down. Ten covers a person's real devices.
+ */
+const MAX_PUSH_SUBSCRIPTIONS = 10;
 
 /** The browser's push endpoint with its keys already sealed by the web service. */
 export const subscribePush = mutation({
@@ -180,11 +188,13 @@ export const subscribePush = mutation({
     const workspace = await workspaceForActor(ctx, args.authSubject, args.authOrgId);
     if (!workspace) throw new Error('Create a workspace first');
     const endpoint = cleanText(args.endpoint, 'Endpoint', 2_048);
-    const existing = await subscriptionFor(ctx, args.authSubject, endpoint);
+    const rows = await subscriptionsFor(ctx, args.authSubject);
+    const existing = rows.find((row) => row.endpoint === endpoint);
     if (existing) {
       await ctx.db.patch(existing._id, { keysCiphertext: args.keysCiphertext });
       return { subscriptionId: existing._id };
     }
+    if (rows.length >= MAX_PUSH_SUBSCRIPTIONS) throw new Error('Too many push subscriptions');
     const subscriptionId = await ctx.db.insert('pushSubscriptions', {
       workspaceId: workspace._id,
       subject: args.authSubject,
@@ -201,7 +211,9 @@ export const unsubscribePush = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     requireService(args.secret);
-    const existing = await subscriptionFor(ctx, args.authSubject, args.endpoint);
+    const existing = (await subscriptionsFor(ctx, args.authSubject)).find(
+      (row) => row.endpoint === args.endpoint,
+    );
     if (existing) await ctx.db.delete(existing._id);
     return null;
   },

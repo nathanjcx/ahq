@@ -143,6 +143,16 @@ export const remember = mutation({
     // Its own notes take effect at once, whether they are for this task or for every task it runs;
     // a floor or project claim is a proposal the janitor or a person decides.
     const status = scope === 'agent' || scope === 'task' ? ('active' as const) : ('proposed' as const);
+    // A proposal cannot retire the claim it replaces: it reaches no model until somebody activates
+    // it, and approval does not revisit the archive. The janitor's merge is the path for those.
+    let previous: Doc<'memories'> | null = null;
+    if (args.supersedesId) {
+      previous = await ctx.db.get(args.supersedesId);
+      if (!previous || previous.workspaceId !== task.workspaceId || previous.scopeId !== scopeId)
+        throw new Error('The superseded claim is not in this scope');
+      if (status !== 'active')
+        throw new Error('A proposed claim cannot supersede; file it and let a person or the janitor decide');
+    }
     const now = Date.now();
     const memoryId = await ctx.db.insert('memories', {
       workspaceId: task.workspaceId,
@@ -160,12 +170,7 @@ export const remember = mutation({
       createdAt: now,
       updatedAt: now,
     });
-    if (args.supersedesId) {
-      const previous = await ctx.db.get(args.supersedesId);
-      if (!previous || previous.workspaceId !== task.workspaceId || previous.scopeId !== scopeId)
-        throw new Error('The superseded claim is not in this scope');
-      await supersede(ctx, previous._id, memoryId);
-    }
+    if (previous) await supersede(ctx, previous._id, memoryId);
     if (scope === 'agent') await enforceAgentBudget(ctx, task, memoryId);
     return { memoryId, status };
   },
@@ -210,8 +215,8 @@ export const recall = query({
     for (const { scope, scopeId } of scopes) {
       const entries = await scopeEntries(ctx, task.workspaceId, scope, scopeId);
       for (const entry of entries) {
-        const status = expireStatus(entry, now);
-        if (status !== 'active' && status !== 'archived') continue;
+        // Only what stands reaches a model: a proposal, a contested side, an archived claim do not.
+        if (expireStatus(entry, now) !== 'active') continue;
         const tags = terms.filter((term) => entry.tags.some((tag) => tag.includes(term))).length;
         const text = entry.text.toLowerCase();
         const hits = terms.filter((term) => text.includes(term)).length;
@@ -248,11 +253,15 @@ export const recordSummary = mutation({
     if (!task) throw new Error('Task not found');
     const lines = (values: string[], field: string) =>
       values.slice(0, 20).map((value) => cleanText(value, field, 400));
+    // A summary lists this task's own deliverables; naming another task's artifact would leak its id.
+    const own = await Promise.all(
+      args.artifactIds.map(async (id) => ((await ctx.db.get(id))?.taskId === task._id ? id : null)),
+    );
     const fields = {
       outcome: cleanText(args.outcome, 'Outcome', 400),
       decisions: lines(args.decisions, 'Decision'),
       openQuestions: lines(args.openQuestions, 'Open question'),
-      artifactIds: args.artifactIds,
+      artifactIds: own.filter((id) => id !== null),
       text: cleanText(args.text, 'Summary', 5_000),
       inferred: args.inferred,
     };
@@ -387,7 +396,8 @@ export const merge = mutation({
       author: 'janitor',
       authorName: task.employeeName,
       confidence: Math.max(...inputs.map((entry) => entry.confidence)),
-      status: 'active',
+      // A merge carries the standing of what it replaces: merging proposals cannot approve them.
+      status: inputs.every((entry) => expireStatus(entry, now) === 'active') ? 'active' : 'proposed',
       lastUsedAt: now,
       createdAt: now,
       updatedAt: now,

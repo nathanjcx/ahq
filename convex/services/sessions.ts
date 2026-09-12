@@ -53,12 +53,14 @@ function publicTask(task: Doc<'tasks'>) {
     prompt: task.prompt,
     status: task.status,
     kind: task.kind ?? 'work',
+    cadence: task.cadence,
     projectId: task.projectId,
     sessionId: task.sessionId,
     model: task.model,
     createdBy: task.createdBy,
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
+    usage: task.usage,
   };
 }
 
@@ -296,7 +298,11 @@ export const recordEvents = mutation({
       let nextStatus = args.status;
       let staleTerminal = false;
       if (isTerminal(args.status)) {
-        if (!args.inputRevision) throw new Error('Terminal session events require an input revision');
+        // The revision may legitimately be empty: a daily task's input is its shift job, not a
+        // `start_task`, so it has no input job to name. What the check needs is that the caller read
+        // one and passed it, so that an input arriving mid-turn still makes this terminal stale.
+        if (args.inputRevision === undefined)
+          throw new Error('Terminal session events require an input revision');
         const input = await taskInputState(ctx, task._id);
         staleTerminal = input.pendingInput || input.inputRevision !== args.inputRevision;
       }
@@ -329,12 +335,16 @@ export const recordEvents = mutation({
     if (args.error !== undefined) patch.error = args.error.slice(0, 2_000);
     const status = patch.status ?? task.status;
     const becameTerminal = isTerminal(status) && !isTerminal(task.status);
+    // A daily task's session completes at the end of every shift and the next shift reopens it, so a
+    // `completed` daily task has finished a shift and not the work. Nothing that belongs to a task
+    // that is really over fires here: no closing post, no listing count, and no dependency release.
+    const finishedWork = becameTerminal && !(task.cadence === 'daily' && status === 'completed');
     if (becameTerminal) {
       patch.streamOwner = undefined;
       patch.streamLeaseExpiresAt = undefined;
     }
     await ctx.db.patch(task._id, patch);
-    if (becameTerminal && status !== 'uncertain') {
+    if (finishedWork && status !== 'uncertain') {
       const closing = status === 'completed' ? await finalAssistantMessage(ctx, task._id) : undefined;
       await systemPost(
         ctx,
@@ -344,10 +354,10 @@ export const recordEvents = mutation({
     }
     // Marketplace usage count, owned by the marketplace workstream: a completed task is the one
     // signal a listing reports beyond its hires.
-    if (becameTerminal && status === 'completed') await recordCompletedTask(ctx, task.employeeId);
+    if (finishedWork && status === 'completed') await recordCompletedTask(ctx, task.employeeId);
     // Dependency release, owned by the projects workstream: a task that just finished either frees
     // the tasks waiting on it or blocks them with the reason. Nothing else here reads the graph.
-    if (becameTerminal) await releaseDependents(ctx, task, status);
+    if (finishedWork) await releaseDependents(ctx, task, status);
     return { inserted, lastSequence: sequence, status };
   },
 });

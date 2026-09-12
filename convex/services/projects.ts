@@ -78,7 +78,8 @@ export const plannerInputs = query({
           q
             .eq('workspaceId', project.workspaceId)
             .eq('scope', 'workspace')
-            .eq('scopeId', '')
+            // A workspace claim is scoped to the workspace itself, the way `memory` files it.
+            .eq('scopeId', String(project.workspaceId))
             .eq('status', 'active'),
         )
         .take(MEMORY_SAMPLE),

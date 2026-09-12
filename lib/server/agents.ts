@@ -9,6 +9,7 @@ import { query, mutate } from './backend';
 import { compileWorkingMemory, type WorkingMemory, type WorkingMemoryInputs } from './memory';
 import { requiredEnv } from './secrets';
 import { toolPolicy } from './tool-policy';
+import { untrustedBlock } from './untrusted';
 
 let client: OpenAI | undefined;
 export function agentsClient() {
@@ -238,7 +239,9 @@ function scheduleLines(
   const next = meetings[0];
   if (next) {
     lines.push(`- Next meeting: ${next.title} at ${when(next.startsAt)}`);
-    if (next.agenda.length) lines.push(`- Agenda: ${next.agenda.join('; ')}`);
+    // The clock and the pace are this platform's own words; the agenda is not. Escalated audit
+    // findings land on it verbatim, so it arrives as material inside a fence.
+    if (next.agenda.length) lines.push('- Agenda:', untrustedBlock(next.agenda.join('\n')));
   }
   if (project.milestone)
     lines.push(

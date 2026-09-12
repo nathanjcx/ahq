@@ -74,6 +74,15 @@ export interface PostInput {
 
 /** The one path that writes a post. Text is trimmed and capped; the channel fixes the workspace. */
 export async function insertPost(ctx: MutationCtx, input: PostInput) {
+  // `createdAt` is the channel's own order and its paging cursor, so it is kept strictly increasing:
+  // several posts written inside one millisecond — a shift report and its system line, say — would
+  // otherwise share a cursor and page as one.
+  const newest = await ctx.db
+    .query('posts')
+    .withIndex('by_channel', (q) => q.eq('channelId', input.channel._id))
+    .order('desc')
+    .first();
+  const createdAt = Math.max(Date.now(), (newest?.createdAt ?? 0) + 1);
   const postId = await ctx.db.insert('posts', {
     workspaceId: input.channel.workspaceId,
     channelId: input.channel._id,
@@ -87,7 +96,7 @@ export async function insertPost(ctx: MutationCtx, input: PostInput) {
     toEmployeeId: input.toEmployeeId,
     reportId: input.reportId,
     handoff: input.handoff,
-    createdAt: Date.now(),
+    createdAt,
   });
   return { postId };
 }
@@ -225,7 +234,8 @@ export function publicPost(post: Doc<'posts'>) {
     toEmployeeId: post.toEmployeeId,
     acceptedTaskId: post.acceptedTaskId,
     handoff: post.handoff,
-    createdAt: post._creationTime,
+    // The field the channel index orders by, so a page's oldest post is a usable `before` cursor.
+    createdAt: post.createdAt,
   };
 }
 
@@ -236,16 +246,17 @@ export async function recentPosts(
   limit: number,
   before?: number,
 ): Promise<Doc<'posts'>[]> {
-  // Pages by creation time, which is unique, so two posts written in the same millisecond page
-  // correctly. `before` is a public post's `createdAt`, which is that creation time.
-  const posts = (
-    await ctx.db
-      .query('posts')
-      .withIndex('by_channel', (q) => q.eq('channelId', channelId))
-      .order('desc')
-      .take(limit + (before === undefined ? 0 : 200))
-  )
-    .filter((post) => before === undefined || post._creationTime < before)
-    .slice(0, limit);
+  // The range is on the index, not a filter over a fixed window: `by_channel` is keyed by channel and
+  // `createdAt`, so reading back from the cursor costs one page however deep the channel goes.
+  // Filtering instead left page three of a busy channel empty, because the whole window was newer
+  // than the cursor. `before` is a public post's `createdAt`, which is the field the index orders by.
+  const posts = await ctx.db
+    .query('posts')
+    .withIndex('by_channel', (q) => {
+      const channel = q.eq('channelId', channelId);
+      return before === undefined ? channel : channel.lt('createdAt', before);
+    })
+    .order('desc')
+    .take(limit);
   return posts.reverse();
 }

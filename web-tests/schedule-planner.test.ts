@@ -28,7 +28,6 @@ function daily(taskId: string, employeeId: string, extra: Partial<PlannerTask> =
     employeeId,
     status: 'running',
     cadence: 'daily',
-    unfinishedDependencies: [],
     model: 'gpt-5.6-terra',
     ...extra,
   };
@@ -39,8 +38,10 @@ function alert(alertId: string, extra: Partial<PlannerAlert> = {}): PlannerAlert
     alertId,
     severity: 'high',
     createdAt: 1,
-    paging: { attempts: 0, required: 3, acknowledged: false },
+    paging: { attempts: 0, required: 3, acknowledged: false, nextAttemptAt: monday },
     pagesSent: 0,
+    runLive: false,
+    runKeys: [],
     ...extra,
   };
 }
@@ -96,13 +97,13 @@ describe('work shifts', () => {
     expect(planTick(plan)[0].findingIds).toEqual(['f1']);
   });
 
-  it('never schedules a task whose dependency is unfinished, and reviews it once a day instead', () => {
+  it('reviews a waiting task once a day and shifts it again once a person has released it', () => {
     const plan = input({
-      tasks: [daily('blocked', 'ann', { status: 'waiting', unfinishedDependencies: ['other'] })],
+      tasks: [daily('held', 'ann', { status: 'waiting' })],
       instances: [worker('ann')],
     });
-    expect(shape(planTick(plan))).toEqual([['review_shift', 'blocked']]);
-    expect(planTick(plan)[0].uniqueKey).toBe('review:blocked:2026-06-01');
+    expect(shape(planTick(plan))).toEqual([['review_shift', 'held']]);
+    expect(planTick(plan)[0].uniqueKey).toBe('review:held:2026-06-01');
     const reviewed = {
       ...plan,
       tasks: plan.tasks.map((task) => ({ ...task, lastReviewDate: '2026-06-01' })),
@@ -110,6 +111,13 @@ describe('work shifts', () => {
     expect(planTick(reviewed)).toEqual([]);
     // A review shift is a working-day habit, so the night brings nothing.
     expect(planTick({ ...plan, now: mondayNight })).toEqual([]);
+    // A dependency that failed leaves the dependent `blocked`, which is a person's to decide: it is
+    // neither shifted nor reviewed every day for as long as the project lasts.
+    const blocked = { ...plan, tasks: [daily('held', 'ann', { status: 'blocked' })] };
+    expect(planTick(blocked)).toEqual([]);
+    // And once a person unblocks it, it shifts like any other daily task, whatever its dependency did.
+    const released = { ...plan, tasks: [daily('held', 'ann', { status: 'queued' })] };
+    expect(shape(planTick(released))).toEqual([['shift', 'held']]);
   });
 
   it('stops at the free slots and never gives one instance two runs at once', () => {
@@ -211,9 +219,10 @@ describe('triage and preparation', () => {
         alert('bad', { severity: 'critical', createdAt: 2 }),
       ],
     });
-    // One responder takes the worst alert first, and the shift still waits for a slot.
+    // One responder takes the worst alert first, and the shift still waits for a slot. The run's key
+    // carries the ledger it is briefed with, so a page that lands plans a run that knows about it.
     expect(planTick(plan).map((job) => [job.kind, job.alertId, job.uniqueKey])).toEqual([
-      ['triage', 'bad', 'triage:bad'],
+      ['triage', 'bad', 'triage:bad:0'],
     ]);
     // At night nobody is watching, so the incident worth waking someone for is also paged. The low
     // one is not: it waits for the morning.
@@ -238,6 +247,43 @@ describe('triage and preparation', () => {
       }),
     );
     expect(jobs[0].taskId).toBe('alert-task');
+  });
+
+  it('plans one run per state of an incident, and never starves another alert waiting on a person', () => {
+    const ledger = (attempts: number) => ({
+      attempts,
+      required: 3,
+      acknowledged: false,
+      firstAttemptAt: mondayNight - 30 * 60_000,
+      nextAttemptAt: undefined,
+    });
+    const plan = (extra: Partial<PlannerAlert>) =>
+      planTick(
+        input({
+          now: mondayNight,
+          settings: { ...settings, overnightPolicy: 'audits_only' },
+          instances: [responder],
+          alerts: [
+            alert('first', { severity: 'critical', triageTaskId: 'first-task', ...extra }),
+            alert('second', { severity: 'high', createdAt: 2, triageTaskId: 'second-task' }),
+          ],
+        }),
+      ).filter((job) => job.kind === 'triage');
+    // A run already queued or in flight is not planned twice, and the responder it would have taken
+    // goes to the other incident instead.
+    expect(plan({ runLive: true }).map((job) => job.alertId)).toEqual(['second']);
+    // Nor is a run planned again for a state of the incident that has already had one: the finished
+    // run's key still stands, so the other alert is what this tick answers.
+    expect(plan({ runKeys: ['triage:first:0'] }).map((job) => job.alertId)).toEqual(['second']);
+    // Once the ledger moves the key moves with it, and the incident gets a run briefed on the pages.
+    expect(plan({ runKeys: ['triage:first:0'], paging: ledger(1) }).map((job) => job.uniqueKey)).toEqual([
+      'triage:first:1',
+    ]);
+    // And when the emergency rule opens, the run that may act on it is a run of its own.
+    expect(
+      plan({ runKeys: ['triage:first:0', 'triage:first:3'], paging: { ...ledger(3), opensAt: mondayNight } })
+        .map((job) => job.uniqueKey),
+    ).toEqual(['triage:first:3:e']);
   });
 
   it('prepares each attendee once, sixty working minutes out', () => {
@@ -279,6 +325,7 @@ describe('caps', () => {
       ['triage', 'triage-task'],
       ['shift', 'one'],
     ]);
+    // A page costs no tokens, so the cap never keeps an incident from reaching a person.
   });
 
   it('stops triage at its own allowance', () => {
@@ -297,7 +344,7 @@ describe('the emergency rule', () => {
   const responder = worker('tri', { kind: 'triage', standingTaskId: 'triage-task' });
   const night = { ...settings, overnightPolicy: 'audits_only' as const };
 
-  it('pages an unanswered incident on the re-page interval until three attempts stand', () => {
+  it('pages an unanswered incident on the re-page interval until three pages have been sent', () => {
     const at = (attempts: number, lastAttemptAt?: number) =>
       planTick(
         input({
@@ -313,7 +360,13 @@ describe('the emergency rule', () => {
                 required: 3,
                 acknowledged: false,
                 lastAttemptAt,
-                nextAttemptAt: lastAttemptAt === undefined ? mondayNight : lastAttemptAt + 7 * 60_000,
+                // `pagingState` stops naming a next page once three have been sent, answered or not.
+                nextAttemptAt:
+                  attempts >= 3
+                    ? undefined
+                    : lastAttemptAt === undefined
+                      ? mondayNight
+                      : lastAttemptAt + 7 * 60_000,
               },
             }),
           ],
@@ -326,7 +379,7 @@ describe('the emergency rule', () => {
     expect(at(1, mondayNight - 60_000)).toEqual([]);
     expect(at(1, mondayNight - 8 * 60_000).map((job) => job.uniqueKey)).toEqual(['page:bad:2']);
     expect(at(2, mondayNight - 8 * 60_000).map((job) => job.uniqueKey)).toEqual(['page:bad:3']);
-    // Three attempts is the whole ledger; nothing pages again.
+    // Three pages is the whole ledger; nothing pages again.
     expect(at(3, mondayNight - 8 * 60_000)).toEqual([]);
   });
 
@@ -388,7 +441,7 @@ describe('the audit policy', () => {
       tasks: [
         daily('flagged', 'ann', { deadlineAt: monday + 86_400_000 }),
         daily('other', 'ann', { deadlineAt: monday + 2 * 86_400_000 }),
-        daily('waiting', 'ann', { status: 'waiting', unfinishedDependencies: ['x'] }),
+        daily('waiting', 'ann', { status: 'waiting' }),
         daily('clear', 'bob'),
       ],
       instances: [worker('ann'), worker('bob')],

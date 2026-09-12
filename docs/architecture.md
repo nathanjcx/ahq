@@ -18,7 +18,9 @@ Web, worker, and gateway share `AHQ_SERVICE_SECRET` for Convex service functions
 `CREDENTIAL_ENCRYPTION_KEY` to seal and unseal secrets. Convex holds no plaintext secret and no key.
 
 Two crons drive the platform (`convex/crons.ts`): `internal.maintenance.wakeWorkers` every minute,
-and `internal.services.schedule.tick` every five minutes.
+and `internal.services.schedule.tick` every five minutes. The tick reads only the list of workspaces
+and schedules one `services/schedule:tickWorkspace` each, because Convex's read limits are per
+transaction and planning every workspace in one would make a few busy ones stop the rest.
 
 ## Domain model
 
@@ -154,9 +156,12 @@ delivers to them by Web Push and prunes the ones a push service reports gone.
 The emergency rule lives in one pure place, `lib/paging.ts`, read by the planner that sends the pages,
 the authority query the gateway asks, and the interface that explains the wait. Outside attended hours
 the five-minute tick pages every open, unanswered alert and re-pages it every `REPAGE_INTERVAL_MS`
-(seven minutes) until `EMERGENCY_ATTEMPTS` (three) delivered attempts stand. Attempts count from the
-first page that still stands rather than over a rolling window, so the count only grows while nobody
-answers; an acknowledgement spends every page before it, resets the count, and stops the paging.
+(seven minutes) until `EMERGENCY_ATTEMPTS` (three) pages have been sent. `livePages` groups the rows of
+one page by the `sentAt` `recordAttempts` stamps the whole batch with, so a page counts once however
+many people it reached, and only a page a `PAGING_TRANSPORTS` channel delivered counts toward the gate —
+the in-app row always lands and proves nothing. Pages count from the first that still stands rather
+than over a rolling window, so the count only grows while nobody answers; an acknowledgement spends
+every page before it, resets the count, and stops the paging.
 
 Triage authority is decided per call by the gateway from `services/triage:authority`: the workspace's
 `triageAllowList` is always open to a triage task; the `emergencyAllowList` opens only outside
@@ -197,16 +202,19 @@ jobs, which is what makes the planner testable without a clock.
 
 Priority inside one tick:
 
-1. **Triage**, one run per open alert, severity then age. It ignores working hours, the overnight
-   policy, and the concurrency limit, and stops only at `triageAllowance`.
+1. **Triage**, one run per state of each open alert, severity then age. It ignores working hours, the
+   overnight policy, and the concurrency limit, and stops only at `triageAllowance`. An incident whose
+   run is queued or in flight is skipped before it takes a responder, so one alert waiting on a person
+   cannot starve the rest.
 2. **Pages** for open, unanswered alerts outside attended hours, on the re-page interval. A page runs
    no model and takes no slot, so neither the token cap nor the concurrency limit holds it back.
 3. Everything below stops at `dailyTokenCap` and fits inside `maxConcurrentInstances` minus the
    shifts already running, one run per instance per tick.
 4. **Meeting preparation** for meetings inside `PREP_LEAD_HOURS` (one working hour).
-5. **Work shifts** for daily tasks with no unfinished dependency and no work shift today, ordered
-   findings-first and then by nearest deadline.
-6. **Review shifts** for waiting tasks, once per working day.
+5. **Work shifts** for daily tasks that are `queued`, `running`, or `completed` and have had no work
+   shift today, ordered findings-first and then by nearest deadline. Status is the whole rule:
+   `releaseDependents` owns the move out of `waiting`, and `blocked` is a person's to undo.
+6. **Review shifts** for `waiting` tasks, once per working day.
 7. **Curation** for the janitor: nightly, or immediately for each batch of
    `CURATION_THRESHOLD` (20) proposed claims.
 8. **Audits** outside working hours, in the night's own task.
@@ -218,9 +226,12 @@ findings may do: under `soft` the findings lead its day and nothing else is held
 runs only the shift that clears them, takes no other run that day, and `startTask` refuses it new work
 until the findings are addressed (reserved staff are exempt, or a finding could never be cleared).
 
-Each planned job carries a `uniqueKey` (`shift:<task>:<date>`, `triage:<alert>`, `page:<alert>:<n>`,
-`meeting_prep:<meeting>:<employee>`, and so on), and `insertJob` returns the existing job for a key
-it has seen, so a repeated tick enqueues nothing twice. `JOB_KINDS` maps each planned kind onto a
+Each planned job carries a `uniqueKey` (`shift:<task>:<date>`, `triage:<alert>:<pages>[:e]`,
+`page:<alert>:<n>`, `meeting_prep:<meeting>:<employee>`, and so on), and `insertJob` returns the
+existing job for a key it has seen, so a repeated tick enqueues nothing twice. A triage key carries the
+ledger the run is briefed with and whether the emergency gate was open for it, which is what plans a
+fresh run when a page lands or the gate opens instead of leaving the incident with the one run it got
+when it arrived. `JOB_KINDS` maps each planned kind onto a
 queue kind from `lib/jobs.ts`.
 
 ### Job kinds
@@ -231,7 +242,7 @@ The first four predate the schedule and live in `services/worker/jobs.ts`.
 
 | Kind             | Enqueued by                                | What the turn does                                                           |
 | ---------------- | ------------------------------------------ | ---------------------------------------------------------------------------- |
-| `start_task`     | `startTask`                                | First message of an ordinary task; not a turn                                |
+| `start_task`     | `startTask`                                | First message of a `once` task; not a turn, and never for a daily task       |
 | `send_message`   | `tasks:message`                            | Follow-up message                                                            |
 | `cancel_task`    | `tasks:cancel`                             | Cancellation                                                                 |
 | `execute_action` | Approving a proposal                       | The approved external write                                                  |
@@ -326,8 +337,12 @@ over inputs the platform hands them.
 - `services/inbox:ingestInbox` enqueues `email_classify` when a Gmail relay delivery inserts
   anything, keyed to the hour so it runs at most hourly.
 - The alert route pages a person on a new `high` or `critical` alert.
-- `services/schedule:startShift` reopens a completed daily task, because a daily task's session
-  completes at the end of every shift.
+- `services/queue:claimJobs` reopens a `completed` task for the job kinds in `REOPENS_TASK`, because a
+  `completed` task is not always finished work: a daily task's session completes at the end of every
+  shift, a reserved employee's standing session completes after every run, and an incident's task is
+  re-run whenever its ledger moves. `recordEvents` knows the difference too — a daily task that
+  completes has finished a shift, so it releases no dependents, counts against no listing, and gets no
+  closing summary.
 
 ## The UI layer
 
@@ -413,10 +428,15 @@ navigation and render a placeholder (page lands with phase four), as do the per-
 - **The office activity model is unchanged.** `components/office/activity.ts` still has the nine
   original activities; none of the v4 states (`waiting`, `auditing`, `triaging`, `off_shift`, and the
   rest) exist, and replay covers no memory, meeting, audit, or triage event.
-- **`capacity.instances` counts reserved instances** (`convex/plan.ts`) while the hiring cap counts
-  worker instances only (`convex/lib/marketplace.ts`), so the projection and the cap disagree by
-  three.
 - **No calendar or transcript export route.** The plan names both; `lib/api/routes.ts` has neither.
+- **A workspace's tick reads its newest 500 tasks.** Standing, meeting, audit, and curation sessions
+  share that window with the work, so a very old daily task in a very busy workspace can fall out of it
+  and stop being scheduled with no signal.
+- **A curation backlog between 20 and 39 claims plans one run.** The key is
+  `curation:<employee>:<date>:<batch>` over `floor(proposed / 20)`, so a run that leaves the count
+  inside the same batch plans no second run that day. The nightly run still comes.
+- **A milestone with a failed task reads `active` forever.** `milestoneStatus` has three words —
+  `planned`, `active`, `done` — and a failed or blocked task is neither finished nor unstarted.
 - **A task-scoped claim is not injected.** `remember` accepts the `task` scope and `recall` searches
   it, but `compileInputs` builds the Working memory block from the workspace, project, floor, and
   agent scopes only, so a task claim has to be recalled rather than read.

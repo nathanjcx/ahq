@@ -1,16 +1,20 @@
+import { createHmac } from 'node:crypto';
 import { makeFunctionReference } from 'convex/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../convex/_generated/api';
+import type { Id } from '../convex/_generated/dataModel';
 import { REQUESTED_WITH } from '../lib/api/routes';
 import type { Backend } from '../lib/server/backend';
 import { installBackend } from '../lib/server/backend';
 import { contentSecurityPolicy, nonceValue } from '../lib/server/csp';
-import { safeError, serviceSecret } from '../lib/server/secrets';
+import { resetRateLimits } from '../lib/server/rate-limit';
+import { safeError, seal, serviceSecret } from '../lib/server/secrets';
 import { harness, hireOne, identity, publishEmployee, secret, type Harness } from './support';
 
 const appUrl = 'https://hq.example.com';
 const viewer = 'viewer-user';
 const author = 'author-user';
+const alertSecret = 'alert-signing-secret-that-is-long-enough';
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: async () => ({ userId: viewer }),
@@ -38,6 +42,71 @@ beforeEach(() => {
   process.env.APP_URL = appUrl;
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = 'pk_test_key';
   process.env.CLERK_SECRET_KEY = 'sk_test_key';
+  process.env.CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
+  resetRateLimits();
+});
+
+/** A workspace with signed alert intake configured, and the pieces needed to post to it. */
+async function alertIntake() {
+  const t = harness();
+  installBackend(testBackend(t));
+  const user = t.withIdentity(identity(author));
+  const { workspaceId } = await user.mutation(api.workspace.bootstrap, { name: 'Acme' });
+  await t.mutation(api.services.triage.setAlertSecretForActor, {
+    secret,
+    authSubject: author,
+    alertSecretCiphertext: seal(alertSecret),
+  });
+  const { POST } = await import('../app/api/alerts/route');
+  const body = JSON.stringify({
+    source: 'webhook',
+    fingerprint: 'uptime:checkout',
+    severity: 'critical',
+    title: 'Checkout is returning 500',
+    detail: 'Five consecutive probes failed.',
+  });
+  const timestamp = Date.now();
+  const signed = {
+    'x-astra-workspace': workspaceId,
+    'x-astra-timestamp': String(timestamp),
+    'x-astra-signature': createHmac('sha256', alertSecret).update(`${timestamp}.${body}`).digest('hex'),
+  };
+  const call = (headers: Record<string, string>, text = body) =>
+    POST(new Request(`${appUrl}/api/alerts`, { method: 'POST', headers, body: text }));
+  return { t, user, signed, call };
+}
+
+describe('signed alert intake', () => {
+  it('does not let unsigned requests spend the workspace allowance', async () => {
+    const { signed, call } = await alertIntake();
+    const forged = { ...signed, 'x-astra-signature': '0'.repeat(64) };
+    // The workspace id is on screen in the app, so anyone can name it. A full window of garbage
+    // under it must not be what blocks the workspace's own signed alert.
+    for (let attempt = 0; attempt < 120; attempt++) expect((await call(forged)).status).toBe(401);
+    const accepted = await call(signed);
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toEqual({
+      accepted: true,
+      alertId: expect.any(String),
+      duplicate: false,
+    });
+  });
+
+  it('answers a replayed signed body instead of reopening an incident somebody closed', async () => {
+    const { t, user, signed, call } = await alertIntake();
+    const { alertId } = (await (await call(signed)).json()) as { alertId: string };
+    await user.mutation(api.triage.close, { alertId: alertId as Id<'alerts'> });
+
+    // The same signature verifies for the whole five-minute window. Answering it again must not
+    // open a second alert for the same incident, nor page anybody a second time.
+    const replay = await call(signed);
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual({ accepted: true, alertId, duplicate: true });
+    expect((await t.run((ctx) => ctx.db.query('alerts').collect())).map((row) => row.status)).toEqual([
+      'closed',
+    ]);
+    expect(await t.run((ctx) => ctx.db.query('notifications').collect())).toHaveLength(1);
+  });
 });
 
 describe('request forgery', () => {

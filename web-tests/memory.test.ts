@@ -194,6 +194,97 @@ describe('workspace memory', () => {
     expect(await t.run(async (ctx) => (await ctx.db.get(promoted.memoryId))!.status)).toBe('active');
   });
 
+  it('keeps a merge of proposals a proposal, and refuses to retire a claim for one', async () => {
+    const t = harness();
+    const context = await tower(t);
+    const { runToken, taskId } = context;
+    const { runToken: janitorToken } = await janitor(context);
+    const floorClaim = (text: string) =>
+      t.mutation(api.services.memory.remember, claim(runToken, text, { scope: 'floor', kind: 'decision' }));
+    const first = await floorClaim('The launch moved to March 12.');
+    const second = await floorClaim('The launch is on March 12.');
+
+    // Two claims nobody approved cannot become one claim nobody approved but every shift reads.
+    const merged = await t.mutation(api.services.memory.merge, {
+      secret,
+      runToken: janitorToken,
+      ids: [first.memoryId, second.memoryId],
+      text: 'The launch is on March 12.',
+      kind: 'decision',
+      tags: [],
+    });
+    expect(await t.run(async (ctx) => (await ctx.db.get(merged.memoryId))!.status)).toBe('proposed');
+    expect((await t.query(api.services.memory.compileInputs, { secret, taskId })).entries.floor).toEqual([]);
+
+    // Nor may a proposal archive what stands today, which approval would never bring back.
+    await expect(
+      t.mutation(
+        api.services.memory.remember,
+        claim(runToken, 'The launch slipped to April.', {
+          scope: 'floor',
+          kind: 'decision',
+          supersedesId: merged.memoryId,
+        }),
+      ),
+    ).rejects.toThrow('A proposed claim cannot supersede');
+    expect(await t.run(async (ctx) => (await ctx.db.get(merged.memoryId))!.status)).toBe('proposed');
+  });
+
+  it('keeps an archived claim out of recall and a summary inside its own task', async () => {
+    const t = harness();
+    const { owner, runToken, taskId, floorId, employeeId } = await tower(t);
+    const retired = await owner.mutation(api.memory.propose, {
+      scope: 'floor',
+      scopeId: floorId,
+      kind: 'fact',
+      text: 'The deploy window is on Wednesday.',
+      tags: ['deploy'],
+    });
+    await owner.mutation(api.memory.archive, { id: retired.memoryId });
+    await t.mutation(api.services.memory.remember, claim(runToken, 'The deploy runs from my notebook.'));
+
+    // A claim a person retired, or the loser of a contest, is not handed back to a model.
+    expect(
+      (await t.query(api.services.memory.recall, { secret, runToken, query: 'deploy' })).map(
+        (entry) => entry.text,
+      ),
+    ).toEqual(['The deploy runs from my notebook.']);
+
+    const { taskId: otherTaskId } = await owner.mutation(api.tasks.create, {
+      floorId,
+      employeeId,
+      title: 'Another task',
+      prompt: 'Do the other work.',
+    });
+    const [own, other] = await t.run(async (ctx) => {
+      const { workspaceId } = (await ctx.db.get(taskId))!;
+      const file = (id: typeof taskId, name: string) =>
+        ctx.db.insert('artifacts', {
+          workspaceId,
+          taskId: id,
+          name,
+          mediaType: 'text/plain',
+          size: 1,
+          storageKey: 'key',
+          sha256: 'sha',
+          createdAt: Date.now(),
+        });
+      return [await file(taskId, 'notes.md'), await file(otherTaskId, 'secret.md')];
+    });
+    const { summaryId } = await t.mutation(api.services.memory.recordSummary, {
+      secret,
+      taskId,
+      outcome: 'The launch shipped.',
+      decisions: [],
+      openQuestions: [],
+      artifactIds: [own, other],
+      text: 'The launch shipped.',
+      inferred: false,
+    });
+    // A summary names this task's deliverables; another task's artifact id is not one of them.
+    expect(await t.run(async (ctx) => (await ctx.db.get(summaryId))!.artifactIds)).toEqual([own]);
+  });
+
   it('contests both sides of a conflict and keeps them out of working memory until a person decides', async () => {
     const t = harness();
     const context = await tower(t);

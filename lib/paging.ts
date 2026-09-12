@@ -14,33 +14,68 @@ export const REPAGE_INTERVAL_MS = 7 * 60_000;
 export const EMERGENCY_DELAY_MS = 20 * 60_000;
 /** Severities worth waking a person for. A low or medium incident waits for the morning. */
 export const PAGING_SEVERITIES = ['high', 'critical'];
+/**
+ * Channels that reach a person who is not looking at the app. The in-app row always lands, so an
+ * in-app delivery says nothing about whether anybody was told; it cannot be what opens merge and
+ * deploy. A workspace with no transport here can still page, but the emergency rule stays shut.
+ */
+export const PAGING_TRANSPORTS = ['push', 'slack', 'email'];
 
-/** One recorded page, as both Convex and the planner see it. */
+/** One recorded page to one person, as both Convex and the planner see it. */
 export interface PageAttempt {
   sentAt: number;
   deliveredAt?: number;
+  deliveredChannel?: string;
   acknowledgedAt?: number;
+}
+
+/** One page, however many people it was sent to. */
+export interface LivePage {
+  sentAt: number;
+  /** At least one person was reached away from the app. Only these count toward the emergency rule. */
+  delivered: boolean;
+}
+
+/**
+ * The pages on one incident that still stand, one entry per page rather than per person paged.
+ *
+ * `recordAttempts` writes a row per subject and stamps the whole batch with one `sentAt`, so counting
+ * rows would let a workspace with three people reach the emergency gate on a single page. An
+ * acknowledgement spends every page sent before it, which is what makes answering mid-incident close
+ * the emergency allow-list.
+ */
+export function livePages(rows: PageAttempt[]) {
+  const answeredAt = rows
+    .map((row) => row.acknowledgedAt)
+    .filter((at): at is number => at !== undefined)
+    .sort((a, b) => b - a)[0];
+  const delivered = new Map<number, boolean>();
+  for (const row of rows) {
+    if (row.acknowledgedAt !== undefined || row.sentAt <= (answeredAt ?? 0)) continue;
+    const away =
+      row.deliveredAt !== undefined && PAGING_TRANSPORTS.includes(row.deliveredChannel ?? '');
+    delivered.set(row.sentAt, (delivered.get(row.sentAt) ?? false) || away);
+  }
+  const pages: LivePage[] = [...delivered]
+    .map(([sentAt, away]) => ({ sentAt, delivered: away }))
+    .sort((a, b) => a.sentAt - b.sentAt);
+  return { answeredAt, pages };
 }
 
 /**
  * How far the emergency rule has run on one incident.
  *
- * Attempts count from the first one that still stands rather than over a rolling window, so the
- * count only ever grows while nobody answers. An acknowledgement resets the gate: pages sent before
- * it are spent, and the count starts again from the next one, which is what makes answering a page
- * mid-incident close the emergency allow-list.
+ * Attempts count from the first page that still stands rather than over a rolling window, so the
+ * count only ever grows while nobody answers. Only pages a real transport delivered count toward the
+ * gate; every page that was sent, delivered or not, sets the pace of the next one and the ceiling of
+ * three, so a workspace whose channels deliver nothing pages three times and then stops instead of
+ * paging on every tick for as long as the incident is open.
  */
-export function pagingState(attempts: PageAttempt[], now: number): AlertPaging {
-  const answeredAt = attempts
-    .map((row) => row.acknowledgedAt)
-    .filter((at): at is number => at !== undefined)
-    .sort((a, b) => b - a)[0];
-  const live = attempts.filter(
-    (row) => row.deliveredAt !== undefined && !row.acknowledgedAt && row.sentAt > (answeredAt ?? 0),
-  );
-  const sentAt = live.map((row) => row.sentAt).sort((a, b) => a - b);
+export function pagingState(rows: PageAttempt[], now: number): AlertPaging {
+  const { answeredAt, pages } = livePages(rows);
+  const sentAt = pages.filter((page) => page.delivered).map((page) => page.sentAt);
   const firstAttemptAt = sentAt[0];
-  const lastAttemptAt = sentAt[sentAt.length - 1];
+  const lastAttemptAt = pages[pages.length - 1]?.sentAt;
   const enough = sentAt.length >= EMERGENCY_ATTEMPTS;
   const opensAt =
     firstAttemptAt === undefined
@@ -53,12 +88,13 @@ export function pagingState(attempts: PageAttempt[], now: number): AlertPaging {
     lastAttemptAt,
     opensAt,
     // Answered, and nothing has paged since: a page sent after an acknowledgement reopens the wait.
-    acknowledged: answeredAt !== undefined && sentAt.length === 0,
-    nextAttemptAt: enough
-      ? undefined
-      : lastAttemptAt === undefined
-        ? now
-        : lastAttemptAt + REPAGE_INTERVAL_MS,
+    acknowledged: answeredAt !== undefined && pages.length === 0,
+    nextAttemptAt:
+      pages.length >= EMERGENCY_ATTEMPTS
+        ? undefined
+        : lastAttemptAt === undefined
+          ? now
+          : lastAttemptAt + REPAGE_INTERVAL_MS,
   };
 }
 

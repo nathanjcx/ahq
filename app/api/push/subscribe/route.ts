@@ -5,7 +5,8 @@ import {
   type SubscribedResponse,
 } from '@/lib/api/schemas';
 import { mutate } from '@/lib/server/backend';
-import { actor, failure, jsonOk, parseBody } from '@/lib/server/http';
+import { actor, failure, HttpError, jsonOk, parseBody } from '@/lib/server/http';
+import { requireSafeEndpoint } from '@/lib/server/notify';
 import { seal } from '@/lib/server/secrets';
 
 export const runtime = 'nodejs';
@@ -15,6 +16,13 @@ export async function POST(request: Request) {
   try {
     const identity = await actor(request);
     const body = await parseBody(request, pushSubscribeRequest, 10_000);
+    // The send path refuses an endpoint inside this network whatever is stored; refusing it here too
+    // tells the browser rather than leaving a subscription that can never deliver.
+    try {
+      requireSafeEndpoint(body.endpoint);
+    } catch (error) {
+      throw new HttpError(400, (error as Error).message, 'invalid_request');
+    }
     await mutate('services/notifications:subscribePush', {
       authSubject: identity.authSubject,
       authOrgId: identity.authOrgId,

@@ -127,9 +127,12 @@ x-astra-signature: hex(HMAC_SHA256(secret, timestamp + "." + rawBody))
 
 The body is `{ source, fingerprint, severity, title, detail, url?, floorIds? }`; `severity` is `low`,
 `medium`, `high`, or `critical`, `url` must be HTTPS, and `detail` is capped at 10,000 characters.
-The timestamp must be within five minutes, the body at most 100 KB, and the rate limit is 120 per
-workspace per window. A new `high` or `critical` alert records and delivers one notification
-attempt per reachable person; outside attended hours the scheduler keeps paging from there. The response is `{ accepted: true, alertId, duplicate }`.
+The timestamp must be within five minutes and the body at most 100 KB. Unsigned traffic is metered by
+sender address; the workspace's own limit of 120 per window is charged only once the signature
+verifies, so nobody can spend a workspace's allowance from outside. An exact replay inside the window
+is answered from the first result rather than opening a second incident. A new `high` or `critical`
+alert records and delivers one page to every reachable person; outside attended hours the scheduler
+keeps paging from there. The response is `{ accepted: true, alertId, duplicate }`.
 
 **GitHub.** The existing native webhook at `/api/webhooks/native/github` also feeds triage: the
 delivery is matched against each following workspace's `triageRules`, case-insensitively, against the
@@ -147,9 +150,19 @@ for the next run rather than silently marked.
 the caller delivers them. Reachable means the owner of a personal workspace plus everyone who created
 a floor or a project here; Convex has no membership list of its own.
 
+One page reaches every subject at once, and the rows of that batch share their `sentAt`. The emergency
+rule counts pages, not rows, so a workspace with three people is three people paged once rather than
+three attempts on the ledger.
+
 An attempt counts only once a channel reports delivery, and the first channel that lands marks the
 row. Channels are tried in the order `push`, `slack`, `email`, `in_app`, whatever order the workspace
 listed them, so a real transport is tried before the database row that always lands.
+
+**The in-app row does not count toward the emergency rule.** It always lands, whether or not anybody
+looked at it, so it says nothing about whether a person was told. Only `push`, `slack`, or `email`
+delivery advances the ledger, and Settings refuses to save a non-empty emergency allow-list unless one
+of those three is among the workspace's channels. A workspace whose only channel is `in_app` can still
+be paged; its emergency allow-list simply stays shut, which is the safe side.
 
 `push` is Web Push through the `web-push` package. It needs three environment variables on the worker
 and the web service — `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` (a `mailto:`
@@ -158,9 +171,15 @@ Generate the pair once with `npx web-push generate-vapid-keys` and keep the priv
 browser. Without all three, push is off and says so in the log. Subscriptions are stored with their
 keys sealed; an endpoint that answers 404 or 410 is deleted rather than retried.
 
+A subject may register at most ten browsers, and an endpoint is resolved through the same
+public-address-only rule every other outbound request uses: an endpoint that names a literal address
+or resolves inside this network is refused rather than posted to.
+
 `slack` and `email` deliver nothing: they are connector stubs that log that they are not configured
 and report no delivery. A workspace that lists only those channels never records a delivered
-attempt, which means the emergency rule never opens for it.
+attempt, which means the emergency rule never opens for it. Listing one of them satisfies the
+Settings check above, because the check reads the workspace's intent; the ledger still only counts
+what a transport actually delivered.
 
 Acknowledging a notification — `/api/notifications/<id>/ack` or `notifications:acknowledge` — is what
 the emergency rule counts as an answer.
@@ -171,9 +190,10 @@ A triage run's provider tools are decided per call by the gateway from `services
 
 - The **triage allow-list** is always open to a triage task. Those tools execute without a proposal.
 - The **emergency allow-list** opens only when the clock is outside attended hours _and_ three
-  delivered, unacknowledged notification attempts for that alert stand _and_ the first of them is at
-  least twenty minutes old. Attempts count from the first page that still stands, not over a rolling
-  window, so the count grows while nobody answers and never oscillates.
+  delivered, unacknowledged pages for that alert stand _and_ the first of them is at least twenty
+  minutes old. A page is one round of paging, however many people it reached, and it counts only if a
+  real transport delivered it to at least one of them. Pages count from the first that still stands,
+  not over a rolling window, so the count grows while nobody answers and never oscillates.
 - Both are recomputed on every call. A person acknowledging a page between discovery and use closes
   the emergency list again mid-incident: every page sent before the answer is spent, the count starts
   again from zero, and the scheduler stops paging that incident.
@@ -182,23 +202,32 @@ A triage run's provider tools are decided per call by the gateway from `services
   before the run ends.
 - A run that used the emergency list and filed no report gets one filed for it: `closeRun` writes a
   placeholder marked `missing` in the instance's name and posts an escalation to the workspace
-  channel. Watch the workspace channel for `Escalation:` lines.
+  channel. Watch the workspace channel for `Escalation:` lines. The report has to be newer than the
+  call it answers for, so a second emergency action in a later run needs a report of its own.
+- Triage writes only through connections shared with the workspace. A member's `private` connection is
+  never used, however the allow-lists are set.
 
 The pages are the scheduler's, not the worker's: outside attended hours each five-minute tick plans a
-`page_alert` for every open, unanswered incident, re-paging every seven minutes until three delivered
-attempts stand. Merging and deploying inside attended hours need a person, as ordinary proposals.
+`page_alert` for every open, unanswered incident, re-paging every seven minutes until three pages have
+been sent, delivered or not. A triage run's job key carries the ledger it was briefed with and whether
+the emergency gate was open for it, so a page that lands or a gate that opens plans a fresh run with
+the tools that go with it, while an incident whose run is still queued is left alone. Merging and
+deploying inside attended hours need a person, as ordinary proposals.
 
 ## The crons
 
 | Cron                      | Interval  | What it does                                                         |
 | ------------------------- | --------- | -------------------------------------------------------------------- |
 | `maintenance:wakeWorkers` | 1 minute  | Bumps the wake revision so due jobs and expired leases are picked up |
-| `services/schedule:tick`  | 5 minutes | Plans and enqueues the day's runs for every workspace                |
+| `services/schedule:tick`  | 5 minutes | Hands every workspace to a tick of its own                           |
 
-The tick reads at most 200 workspaces and 500 tasks, entries, alerts, and proposed claims per
-workspace. It creates the reserved janitor, auditor, and triage staff on first run, opens the night's
-audit task after hours, and prepares meetings at the lead. It enqueues; it never runs a turn. Every
-job it inserts carries a unique key, so a repeated tick is a no-op.
+The tick itself reads nothing but the list of workspaces and schedules one
+`services/schedule:tickWorkspace` per workspace, because Convex's read limits are per transaction and a
+few busy workspaces would otherwise stop the whole deployment from being scheduled. Each workspace's
+own tick reads at most 500 tasks, entries, alerts, and proposed claims. It creates the reserved
+janitor, auditor, and triage staff on first run, opens the night's audit task after hours, and prepares
+meetings at the lead. It enqueues; it never runs a turn. Every job it inserts carries a unique key, so
+a repeated tick is a no-op.
 
 ## The worker
 

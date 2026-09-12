@@ -1,4 +1,5 @@
 import { v } from 'convex/values';
+import type { JobKind } from '../../lib/jobs';
 import type { Doc, Id } from '../_generated/dataModel';
 import { mutation, query, type MutationCtx, type QueryCtx } from '../_generated/server';
 import { requireService } from '../shared';
@@ -6,6 +7,40 @@ import { isTerminal, taskInputState } from './context';
 
 /** Active task statuses, in the order a worker should take them on. */
 const monitorable = ['queued', 'running', 'awaiting_approval'] as const;
+
+/**
+ * Job kinds that run again on a task whose session has already finished, and reopen it when they do.
+ *
+ * A `completed` task is not always finished work. A daily task's session completes at the end of every
+ * shift and the next day's shift reopens it; a reserved employee's standing session completes after
+ * every run and the next run reopens it; an incident's task is re-run whenever its notification ledger
+ * moves. Failing these for being finished is what would stop a daily task after one day.
+ *
+ * `execute_action` is the other case and is handled separately: an approved action executes against a
+ * task that really did finish while it waited for approval, and leaves it finished.
+ */
+const REOPENS_TASK: readonly string[] = [
+  'start_shift',
+  'review_shift',
+  'meeting_prep',
+  'meeting_answer',
+  'meeting_wrapup',
+  'curation_run',
+  'audit_run',
+  'triage_run',
+  'email_classify',
+] satisfies readonly JobKind[];
+
+function reopensTask(job: Doc<'jobs'>, task: Doc<'tasks'>) {
+  return task.status === 'completed' && REOPENS_TASK.includes(job.kind);
+}
+
+/** Whether this job has outlived the task it belongs to and should be failed rather than run. */
+function taskIsPast(job: Doc<'jobs'>, task: Doc<'tasks'>) {
+  if (job.kind === 'cancel_task' || reopensTask(job, task)) return false;
+  if (task.status === 'completed') return job.kind !== 'execute_action';
+  return isTerminal(task.status);
+}
 
 async function activeTasks(ctx: QueryCtx | MutationCtx) {
   const tasks: Doc<'tasks'>[] = [];
@@ -116,7 +151,7 @@ export const claimJobs = mutation({
         }
       } else {
         const task = await ctx.db.get(job.taskId);
-        if (!task || (job.kind !== 'cancel_task' && isTerminal(task.status))) {
+        if (!task || taskIsPast(job, task)) {
           await ctx.db.patch(job._id, {
             state: 'failed',
             error: 'Task became inactive before the command could be retried',
@@ -179,11 +214,7 @@ export const claimJobs = mutation({
         await ctx.db.patch(job._id, { state: 'failed', error: 'Task not found', updatedAt: now });
         continue;
       }
-      if (
-        job.kind !== 'cancel_task' &&
-        (['failed', 'cancelled', 'uncertain'].includes(task.status) ||
-          (task.status === 'completed' && job.kind !== 'execute_action'))
-      ) {
+      if (taskIsPast(job, task)) {
         await ctx.db.patch(job._id, { state: 'failed', error: 'Task is no longer active', updatedAt: now });
         if (job.kind === 'execute_action' && job.proposalId) {
           const proposal = await ctx.db.get(job.proposalId);
@@ -222,6 +253,9 @@ export const claimJobs = mutation({
       // renew, or fail the same attempt. At most one session-holding job per task is leased at once.
       const leaseToken = crypto.randomUUID();
       const attempts = job.attempts + 1;
+      // The run reopens the session it is about to use: a task left `completed` would be refused by
+      // the gateway's run token and by `renewLease` the moment the turn tried to do anything.
+      if (reopensTask(job, task)) await ctx.db.patch(task._id, { status: 'running', updatedAt: now });
       await ctx.db.patch(job._id, {
         state: 'leased',
         attempts,

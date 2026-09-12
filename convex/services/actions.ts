@@ -326,6 +326,8 @@ async function triageMayWrite(
   return (
     connection?.workspaceId === task.workspaceId &&
     connection.status === 'connected' &&
+    // A private connection belongs to the member who made it, not to the workspace's triage rule.
+    connection.visibility === 'workspace' &&
     connection.allowedTools.includes(tool)
   );
 }

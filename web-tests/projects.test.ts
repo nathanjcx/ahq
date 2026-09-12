@@ -173,7 +173,7 @@ describe('projects and roadmaps', () => {
     expect((await user.query(api.projects.list, {}))[0]).toMatchObject({ id: projectId, openTasks: 2 });
   });
 
-  it('lists the project\'s own work and names its channel for the interface', async () => {
+  it("lists the project's own work and names its channel for the interface", async () => {
     const { user, floorId, employeeId, projectId } = await setup();
     const proposal = roadmap(floorId, employeeId);
     const confirmed = await user.mutation(api.projects.confirmProposal, { projectId, proposal });
@@ -419,13 +419,44 @@ describe('planner inputs', () => {
         updatedAt: task.createdAt + 2 * 3_600_000,
       });
     });
-    expect(
-      await t.run(async (ctx) => {
-        const task = await ctx.db.get(taskId);
-        if (!task) throw new Error('Expected the task');
-        return estimateTask(ctx, task.workspaceId, versionId, 'daily');
-      }),
-    ).toMatchObject({ workingHours: 2, tokens: 1_000, confidence: 0.4 });
+    const workspaceId = await t.run(async (ctx) => (await ctx.db.get(taskId))!.workspaceId);
+    const estimateFor = (cadence: 'once' | 'daily') =>
+      t.run(async (ctx) => estimateTask(ctx, workspaceId, versionId, cadence));
+    expect(await estimateFor('daily')).toMatchObject({ workingHours: 2, tokens: 1_000, confidence: 0.4 });
+
+    // History is this workspace's. A busy neighbour on the same deployment must not push it out of
+    // the sample and leave every estimate falling back to the per-model default.
+    const other = t.withIdentity(orgIdentity('other-owner', 'globex'));
+    const { workspaceId: otherWorkspaceId } = await other.mutation(api.workspace.bootstrap, {
+      name: 'Globex',
+    });
+    await t.run(async (ctx) => {
+      const { _id, _creationTime, ...task } = (await ctx.db.get(taskId))!;
+      for (let index = 0; index < 250; index++)
+        await ctx.db.insert('tasks', {
+          ...task,
+          workspaceId: otherWorkspaceId,
+          title: `Their work ${index}`,
+          usage: { input: 900_000, cached: 0, output: 100_000 },
+        });
+    });
+    expect(await estimateFor('daily')).toMatchObject({ workingHours: 2, tokens: 1_000, confidence: 0.4 });
+  });
+
+  it('shows the planner what the workspace has agreed', async () => {
+    const { t, projectId } = await setup();
+    const admin = t.withIdentity(orgIdentity('owner', 'acme', 'org:admin'));
+    const workspaceId = await t.run(async (ctx) => (await ctx.db.get(projectId))!.workspaceId);
+    await admin.mutation(api.memory.propose, {
+      scope: 'workspace',
+      scopeId: workspaceId,
+      kind: 'preference',
+      text: 'We ship on Fridays.',
+    });
+
+    expect((await t.query(api.services.projects.plannerInputs, { secret, projectId })).memory).toContainEqual(
+      expect.objectContaining({ scope: 'workspace', text: 'We ship on Fridays.' }),
+    );
   });
 
   it('stores a planner proposal with the bottleneck questions the platform can see', async () => {
@@ -452,9 +483,9 @@ describe('planner inputs', () => {
     });
     expect((await user.query(api.projects.get, { projectId })).deadlineAt).toBe(8 * DAY);
     // The planner reads the field rather than the brief, and the brief says nothing about a date.
-    expect(
-      (await t.query(api.services.projects.plannerInputs, { secret, projectId })).project,
-    ).toMatchObject({ deadlineAt: 8 * DAY });
+    expect((await t.query(api.services.projects.plannerInputs, { secret, projectId })).project).toMatchObject(
+      { deadlineAt: 8 * DAY },
+    );
 
     await t.mutation(api.services.projects.recordProposal, {
       secret,
