@@ -36,6 +36,24 @@ export interface OAuthState {
 export interface StoredCredential {
   oauth: OAuthState;
 }
+
+/**
+ * Every OAuth endpoint this application uses, whether it came from the administrator's provider
+ * configuration or from the server's own discovery document. The authorization endpoint is a
+ * redirect target for the browser and the token endpoint is an outbound request, so neither is
+ * allowed to be anything but plain HTTPS without embedded credentials.
+ */
+function httpsEndpoint(value: string, field: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`The ${field} is not a valid URL.`);
+  }
+  if (url.protocol !== 'https:' || url.username || url.password)
+    throw new Error(`The ${field} must be an HTTPS URL without embedded credentials.`);
+  return url.href;
+}
 /** The client registered for this exact server, otherwise the provider default entry. */
 export function pickOAuthClient(config: ProviderRuntimeConfig, serverUrl?: string) {
   return (
@@ -69,12 +87,14 @@ function providerFor(
   let authorizationUrl: string | undefined;
   const callback = new URL('/api/integrations/callback', requiredEnv('APP_URL')).href;
   if (settings.authorizationUrl && settings.tokenUrl && !state.discovery) {
+    const authorization = httpsEndpoint(settings.authorizationUrl, 'authorization endpoint');
+    const token = httpsEndpoint(settings.tokenUrl, 'token endpoint');
     state.discovery = {
-      authorizationServerUrl: new URL(settings.authorizationUrl).origin,
+      authorizationServerUrl: new URL(authorization).origin,
       authorizationServerMetadata: {
-        issuer: new URL(settings.authorizationUrl).origin,
-        authorization_endpoint: settings.authorizationUrl,
-        token_endpoint: settings.tokenUrl,
+        issuer: new URL(authorization).origin,
+        authorization_endpoint: authorization,
+        token_endpoint: token,
         response_types_supported: ['code'],
         code_challenge_methods_supported: ['S256'],
         token_endpoint_auth_methods_supported: [
@@ -129,7 +149,8 @@ export async function startOAuth(input: Omit<OAuthState, 'nonce' | 'createdAt'>)
   await mcpAuth(flow.provider, { serverUrl: state.serverUrl, scope: settings.scopes, fetchFn: safeFetch });
   const authorizationUrl = flow.redirect();
   if (!authorizationUrl) throw new Error('Provider did not return an authorization page');
-  return { state, authorizationUrl };
+  // The browser is sent here, so it is checked again after discovery, not only after configuration.
+  return { state, authorizationUrl: httpsEndpoint(authorizationUrl, 'authorization endpoint') };
 }
 export async function finishOAuth(state: OAuthState, code: string) {
   const { provider } = providerFor(state, await oauthClient(state.provider, state.serverUrl));
@@ -153,6 +174,7 @@ export function oauthCookie(requestUrl: string) {
     sameSite: 'lax' as const,
     path: '/api/integrations/callback',
     maxAge: 600,
-    secure: new URL(requestUrl).protocol === 'https:',
+    // Behind a TLS-terminating proxy the request URL is plain HTTP, so the deployed origin decides.
+    secure: new URL(process.env.APP_URL || requestUrl).protocol === 'https:',
   };
 }

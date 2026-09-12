@@ -28,6 +28,19 @@ const proposalStatus = z.enum([
 ]);
 const memberRole = z.enum(['owner', 'admin', 'member']);
 
+/** `z.url()` accepts any scheme, including `javascript:`. Endpoints we redirect to or call do not. */
+const httpsUrl = z
+  .url()
+  .max(2048)
+  .refine((value) => {
+    try {
+      const url = new URL(value);
+      return url.protocol === 'https:' && !url.username && !url.password;
+    } catch {
+      return false;
+    }
+  }, 'Must be an HTTPS URL without embedded credentials');
+
 /** The error envelope every route uses for every failure. */
 export const errorResponse = z.object({ error: z.string(), code: z.string().optional() });
 
@@ -128,8 +141,8 @@ export const oauthClientRequest = z.object({
   clientId: z.string().min(1).max(500),
   clientSecret: z.string().max(2000).optional(),
   scopes: z.string().max(2000).optional(),
-  authorizationUrl: z.url().optional(),
-  tokenUrl: z.url().optional(),
+  authorizationUrl: httpsUrl.optional(),
+  tokenUrl: httpsUrl.optional(),
   tokenAuthMethod: z.enum(['client_secret_basic', 'client_secret_post', 'none']).optional(),
 });
 export const removeOAuthClientRequest = z.object({
