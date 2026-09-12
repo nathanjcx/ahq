@@ -1,6 +1,14 @@
 'use client';
 
-import { ChevronDown, MoreHorizontal, PanelLeftClose, Settings, ShieldCheck, Sparkles } from 'lucide-react';
+import {
+  ChevronDown,
+  MoreHorizontal,
+  PanelLeftClose,
+  Settings,
+  ShieldCheck,
+  SlidersHorizontal,
+  Sparkles,
+} from 'lucide-react';
 import type { Dashboard } from '@/lib/contracts';
 import { nav, type Page } from './nav';
 
@@ -77,6 +85,14 @@ export function Sidebar({
             <button className="nav-item" data-active={page === 'admin'} onClick={() => onNavigate('admin')}>
               <ShieldCheck size={17} />
               <span>Marketplace admin</span>
+            </button>
+            <button
+              className="nav-item"
+              data-active={page === 'operations'}
+              onClick={() => onNavigate('operations')}
+            >
+              <SlidersHorizontal size={17} />
+              <span>Operations</span>
             </button>
           </>
         )}

@@ -6,6 +6,7 @@ import type {
   Dashboard,
   Listing,
   Project,
+  ProviderConfig,
   ProviderReadiness,
   RegistryTool,
 } from '@/lib/contracts';
@@ -27,6 +28,7 @@ export function WorkspaceShell({
   listings,
   drafts,
   registryTools,
+  providerConfigs,
   actions,
 }: {
   configured: boolean;
@@ -35,6 +37,7 @@ export function WorkspaceShell({
   listings: Listing[];
   drafts: EditorDraft[];
   registryTools: RegistryTool[];
+  providerConfigs?: ProviderConfig[];
   actions: Actions;
 }) {
   const [page, setPage] = useState<Page>('office');
@@ -147,6 +150,7 @@ export function WorkspaceShell({
             listings={listings}
             drafts={drafts}
             registryTools={registryTools}
+            providerConfigs={providerConfigs}
             readiness={readiness}
             configured={configured}
             canManageWorkspace={canManageWorkspace}

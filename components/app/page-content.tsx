@@ -1,8 +1,16 @@
 'use client';
 
-import type { Dashboard, Listing, Project, ProviderReadiness, RegistryTool } from '@/lib/contracts';
+import type {
+  Dashboard,
+  Listing,
+  Project,
+  ProviderConfig,
+  ProviderReadiness,
+  RegistryTool,
+} from '@/lib/contracts';
 import type { EditorDraft } from '../admin/draft-issues';
 import { MarketplaceStudioPage } from '../admin/marketplace-studio';
+import { OperationsPage } from '../admin/operations-page';
 import { ActivityPage } from '../activity/activity-page';
 import { EmployeesPage } from '../employees/employees-page';
 import { FilesPage } from '../files/files-page';
@@ -20,6 +28,7 @@ export type PageContentProps = {
   listings: Listing[];
   drafts: EditorDraft[];
   registryTools: RegistryTool[];
+  providerConfigs?: ProviderConfig[];
   readiness: ProviderReadiness[];
   configured: boolean;
   canManageWorkspace: boolean;
@@ -159,6 +168,28 @@ export function PageContent(props: PageContentProps) {
         onSave={(draft) => run(() => actions.saveDraft(draft), 'Draft saved')}
         onPublish={(id) => run(() => actions.publish(id), 'Employee published')}
         onRetire={(id) => run(() => actions.retire(id), 'Version retired')}
+      />
+    );
+
+  if (page === 'operations' && dashboard.isPlatformAdmin)
+    return (
+      <OperationsPage
+        configs={props.providerConfigs ?? []}
+        registryTools={props.registryTools}
+        readiness={props.readiness}
+        connections={dashboard.connections}
+        configured={props.configured}
+        onSetEnabledUrls={(provider, urls) =>
+          run(() => actions.setEnabledUrls(provider, urls), 'Enabled servers updated')
+        }
+        onSaveTool={(tool) => run(() => actions.saveRegistryTool(tool), 'Tool saved')}
+        onDeleteTool={(provider, name) =>
+          run(() => actions.deleteRegistryTool(provider, name), 'Tool removed from the registry')
+        }
+        onImportTools={async (connectionId) =>
+          (await actions.importDiscoveredTools(connectionId))?.imported ?? null
+        }
+        onNotice={props.onNotice}
       />
     );
 

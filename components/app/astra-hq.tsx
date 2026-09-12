@@ -19,6 +19,7 @@ export function AstraHq({ configured }: { configured: boolean }) {
       listings={[]}
       drafts={[]}
       registryTools={[]}
+      providerConfigs={[]}
       actions={offlineActions}
     />
   );
@@ -32,6 +33,10 @@ function ConnectedAstraHq() {
   const drafts = useQuery(uiApi.adminDrafts, isAuthenticated && dashboard?.isPlatformAdmin ? {} : 'skip');
   const registryTools = useQuery(
     uiApi.registryTools,
+    isAuthenticated && dashboard?.isPlatformAdmin ? {} : 'skip',
+  );
+  const providerConfigs = useQuery(
+    uiApi.providerConfigs,
     isAuthenticated && dashboard?.isPlatformAdmin ? {} : 'skip',
   );
   const actions = useWorkspaceActions();
@@ -54,6 +59,7 @@ function ConnectedAstraHq() {
             listings={listings}
             drafts={(drafts ?? []).map((draft) => ({ ...draft, id: draft.draftId }))}
             registryTools={registryTools ?? []}
+            providerConfigs={providerConfigs ?? []}
             actions={actions}
           />
         )}
