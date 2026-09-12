@@ -12,6 +12,14 @@ export interface Capability {
   tools: string[];
   optional: boolean;
 }
+/** Public character of an employee. Carried into the model's operating rules and into the office scene. */
+export interface Persona {
+  /** One or two sentences on how this employee speaks and works. */
+  voice: string;
+  /** Short traits such as "fast", "cautious", "dry humour". At most five. */
+  traits: string[];
+  catchphrase?: string;
+}
 export interface Listing {
   id: string;
   versionId: string;
@@ -25,6 +33,7 @@ export interface Listing {
   model: ModelId;
   color: string;
   media: { url: string; type: 'image' | 'video'; alt: string }[];
+  persona?: Persona;
   publishedAt: number;
 }
 export interface Employee {
@@ -36,6 +45,7 @@ export interface Employee {
   model: ModelId;
   status: string;
   missingCapabilities: string[];
+  persona?: Persona;
 }
 export interface Member {
   subject: string;
@@ -123,6 +133,8 @@ export interface Task {
   error?: string;
   model: ModelId;
   usage?: TokenUsage;
+  /** Latest assistant output for tasks that are still active, so the office can show what is happening. */
+  lastMessage?: { text: string; createdAt: number; phase?: string };
 }
 export interface ActivityEvent {
   id: string;

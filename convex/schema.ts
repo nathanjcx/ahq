@@ -52,6 +52,11 @@ const media = v.object({
   alt: v.string(),
 });
 const skill = v.object({ name: v.string(), version: v.string(), sha256: v.string(), content: v.string() });
+export const persona = v.object({
+  voice: v.string(),
+  traits: v.array(v.string()),
+  catchphrase: v.optional(v.string()),
+});
 
 export default defineSchema({
   // Operational configuration. Edited by platform administrators, read by every service.
@@ -138,6 +143,7 @@ export default defineSchema({
     media: v.array(media),
     instructions: v.string(),
     skills: v.array(skill),
+    persona: v.optional(persona),
     updatedAt: v.number(),
   }).index('by_updated', ['updatedAt']),
   employeeVersions: defineTable({
@@ -155,6 +161,7 @@ export default defineSchema({
     media: v.array(media),
     instructions: v.string(),
     skills: v.array(skill),
+    persona: v.optional(persona),
     publishedBy: v.string(),
     publishedAt: v.number(),
     retiredAt: v.optional(v.number()),

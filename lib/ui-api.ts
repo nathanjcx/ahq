@@ -5,6 +5,7 @@ import type {
   Listing,
   Message,
   ModelId,
+  Persona,
   ProjectPost,
   ProviderConfig,
   ProviderId,
@@ -28,6 +29,7 @@ type AdminDraft = {
   capabilities: { provider: ProviderId; tools: string[]; optional: boolean }[];
   media: { url: string; type: 'image' | 'video'; alt: string }[];
   skills: { name: string; version: string; sha256: string; content: string }[];
+  persona?: Persona;
   updatedAt: number;
 };
 
