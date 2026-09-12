@@ -21,17 +21,7 @@ export const C = {
   rug: '#81907a',
 };
 
-/** Statuses that place a person in the office; anything else stays off the floor. */
-
-/** Desk anchors and the two fixed furniture positions the scene and its people share. */
-export const desks: Point[] = [
-  [-6.3, 0, -3.2],
-  [-3.1, 0, -3.2],
-  [-6.3, 0, 0.1],
-  [-3.1, 0, 0.1],
-  [-6.3, 0, 3.4],
-  [-3.1, 0, 3.4],
-];
+/** The two fixed furniture positions the scene and its people share. */
 export const storagePosition: Point = [0.43, 0, -5.23];
 export const speakerPosition: Point = [-1.45, 9.4, -5.75];
 
@@ -39,6 +29,8 @@ type SurfaceMaps = {
   wood: THREE.DataTexture;
   fabric: THREE.DataTexture;
   plaster: THREE.DataTexture;
+  /** A soft round falloff, used for lamp halos and the glow behind the windows. */
+  halo: THREE.DataTexture;
 };
 export const SurfaceContext = createContext<SurfaceMaps | null>(null);
 
@@ -71,10 +63,26 @@ export function useSurfaceTextures() {
       texture.needsUpdate = true;
       return texture;
     }
+    function makeHalo() {
+      const width = 64;
+      const pixels = new Uint8Array(width * width * 4);
+      for (let y = 0; y < width; y++)
+        for (let x = 0; x < width; x++) {
+          const distance = Math.hypot(x - (width - 1) / 2, y - (width - 1) / 2) / ((width - 1) / 2);
+          const falloff = Math.max(0, 1 - distance) ** 2.4;
+          const i = (y * width + x) * 4;
+          pixels[i] = pixels[i + 1] = pixels[i + 2] = 255;
+          pixels[i + 3] = Math.round(falloff * 255);
+        }
+      const texture = new THREE.DataTexture(pixels, width, width, THREE.RGBAFormat);
+      texture.needsUpdate = true;
+      return texture;
+    }
     return {
       wood: make('wood'),
       fabric: make('fabric'),
       plaster: make('plaster'),
+      halo: makeHalo(),
     };
   }, []);
   useEffect(() => () => Object.values(maps).forEach((texture) => texture.dispose()), [maps]);
@@ -175,5 +183,57 @@ export function Cylinder({
       <cylinderGeometry args={[radius, radius, height, 16]} />
       <meshStandardMaterial color={color} roughness={0.7} />
     </mesh>
+  );
+}
+
+/**
+ * A soft glow: a lamp's halo, or the light a window spills at night. Drawn
+ * additively so it brightens the room without hiding what is behind it.
+ */
+export function Halo({
+  p,
+  size,
+  color = '#ffdca4',
+  opacity,
+  rotation,
+}: {
+  p: Point;
+  /** Width and height in world units. */
+  size: [number, number];
+  color?: string;
+  opacity: number;
+  /** Omit for a camera-facing halo; give a rotation to pin it to a surface. */
+  rotation?: Point;
+}) {
+  const surfaces = useContext(SurfaceContext);
+  if (opacity <= 0.01) return null;
+  // Pinned to a surface when a rotation is given, otherwise it turns with the camera.
+  if (rotation)
+    return (
+      <mesh position={p} rotation={rotation} renderOrder={2}>
+        <planeGeometry args={size} />
+        <meshBasicMaterial
+          map={surfaces?.halo}
+          color={color}
+          transparent
+          opacity={opacity}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </mesh>
+    );
+  return (
+    <sprite position={p} scale={[size[0], size[1], 1]} renderOrder={2}>
+      <spriteMaterial
+        map={surfaces?.halo}
+        color={color}
+        transparent
+        opacity={opacity}
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+        toneMapped={false}
+      />
+    </sprite>
   );
 }

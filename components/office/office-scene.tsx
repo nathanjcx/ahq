@@ -1,15 +1,18 @@
 'use client';
 
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { EmployeeActivity } from './activity';
 import { daylight, type Daylight } from './daylight';
+import { rankBubbles, type LabelMode } from './office-labels';
 import { useOfficePan } from './office-pan';
 import { FileCabinet, OfficeSpeakers } from './office-furniture';
-import { EmployeeAvatar, type Station } from './office-people';
+import { OfficeOverlay } from './office-overlay';
+import { EmployeeAvatar } from './office-people';
 import { BoardNote, ProviderConsole, ReviewLectern, StatusDevice } from './office-signals';
-import { SurfaceContext, desks, speakerPosition, useSurfaceTextures, type Point } from './office-primitives';
+import { Halo, SurfaceContext, useSurfaceTextures, type Point } from './office-primitives';
+import { CONSOLE_X, CONSOLE_Z, LECTERN, deskGrid, layoutStations, type Station } from './office-stations';
 import { Architecture } from './office-room';
 
 /** The one employee shape this component understands. */
@@ -36,6 +39,8 @@ export type OfficeProvider = {
 export type OfficeSceneProps = {
   employees: OfficeEmployee[];
   onSelect?: (id: string) => void;
+  /** The figure the viewer last picked. Its pill outranks everyone else's. */
+  selectedId?: string;
   motion: boolean;
   /** Unit scale, 1 fits the room to the container. */
   zoom: number;
@@ -43,6 +48,8 @@ export type OfficeSceneProps = {
   angle: number;
   resetKey: number;
   eventSource: HTMLDivElement;
+  /** What the legend's Labels control is set to. */
+  labels: LabelMode;
   /** Connected providers on this floor, one console each. */
   providers?: OfficeProvider[];
   /** The latest board note, already short. Shown on the whiteboard. */
@@ -55,35 +62,45 @@ export type OfficeSceneProps = {
 
 const ACTIVE_STATUSES = new Set(['working', 'review', 'ready']);
 const IDLE: EmployeeActivity = { activity: 'idle', since: 0 };
-/** The lectern people stand at while their work waits for a decision. */
-const LECTERN: Point = [-0.75, 0, 1.05];
-/** Provider consoles line the window wall, clear of the desks. */
-const CONSOLE_X = -8.5;
-const CONSOLE_Z = [-3.6, -1.7, 0.2, 2.1, 4];
 const STATUS_DEVICE: Point = [-7.9, 1.55, -5.84];
 const BOARD_NOTE: Point = [4.5, 2.16, -5.7];
+/** The floor plate and the people on it. Taller props are allowed to crop. */
+const ROOM = { x: 9.3, y: 1.9, z: 6.3 };
+/** How much of the tighter axis the room fills, on a wide stage and on a phone. */
+const FILL = 0.85;
+const FILL_COMPACT = 1.18;
+/** A stage narrower than this gets the closer framing and the compact chrome. */
+const COMPACT_WIDTH = 560;
+/** Two bubbles only once the stage is genuinely wide. */
+const WIDE_WIDTH = 1200;
+/** One bubble holds the floor this long before the next candidate takes its turn. */
+const BUBBLE_TURN_MS = 6_000;
 const scratchSun = new THREE.Vector3();
+const corner = new THREE.Vector3();
 
 export function isActiveEmployee(employee: OfficeEmployee): boolean {
   return ACTIVE_STATUSES.has(employee.status.trim().toLowerCase());
 }
 
-/** Yaw that makes a figure at `from` look at `to`. */
-function facing(from: Point, to: Point): number {
-  return Math.atan2(to[0] - from[0], to[2] - from[2]);
-}
-
-/** Camera fits the projected architecture to the actual Canvas container. */
+/**
+ * Fits the floor plate to the actual Canvas container: about `FILL` of whichever
+ * axis is tighter, centred on the room, or closer and centred on the desks when
+ * the stage is only as wide as a phone. Everything above head height, the ceiling
+ * lamp included, is allowed to crop.
+ */
 function Framing({
   zoom,
   angle,
   resetKey = 0,
   source,
+  cluster,
 }: {
   zoom: number;
   angle: number;
   resetKey?: number;
   source: HTMLDivElement;
+  /** Where the busiest part of the floor is, for the close framing. */
+  cluster: Point;
 }) {
   const { camera, size, invalidate } = useThree();
   const pan = useOfficePan(camera, source, invalidate, resetKey);
@@ -94,40 +111,35 @@ function Framing({
       pan.set(0, 0);
       previousReset.current = resetKey;
     }
+    const compact = size.width < COMPACT_WIDTH;
     const azimuth = Math.PI / 4 + (angle * Math.PI) / 180;
-    const target = new THREE.Vector3(0, 0.6, 0);
     camera.position.set(Math.sin(azimuth) * 28, 24.5, Math.cos(azimuth) * 28);
-    camera.lookAt(target);
+    camera.lookAt(compact ? new THREE.Vector3(...cluster) : new THREE.Vector3(0, 0.6, 0));
     camera.updateMatrixWorld(true);
     const bounds = new THREE.Box3();
-    for (const x of [-9.5, 9.5])
-      for (const y of [-0.7, 3.8])
-        for (const z of [-6.5, 6.5]) {
-          bounds.expandByPoint(new THREE.Vector3(x, y, z).applyMatrix4(camera.matrixWorldInverse));
-        }
-    // Fit the floating horn at its loudest expansion without giving the
-    // entire floor an unnecessarily tall bounding box.
-    for (const x of [speakerPosition[0] - 1.6, speakerPosition[0] + 2.3])
-      for (const y of [speakerPosition[1] - 2, speakerPosition[1] + 1.5])
-        for (const z of [speakerPosition[2] - 0.5, speakerPosition[2] + 2.7]) {
-          bounds.expandByPoint(new THREE.Vector3(x, y, z).applyMatrix4(camera.matrixWorldInverse));
-        }
-    const w = bounds.max.x - bounds.min.x;
-    const h = bounds.max.y - bounds.min.y;
-    // Center the projected cutaway, including its raised back walls, rather
-    // than assuming that the floor origin is the visual center.
-    const center = bounds.getCenter(new THREE.Vector3());
-    camera.translateX(center.x);
-    camera.translateY(center.y);
+    for (const x of [-ROOM.x, ROOM.x])
+      for (const y of [0, ROOM.y])
+        for (const z of [-ROOM.z, ROOM.z])
+          bounds.expandByPoint(corner.set(x, y, z).applyMatrix4(camera.matrixWorldInverse));
+    const width = bounds.max.x - bounds.min.x;
+    const height = bounds.max.y - bounds.min.y;
+    if (!compact) {
+      // Centre the projected plate rather than assuming the floor origin is its
+      // visual centre; the close framing is already centred on the cluster.
+      const center = bounds.getCenter(corner);
+      camera.translateX(center.x);
+      camera.translateY(center.y);
+    }
     camera.translateX(pan.x);
     camera.translateY(pan.y);
     camera.updateMatrixWorld(true);
-    const safeWidth = Math.max(100, size.width - (size.width < 500 ? 16 : 40));
-    const safeHeight = Math.max(100, size.height - 32);
-    camera.zoom = Math.min(safeWidth / w, safeHeight / h) * Math.max(0.5, zoom / 37);
+    const safeWidth = Math.max(100, size.width - (compact ? 12 : 32));
+    const safeHeight = Math.max(100, size.height - 24);
+    const fit = Math.min(safeWidth / width, safeHeight / height);
+    camera.zoom = fit * (compact ? FILL_COMPACT : FILL) * zoom;
     camera.updateProjectionMatrix();
     invalidate();
-  }, [camera, size.width, size.height, zoom, angle, resetKey, pan, invalidate]);
+  }, [camera, size.width, size.height, zoom, angle, resetKey, pan, invalidate, cluster]);
   return null;
 }
 
@@ -139,69 +151,8 @@ type Placed = {
   accent?: string;
 };
 
-/**
- * Puts everyone somewhere the room can explain: at their own desk, at a provider
- * console, at the review lectern, or turned toward the person they are handing
- * work to. Seats are sticky, so nobody swaps chairs while the office is open.
- */
-function place(
-  employees: OfficeEmployee[],
-  providers: OfficeProvider[],
-  seats: Map<string, number>,
-): Placed[] {
-  const taken = new Set(employees.map((employee) => seats.get(employee.id)));
-  taken.delete(undefined);
-  let free = 0;
-  const seated = employees.map((employee) => {
-    let seat = seats.get(employee.id);
-    if (seat === undefined) {
-      while (taken.has(free)) free += 1;
-      seat = free;
-      taken.add(seat);
-      seats.set(employee.id, seat);
-    }
-    return { employee, seat };
-  });
-  const desk = (seat: number) => desks[seat % desks.length];
-  const home = (seat: number): Point => [desk(seat)[0], 0, desk(seat)[2] + 1];
-  const consoleFor = (provider?: string) => {
-    const found = providers.findIndex((item) => item.id === provider);
-    const slot = found >= 0 ? found : 0;
-    return { slot, provider: providers[slot] };
-  };
-  let atLectern = 0;
-  return seated.map(({ employee, seat }, index) => {
-    const state = employee.state ?? IDLE;
-    const activity = state.activity;
-    const seat0 = home(seat);
-    let station: Station = { at: seat0, facing: Math.PI };
-    let accent: string | undefined;
-    if (activity === 'reviewing') {
-      const offset = atLectern++ * 0.85;
-      const at: Point = [LECTERN[0] + offset, 0, LECTERN[2] - 0.95];
-      station = { at, facing: facing(at, [LECTERN[0] + offset, 0, LECTERN[2]]) };
-    } else if (activity === 'calling' && providers.length) {
-      const { slot, provider } = consoleFor(state.provider);
-      const z = CONSOLE_Z[slot % CONSOLE_Z.length];
-      const at: Point = [CONSOLE_X + 0.85, 0, z];
-      station = { at, facing: facing(at, [CONSOLE_X, 0, z]) };
-      accent = provider?.color;
-    } else if (activity === 'talking' || activity === 'celebrating') {
-      const at: Point = [seat0[0], 0, seat0[2] + 0.85];
-      const partner = state.partnerId
-        ? seated.find((other) => other.employee.id === state.partnerId)
-        : undefined;
-      const toward: Point = partner
-        ? [home(partner.seat)[0], 0, home(partner.seat)[2] + 0.85]
-        : [at[0], 0, at[2] + 1];
-      station = { at, facing: activity === 'talking' ? facing(at, toward) : 0 };
-    }
-    return { employee, index, state, station, ...(accent ? { accent } : {}) };
-  });
-}
-
 /** Directional and ambient light follow the viewer's clock, and dim as the cap fills. */
-function Lighting({ light, budget, motion }: { light: Daylight; budget: number; motion: boolean }) {
+function Lighting({ light, budget }: { light: Daylight; budget: number }) {
   const ambient = useRef<THREE.AmbientLight>(null);
   const sun = useRef<THREE.DirectionalLight>(null);
   // A cap that is nearly spent quietly takes the lights down.
@@ -222,7 +173,13 @@ function Lighting({ light, budget, motion }: { light: Daylight; budget: number; 
   return (
     <>
       <ambientLight ref={ambient} intensity={light.ambientIntensity * dim} color={light.ambient} />
-      <hemisphereLight args={['#dce7df', '#3e4631', light.hemisphere * dim]} />
+      <hemisphereLight
+        args={[
+          light.night ? '#8ea6c8' : '#dce7df',
+          light.night ? '#2a3340' : '#3e4631',
+          light.hemisphere * dim,
+        ]}
+      />
       <directionalLight
         ref={sun}
         position={light.sunPosition}
@@ -243,9 +200,15 @@ function Lighting({ light, budget, motion }: { light: Daylight; budget: number; 
       <directionalLight position={[10, 9, -2]} intensity={light.fillIntensity * dim} color={light.fill} />
       {/* Sun or moon, seen through the window wall. */}
       <mesh position={[-11.6, light.skyHeight, 4.2]} rotation={[0, -Math.PI / 2, 0]}>
-        <circleGeometry args={[light.night ? 0.62 : 0.95, 32]} />
+        <circleGeometry args={[light.night ? 0.78 : 0.95, 32]} />
         <meshBasicMaterial color={light.disc} toneMapped={false} />
       </mesh>
+      <Halo
+        p={[-11.5, light.skyHeight, 4.2]}
+        size={[4.6, 4.6]}
+        color={light.disc}
+        opacity={light.interior * 0.55}
+      />
     </>
   );
 }
@@ -253,44 +216,68 @@ function Lighting({ light, budget, motion }: { light: Daylight; budget: number; 
 export function OfficeScene({
   employees,
   onSelect,
+  selectedId,
   motion,
   zoom,
   angle,
   resetKey,
   eventSource,
+  labels,
   providers = [],
   note,
   lightBudget = 0,
   hour,
 }: OfficeSceneProps) {
+  const { size } = useThree();
   const surfaces = useSurfaceTextures();
   const seats = useRef(new Map<string, number>());
   const light = useMemo(() => daylight(hour ?? new Date().getHours()), [hour]);
-  const people = useMemo(
-    () => place(employees.filter(isActiveEmployee), providers, seats.current),
-    [employees, providers],
-  );
-  const reviews = people.filter((person) => person.state.attention).length;
-  const stuck = people.some((person) => person.state.attention === 'stuck');
+  const present = useMemo(() => employees.filter(isActiveEmployee), [employees]);
+  const desks = useMemo(() => deskGrid(present.length), [present.length]);
+  const people: Placed[] = useMemo(() => {
+    const states = present.map((employee) => employee.state ?? IDLE);
+    const stations = layoutStations({
+      people: present.map((employee, index) => ({ id: employee.id, state: states[index] })),
+      providers,
+      seats: seats.current,
+    });
+    return present.map((employee, index) => ({
+      employee,
+      index,
+      state: states[index],
+      station: stations[index].station,
+      ...(stations[index].accent ? { accent: stations[index].accent } : {}),
+    }));
+  }, [present, providers]);
+
+  // The desks are where a floor's work happens, so a phone opens on them.
+  const cluster = useMemo((): Point => {
+    const middle = desks.reduce((total, desk) => total + desk[2], 0) / Math.max(1, desks.length);
+    return [-4.7, 0.6, middle + 0.5];
+  }, [desks]);
+
+  const waiting = people.filter((person) => person.state.attention);
+  const stuck = waiting.some((person) => person.state.attention === 'stuck');
   const degraded = providers.some((provider) => provider.degraded);
+  const speaking = useSpeaking(people, size.width);
+
   return (
     <>
       <color attach="background" args={[light.background]} />
-      <Framing zoom={zoom * 37} angle={angle} resetKey={resetKey} source={eventSource} />
-      <Lighting light={light} budget={lightBudget} motion={motion} />
+      <Framing zoom={zoom} angle={angle} resetKey={resetKey} source={eventSource} cluster={cluster} />
       <SurfaceContext.Provider value={surfaces}>
-        <Architecture />
+        <Lighting light={light} budget={lightBudget} />
+        <Architecture desks={desks} interior={light.interior} />
         <FileCabinet />
         <OfficeSpeakers />
         <group position={LECTERN} rotation={[0, Math.PI, 0]}>
           <ReviewLectern
             position={[0, 0, 0]}
-            glowing={reviews > 0}
+            waiting={waiting.length}
+            stuck={stuck}
             motion={motion}
-            label={reviews ? `${reviews} ${stuck ? 'waiting too long' : 'to review'}` : undefined}
             onSelect={() => {
-              const waiting = people.find((person) => person.state.attention);
-              if (waiting) onSelect?.(waiting.employee.id);
+              if (waiting.length) onSelect?.(waiting[0].employee.id);
             }}
           />
         </group>
@@ -308,18 +295,23 @@ export function OfficeScene({
         ))}
         <StatusDevice position={STATUS_DEVICE} degraded={degraded} motion={motion} />
         <BoardNote position={BOARD_NOTE} note={note} />
-        {people.map((person) => (
-          <EmployeeAvatar
-            key={person.employee.id}
-            employee={person.employee}
-            index={person.index}
-            state={person.state}
-            station={person.station}
-            accent={person.accent}
-            motion={motion}
-            onSelect={onSelect}
-          />
-        ))}
+        <OfficeOverlay>
+          {people.map((person) => (
+            <EmployeeAvatar
+              key={person.employee.id}
+              employee={person.employee}
+              index={person.index}
+              state={person.state}
+              station={person.station}
+              accent={person.accent}
+              motion={motion}
+              mode={labels}
+              selected={person.employee.id === selectedId}
+              speaking={speaking.has(person.employee.id)}
+              onSelect={onSelect}
+            />
+          ))}
+        </OfficeOverlay>
       </SurfaceContext.Provider>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.71, 0]} receiveShadow>
         <planeGeometry args={[200, 200]} />
@@ -328,4 +320,40 @@ export function OfficeScene({
       <gridHelper args={[200, 200, light.grid, light.grid]} position={[0, -0.7, 0]} />
     </>
   );
+}
+
+/**
+ * Which figures are speaking right now. The floor shows one line at a time, two
+ * once the stage is wide, and hands the floor to the next candidate every six
+ * seconds so a quiet message still gets its turn.
+ */
+function useSpeaking(people: Placed[], width: number): Set<string> {
+  const slots = width >= WIDE_WIDTH ? 2 : 1;
+  const ranked = useMemo(
+    () =>
+      rankBubbles(
+        people
+          .filter((person) => person.state.bubble)
+          .map((person) => ({
+            id: person.employee.id,
+            activity: person.state.activity,
+            ...(person.state.attention ? { attention: person.state.attention } : {}),
+            since: person.state.since,
+          })),
+      ),
+    [people],
+  );
+  const [turn, setTurn] = useState(0);
+  useEffect(() => {
+    if (ranked.length <= slots) return;
+    const timer = setInterval(() => setTurn((current) => current + slots), BUBBLE_TURN_MS);
+    return () => clearInterval(timer);
+  }, [ranked, slots]);
+  return useMemo(() => {
+    if (!ranked.length) return new Set<string>();
+    const start = ((turn % ranked.length) + ranked.length) % ranked.length;
+    return new Set(
+      Array.from({ length: Math.min(slots, ranked.length) }, (_, i) => ranked[(start + i) % ranked.length]),
+    );
+  }, [ranked, slots, turn]);
 }

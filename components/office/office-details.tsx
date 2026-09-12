@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
-import { Box, C, Cylinder, GlowBar, Round, desks } from './office-primitives';
+import { Box, C, Cylinder, GlowBar, Halo, Round, type Point } from './office-primitives';
 
-export function ArchitecturalDetails() {
+export function ArchitecturalDetails({ desks, interior }: { desks: Point[]; interior: number }) {
   return (
     <group>
       {/* A layered, chamfered architectural model rather than a floating floor. */}
@@ -57,7 +57,14 @@ export function ArchitecturalDetails() {
       ))}
       <Round p={[5.02, 2.78, -3.28]} s={[3.62, 0.095, 0.22]} color="#24372e" radius={0.025} />
       <GlowBar p={[5.02, 2.725, -3.28]} s={[3.42, 0.015, 0.155]} />
-      <pointLight position={[5.05, 2.55, -3.2]} color="#ffd9a0" intensity={2.5} distance={7} decay={2} />
+      <Halo p={[5.02, 2.6, -3.28]} size={[5.4, 1.9]} opacity={0.12 + interior * 0.5} />
+      <pointLight
+        position={[5.05, 2.55, -3.2]}
+        color="#ffd9a0"
+        intensity={2.5 + interior * 5}
+        distance={9}
+        decay={2}
+      />
       {/* Frosted privacy bands and a brass door pull make the glass read as glass. */}
       {[2.4, 4.75, 7.1].map((x) => (
         <mesh key={x} position={[x, 1.17, -0.638]}>
@@ -81,11 +88,12 @@ export function ArchitecturalDetails() {
             />
           </mesh>
           <GlowBar p={[-0.16, 0.343, 0]} s={[0.15, 0.012, 0.1]} color="#ffe2a2" />
+          <Halo p={[-0.16, 0.3, 0]} size={[1.5, 1.5]} opacity={interior * 0.5} />
           <pointLight
             position={[-0.16, 0.32, 0]}
             color="#ffdd9b"
-            intensity={0.16}
-            distance={1.25}
+            intensity={0.16 + interior * 2.6}
+            distance={2.6}
             decay={2}
           />
         </group>
@@ -117,7 +125,14 @@ export function ArchitecturalDetails() {
           <meshStandardMaterial color="#ded0ae" roughness={0.7} side={THREE.DoubleSide} />
         </mesh>
         <GlowBar p={[-0.43, 1.946, 0]} s={[0.37, 0.015, 0.26]} />
-        <pointLight position={[-0.43, 1.85, 0]} intensity={1.25} color="#ffdc9e" distance={3.8} decay={2} />
+        <Halo p={[-0.43, 1.9, 0]} size={[2.6, 2.6]} opacity={0.1 + interior * 0.55} />
+        <pointLight
+          position={[-0.43, 1.85, 0]}
+          intensity={1.25 + interior * 3.4}
+          color="#ffdc9e"
+          distance={5.5}
+          decay={2}
+        />
       </group>
       <Cylinder p={[7.56, 0.61, 3.87]} radius={0.34} height={0.08} color={C.walnut} />
       <Cylinder p={[7.56, 0.32, 3.87]} radius={0.065} height={0.57} color={C.brass} />

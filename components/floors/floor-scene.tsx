@@ -1,10 +1,17 @@
 'use client';
 
-import { Volume2, VolumeX } from 'lucide-react';
+import { Tag, Volume2, VolumeX } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { OfficeStage, type OfficeSceneData } from '../office/office-stage';
 import type { OfficeEmployee } from '../office/office-view';
+import { useLabelMode } from '../office/use-labels';
 import { useSound } from '../office/sound';
+
+const LABEL_TITLE = {
+  names: 'Labels: names. Show status dots only.',
+  dots: 'Labels: dots. Hide labels.',
+  off: 'Labels: off. Show names.',
+};
 
 /** The 3D office, framed by its toolbar and legend. Used by the lobby and by a floor's team rail. */
 export function FloorScene({
@@ -32,11 +39,12 @@ export function FloorScene({
   live?: boolean;
   /** Replaces live work, so replay never touches the subscription. */
   scene?: OfficeSceneData;
-  /** A control for this scene, such as replay. Sits in the toolbar; its own bar overlays the stage. */
+  /** A control for this scene, such as replay. Sits in its own dock under the canvas. */
   controls?: ReactNode;
   onEmployee: (id: string) => void;
 }) {
   const sound = useSound();
+  const labels = useLabelMode();
   return (
     <div className={`office-canvas floor-canvas ${compact ? 'floor-canvas-compact' : ''}`}>
       <div className="office-toolbar">
@@ -45,7 +53,6 @@ export function FloorScene({
           {archived ? 'ARCHIVED OFFICE' : !live ? 'OFFICE' : scene ? 'REPLAY' : 'LIVE OFFICE'}
         </span>
         <span>
-          {controls}
           {employeeCount} {employeeCount === 1 ? 'employee' : 'employees'}
         </span>
       </div>
@@ -59,8 +66,10 @@ export function FloorScene({
           projectId={projectId}
           live={live && !archived}
           scene={scene}
+          labels={labels.mode}
         />
       </div>
+      {controls && <div className="office-dock">{controls}</div>}
       <div className="office-legend">
         <span>
           <i className="status-dot working" /> Working
@@ -71,6 +80,16 @@ export function FloorScene({
         <span>
           <i className="status-dot idle" /> Available
         </span>
+        <button
+          type="button"
+          className="office-labels"
+          data-mode={labels.mode}
+          title={LABEL_TITLE[labels.mode]}
+          onClick={labels.cycle}
+        >
+          <Tag size={12} />
+          Labels: {labels.mode}
+        </button>
         <button
           type="button"
           className="office-sound"

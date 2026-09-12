@@ -1,12 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Activity, EmployeeActivity } from './activity';
-import { Box, C, Cylinder, Round, type Point } from './office-primitives';
+import { labelPriority, type LabelMode } from './office-labels';
+import { useOverlayEntry } from './office-overlay';
+import { Box, C, Cylinder, Round } from './office-primitives';
+import type { Station } from './office-stations';
 import type { OfficeEmployee } from './office-scene';
 
 type Appearance = {
@@ -25,7 +28,8 @@ const HAIR_COLORS = ['#3d3029', '#76533b', '#272f2b', '#3c3029', '#9c7653', '#3b
 const SEATED: Activity[] = ['idle', 'thinking', 'reading', 'writing', 'failed'];
 /** How long the hop-and-arms-up lasts, however long the task stays freshly completed. */
 const CELEBRATION_MS = 3_000;
-const BUBBLE_VISIBLE_MS = 6_000;
+/** Every walk across the floor takes the same time, however far it is. */
+const WALK_SECONDS = 1.2;
 
 /** A stable per-person look derived from the id; the office invents nothing per session. */
 function appearanceFor(id: string): Appearance {
@@ -249,16 +253,16 @@ function Figure({
   );
 }
 
-/** Where a person stands or sits for their current activity, and which way they face. */
-export type Station = {
-  /** The place to be. The figure walks there; reduced motion snaps. */
-  at: Point;
-  /** Yaw in radians. Math.PI is facing the camera side of the room. */
-  facing: number;
-};
-
 const scratch = new THREE.Vector3();
 const heading = new THREE.Vector3();
+
+/** The status a pill's dot and a figure's floor disc report. */
+function statusOf(state: EmployeeActivity): 'attention' | 'working' | 'idle' {
+  if (state.attention) return 'attention';
+  return state.activity === 'idle' ? 'idle' : 'working';
+}
+
+const STATUS_COLOR = { attention: '#e0b262', working: '#7fb069', idle: '#9fae9b' };
 
 export function EmployeeAvatar({
   employee,
@@ -267,51 +271,68 @@ export function EmployeeAvatar({
   station,
   accent,
   motion,
+  mode,
+  selected,
+  speaking,
   onSelect,
 }: {
   employee: OfficeEmployee;
   index: number;
   state: EmployeeActivity;
   station: Station;
-  /** Bubble tail colour: the provider being called, when there is one. */
+  /** Bubble rule colour: the provider being called, when there is one. */
   accent?: string;
   motion: boolean;
+  /** What the legend's Labels control is set to. */
+  mode: LabelMode;
+  selected?: boolean;
+  /** Whether this figure holds one of the floor's bubbles right now. */
+  speaking?: boolean;
   onSelect?: (id: string) => void;
 }) {
   const group = useRef<THREE.Group>(null);
+  const walk = useRef({ from: new THREE.Vector3(), to: new THREE.Vector3(), t: 1 });
   const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
   const [pose, setPose] = useState<Pose>(() => poseFor(state.activity, 0, 0, employee.traits ?? []));
   const elapsed = useRef(index * 7.3 + 7);
   const lastPoseUpdate = useRef(-1);
+  const placed = useRef(false);
   const color = employee.color || C.sage;
   const traits = employee.traits ?? [];
   const appearance = useMemo(() => appearanceFor(employee.id), [employee.id]);
   const activity = state.activity;
   const seated = SEATED.includes(activity);
-  const bubble = state.bubble;
-  const [bubbleVisible, setBubbleVisible] = useState(Boolean(bubble));
+  const status = statusOf(state);
+  const entry = useOverlayEntry(employee.id);
+  const headroom = seated ? 1.95 : 2.24;
 
-  useEffect(() => {
-    if (!bubble) {
-      setBubbleVisible(false);
-      return;
-    }
-    setBubbleVisible(true);
-    const timer = setTimeout(() => setBubbleVisible(false), BUBBLE_VISIBLE_MS);
-    return () => clearTimeout(timer);
-  }, [bubble]);
+  // The office's own declutter pass needs to know who matters most.
+  useLayoutEffect(() => {
+    if (!entry) return;
+    entry.priority = labelPriority({
+      activity,
+      ...(selected ? { selected } : {}),
+      ...(state.attention ? { attention: state.attention } : {}),
+    });
+    entry.forced = Boolean(hovered || focused || selected);
+  });
 
-  // Reduced motion, and the first placement, put the figure at its station directly.
+  // A new station starts a walk. Reduced motion, and the first placement, snap.
   useEffect(() => {
     if (!group.current) return;
-    if (!motion) {
-      group.current.position.set(...station.at);
+    const target = scratch.set(...station.at);
+    if (!motion || !placed.current) {
+      placed.current = true;
+      group.current.position.copy(target);
       group.current.rotation.y = station.facing;
-    } else if (lastPoseUpdate.current < 0) {
-      group.current.position.set(...station.at);
-      group.current.rotation.y = station.facing;
-      lastPoseUpdate.current = 0;
+      walk.current.t = 1;
+      return;
     }
+    if (group.current.position.distanceTo(target) < 0.02) return;
+    walk.current.from.copy(group.current.position);
+    walk.current.to.copy(target);
+    walk.current.t = 0;
   }, [motion, station.at[0], station.at[1], station.at[2], station.facing]);
 
   // Reduced motion still changes pose, it just never tweens between them.
@@ -329,36 +350,38 @@ export function EmployeeAvatar({
   }, [hovered]);
 
   useFrame((_, delta) => {
-    if (!motion || !group.current) return;
-    const step = Math.min(delta, 0.05);
-    elapsed.current += step;
-    // Walking: the figure crosses the floor at a human pace and faces where it is going.
-    const target = scratch.set(...station.at);
-    const here = group.current.position;
-    const gap = target.distanceTo(here);
-    if (gap > 0.02) {
-      heading.copy(target).sub(here).normalize();
-      here.addScaledVector(heading, Math.min(gap, step * 1.9));
-      if (gap > 0.25)
-        group.current.rotation.y = turnToward(
-          group.current.rotation.y,
-          Math.atan2(heading.x, heading.z),
+    const figure = group.current;
+    if (!figure) return;
+    if (motion) {
+      const step = Math.min(delta, 0.05);
+      elapsed.current += step;
+      const journey = walk.current;
+      if (journey.t < 1) {
+        journey.t = Math.min(1, journey.t + step / WALK_SECONDS);
+        // Ease in and out, so a walk starts and finishes on the figure's feet.
+        const eased = journey.t * journey.t * (3 - 2 * journey.t);
+        figure.position.lerpVectors(journey.from, journey.to, eased);
+        heading.copy(journey.to).sub(journey.from);
+        const walking = journey.t < 0.82 && heading.lengthSq() > 0.09;
+        figure.rotation.y = turnToward(
+          figure.rotation.y,
+          walking ? Math.atan2(heading.x, heading.z) : station.facing,
           step * 4.5,
         );
-    } else {
-      group.current.rotation.y = turnToward(group.current.rotation.y, station.facing, step * 4.5);
+      } else {
+        figure.rotation.y = turnToward(figure.rotation.y, station.facing, step * 4.5);
+      }
+      // Articulated limbs update at 20fps.
+      if (elapsed.current - lastPoseUpdate.current > 0.05) {
+        lastPoseUpdate.current = elapsed.current;
+        setPose(poseFor(activity, elapsed.current, (Date.now() - state.since) / 1000, traits));
+      }
     }
-    // Articulated limbs update at 20fps.
-    if (elapsed.current - lastPoseUpdate.current > 0.05) {
-      lastPoseUpdate.current = elapsed.current;
-      setPose(poseFor(activity, elapsed.current, (Date.now() - state.since) / 1000, traits));
-    }
+    if (entry) entry.anchor.set(figure.position.x, headroom, figure.position.z);
   });
 
-  // Neighbours sit close together, so labels are staggered to stay legible.
-  const headroom = (seated ? 1.89 : 2.18) + (index % 3) * 0.22;
-  // The bubble stays mounted while the message is fresh, so it can fade in place
-  // and the label never jumps when it goes quiet.
+  const walking = walk.current.t < 1;
+  const bubble = state.bubble;
   return (
     <group ref={group} position={station.at} rotation={[0, station.facing, 0]}>
       <group
@@ -372,104 +395,92 @@ export function EmployeeAvatar({
         }}
         onPointerOut={() => setHovered(false)}
       >
-        <Figure color={color} appearance={appearance} index={index} pose={pose} />
-        {hovered && (
+        <Figure color={color} appearance={appearance} index={index} pose={walking ? REST : pose} />
+        {(hovered || selected) && (
           <mesh position={[0, 0.052, 0]} rotation={[-Math.PI / 2, 0, 0]}>
             <ringGeometry args={[0.43, 0.48, 48]} />
             <meshBasicMaterial color={color} transparent opacity={0.85} depthWrite={false} />
           </mesh>
         )}
+        {/* A figure the floor is waiting on gets a ring, not another chip in the pile. */}
+        {state.attention && <AttentionRing stuck={state.attention === 'stuck'} motion={motion} />}
+        {mode === 'dots' && (
+          <mesh position={[0, 0.045, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <circleGeometry args={[0.2, 24]} />
+            <meshBasicMaterial color={STATUS_COLOR[status]} toneMapped={false} />
+          </mesh>
+        )}
       </group>
-      <Html center position={[0, headroom, 0]} zIndexRange={[30, 10]}>
-        <div className="office-stack">
-          {bubble && (
-            <button
-              type="button"
-              className="office-bubble"
-              data-visible={bubbleVisible ? 'true' : undefined}
-              style={{ '--bubble-color': accent || color } as CSSProperties}
-              onClick={(event) => {
-                event.stopPropagation();
-                onSelect?.(employee.id);
-              }}
-            >
-              {activity === 'talking' && (
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 12 12"
-                  aria-hidden="true"
-                  className="office-bubble-icon"
-                >
-                  <path
-                    d="M1.5 4h6M5.5 1.8 7.8 4 5.5 6.2M10.5 8h-6M6.5 5.8 4.2 8l2.3 2.2"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              )}
-              <span>{bubble}</span>
-            </button>
-          )}
+      <Html center className="office-anchor" position={[0, headroom, 0]} zIndexRange={[30, 10]}>
+        {mode === 'names' && (
           <button
+            ref={(element) => {
+              if (entry) entry.pill = element;
+            }}
             type="button"
-            className="office-view-label"
+            className="office-pill"
+            data-status={status}
+            style={{ '--person-color': color } as CSSProperties}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onPointerEnter={() => setHovered(true)}
+            onPointerLeave={() => setHovered(false)}
             onClick={(event) => {
               event.stopPropagation();
               onSelect?.(employee.id);
             }}
             aria-label={`${employee.name}, ${employee.role}. ${activityLabel(activity)}`}
             title={`${employee.name} · ${employee.role} · ${activityLabel(activity)}`}
-            style={
-              {
-                '--person-color': color,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '6px 9px',
-                borderRadius: 7,
-                border: '1px solid #ffffff30',
-                background: '#19342fe8',
-                color: '#f0f1df',
-                fontSize: 11,
-                fontWeight: 650,
-                lineHeight: 1,
-                whiteSpace: 'nowrap',
-                boxShadow: '0 3px 12px #07161245',
-                cursor: 'pointer',
-              } as CSSProperties
-            }
           >
-            <span
-              className="office-view-label-dot"
-              style={{
-                background: color,
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                display: 'inline-block',
-                boxShadow: `0 0 8px ${color}60`,
-              }}
-            />
+            <span className="office-pill-dot" />
             <span>{employee.name.split(' ')[0]}</span>
-            {state.attention && (
-              <span
-                className={`office-attention office-attention-${state.attention}`}
-                title={state.attention === 'stuck' ? 'Waiting a long time' : 'Needs your review'}
-              />
-            )}
-            {activity !== 'idle' && !state.attention && (
-              <span className="office-view-work-dot" title={activityLabel(activity)}>
-                <span />
-              </span>
-            )}
           </button>
-        </div>
+        )}
+        {bubble && (
+          <div
+            ref={(element) => {
+              if (entry) entry.bubble = element;
+            }}
+            className="office-bubble"
+            data-visible={speaking ? 'true' : undefined}
+            style={{ '--bubble-color': accent || color } as CSSProperties}
+          >
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelect?.(employee.id);
+              }}
+            >
+              <strong>{employee.name.split(' ')[0]}</strong>
+              <span>{bubble}</span>
+            </button>
+          </div>
+        )}
       </Html>
     </group>
+  );
+}
+
+/** The floor is waiting on this person: a ring that breathes under their feet. */
+function AttentionRing({ stuck, motion }: { stuck: boolean; motion: boolean }) {
+  const ring = useRef<THREE.Mesh>(null);
+  useFrame((state) => {
+    if (!motion || !ring.current) return;
+    const wave = 1 + Math.sin(state.clock.elapsedTime * (stuck ? 3.4 : 2.1)) * 0.12;
+    ring.current.scale.set(wave, wave, 1);
+  });
+  return (
+    <mesh ref={ring} position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[0.44, 0.62, 48]} />
+      <meshBasicMaterial
+        color={stuck ? '#d2764c' : '#e0b262'}
+        transparent
+        opacity={0.8}
+        depthWrite={false}
+        toneMapped={false}
+      />
+    </mesh>
   );
 }
 

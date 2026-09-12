@@ -15,20 +15,27 @@ const CONSOLE_BARS: [number, number][] = [
   [0.17, 0.26],
 ];
 
-/** A walnut lectern with an inbox tray that warms when approvals are waiting. */
+/**
+ * A walnut lectern whose inbox tray warms, and carries a small count, when work
+ * is waiting on a person. The count lives on the prop rather than over the
+ * figures, so the middle of the room stays readable.
+ */
 export function ReviewLectern({
   position,
-  glowing,
+  waiting,
+  stuck,
   motion,
-  label,
   onSelect,
 }: {
   position: Point;
-  glowing: boolean;
+  /** How many people on this floor are waiting on a decision. */
+  waiting: number;
+  /** Whether any of it has been waiting too long. */
+  stuck: boolean;
   motion: boolean;
-  label?: string;
   onSelect?: () => void;
 }): JSX.Element {
+  const glowing = waiting > 0;
   const trayMaterial = useRef<THREE.MeshStandardMaterial>(null);
   const lamp = useRef<THREE.PointLight>(null);
   const [hovered, setHovered] = useState(false);
@@ -101,23 +108,23 @@ export function ReviewLectern({
       </group>
       {/* A soft warm lamp hangs over the tray; it is quiet unless glowing. */}
       <pointLight ref={lamp} position={[0, 1.42, 0]} color="#ffc984" intensity={0} distance={2.4} />
-      {label && (
-        <Html center position={[0, 1.62, 0]} zIndexRange={[18, 8]}>
-          <div
-            style={{
-              padding: '5px 9px',
-              borderRadius: 7,
-              border: '1px solid #ffffff30',
-              background: '#19342fe8',
-              color: '#f0f1df',
-              fontSize: 11,
-              fontWeight: 650,
-              lineHeight: 1,
-              whiteSpace: 'nowrap',
+      {glowing && (
+        <Html center position={[0, 1.36, 0]} zIndexRange={[18, 8]}>
+          <button
+            type="button"
+            className="office-tray-count"
+            data-stuck={stuck ? 'true' : undefined}
+            title={
+              stuck ? `${waiting} waiting too long for a decision` : `${waiting} waiting for your review`
+            }
+            aria-label={`${waiting} waiting for review`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelect?.();
             }}
           >
-            {label}
-          </div>
+            {waiting}
+          </button>
         </Html>
       )}
     </group>

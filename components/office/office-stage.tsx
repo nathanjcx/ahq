@@ -8,6 +8,7 @@ import { providers as providerCatalog } from '@/lib/providers';
 import { asId, uiApi } from '@/lib/ui-api';
 import { deriveActivities, type EmployeeActivity } from './activity';
 import { useActivityCues } from './sound';
+import type { LabelMode } from './office-labels';
 import type { OfficeEmployee, OfficeProvider } from './office-scene';
 
 const OfficeView = dynamic(() => import('./office-view'), { ssr: false });
@@ -42,6 +43,8 @@ export type OfficeStageProps = {
   archived?: boolean;
   label?: string;
   emptyMessage?: string;
+  /** What the legend's Labels control is set to. */
+  labels?: LabelMode;
   onSelect?: (id: string) => void;
 };
 
@@ -136,6 +139,7 @@ function Stage({
   archived,
   label,
   emptyMessage,
+  labels,
   onSelect,
 }: Omit<OfficeStageProps, 'live' | 'projectId'> & { scene: OfficeSceneData }) {
   const dressed = useMemo(
@@ -154,6 +158,7 @@ function Stage({
       label={label}
       emptyMessage={emptyMessage}
       archived={archived}
+      labels={labels}
       providers={scene.providers}
       note={scene.note}
       lightBudget={scene.lightBudget}

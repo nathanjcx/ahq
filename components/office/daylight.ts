@@ -17,6 +17,8 @@ export interface Daylight {
   /** The sun or moon seen through the window wall. */
   disc: string;
   skyHeight: number;
+  /** How hard the room's own lamps work, 0 at midday and 1 in the small hours. */
+  interior: number;
   night: boolean;
 }
 
@@ -26,19 +28,21 @@ type Keyframe = Daylight & { hour: number };
 const KEYFRAMES: Keyframe[] = [
   {
     hour: 2,
-    background: '#2b333a',
-    ground: '#39424a',
-    grid: '#4a5560',
-    ambient: '#9caebd',
-    ambientIntensity: 0.36,
-    hemisphere: 0.34,
-    sun: '#9db4d8',
-    sunIntensity: 0.85,
+    background: '#151d2a',
+    ground: '#1e2634',
+    grid: '#2e3a4d',
+    // Warm lamplight inside, cool moonlight through the glazing.
+    ambient: '#ffd6a2',
+    ambientIntensity: 0.62,
+    hemisphere: 0.22,
+    sun: '#8fa9de',
+    sunIntensity: 1.15,
     sunPosition: [-13, 11, 5],
-    fill: '#6d8296',
-    fillIntensity: 0.5,
-    disc: '#e7edf6',
+    fill: '#5d7ba8',
+    fillIntensity: 0.45,
+    disc: '#eef3ff',
     skyHeight: 5.4,
+    interior: 1,
     night: true,
   },
   {
@@ -56,6 +60,7 @@ const KEYFRAMES: Keyframe[] = [
     fillIntensity: 1,
     disc: '#ffe3b0',
     skyHeight: 2.4,
+    interior: 0.16,
     night: false,
   },
   {
@@ -73,10 +78,11 @@ const KEYFRAMES: Keyframe[] = [
     fillIntensity: 1.1,
     disc: '#fff6dd',
     skyHeight: 6.2,
+    interior: 0,
     night: false,
   },
   {
-    hour: 19,
+    hour: 20,
     background: '#e7e3da',
     ground: '#efe7db',
     grid: '#b5a996',
@@ -90,7 +96,27 @@ const KEYFRAMES: Keyframe[] = [
     fillIntensity: 0.8,
     disc: '#ffb478',
     skyHeight: 1.5,
+    interior: 0.5,
     night: false,
+  },
+  {
+    // Dusk: the sky has gone cold and the room is running on its own lamps.
+    hour: 21,
+    background: '#222c3c',
+    ground: '#2a3342',
+    grid: '#3b4759',
+    ambient: '#ffcf9a',
+    ambientIntensity: 0.58,
+    hemisphere: 0.28,
+    sun: '#7f9bd0',
+    sunIntensity: 1.35,
+    sunPosition: [-14, 7, 5],
+    fill: '#5f7ca6',
+    fillIntensity: 0.5,
+    disc: '#e4ecff',
+    skyHeight: 3.4,
+    interior: 0.88,
+    night: true,
   },
 ];
 
@@ -150,6 +176,7 @@ export function daylight(hour: number): Daylight {
     fillIntensity: mix(from.fillIntensity, to.fillIntensity, t),
     disc: mixColor(from.disc, to.disc, t),
     skyHeight: mix(from.skyHeight, to.skyHeight, t),
+    interior: mix(from.interior, to.interior, t),
     night: t < 0.5 ? from.night : to.night,
   };
 }

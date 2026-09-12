@@ -4,7 +4,7 @@ import { useContext, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { ArchitecturalDetails, OperationsDisplay } from './office-details';
 import { Bookshelf, Chair, Desk, Laptop, Plant, Whiteboard } from './office-furniture';
-import { Box, C, Cylinder, Round, SurfaceContext, desks, type Point } from './office-primitives';
+import { Box, C, Cylinder, Halo, Round, SurfaceContext, type Point } from './office-primitives';
 
 function Parquet() {
   const surfaces = useContext(SurfaceContext);
@@ -52,7 +52,11 @@ function Parquet() {
   );
 }
 
-export function Architecture() {
+/**
+ * The room itself. `desks` is the grid the floor's headcount produced, so the
+ * furniture and the people always agree about where a workstation is.
+ */
+export function Architecture({ desks, interior }: { desks: Point[]; interior: number }) {
   return (
     <group>
       <Parquet />
@@ -70,7 +74,7 @@ export function Architecture() {
       ).map(([z, width]) => (
         <Box key={z} p={[-9, 1.95, z]} s={[0.17, 1.94, width]} color={C.wall} />
       ))}
-      <ArchitecturalDetails />
+      <ArchitecturalDetails desks={desks} interior={interior} />
       <Box p={[0, 0.15, -5.88]} s={[17.9, 0.25, 0.055]} color={C.trim} />
       <Box p={[-8.89, 0.15, 0]} s={[0.055, 0.25, 11.9]} color={C.trim} />
       <Box p={[0, 3.1, -6]} s={[18.2, 0.09, 0.24]} color={C.trim} />
@@ -96,6 +100,14 @@ export function Architecture() {
             <Box key={y} p={[0.08, y, 0]} s={[0.11, 0.07, 3.85]} color={C.trim} />
           ))}
           <Box p={[0.15, -0.89, 0]} s={[0.36, 0.09, 4]} color={C.trim} />
+          {/* Outside is darker than the room, so the glazing glows after dusk. */}
+          <Halo
+            p={[-0.22, 0, 0]}
+            size={[4.6, 2.6]}
+            rotation={[0, -Math.PI / 2, 0]}
+            color="#ffca82"
+            opacity={interior * 0.42}
+          />
         </group>
       ))}
       <OperationsDisplay />
