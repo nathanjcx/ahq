@@ -594,6 +594,8 @@ export default defineSchema({
     supersedesId: v.optional(v.id('memories')),
     /** Set on a promoted workspace copy: the scoped entry it was promoted from. */
     sourceMemoryId: v.optional(v.id('memories')),
+    /** Set on both sides of a conflict: the competing claim this one is contested against. */
+    contestedWithId: v.optional(v.id('memories')),
     contestReason: v.optional(v.string()),
     expiresAt: v.optional(v.number()),
     lastUsedAt: v.optional(v.number()),

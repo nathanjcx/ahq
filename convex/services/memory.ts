@@ -361,18 +361,43 @@ export const merge = mutation({
   },
 });
 
-/** Marks a claim as contested so it reaches no model; the caller asks the channel question. */
+/**
+ * Marks a claim as contested so it reaches no model. Naming the competing claim contests both sides
+ * and links them, which is what lets a person resolve the conflict in one decision. The caller posts
+ * the channel question, so the contested entry is returned.
+ */
 export const contest = mutation({
-  args: { secret: v.string(), runToken: v.string(), id: v.id('memories'), reason: v.string() },
+  args: {
+    secret: v.string(),
+    runToken: v.string(),
+    id: v.id('memories'),
+    reason: v.string(),
+    otherId: v.optional(v.id('memories')),
+  },
   returns: memoryView,
   handler: async (ctx, args) => {
     requireService(args.secret);
     const task = await janitorRun(ctx, args.runToken);
     const entry = await janitorEntry(ctx, task, args.id);
+    const reason = cleanText(args.reason, 'Reason', 400);
+    const now = Date.now();
+    const other = args.otherId ? await janitorEntry(ctx, task, args.otherId) : null;
+    if (other) {
+      if (other._id === entry._id) throw new Error('A claim cannot be contested against itself');
+      if (other.scope !== entry.scope || other.scopeId !== entry.scopeId)
+        throw new Error('A conflict stays inside one scope');
+      await ctx.db.patch(other._id, {
+        status: 'contested',
+        contestReason: reason,
+        contestedWithId: entry._id,
+        updatedAt: now,
+      });
+    }
     const patch = {
       status: 'contested' as const,
-      contestReason: cleanText(args.reason, 'Reason', 400),
-      updatedAt: Date.now(),
+      contestReason: reason,
+      contestedWithId: other?._id,
+      updatedAt: now,
     };
     await ctx.db.patch(entry._id, patch);
     return publicMemory({ ...entry, ...patch });

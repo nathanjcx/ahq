@@ -16,6 +16,7 @@ export interface Memory {
   confidence: number;
   status: MemoryStatus;
   supersedesId?: string;
+  contestedWithId?: string;
   contestReason?: string;
   expiresAt?: number;
   lastUsedAt?: number;
