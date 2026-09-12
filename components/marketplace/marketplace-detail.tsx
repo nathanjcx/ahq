@@ -11,7 +11,7 @@ import {
   Play,
   SlidersHorizontal,
 } from 'lucide-react';
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { providerName } from '../shared/format';
 import { ProviderMark } from '../shared/marks';
 import { Sheet } from '../shared/sheet';
@@ -33,10 +33,11 @@ export function MarketplaceDetail({
   onHire: () => void;
 }) {
   const [mediaIndex, setMediaIndex] = useState(0);
-  const [mediaFailed, setMediaFailed] = useState(false);
+  // Remembering which slide failed lets moving to the next one clear the notice on its own.
+  const [failedIndex, setFailedIndex] = useState<number | null>(null);
+  const mediaFailed = failedIndex === mediaIndex;
   const media = listing.media[mediaIndex];
   const canHire = configured && !hired && missing.length === 0;
-  useEffect(() => setMediaFailed(false), [mediaIndex]);
   return (
     <Sheet
       wide
@@ -82,7 +83,7 @@ export function MarketplaceDetail({
               </div>
             )}
             {media?.type === 'image' && !mediaFailed && (
-              <img src={media.url} alt={media.alt} onError={() => setMediaFailed(true)} />
+              <img src={media.url} alt={media.alt} onError={() => setFailedIndex(mediaIndex)} />
             )}
             {media?.type === 'video' && !mediaFailed && (
               <video
@@ -90,7 +91,7 @@ export function MarketplaceDetail({
                 controls
                 preload="metadata"
                 aria-label={media.alt}
-                onError={() => setMediaFailed(true)}
+                onError={() => setFailedIndex(mediaIndex)}
               />
             )}
             {!media && (

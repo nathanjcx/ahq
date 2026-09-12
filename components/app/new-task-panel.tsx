@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowRight, ShieldCheck } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Sheet } from '../shared/sheet';
 import type { Employee, Floor } from '@/lib/contracts';
 
@@ -31,16 +31,15 @@ export function NewTaskPanel({
     (employee) =>
       employee.status === 'ready' && (!selectedFloor || selectedFloor.employeeIds.includes(employee.id)),
   );
-  const [employeeId, setEmployeeId] = useState(
-    defaultEmployee && ready.some((e) => e.id === defaultEmployee) ? defaultEmployee : (ready[0]?.id ?? ''),
+  const [chosen, setChosen] = useState(
+    defaultEmployee && ready.some((e) => e.id === defaultEmployee) ? defaultEmployee : '',
   );
+  // Changing floor narrows the list, so the choice falls back to the first person still on it.
+  const employeeId = ready.some((employee) => employee.id === chosen) ? chosen : (ready[0]?.id ?? '');
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const unavailableFloor = Boolean(floorId && !selectedFloor);
-  useEffect(() => {
-    if (!ready.some((employee) => employee.id === employeeId)) setEmployeeId(ready[0]?.id ?? '');
-  }, [employeeId, ready]);
   return (
     <Sheet
       title="Assign new work"
@@ -100,7 +99,7 @@ export function NewTaskPanel({
         </label>
         <label>
           Employee
-          <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} required>
+          <select value={employeeId} onChange={(e) => setChosen(e.target.value)} required>
             <option value="" disabled>
               Select an employee
             </option>

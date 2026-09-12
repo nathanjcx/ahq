@@ -1,7 +1,7 @@
 'use client';
 
 import { Download, RefreshCw, ScrollText } from 'lucide-react';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { EmptyPane } from '../shared/empty';
 import { correctionLabel, providerName } from '../shared/format';
 import { JsonView } from '../shared/json-view';
@@ -157,34 +157,41 @@ function Entry({ entry }: { entry: AuditEntry }) {
 
 /** The unsealed journal for one task: events, messages, tool calls, and proposals in order. */
 export function AuditTab({ taskId }: { taskId: string }) {
-  const [timeline, setTimeline] = useState<AuditResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(
-    async (signal?: AbortSignal) => {
-      setLoading(true);
-      try {
-        setTimeline(await webClient.audit(taskId, signal));
-        setError(null);
-      } catch (cause) {
-        if (signal?.aborted) return;
-        if (cause instanceof WebApiError && (cause.status === 401 || cause.status === 403)) {
-          setTimeline(null);
-          setError(NO_ACCESS);
-        } else setError(LOAD_FAILED);
-      } finally {
-        if (!signal?.aborted) setLoading(false);
-      }
-    },
-    [taskId],
-  );
+  // The result carries the task it belongs to, so switching tasks reads as loading without an
+  // effect that resets state. A refresh keeps the visible trail until the new one arrives.
+  const [result, setResult] = useState<{
+    taskId: string;
+    timeline: AuditResponse | null;
+    error: string | null;
+  } | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  // Refreshing re-runs the effect below rather than duplicating the request here.
+  const [attempt, setAttempt] = useState(0);
+  const current = result?.taskId === taskId ? result : null;
+  const timeline = current?.timeline ?? null;
+  const error = current?.error ?? null;
+  const loading = !current || refreshing;
 
   useEffect(() => {
     const controller = new AbortController();
-    void load(controller.signal);
+    void webClient
+      .audit(taskId, controller.signal)
+      .then((next) => setResult({ taskId, timeline: next, error: null }))
+      .catch((cause: unknown) => {
+        if (controller.signal.aborted) return;
+        // Losing access hides the trail; a transient failure leaves what is already on screen.
+        const denied = cause instanceof WebApiError && (cause.status === 401 || cause.status === 403);
+        setResult((previous) => ({
+          taskId,
+          timeline: denied || previous?.taskId !== taskId ? null : previous.timeline,
+          error: denied ? NO_ACCESS : LOAD_FAILED,
+        }));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setRefreshing(false);
+      });
     return () => controller.abort();
-  }, [load]);
+  }, [taskId, attempt]);
 
   function exportJson() {
     if (!timeline) return;
@@ -209,7 +216,14 @@ export function AuditTab({ taskId }: { taskId: string }) {
             : 'Every event, message, tool call, and proposal for this task.'}
         </p>
         <div>
-          <button className="text-button" onClick={() => void load()} disabled={loading}>
+          <button
+            className="text-button"
+            onClick={() => {
+              setRefreshing(true);
+              setAttempt((count) => count + 1);
+            }}
+            disabled={loading}
+          >
             <RefreshCw size={14} />
             Refresh
           </button>

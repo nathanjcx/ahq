@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowUpRight, ShieldCheck } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Sheet } from '../shared/sheet';
 import { DecideButtons, ProposalEvidence, ProposalHeading } from '../tasks/proposal-card';
 import type { ActionProposal } from '@/lib/contracts';
@@ -26,11 +26,11 @@ export function ReviewBar({
 }) {
   const [open, setOpen] = useState(false);
   const pending = reviewable(proposals);
-  // Decisions land while the sheet is open; the last one closes it.
-  useEffect(() => {
-    if (!pending.length) setOpen(false);
-  }, [pending.length]);
-  if (!pending.length) return null;
+  if (!pending.length) {
+    // The bar and its sheet leave together, and a proposal arriving later starts closed.
+    if (open) setOpen(false);
+    return null;
+  }
   return (
     <>
       <div className="review-bar" role="status">

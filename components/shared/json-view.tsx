@@ -13,11 +13,18 @@ export function jsonText(value: unknown): string {
       return value;
     }
   }
+  // A circular value, a BigInt, or a bare symbol cannot be serialized; describe it instead of
+  // letting the default stringification print "[object Object]".
   try {
-    return JSON.stringify(value, null, 2) ?? String(value);
+    return JSON.stringify(value, null, 2) ?? describe(value);
   } catch {
-    return String(value);
+    return describe(value);
   }
+}
+
+function describe(value: unknown): string {
+  if (typeof value === 'object' && value !== null) return `[${value.constructor?.name ?? 'object'}]`;
+  return typeof value === 'symbol' ? value.toString() : `${String(value)}`;
 }
 
 function CopyButton({ text }: { text: string }) {
