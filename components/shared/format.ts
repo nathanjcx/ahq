@@ -27,10 +27,6 @@ export function correctionLabel(kind: ActionProposal['correction']) {
     unknown: 'Correction is unverified.',
   }[kind];
 }
-export function timeGreeting() {
-  const hour = new Date().getHours();
-  return hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
-}
 export function fileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;

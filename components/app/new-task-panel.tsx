@@ -23,7 +23,7 @@ export function NewTaskPanel({
   onCreate: (employeeId: string, title: string, prompt: string, floorId?: string) => Promise<void>;
 }) {
   const activeFloors = floors.filter((floor) => !floor.archivedAt);
-  const [floorId, setProjectId] = useState(
+  const [floorId, setFloorId] = useState(
     defaultFloorId && activeFloors.some((floor) => floor.id === defaultFloorId) ? defaultFloorId : '',
   );
   const selectedFloor = activeFloors.find((floor) => floor.id === floorId);
@@ -81,7 +81,7 @@ export function NewTaskPanel({
       >
         <label>
           Floor
-          <select value={floorId} onChange={(event) => setProjectId(event.target.value)}>
+          <select value={floorId} onChange={(event) => setFloorId(event.target.value)}>
             <option value="">Lobby · Unassigned</option>
             {activeFloors.map((floor) => (
               <option key={floor.id} value={floor.id}>

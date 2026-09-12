@@ -3,6 +3,12 @@
  * clock; the workspace's schedule arithmetic lives in `lib/time.ts` and takes its zone explicitly.
  */
 
+/** Which part of the day it is for the viewer, for a greeting. */
+export function timeGreeting() {
+  const hour = new Date().getHours();
+  return hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+}
+
 /** "Mar 4": the date without a year, for something recent. */
 export function shortDate(at: number) {
   return new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });

@@ -48,14 +48,10 @@ export function TasksPage({
   onSetVisibility?: (taskId: string, visibility: TaskVisibility) => void;
   onRequestHandoff?: (floorId: string, toEmployeeId: string, brief: string, taskId: string) => void;
 }) {
-  const [projectFilter, setProjectFilter] = useState('all');
+  const [floorFilter, setFloorFilter] = useState('all');
   const { open, openDetail, closeDetail } = useMasterDetail();
   const shownTasks = tasks.filter((task) =>
-    projectFilter === 'all'
-      ? true
-      : projectFilter === 'lobby'
-        ? !task.floorId
-        : task.floorId === projectFilter,
+    floorFilter === 'all' ? true : floorFilter === 'lobby' ? !task.floorId : task.floorId === floorFilter,
   );
   const selected = shownTasks.find((task) => task.id === selectedId) ?? shownTasks[0];
   const floor = floors.find((floor) => floor.id === selected?.floorId);
@@ -85,7 +81,7 @@ export function TasksPage({
                 <strong>{pluralize(shownTasks.length, 'task')}</strong>
                 <label className="task-floor-filter">
                   <span className="sr-only">Filter by floor</span>
-                  <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
+                  <select value={floorFilter} onChange={(event) => setFloorFilter(event.target.value)}>
                     <option value="all">All floors</option>
                     <option value="lobby">Lobby</option>
                     {floors.map((floor) => (

@@ -19,7 +19,11 @@ export type CoreActions = {
   setTokenCap: (monthlyTokenCap: number) => Promise<unknown>;
   hire: (versionId: string) => Promise<unknown>;
   createTask: (employeeId: string, prompt: string, title: string, floorId?: string) => Promise<unknown>;
-  createFloor: (name: string, brief: string, employeeIds: string[]) => Promise<unknown>;
+  createFloor: (
+    name: string,
+    brief: string,
+    employeeIds: string[],
+  ) => Promise<{ floorId: string } | undefined>;
   updateFloor: (floorId: string, name: string, brief: string, employeeIds: string[]) => Promise<unknown>;
   setFloorArchived: (floorId: string, archived: boolean) => Promise<unknown>;
   sendMessage: (taskId: string, text: string) => Promise<unknown>;
