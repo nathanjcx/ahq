@@ -1,6 +1,7 @@
-import { actor, failure, jsonOk, parseBody } from '@/lib/server/http';
+import { actor, failure, HttpError, jsonOk, parseBody } from '@/lib/server/http';
 import { connectRequest, type ConnectResponse } from '@/lib/api/schemas';
 import { approvedMcpUrl } from '@/lib/server/network';
+import { withinRateLimit } from '@/lib/server/rate-limit';
 import { oauthCookie, pickOAuthClient, startOAuth } from '@/lib/server/oauth';
 import { providerRuntimeConfig } from '@/lib/server/config';
 import { seal } from '@/lib/server/secrets';
@@ -10,6 +11,10 @@ export const runtime = 'nodejs';
 export async function POST(request: Request) {
   try {
     const identity = await actor(request);
+    // Starting a flow makes the discovery and registration requests the provider's server answers,
+    // so one signed-in caller cannot turn this route into an outbound request amplifier.
+    if (!withinRateLimit(`connect:${identity.authSubject}`, 20))
+      throw new HttpError(429, 'Too many connection attempts. Try again in a minute.', 'rate_limited');
     const body = await parseBody(request, connectRequest);
     const definition = getProvider(body.provider);
     const serverUrls = [

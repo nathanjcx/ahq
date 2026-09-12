@@ -317,7 +317,7 @@ export const recordEvents = mutation({
       }
       patch.status = nextStatus;
     }
-    if (args.error !== undefined) patch.error = args.error;
+    if (args.error !== undefined) patch.error = args.error.slice(0, 2_000);
     const status = patch.status ? String(patch.status) : task.status;
     const becameTerminal = isTerminal(status) && !isTerminal(task.status);
     if (becameTerminal) {

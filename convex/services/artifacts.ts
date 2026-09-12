@@ -17,6 +17,17 @@ export const recordArtifact = mutation({
     requireService(args.secret);
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error('Task not found');
+    // The archive key is the only thing the download route hands to object storage, and its last
+    // segment is a provider-supplied file id. It has to stay inside this task's own prefix.
+    const prefix = `${task.workspaceId}/${task._id}/`;
+    if (
+      !args.storageKey.startsWith(prefix) ||
+      !/^[A-Za-z0-9_-]{1,200}$/.test(args.storageKey.slice(prefix.length))
+    )
+      throw new Error('Artifact storage key is outside this task');
+    if (args.name.length > 300 || args.mediaType.length > 200 || !/^[0-9a-f]{64}$/.test(args.sha256))
+      throw new Error('Artifact metadata is invalid');
+    if (!Number.isFinite(args.size) || args.size < 0) throw new Error('Artifact size is invalid');
     const existing = (
       await ctx.db
         .query('artifacts')

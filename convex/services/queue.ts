@@ -381,6 +381,7 @@ export const failJob = mutation({
     const job = await ctx.db.get(args.jobId);
     if (!job || job.state !== 'leased' || job.leaseToken !== args.leaseToken)
       throw new Error('Job lease is no longer valid');
+    const error = args.error.slice(0, 2_000);
     const now = Date.now();
     const task = await ctx.db.get(job.taskId);
     const taskActive = Boolean(task && !isTerminal(task.status));
@@ -391,7 +392,7 @@ export const failJob = mutation({
       canRetry
         ? {
             state: 'queued',
-            error: args.error,
+            error,
             availableAt: now + Math.min(60_000, 1_000 * 2 ** job.attempts),
             leaseOwner: undefined,
             leaseToken: undefined,
@@ -400,7 +401,7 @@ export const failJob = mutation({
           }
         : {
             state: 'failed',
-            error: args.error,
+            error,
             leaseOwner: undefined,
             leaseToken: undefined,
             leaseExpiresAt: undefined,
@@ -411,14 +412,14 @@ export const failJob = mutation({
       if (task && !isTerminal(task.status))
         await ctx.db.patch(task._id, {
           status: args.outcomeUnknown ? 'uncertain' : 'failed',
-          error: args.error,
+          error,
           updatedAt: now,
         });
       if (job.proposalId) {
         const proposal = await ctx.db.get(job.proposalId);
         if (proposal && proposal.status === 'executing') {
           const status = args.outcomeUnknown ? 'uncertain' : 'failed';
-          await ctx.db.patch(proposal._id, { status, result: args.error });
+          await ctx.db.patch(proposal._id, { status, result: error });
           await ctx.db.insert('actionTransitions', {
             workspaceId: proposal.workspaceId,
             proposalId: proposal._id,
@@ -426,7 +427,7 @@ export const failJob = mutation({
             to: status,
             actor: 'worker',
             at: now,
-            detail: args.error,
+            detail: error,
           });
         }
       }

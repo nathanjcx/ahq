@@ -34,6 +34,17 @@ export async function archiveFiles(runtime: WorkerRuntime, context: SessionConte
       });
       break;
     }
+    // The provider's file id is the last path segment of an object storage key. Anything that is
+    // not a plain id would write outside this task's prefix, so it is refused before the upload.
+    if (!/^[A-Za-z0-9_-]{1,200}$/.test(artifact.id)) {
+      await journal(context.task.id, {
+        externalId: `artifact-rejected:${count}`,
+        type: 'artifact.unavailable',
+        text: 'A session file was skipped because the provider reported an unusable file id.',
+        createdAt: Date.now(),
+      });
+      continue;
+    }
     const storageKey = `${context.task.workspaceId}/${context.task.id}/${artifact.id}`;
     if (archived.has(storageKey)) continue;
     if (artifact.size_bytes > maxFileBytes) {
@@ -53,7 +64,7 @@ export async function archiveFiles(runtime: WorkerRuntime, context: SessionConte
     await putArtifact(storageKey, bytes, 'application/octet-stream');
     await mutate('services/artifacts:recordArtifact', {
       taskId: context.task.id,
-      name: artifact.path.split('/').pop() || 'file',
+      name: (artifact.path.split('/').pop() || 'file').slice(0, 300),
       mediaType: 'application/octet-stream',
       size: bytes.byteLength,
       storageKey,
