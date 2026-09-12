@@ -1,0 +1,448 @@
+/* The records basement: shelves per scope, the claims on them, the conflicts queue, the janitor. */
+
+/* === components/records/records-page.tsx === */
+.records-scopes {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 14px;
+  overflow-x: auto;
+}
+.records-layout {
+  min-height: 620px;
+  grid-template-columns: 275px minmax(0, 1fr);
+  overflow: hidden;
+}
+.shelf-list {
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+}
+.shelf-list > button {
+  width: 100%;
+  display: block;
+  padding: 12px 14px;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid #ebece6;
+  background: transparent;
+}
+.shelf-list > button:hover,
+.shelf-list > button[data-active='true'] {
+  background: var(--sage-50);
+}
+.shelf-list > button[data-active='true'] {
+  box-shadow: inset 3px 0 var(--sage-400);
+}
+.shelf-list strong,
+.shelf-list small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shelf-list strong {
+  font-size: var(--text-sm);
+}
+.shelf-list small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: var(--text-2xs);
+}
+.shelf-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 26px 28px 32px;
+  overflow-y: auto;
+}
+.shelf-head h2 {
+  margin-top: 3px;
+  font-size: 21px;
+  letter-spacing: -0.5px;
+}
+.shelf-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--sage-50);
+}
+.shelf-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+.shelf-counts strong {
+  margin-right: 4px;
+  color: var(--ink);
+  font-size: var(--text-lg);
+}
+.shelf-counts span[data-alert='true'] strong {
+  color: var(--terra);
+}
+.shelf-fill small,
+.shelf-unbudgeted {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: var(--text-2xs);
+}
+.shelf-bar {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--sage-200);
+}
+.shelf-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--sage-600);
+}
+.shelf-bar[data-over='true'] > i {
+  background: var(--terra);
+}
+
+/* === components/records/claim-list.tsx === */
+.claim-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.claim {
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+}
+.claim[data-status='archived'] {
+  opacity: 0.62;
+}
+.claim[data-status='proposed'] {
+  border-color: #d9cfae;
+  background: #fdfaee;
+}
+.claim-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.claim-kind {
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: var(--sage-800);
+  background: var(--sage-100);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+}
+.claim-status {
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  font-weight: 680;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.claim[data-status='contested'] .claim-status {
+  color: var(--terra);
+}
+.claim-confidence {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--text-2xs);
+}
+.claim > p {
+  margin-top: 7px;
+  color: var(--ink);
+  font-size: var(--text-md);
+  line-height: 1.55;
+}
+.claim-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: var(--text-2xs);
+}
+.claim-tag {
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: #6d7c6b;
+  background: #eef1e8;
+}
+.claim-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.claim-actions .text-button {
+  gap: 5px;
+  display: inline-flex;
+  align-items: center;
+}
+.claim-chain {
+  margin-top: 10px;
+  padding-left: 14px;
+  border-left: 2px solid var(--sage-200);
+}
+.claim-chain li + li {
+  margin-top: 10px;
+}
+.claim-chain span {
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.claim-chain p {
+  margin-top: 3px;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.claim-chain small {
+  color: var(--muted);
+  font-size: var(--text-2xs);
+}
+
+/* === components/records/contested-pairs.tsx === */
+.contested-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px 18px;
+  border: 1px solid #e0cfc2;
+  border-radius: var(--radius-lg);
+  background: #fdf5ef;
+}
+.contested-queue .section-title h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+}
+.contested-note {
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+.contested-pair {
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.contested-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.contested-side p {
+  margin-top: 6px;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.contested-side small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: var(--text-2xs);
+}
+.contested-side .claim-kind {
+  display: inline-block;
+  margin-top: 5px;
+}
+.contested-missing p {
+  color: var(--muted);
+  font-style: italic;
+}
+.contested-reason {
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+  color: var(--terra-dark);
+  font-size: var(--text-xs);
+}
+.contested-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 11px;
+}
+
+/* === components/records/claim-composer.tsx === */
+.claim-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 15px 16px 17px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--cream);
+}
+.claim-composer .section-title h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+}
+.composer-row {
+  display: flex;
+  gap: 8px;
+}
+.composer-row input,
+.composer-row select {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid #d5ddd0;
+  border-radius: 7px;
+  outline: 0;
+  background: #fffef9;
+  font-size: var(--text-sm);
+}
+.composer-row input {
+  flex: 1;
+  min-width: 0;
+}
+.composer-row input:focus,
+.composer-row select:focus {
+  border-color: #9aad90;
+  box-shadow: 0 0 0 3px #e4eadf;
+}
+
+/* === components/records/task-dossier.tsx === */
+.task-dossier {
+  padding: 15px 16px 17px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--cream);
+}
+.dossier-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dossier-head .text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.dossier-outcome {
+  margin-top: 7px;
+  color: var(--ink);
+  font-size: var(--text-lg);
+  line-height: 1.5;
+}
+.dossier-text {
+  margin-top: 7px;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+.dossier-points {
+  margin-top: 12px;
+}
+.dossier-points ul {
+  margin-top: 5px;
+  padding-left: 16px;
+  list-style: disc;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: 1.65;
+}
+
+/* === components/records/janitor-log.tsx === */
+.janitor-log {
+  margin-top: 16px;
+  padding: 18px 20px 20px;
+}
+.janitor-log .section-title h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+}
+.janitor-log ol {
+  margin-top: 12px;
+}
+.janitor-log li {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid #ebece6;
+}
+.janitor-log li p {
+  color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.janitor-log li small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: var(--text-2xs);
+}
+.janitor-log time {
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+}
+.janitor-action {
+  justify-self: start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sage-100);
+  color: var(--sage-800);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+}
+.janitor-action[data-action='contested'] {
+  background: #f2ddd2;
+  color: var(--terra-dark);
+}
+.janitor-action[data-action='promoted'] {
+  background: #efe6cd;
+  color: #7d6626;
+}
+
+@media (max-width: 900px) {
+  .records-layout {
+    grid-template-columns: 235px minmax(0, 1fr);
+  }
+  .shelf-detail {
+    padding: 22px 20px 26px;
+  }
+}
+@media (max-width: 640px) {
+  .records-layout {
+    min-height: 0;
+  }
+  .shelf-list {
+    border-right: 0;
+  }
+  .shelf-list > button {
+    min-height: var(--tap);
+  }
+  .shelf-detail {
+    padding: 18px 16px 24px;
+  }
+  .contested-sides {
+    grid-template-columns: 1fr;
+  }
+  .composer-row {
+    flex-direction: column;
+  }
+  .janitor-log li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+  }
+}
