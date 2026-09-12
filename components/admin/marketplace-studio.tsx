@@ -11,6 +11,7 @@ import { draftPublishIssues, type EditorDraft } from './draft-issues';
 import { EmployeeEditor } from './employee-editor';
 import { groupRegistryTools } from './registry';
 import type { Listing, RegistryTool } from '@/lib/contracts';
+import './admin.css';
 
 export function MarketplaceStudioPage({
   drafts,

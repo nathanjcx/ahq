@@ -14,7 +14,7 @@ import type {
   ProviderReadiness,
   RegistryTool,
 } from '@/lib/contracts';
-import './operations.css';
+import './admin.css';
 
 /** The origin never changes while the page is open, so there is nothing to subscribe to. */
 const subscribeToNothing = () => () => {};

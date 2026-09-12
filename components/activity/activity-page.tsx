@@ -5,6 +5,7 @@ import { EmptyPane } from '../shared/empty';
 import { PageIntro } from '../shared/page-intro';
 import { relativeTime } from '../shared/time';
 import type { ActivityEvent } from '@/lib/contracts';
+import './activity.css';
 
 export function ActivityPage({ events }: { events: ActivityEvent[] }) {
   return (

@@ -6,6 +6,7 @@ import { fileSize } from '../shared/format';
 import { PageIntro } from '../shared/page-intro';
 import { relativeTime } from '../shared/time';
 import type { Artifact } from '@/lib/contracts';
+import './files.css';
 
 export function FilesPage({ artifacts, onTasks }: { artifacts: Artifact[]; onTasks: () => void }) {
   return (

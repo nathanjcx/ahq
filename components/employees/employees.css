@@ -1,0 +1,135 @@
+/* The employee grid and the profile beside it. */
+/* The pair is a MasterDetail, which owns `display`; a phone drops to one pane on its own. */
+.employee-layout {
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 18px;
+  align-items: start;
+}
+.employee-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.employee-card {
+  position: relative;
+  min-height: 132px;
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 19px;
+  text-align: left;
+}
+.employee-card:hover,
+.employee-card[data-active='true'] {
+  border-color: #b9c8b1;
+  transform: translateY(-1px);
+}
+.employee-card[data-active='true'] {
+  box-shadow:
+    inset 3px 0 #708866,
+    var(--shadow-sm);
+}
+.employee-card h3 {
+  font-size: var(--text-lg);
+}
+.employee-card p {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.employee-card .model-pill {
+  grid-column: 2;
+  align-self: start;
+  width: fit-content;
+}
+.employee-profile {
+  padding: 24px;
+}
+.profile-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.profile-top h2 {
+  font-size: 20px;
+}
+.profile-top p {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.profile-facts {
+  margin: 18px 0 0;
+}
+.profile-facts > div {
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 0;
+}
+.profile-facts dt {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.profile-facts dd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 640;
+}
+.profile-section,
+.profile-connections {
+  margin-top: 20px;
+}
+.profile-section h3,
+.profile-connections h3 {
+  margin-bottom: 8px;
+  font-size: var(--text-sm);
+}
+.readiness-ok,
+.readiness-warn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px;
+  border-radius: 6px;
+  font-size: var(--text-xs);
+}
+.readiness-ok {
+  color: #496d47;
+  background: #edf4e9;
+}
+.readiness-warn {
+  color: #85622f;
+  background: #f6eedc;
+}
+.profile-connections > div {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.profile-connections > div > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-2xs);
+}
+@media (max-width: 1120px) {
+  .employee-layout {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .employee-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .employee-layout {
+    gap: 0;
+  }
+}

@@ -21,6 +21,7 @@ import type {
   ProviderReadiness,
   RegistryTool,
 } from '@/lib/contracts';
+import './app.css';
 
 export function WorkspaceShell({
   configured,

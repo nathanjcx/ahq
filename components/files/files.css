@@ -1,0 +1,51 @@
+/* Artifacts produced by tasks, as a grid of cards. */
+.file-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.file-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 12px;
+  min-height: 112px;
+  padding: 17px;
+}
+.file-card:hover {
+  border-color: #bdcbb7;
+  transform: translateY(-1px);
+}
+.file-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 46px;
+  color: var(--sage-600);
+  border: 1px solid #d8dfd2;
+  border-radius: 8px;
+  background: var(--sage-50);
+}
+.file-card h3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-base);
+}
+.file-card p,
+.file-card time {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: var(--text-2xs);
+}
+@media (max-width: 820px) {
+  .file-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .file-grid {
+    grid-template-columns: 1fr;
+  }
+}

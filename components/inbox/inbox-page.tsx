@@ -9,6 +9,7 @@ import { MasterDetail, useMasterDetail } from '../shared/master-detail';
 import { PageIntro } from '../shared/page-intro';
 import { relativeTime } from '../shared/time';
 import type { Employee, InboxItem, Floor } from '@/lib/contracts';
+import './inbox.css';
 
 export function InboxPage({
   items,

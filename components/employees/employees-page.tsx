@@ -7,6 +7,7 @@ import { Avatar, ProviderMark } from '../shared/marks';
 import { MasterDetail, useMasterDetail } from '../shared/master-detail';
 import { PageIntro } from '../shared/page-intro';
 import type { Connection, Employee, ProviderId } from '@/lib/contracts';
+import './employees.css';
 
 /**
  * Why a capability is missing, in terms of the connections this viewer can see.

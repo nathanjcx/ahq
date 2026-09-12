@@ -1,3 +1,219 @@
+/* === components/integrations: cards and connections === */
+.integration-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 13px;
+}
+.integration-card {
+  min-height: 250px;
+  padding: 19px;
+}
+.integration-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.connection-state {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #849182;
+  font-size: var(--text-2xs);
+  text-transform: capitalize;
+}
+.connection-state i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a4aea1;
+}
+.connection-state.connected {
+  color: #567753;
+}
+.connection-state.connected i {
+  background: #6e9a69;
+}
+.connection-state.degraded {
+  color: #9d7438;
+}
+.connection-state.degraded i {
+  background: #c28d43;
+}
+.connection-state.revoked {
+  color: #a0574f;
+}
+.connection-state.revoked i {
+  background: #c3675d;
+}
+.connection-state.setup {
+  color: #8a8f86;
+}
+.setup-note {
+  margin-top: 14px;
+  padding: 12px 13px;
+  border: 1px dashed #d3dacd;
+  border-radius: 8px;
+  color: #6f7d6d;
+  font-size: var(--text-xs);
+}
+.setup-note strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #4d5c4b;
+  font-size: var(--text-xs);
+}
+.setup-note ul {
+  margin: 0 0 8px 14px;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+}
+.setup-note p {
+  margin: 0;
+}
+.setup-note a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #567753;
+  font-weight: 600;
+}
+.integration-card .primary-button,
+.integration-card .secondary-button {
+  margin-top: 14px;
+}
+.integration-card > .form-note {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: var(--text-2xs);
+}
+.integration-card h2 {
+  margin-top: 16px;
+  font-size: 15px;
+}
+.integration-card > p {
+  min-height: 34px;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.connection-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 38px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.connection-accounts {
+  display: grid;
+  gap: 8px;
+}
+.connection-accounts .connection-account {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.connection-account > div {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.connection-accounts > .secondary-button {
+  margin-top: 4px;
+}
+.connection-account strong,
+.connection-shared {
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  font-style: italic;
+}
+.connection-account strong {
+  font-size: var(--text-xs);
+}
+.connection-account small {
+  display: block;
+  color: var(--muted);
+  font-size: var(--text-2xs);
+}
+/* === components/integrations/manage-access-panel.tsx === */
+.permission-heading h3 {
+  font-size: 15px;
+}
+.permission-heading p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.form-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 11px;
+  color: #687769;
+  border-radius: 7px;
+  background: var(--sage-50);
+  font-size: var(--text-2xs);
+}
+.form-note svg {
+  flex: 0 0 auto;
+}
+@media (max-width: 1120px) {
+  .integration-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .integration-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .share-choices label {
+    min-height: var(--tap);
+  }
+  /* Integrations: compact cards, actions behind the overflow menu. */
+  .integration-card {
+    min-height: 0;
+    padding: 15px;
+  }
+  .integration-card > p {
+    min-height: 0;
+  }
+  .integration-card h2 {
+    margin-top: 11px;
+  }
+  .connection-accounts .connection-account {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    column-gap: var(--space-2);
+  }
+  .connection-account > span:first-child {
+    grid-area: 1 / 1 / 2 / 3;
+  }
+  .connection-account > div {
+    display: contents;
+  }
+  .connection-account .connection-state {
+    grid-area: 2 / 1;
+  }
+  .connection-sharing,
+  .connection-reach {
+    grid-area: 2 / 2;
+    justify-self: end;
+    margin: 0;
+  }
+  .connection-shared {
+    grid-area: 3 / 1 / 4 / 4;
+    margin: 0;
+  }
+  .connection-account .overflow-menu {
+    grid-area: 1 / 3 / 3 / 4;
+    justify-self: end;
+  }
+}
+
 /* === components/integrations: sharing and relay credentials === */
 .connection-accounts .connection-account > div {
   flex-wrap: wrap;

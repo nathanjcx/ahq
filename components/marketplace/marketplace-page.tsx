@@ -8,6 +8,7 @@ import { PageIntro } from '../shared/page-intro';
 import { missingRequiredCapabilities } from './capabilities';
 import { MarketplaceDetail } from './marketplace-detail';
 import type { Connection, Employee, Listing } from '@/lib/contracts';
+import './marketplace.css';
 
 export function MarketplacePage({
   listings,
