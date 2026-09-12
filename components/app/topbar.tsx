@@ -34,17 +34,14 @@ export function Topbar({
   configured: boolean;
   proposals: ActionProposal[];
   canCreateTask: boolean;
-  /**
-   * Marking the ledger read. The shell passes its actions; without them the bell still lists what
-   * arrived, and says so, rather than offering a control that would do nothing.
-   */
-  notificationActions?: Pick<TriageActions, 'acknowledgeNotification' | 'acknowledgeNotifications'>;
+  /** Marking the ledger read. */
+  notificationActions: Pick<TriageActions, 'acknowledgeNotification' | 'acknowledgeNotifications'>;
   onOpenNavigation: () => void;
   onNewTask: () => void;
   onSettings: () => void;
   onReview: (taskId: string) => void;
-  /** Navigates to what a notification is about. Supplied by the shell. */
-  onOpen?: (page: Page) => void;
+  /** Navigates to what a notification is about. */
+  onOpen: (page: Page) => void;
 }) {
   const pending = proposals.filter((proposal) => proposal.status === 'pending');
 
@@ -102,7 +99,7 @@ export function Topbar({
 
 type BellProps = {
   pending: ActionProposal[];
-  actions?: Pick<TriageActions, 'acknowledgeNotification' | 'acknowledgeNotifications'>;
+  actions: Pick<TriageActions, 'acknowledgeNotification' | 'acknowledgeNotifications'>;
   onReview: (taskId: string) => void;
   onOpen?: (page: Page) => void;
 };
@@ -145,13 +142,10 @@ function NotificationBell({
             setOpen(false);
             onReview(taskId);
           }}
-          onOpen={
-            onOpen &&
-            ((page) => {
-              setOpen(false);
-              onOpen(page);
-            })
-          }
+          onOpen={(page) => {
+            setOpen(false);
+            onOpen(page);
+          }}
         />
       )}
     </div>
@@ -170,7 +164,7 @@ function NotificationPanel({
   notifications: Notification[] | undefined;
   unreadCount: number;
   pending: ActionProposal[];
-  actions?: Pick<TriageActions, 'acknowledgeNotification' | 'acknowledgeNotifications'>;
+  actions: Pick<TriageActions, 'acknowledgeNotification' | 'acknowledgeNotifications'>;
   onClose: () => void;
   onReview: (taskId: string) => void;
   onOpen?: (page: Page) => void;
@@ -191,8 +185,8 @@ function NotificationPanel({
           <strong>Notifications</strong>
           <button
             className="text-button"
-            disabled={!actions || !unreadCount}
-            onClick={() => void actions?.acknowledgeNotifications()}
+            disabled={!unreadCount}
+            onClick={() => void actions.acknowledgeNotifications()}
           >
             <CheckCheck size={14} /> Mark all read
           </button>
@@ -224,16 +218,13 @@ function NotificationPanel({
                 </header>
                 <p>{row.text}</p>
                 <footer>
-                  {onOpen && (
-                    <button className="text-button" onClick={() => onOpen(TARGET[row.kind])}>
-                      Open <ArrowUpRight size={13} />
-                    </button>
-                  )}
+                  <button className="text-button" onClick={() => onOpen(TARGET[row.kind])}>
+                    Open <ArrowUpRight size={13} />
+                  </button>
                   {!row.acknowledgedAt && (
                     <button
                       className="text-button"
-                      disabled={!actions}
-                      onClick={() => void actions?.acknowledgeNotification(row.id)}
+                      onClick={() => void actions.acknowledgeNotification(row.id)}
                     >
                       <Check size={13} /> Mark read
                     </button>
@@ -243,9 +234,6 @@ function NotificationPanel({
             ))
           )}
         </div>
-        {!actions && (
-          <p className="bell-empty">Connect the workspace to mark these read from here.</p>
-        )}
       </div>
     </>
   );
