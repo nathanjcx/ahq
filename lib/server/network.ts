@@ -11,9 +11,25 @@ export function publicAddress(address: string): boolean {
     return false;
   }
 }
+/**
+ * Test-only escape hatch. The runtime harness in `web-tests/` runs a fake MCP server on loopback
+ * HTTP, which every production rule below correctly rejects. It is honoured only when the process
+ * is a test process and opts in explicitly, so production keeps HTTPS, the provider registry, and
+ * the public-address rule.
+ */
+function loopbackTestEndpoint(url: URL): boolean {
+  return (
+    process.env.NODE_ENV === 'test' &&
+    process.env.ALLOW_INSECURE_MCP_FOR_TESTS === '1' &&
+    url.protocol === 'http:' &&
+    ['127.0.0.1', 'localhost', '[::1]', '::1'].includes(url.hostname)
+  );
+}
+
 export function approvedMcpUrl(providerId: string, raw: string): URL {
   const provider = getProvider(providerId);
   const url = new URL(raw || provider.serverUrl);
+  if (loopbackTestEndpoint(url)) return url;
   if (
     url.protocol !== 'https:' ||
     url.username ||
@@ -44,12 +60,16 @@ const dispatcher = new Agent({
 });
 export async function safeFetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
-  if (url.protocol !== 'https:' || url.username || url.password || isIP(url.hostname.replace(/^\[|\]$/g, '')))
+  const loopbackTest = loopbackTestEndpoint(url);
+  if (
+    !loopbackTest &&
+    (url.protocol !== 'https:' || url.username || url.password || isIP(url.hostname.replace(/^\[|\]$/g, '')))
+  )
     throw new Error('Unsafe integration destination');
   const response = await networkFetch(url, {
     ...init,
     redirect: 'manual',
-    dispatcher,
+    ...(loopbackTest ? {} : { dispatcher }),
     signal: init?.signal || AbortSignal.timeout(30000),
   } as Parameters<typeof networkFetch>[1]);
   if (response.status >= 300 && response.status < 400) {

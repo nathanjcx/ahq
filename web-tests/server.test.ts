@@ -108,8 +108,21 @@ it('builds an isolated hosted session with only the employee/tool grant intersec
   expect(initialTaskInput({ task: context.task })).toBe(context.task.prompt);
   expect(config.input).toBeUndefined();
   expect(config.agent?.multi_agent?.enabled).toBe(false);
-  expect(config.agent?.tools).toHaveLength(1);
+  expect(config.agent?.tools).toHaveLength(2);
   expect(config.agent?.tools?.[0]).toMatchObject({ allowed_tools: ['get_me'], connection_origin: 'service' });
+  // A floor task also reaches the internal board through the gateway, with a rule about it.
+  expect(config.agent?.tools?.[1]).toMatchObject({
+    server_label: 'astra_floor',
+    allowed_tools: ['floor_post', 'floor_handoff'],
+    required: false,
+    transport: { server_url: 'https://gateway.example/mcp/floor' },
+  });
+  expect(config.agent?.instructions).toContain('never claim a handoff was accepted');
+  expect(
+    sessionConfiguration({ ...context, project: undefined }).agent?.tools?.some(
+      (tool) => 'server_label' in tool && tool.server_label === 'astra_floor',
+    ),
+  ).toBe(false);
   if (config.environment.type !== 'openai_hosted') throw new Error('Expected hosted environment');
   expect(config.environment.network?.access).toBe('disabled');
   const archive = config.environment.plugins![0].source;

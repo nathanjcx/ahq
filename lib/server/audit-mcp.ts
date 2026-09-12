@@ -3,6 +3,7 @@ import { connectedMcp } from './mcp';
 import { journalMutation, query } from './backend';
 import { canonical, checkResourceScope, toolPolicy } from './tool-policy';
 import { seal, safeError } from './secrets';
+import { GatewayError, upstreamFailure } from '../../services/gateway/errors';
 import type { PrivateConnection, TaskContext, ToolPolicy } from '../../services/types';
 
 export function toolEvidence(value: unknown) {
@@ -45,7 +46,7 @@ export async function auditedRead(
   args: Record<string, unknown>,
 ) {
   if (toolPolicy(policies, connection.provider, tool).mode !== 'read')
-    throw new Error('The configured read tool is not approved as read-only.');
+    throw new GatewayError('policy_denied', 'The configured read tool is not approved as read-only.');
   checkResourceScope(connection.resourceScope, args, toolPolicy(policies, connection.provider, tool));
   const operationId = randomUUID(),
     request = toolEvidence(args);
@@ -65,22 +66,29 @@ export async function auditedRead(
         { runToken },
       );
       const active = current.connections.find((item) => item.id === connection.id);
-      if (!active) throw new Error('Connection was revoked');
+      if (!active) throw new GatewayError('revoked', 'Integration access was revoked.');
       checkResourceScope(active.resourceScope, args, toolPolicy(current.policies, active.provider, tool));
       await journalMutation('services/actions:recordToolCall', { ...base, outcome: 'started' });
       started = Date.now();
       return client.callTool({ name: tool, arguments: args }, undefined, { timeout: 45_000 });
     });
   } catch (error) {
+    const failure =
+      error instanceof GatewayError
+        ? error
+        : upstreamFailure(
+            error,
+            'The integration could not complete the read. Check its connection and permissions.',
+          );
     if (started)
       await journalMutation('services/actions:recordToolCall', {
         ...base,
         outcome: 'failed',
-        reason: 'provider_error',
+        reason: failure.reason,
         durationMs: Date.now() - started,
         resultCiphertext: seal({ error: safeError(error) }),
       });
-    throw new Error('The integration could not complete the read. Check its connection and permissions.');
+    throw failure;
   }
   const output = toolEvidence(result);
   await journalMutation('services/actions:recordToolCall', {

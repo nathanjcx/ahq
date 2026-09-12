@@ -1,5 +1,6 @@
 import type { CorrectionKind, ProviderId } from '../contracts';
 import type { ToolPolicy } from '../../services/types';
+import { GatewayError } from '../../services/gateway/errors';
 
 export type ResolvedPolicy = Pick<ToolPolicy, 'mode' | 'resourceArgument' | 'correction'>;
 
@@ -52,12 +53,13 @@ export function checkResourceScope(
   const ids = validateScope(scope);
   if (!ids.length) return;
   if (!policy?.resourceArgument)
-    throw new Error(
+    throw new GatewayError(
+      'policy_denied',
       'This tool has no verified resource restriction. Ask the administrator to configure its resource argument, or restrict access in the provider account.',
     );
   const target = args[policy.resourceArgument];
   if (typeof target !== 'string' || !ids.includes(target))
-    throw new Error('This request is outside the connection resource restriction.');
+    throw new GatewayError('policy_denied', 'This request is outside the connection resource restriction.');
 }
 
 export function canonical(value: unknown): string {

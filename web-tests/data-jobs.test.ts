@@ -134,8 +134,10 @@ describe('Convex job and audit invariants', () => {
       taskId,
     });
     expect(starting).toMatchObject({ inputRevision: String(start.id), pendingInput: true });
-    const workerState = await t.query(api.services.queue.workerState, { secret: 'service-test-secret' });
-    expect(workerState.activeTaskIds).not.toContain(String(taskId));
+    // A task whose input is still in flight is not monitorable: a monitor would race the input job.
+    expect(
+      await t.mutation(api.services.queue.claimStreams, { secret, workerId: 'worker-1', limit: 4 }),
+    ).toEqual([]);
     await t.mutation(api.services.queue.completeJob, {
       secret,
       jobId: start.id,

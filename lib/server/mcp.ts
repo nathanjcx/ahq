@@ -6,6 +6,7 @@ import { approvedMcpUrl, safeFetch } from './network';
 import { oauthProvider, type StoredCredential } from './oauth';
 import { unseal, seal } from './secrets';
 import { mutate } from './backend';
+import { GatewayError } from '../../services/gateway/errors';
 import type { PrivateConnection } from '../../services/types';
 export async function withMcp<T>(
   connection: Pick<PrivateConnection, 'provider' | 'serverUrl'>,
@@ -53,7 +54,8 @@ export async function connectedMcp<T>(
   connection: PrivateConnection,
   run: (client: Client) => Promise<T>,
 ): Promise<T> {
-  if (connection.status !== 'connected') throw new Error('Integration is no longer connected');
+  if (connection.status !== 'connected')
+    throw new GatewayError('revoked', 'Integration is no longer connected.');
   const credentials = unseal<StoredCredential>(connection.credentialCiphertext);
   try {
     return await withMcp(connection, credentials, run, async (refreshed) => {
@@ -64,11 +66,13 @@ export async function connectedMcp<T>(
     });
   } catch (error) {
     // A failed refresh means the provider revoked or expired the grant. Ask the owner to sign in again.
-    if (error instanceof UnauthorizedError)
+    if (error instanceof UnauthorizedError) {
       await mutate('services/integrations:markConnectionError', {
         connectionId: connection.id,
         error: 'Authorization expired. Reconnect this integration to continue.',
       }).catch(() => {});
+      throw new GatewayError('revoked', 'Authorization expired. Reconnect this integration to continue.');
+    }
     throw error;
   }
 }

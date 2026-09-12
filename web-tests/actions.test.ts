@@ -15,6 +15,7 @@ import { executeAction } from '../services/actions';
 import type { Job, ToolPolicy } from '../services/types';
 const policies: ToolPolicy[] = [{ provider: 'linear', name: 'update_issue', mode: 'write' }];
 const correctable: ToolPolicy[] = [
+  { provider: 'linear', name: 'get_issue', mode: 'read' },
   {
     provider: 'linear',
     name: 'update_issue',
@@ -76,10 +77,11 @@ it('does not mistake an upstream tool error for proof that no write happened', a
     expect.objectContaining({ status: 'uncertain' }),
   );
 });
-it('sends only configured restoration fields with a provider version precondition', async () => {
+const correction = (liveVersion: number) => {
   const value = {
     ...context(),
     policies: correctable,
+    connection: { ...context().connection, allowedTools: ['update_issue', 'get_issue'] },
     action: { ...context().action, originalActionId: 'original' },
     original: {
       tool: 'update_issue',
@@ -89,11 +91,28 @@ it('sends only configured restoration fields with a provider version preconditio
     },
   };
   mocks.query.mockResolvedValue(value);
+  mocks.callTool.mockImplementation(async ({ name }: { name: string }) =>
+    name === 'get_issue'
+      ? { structuredContent: { id: 'issue', title: 'Corrected', version: liveVersion } }
+      : { content: [{ type: 'text', text: 'Updated' }] },
+  );
+};
+it('sends only configured restoration fields with a provider version precondition', async () => {
+  correction(2);
   await executeAction(job);
   expect(mocks.callTool).toHaveBeenCalledWith(
     { name: 'update_issue', arguments: { id: 'issue', title: 'Original', expectedVersion: 2 } },
     undefined,
     { timeout: 45000 },
+  );
+});
+it('refuses a correction when the record moved on before dispatch', async () => {
+  correction(3);
+  await executeAction(job);
+  expect(mocks.callTool).toHaveBeenCalledTimes(1);
+  expect(mocks.mutate).toHaveBeenCalledWith(
+    'services/actions:recordActionResult',
+    expect.objectContaining({ status: 'failed', result: expect.stringContaining('no longer applies') }),
   );
 });
 it('refuses corrections without a verified provider version', async () => {

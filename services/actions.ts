@@ -3,6 +3,8 @@ import { connectedMcp } from '../lib/server/mcp';
 import { canonical, checkResourceScope, resultObject, toolPolicy } from '../lib/server/tool-policy';
 import { toolEvidence } from '../lib/server/audit-mcp';
 import { safeError } from '../lib/server/secrets';
+import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import type { CorrectionDescriptor } from '../lib/contracts';
 import type { Job, PrivateConnection, ToolPolicy } from './types';
 interface ExecutableAction {
   action: { id: string; tool: string; arguments: string; beforeState?: string; originalActionId?: string };
@@ -11,6 +13,56 @@ interface ExecutableAction {
   task: { id: string; runToken: string };
   original?: { arguments: string; beforeState?: string; afterState?: string; tool: string };
 }
+/**
+ * A compensating write has to know what it is restoring, so the live record is read through the
+ * configured read tool and the correction is refused when the version is no longer the one the
+ * original write returned. Without this the provider's precondition would reject the write after
+ * dispatch, leaving an uncertain outcome instead of a clear refusal.
+ *
+ * The read is journaled as a task event rather than a sealed tool call because
+ * `services/actions:recordToolCall` refuses reads on a finished task, and corrections are usually
+ * requested after the task finished.
+ */
+async function verifyCorrectionPrecondition(
+  client: Client,
+  input: {
+    taskId: string;
+    proposalId: string;
+    connection: PrivateConnection;
+    policies: ToolPolicy[];
+    rule: CorrectionDescriptor;
+    expectedVersion: unknown;
+    id: unknown;
+  },
+) {
+  const { rule, connection } = input;
+  const policy = toolPolicy(input.policies, connection.provider, rule.readTool);
+  if (policy.mode !== 'read' || !connection.allowedTools.includes(rule.readTool))
+    throw new Error('Correction requires access to the configured record-reading tool.');
+  const args = { [rule.idArgument]: input.id };
+  checkResourceScope(connection.resourceScope, args, policy);
+  const result = await client.callTool({ name: rule.readTool, arguments: args }, undefined, {
+    timeout: 45_000,
+  });
+  if (result.isError) throw new Error('The record could not be read before correcting it.');
+  const version = resultObject(result)[rule.versionField];
+  await journalMutation('services/sessions:recordEvents', {
+    taskId: input.taskId,
+    events: [
+      {
+        externalId: `correction-precondition:${input.proposalId}`,
+        type: 'action.precondition',
+        text: `Checked the record version before correcting: expected ${canonical(input.expectedVersion)}, found ${canonical(version)}.`,
+        createdAt: Date.now(),
+      },
+    ],
+  });
+  if (version === undefined || canonical(version) !== canonical(input.expectedVersion))
+    throw new Error(
+      'The record changed after the original action, so the automatic correction no longer applies. Review it manually.',
+    );
+}
+
 export async function executeAction(job: Job) {
   const proposalId = String(job.payload.proposalId);
   let dispatched = 0;
@@ -27,6 +79,7 @@ export async function executeAction(job: Job) {
     if (policy.mode !== 'write') throw new Error('This tool is no longer approved for external writes.');
     let args = JSON.parse(action.arguments) as Record<string, unknown>;
     let before = action.beforeState ? JSON.parse(action.beforeState) : undefined;
+    let precondition: { rule: CorrectionDescriptor; expectedVersion: unknown } | undefined;
     if (action.originalActionId) {
       const rule = policy.correction,
         original = context.original;
@@ -46,6 +99,7 @@ export async function executeAction(job: Job) {
         args[field] = previous[field];
       }
       before = after;
+      precondition = { rule, expectedVersion: after[rule.versionField] };
     } else if (policy.correction) {
       const rule = policy.correction;
       if (!before || before[rule.versionField] === undefined)
@@ -64,6 +118,16 @@ export async function executeAction(job: Job) {
         args,
         toolPolicy(current.policies, current.connection.provider, action.tool),
       );
+      if (precondition)
+        await verifyCorrectionPrecondition(client, {
+          taskId: current.task.id,
+          proposalId,
+          connection: current.connection,
+          policies: current.policies,
+          rule: precondition.rule,
+          expectedVersion: precondition.expectedVersion,
+          id: args[precondition.rule.idArgument],
+        });
       audit = {
         runToken: current.task.runToken,
         connectionId: current.connection.id,

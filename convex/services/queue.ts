@@ -1,25 +1,34 @@
 import { v } from 'convex/values';
-import { mutation, query } from '../_generated/server';
+import { mutation, query, type MutationCtx, type QueryCtx } from '../_generated/server';
 import type { Doc, Id } from '../_generated/dataModel';
 import { requireService } from '../shared';
-import { isTerminal } from './context';
+import { isTerminal, taskInputState } from './context';
 
+/** Active task statuses, in the order a worker should take them on. */
+const monitorable = ['queued', 'running', 'awaiting_approval'] as const;
+
+async function activeTasks(ctx: QueryCtx | MutationCtx) {
+  const tasks: Doc<'tasks'>[] = [];
+  for (const status of monitorable) {
+    tasks.push(
+      ...(await ctx.db
+        .query('tasks')
+        .withIndex('by_status', (q) => q.eq('status', status))
+        .take(500)),
+    );
+  }
+  return tasks.filter((task) => task.sessionId);
+}
+
+/**
+ * The worker subscription. It carries counts and revisions only: workers pull work with the claim
+ * mutations, so a replica never acts on a list it was pushed.
+ */
 export const workerState = query({
   args: { secret: v.string() },
   handler: async (ctx, args) => {
     requireService(args.secret);
-    const [
-      queued,
-      leased,
-      queuedStarts,
-      queuedMessages,
-      leasedStarts,
-      leasedMessages,
-      queuedTasks,
-      running,
-      awaitingApproval,
-      signal,
-    ] = await Promise.all([
+    const [queued, leased, tasks, signal] = await Promise.all([
       ctx.db
         .query('jobs')
         .withIndex('by_state_available', (q) => q.eq('state', 'queued'))
@@ -28,50 +37,15 @@ export const workerState = query({
         .query('jobs')
         .withIndex('by_state_available', (q) => q.eq('state', 'leased'))
         .take(100),
-      ctx.db
-        .query('jobs')
-        .withIndex('by_state_kind_available', (q) => q.eq('state', 'queued').eq('kind', 'start_task'))
-        .collect(),
-      ctx.db
-        .query('jobs')
-        .withIndex('by_state_kind_available', (q) => q.eq('state', 'queued').eq('kind', 'send_message'))
-        .collect(),
-      ctx.db
-        .query('jobs')
-        .withIndex('by_state_kind_available', (q) => q.eq('state', 'leased').eq('kind', 'start_task'))
-        .collect(),
-      ctx.db
-        .query('jobs')
-        .withIndex('by_state_kind_available', (q) => q.eq('state', 'leased').eq('kind', 'send_message'))
-        .collect(),
-      ctx.db
-        .query('tasks')
-        .withIndex('by_status', (q) => q.eq('status', 'queued'))
-        .take(500),
-      ctx.db
-        .query('tasks')
-        .withIndex('by_status', (q) => q.eq('status', 'running'))
-        .take(500),
-      ctx.db
-        .query('tasks')
-        .withIndex('by_status', (q) => q.eq('status', 'awaiting_approval'))
-        .take(500),
+      activeTasks(ctx),
       ctx.db
         .query('workerSignals')
         .withIndex('by_name', (q) => q.eq('name', 'jobs'))
         .unique(),
     ]);
-    const pendingInputTasks = new Set(
-      [...queuedStarts, ...queuedMessages, ...leasedStarts, ...leasedMessages].map((job) =>
-        String(job.taskId),
-      ),
-    );
     return {
       pendingJobs: queued.length + leased.length,
-      queuedJobIds: queued.slice(0, 100).map((job) => String(job._id)),
-      activeTaskIds: [...queuedTasks, ...running, ...awaitingApproval]
-        .filter((task) => task.sessionId && !pendingInputTasks.has(String(task._id)))
-        .map((task) => String(task._id)),
+      activeTasks: tasks.length,
       nextAvailableAt: queued.reduce(
         (next: number | undefined, job) =>
           next === undefined ? job.availableAt : Math.min(next, job.availableAt),
@@ -239,6 +213,9 @@ export const claimJobs = mutation({
           continue;
         }
       }
+      // Invariant: one worker runs a job at a time. The lease token is minted and stored here, and
+      // every later mutation for this job requires it, so a second replica's claim cannot complete,
+      // renew, or fail the same attempt. At most one job per task is leased at once.
       const leaseToken = crypto.randomUUID();
       const attempts = job.attempts + 1;
       await ctx.db.patch(job._id, {
@@ -293,19 +270,65 @@ export const renewLease = mutation({
   },
 });
 
-export const claimStream = mutation({
+const streamLeaseMs = 120_000;
+
+/**
+ * Claims session monitors for one worker, up to its free monitor slots.
+ *
+ * Invariant: exactly one worker monitors a session at a time. A task is claimable only when its
+ * stream lease is empty, already this worker's, or expired, and the lease is stamped inside this
+ * same mutation. Convex serializes conflicting mutations, so two replicas cannot both take it.
+ * Tasks with a pending input job are skipped: their monitor would race the job that sends input.
+ */
+export const claimStreams = mutation({
+  args: { secret: v.string(), workerId: v.string(), limit: v.number() },
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    if (!args.workerId.trim()) throw new Error('workerId is required');
+    const limit = Number.isFinite(args.limit) ? Math.max(0, Math.min(64, Math.floor(args.limit))) : 0;
+    if (!limit) return [];
+    const now = Date.now();
+    const leaseExpiresAt = now + streamLeaseMs;
+    const claimed: { taskId: Id<'tasks'>; leaseExpiresAt: number }[] = [];
+    let examined = 0;
+    for (const task of await activeTasks(ctx)) {
+      if (claimed.length >= limit || ++examined > 200) break;
+      if (task.streamOwner && task.streamOwner !== args.workerId && (task.streamLeaseExpiresAt || 0) > now)
+        continue;
+      if ((await taskInputState(ctx, task._id)).pendingInput) continue;
+      await ctx.db.patch(task._id, { streamOwner: args.workerId, streamLeaseExpiresAt: leaseExpiresAt });
+      claimed.push({ taskId: task._id, leaseExpiresAt });
+    }
+    return claimed;
+  },
+});
+
+/** The monitor heartbeat. Losing the lease means another replica took the session over. */
+export const renewStream = mutation({
   args: { secret: v.string(), taskId: v.id('tasks'), workerId: v.string() },
   handler: async (ctx, args) => {
     requireService(args.secret);
     const task = await ctx.db.get(args.taskId);
-    if (!task || !task.sessionId || !['queued', 'running', 'awaiting_approval'].includes(task.status))
+    if (!task || !task.sessionId || !monitorable.includes(task.status as (typeof monitorable)[number]))
       return { claimed: false as const };
     const now = Date.now();
     if (task.streamOwner && task.streamOwner !== args.workerId && (task.streamLeaseExpiresAt || 0) > now)
       return { claimed: false as const, leaseExpiresAt: task.streamLeaseExpiresAt };
-    const leaseExpiresAt = now + 120_000;
+    const leaseExpiresAt = now + streamLeaseMs;
     await ctx.db.patch(task._id, { streamOwner: args.workerId, streamLeaseExpiresAt: leaseExpiresAt });
     return { claimed: true as const, leaseExpiresAt };
+  },
+});
+
+/** Shutdown releases the lease immediately so another replica takes over without waiting it out. */
+export const releaseStream = mutation({
+  args: { secret: v.string(), taskId: v.id('tasks'), workerId: v.string() },
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const task = await ctx.db.get(args.taskId);
+    if (!task || task.streamOwner !== args.workerId) return { released: false as const };
+    await ctx.db.patch(task._id, { streamOwner: undefined, streamLeaseExpiresAt: undefined });
+    return { released: true as const };
   },
 });
 
