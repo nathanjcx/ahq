@@ -127,7 +127,7 @@ export const list = query({
       if (await readable(entry)) visible.push(entry);
     }
     return visible
-      .sort((a, b) => b.createdAt - a.createdAt)
+      .sort((a, b) => b.createdAt - a.createdAt || b._creationTime - a._creationTime)
       .slice(0, 500)
       .map((entry) => publicMemory(entry, now));
   },

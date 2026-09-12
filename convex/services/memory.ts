@@ -174,7 +174,11 @@ async function enforceAgentBudget(ctx: MutationCtx, task: Doc<'tasks'>, keepId: 
   let total = entries.reduce((sum, entry) => sum + tokenEstimate(entry.text), 0);
   const evictable = entries
     .filter((entry) => entry._id !== keepId)
-    .sort((a, b) => (a.lastUsedAt ?? a.createdAt) - (b.lastUsedAt ?? b.createdAt));
+    // Creation time breaks same-millisecond ties, so eviction order is stable.
+    .sort(
+      (a, b) =>
+        (a.lastUsedAt ?? a.createdAt) - (b.lastUsedAt ?? b.createdAt) || a._creationTime - b._creationTime,
+    );
   for (const entry of evictable) {
     if (total <= budget) break;
     await ctx.db.patch(entry._id, { status: 'archived', updatedAt: Date.now() });

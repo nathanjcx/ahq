@@ -33,11 +33,14 @@ function readMarker(ctx: Ctx, channelId: Id<'channels'>, subject: string) {
 async function unreadCount(ctx: QueryCtx, channel: Doc<'channels'>, subject: string) {
   const marker = await readMarker(ctx, channel._id, subject);
   const since = marker?.lastReadAt ?? 0;
+  // The marker is the newest post's creation time when it was read, so a post written in the same
+  // millisecond as the read still counts correctly.
   const posts = await ctx.db
     .query('posts')
-    .withIndex('by_channel', (q) => q.eq('channelId', channel._id).gt('createdAt', since))
+    .withIndex('by_channel', (q) => q.eq('channelId', channel._id))
+    .order('desc')
     .take(UNREAD_CAP + 1);
-  return posts.filter((post) => post.authorSubject !== subject).length;
+  return posts.filter((post) => post._creationTime > since && post.authorSubject !== subject).length;
 }
 
 /** A scope only becomes a channel once it exists in this workspace. */
@@ -134,7 +137,12 @@ export const markRead = mutation({
     const { workspace, actor } = await requireWorkspace(ctx);
     const channel = await requireChannel(ctx, workspace._id, args.channelId);
     const marker = await readMarker(ctx, channel._id, actor.subject);
-    const lastReadAt = Date.now();
+    const newest = await ctx.db
+      .query('posts')
+      .withIndex('by_channel', (q) => q.eq('channelId', channel._id))
+      .order('desc')
+      .first();
+    const lastReadAt = newest?._creationTime ?? Date.now();
     if (marker) await ctx.db.patch(marker._id, { lastReadAt });
     else
       await ctx.db.insert('channelReads', {

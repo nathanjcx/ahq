@@ -181,7 +181,7 @@ export function publicPost(post: Doc<'posts'>) {
     taskId: post.taskId,
     toEmployeeId: post.toEmployeeId,
     handoff: post.handoff,
-    createdAt: post.createdAt,
+    createdAt: post._creationTime,
   };
 }
 
@@ -192,14 +192,16 @@ export async function recentPosts(
   limit: number,
   before?: number,
 ): Promise<Doc<'posts'>[]> {
-  const posts = await ctx.db
-    .query('posts')
-    .withIndex('by_channel', (q) =>
-      before === undefined
-        ? q.eq('channelId', channelId)
-        : q.eq('channelId', channelId).lt('createdAt', before),
-    )
-    .order('desc')
-    .take(limit);
+  // Pages by creation time, which is unique, so two posts written in the same millisecond page
+  // correctly. `before` is a public post's `createdAt`, which is that creation time.
+  const posts = (
+    await ctx.db
+      .query('posts')
+      .withIndex('by_channel', (q) => q.eq('channelId', channelId))
+      .order('desc')
+      .take(limit + (before === undefined ? 0 : 200))
+  )
+    .filter((post) => before === undefined || post._creationTime < before)
+    .slice(0, limit);
   return posts.reverse();
 }
