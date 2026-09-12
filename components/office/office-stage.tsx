@@ -10,6 +10,7 @@ import {
   type DayInput,
   type EmployeeActivity,
 } from './activity';
+import { DAY_MS, startOfDay } from './day-replay';
 import type { LabelMode } from './office-labels';
 import type { SelectProp } from './office-props';
 import type { OfficeDressing, OfficeEmployee, OfficeProvider } from './office-scene';
@@ -125,13 +126,6 @@ export function deriveScene(
         }
       : {}),
   };
-}
-
-const DAY_MS = 86_400_000;
-
-/** Local midnight before `now`, which is where the office's day starts. */
-export function startOfDay(now: number): number {
-  return new Date(now).setHours(0, 0, 0, 0);
 }
 
 /**

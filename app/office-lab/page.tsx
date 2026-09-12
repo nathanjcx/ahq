@@ -3,7 +3,8 @@ import { OfficeLab } from './lab';
 
 /**
  * A deterministic office render for visual baselines. Exists only when QA_FIXTURE=1; every other
- * build answers 404. Query parameters choose the scene: `preset`, `hour`, `labels`, `seed`.
+ * build answers 404. Query parameters choose the scene: `preset`, `hour`, `labels`, `seed`, and
+ * `at` — the hour of the day the replay's scrubber is standing on.
  */
 export default async function OfficeLabPage({
   searchParams,
@@ -22,6 +23,7 @@ export default async function OfficeLabPage({
       hour={Number(single('hour') ?? 13)}
       labels={single('labels') ?? 'names'}
       seed={Number(single('seed') ?? 1)}
+      at={Number(single('at') ?? 10)}
     />
   );
 }

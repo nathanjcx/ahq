@@ -490,6 +490,17 @@ function shiftActivity({ employee, day, now }: Context): EmployeeActivity | unde
   );
   if (ended?.endedAt)
     return { activity: 'leaving', since: ended.endedAt, ...(ended.taskId ? { taskId: ended.taskId } : {}) };
+  // A shift is running and the journal had nothing to say about it: they are at work.
+  const running = newest(
+    mine.filter((shift) => shift.startedAt <= now && (shift.endedAt ?? Infinity) > now),
+    (shift) => shift.startedAt,
+  );
+  if (running)
+    return {
+      activity: 'thinking',
+      since: running.startedAt,
+      ...(running.taskId ? { taskId: running.taskId } : {}),
+    };
   if (day.schedule && !day.schedule.working) return { activity: 'off_shift', since: 0 };
   return undefined;
 }

@@ -2,6 +2,8 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import type { Activity, EmployeeActivity } from '@/components/office/activity';
+import { DAY_MS, type DayRecord } from '@/components/office/day-replay';
+import { DayReplay } from '@/components/office/office-day';
 import type { LabelMode } from '@/components/office/office-labels';
 import type { BoardCard, ShelfSpec } from '@/components/office/office-layout';
 import type { EmployeeKind } from '@/components/office/office-people';
@@ -145,6 +147,11 @@ const PRESETS: Record<string, Preset> = {
     label: 'Triage',
     dressing: () => ({ room: 'triage', incident: true, incidentCount: 3 }),
   },
+  'day-replay': {
+    roles: [undefined, undefined, undefined, undefined],
+    label: 'Floor 1 · Release desk · Wednesday 9 September',
+    providers: false,
+  },
   'meeting-live': {
     roles: ['presenting', 'answering', 'thinking', 'thinking', 'reading'],
     label: 'Boardroom · September release review',
@@ -248,16 +255,163 @@ function buildScene(name: string, hour: number, seed: number) {
   return { employees, scene, label: preset.label };
 }
 
+/**
+ * One recorded day on the release desk, to the minute: three people on shift, a
+ * meeting at eleven, an alert in the afternoon that triage takes without waiting
+ * for an answer, and the night's audit leaving a finding on Bruno's desk.
+ */
+const REPLAY_DAY = new Date(2026, 8, 9).getTime();
+const hours = (value: number) => REPLAY_DAY + value * 3_600_000;
+
+function replayRecord(employees: OfficeEmployee[]): DayRecord {
+  const [ada, bruno, cyrus, emi] = employees.map((employee) => employee.id);
+  const session = (
+    id: string,
+    employeeId: string,
+    employeeName: string,
+    kind: 'triage' | 'audit',
+    from: number,
+    to: number,
+  ) => ({
+    id,
+    floorId: 'flr_1',
+    employeeId,
+    employeeName,
+    kind,
+    createdBy: 'system',
+    createdByName: 'Astra HQ',
+    isOwner: true,
+    visibility: 'workspace' as const,
+    title: kind === 'triage' ? 'Checkout incident' : 'Nightly audit',
+    prompt: '',
+    status: 'completed' as const,
+    createdAt: from,
+    updatedAt: to,
+    model: 'gpt-5.6-terra' as const,
+  });
+  return {
+    from: REPLAY_DAY,
+    to: REPLAY_DAY + DAY_MS,
+    employees: employees.map((employee) => ({ id: employee.id, name: employee.name })),
+    schedule: {
+      timezone: 'Europe/London',
+      workingDays: [1, 2, 3, 4, 5],
+      startHour: 9,
+      endHour: 18,
+      attendedStartHour: 9,
+      attendedEndHour: 18,
+      overnightPolicy: 'cheap',
+      working: true,
+      attended: true,
+      usageToday: { input: 0, output: 0, cached: 0, cap: 0 },
+    },
+    tasks: [session('tsk_triage', emi, 'Emi', 'triage', hours(14.4), hours(16))],
+    shifts: [
+      { employeeId: ada, startedAt: hours(9), endedAt: hours(17.5) },
+      { employeeId: bruno, startedAt: hours(9.1), endedAt: hours(17.8) },
+      { employeeId: cyrus, startedAt: hours(9.3), endedAt: hours(18) },
+    ],
+    meetings: [
+      {
+        entry: {
+          id: 'cal_review',
+          kind: 'meeting',
+          title: 'September release review',
+          startsAt: hours(11),
+          endsAt: hours(11.75),
+          attendees: employees.slice(0, 3).map((employee) => ({
+            kind: 'employee' as const,
+            id: employee.id,
+            name: employee.name,
+          })),
+          agenda: ['Changelog sign-off', 'Pricing page'],
+          status: 'scheduled',
+        },
+        meeting: {
+          id: 'mtg_review',
+          calendarEntryId: 'cal_review',
+          status: 'closed',
+          openedAt: hours(11.03),
+          closedAt: hours(11.7),
+          turns: [
+            {
+              id: 'trn_1',
+              kind: 'question',
+              authorName: 'Sam',
+              addressedTo: [bruno],
+              text: 'Is the changelog signed off?',
+              createdAt: hours(11.1),
+            },
+            {
+              id: 'trn_2',
+              kind: 'answer',
+              authorName: 'Bruno',
+              employeeId: bruno,
+              text: 'Signed off this morning. The pricing page is the one at risk.',
+              createdAt: hours(11.2),
+            },
+          ],
+        },
+      },
+    ],
+    findings: [
+      {
+        id: 'fnd_1',
+        employeeId: bruno,
+        employeeName: 'Bruno',
+        auditDate: '2026-09-08',
+        severity: 'medium',
+        claim: 'The report claims the tests pass; the journal has no test run.',
+        evidence: 'No tool call between 15:10 and the report.',
+        requiredAction: 'Run the tests and post the output.',
+        status: 'addressed',
+        createdAt: hours(-1.2),
+        updatedAt: hours(9.8),
+      },
+    ],
+    alerts: [
+      {
+        id: 'alr_1',
+        source: 'github',
+        fingerprint: 'checkout-500',
+        severity: 'high',
+        title: 'Checkout is returning 500 on card payments.',
+        detail: 'Five reports in ten minutes.',
+        status: 'closed',
+        triageTaskId: 'tsk_triage',
+        affectedFloorIds: [],
+        occurrences: 5,
+        createdAt: hours(14.3),
+        updatedAt: hours(16.1),
+      },
+    ],
+    notifications: [
+      {
+        id: 'ntf_1',
+        kind: 'triage',
+        title: 'Deployed the checkout fix without approval.',
+        text: 'Three attempts over twenty minutes went unanswered.',
+        alertId: 'alr_1',
+        attempt: 3,
+        sentAt: hours(15),
+      },
+    ],
+  };
+}
+
 export function OfficeLab({
   preset,
   hour,
   labels,
   seed,
+  at,
 }: {
   preset: string;
   hour: number;
   labels: string;
   seed: number;
+  /** Hour of the recorded day the replay's scrubber stands on. */
+  at: number;
 }) {
   const { employees, scene, label } = useMemo(() => buildScene(preset, hour, seed), [preset, hour, seed]);
   const [stats, setStats] = useState<RenderStats | null>(null);
@@ -265,17 +419,29 @@ export function OfficeLab({
     (next: RenderStats) => setStats((current) => (current?.calls === next.calls ? current : next)),
     [],
   );
+  const record = useMemo(() => replayRecord(employees), [employees]);
   return (
     <>
       <main className="office-lab" data-preset={preset} style={{ width: 1280, height: 720, margin: 0 }}>
-        <OfficeStage
-          live={false}
-          scene={scene}
-          employees={employees}
-          label={label}
-          labels={labels as LabelMode}
-          onRenderStats={report}
-        />
+        {preset === 'day-replay' ? (
+          <DayReplay
+            employees={employees}
+            label={label}
+            labels={labels as LabelMode}
+            record={record}
+            startAt={at * 3_600_000}
+            dressing={{ board: { cards: CARDS } }}
+          />
+        ) : (
+          <OfficeStage
+            live={false}
+            scene={scene}
+            employees={employees}
+            label={label}
+            labels={labels as LabelMode}
+            onRenderStats={report}
+          />
+        )}
       </main>
       {/* Outside the photographed stage, so the read-out never lands in a baseline. */}
       <p
