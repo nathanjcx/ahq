@@ -3,7 +3,8 @@
 import { Download, Plus, Search, Wrench } from 'lucide-react';
 import { useState } from 'react';
 import { EmptyMini } from '../shared/empty';
-import { providerName, relativeTime } from '../shared/format';
+import { providerName } from '../shared/format';
+import { relativeTime } from '../shared/time';
 import { groupRegistryTools } from './registry';
 import { RegistryToolSheet, type RegistryToolInput } from './registry-tool-sheet';
 import type { Connection, ProviderId, RegistryTool } from '@/lib/contracts';

@@ -8,9 +8,11 @@ import { JsonView } from '../shared/json-view';
 import { ProviderMark } from '../shared/marks';
 import { SkeletonList } from '../shared/skeleton';
 import { StateDiff } from '../shared/state-diff';
+import { durationLabel } from '../shared/time';
 import { webClient, WebApiError } from '@/lib/api/client';
 import type { AuditResponse } from '@/lib/api/schemas';
 import type { AuditEntry } from '@/lib/contracts';
+import { clip, pluralize } from '@/lib/text';
 
 const NO_ACCESS = 'You need access to this task to read its audit trail.';
 const LOAD_FAILED = 'The audit trail could not be loaded.';
@@ -26,17 +28,12 @@ function exactTime(at: number) {
   });
 }
 
-function duration(ms?: number) {
-  if (ms === undefined) return null;
-  return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
-}
-
 function AuditText({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false);
   const long = text.length > PREVIEW_LENGTH;
   return (
     <>
-      <p className="audit-text">{long && !expanded ? `${text.slice(0, PREVIEW_LENGTH)}…` : text}</p>
+      <p className="audit-text">{long && !expanded ? clip(text, PREVIEW_LENGTH) : text}</p>
       {long && (
         <button
           type="button"
@@ -111,7 +108,11 @@ function Entry({ entry }: { entry: AuditEntry }) {
         aside={<span className={`audit-outcome outcome-${entry.outcome}`}>{entry.outcome}</span>}
       >
         <p className="audit-meta">
-          {[providerName(entry.provider), entry.reason, duration(entry.durationMs)]
+          {[
+            providerName(entry.provider),
+            entry.reason,
+            entry.durationMs === undefined ? null : durationLabel(entry.durationMs),
+          ]
             .filter(Boolean)
             .join(' · ')}
         </p>
@@ -210,9 +211,11 @@ export function AuditTab({ taskId }: { taskId: string }) {
       <div className="audit-toolbar">
         <p>
           {timeline
-            ? `${timeline.truncated ? 'Most recent ' : ''}${timeline.entries.length.toLocaleString()} recorded ${
-                timeline.entries.length === 1 ? 'entry' : 'entries'
-              }`
+            ? `${timeline.truncated ? 'Most recent ' : ''}${pluralize(
+                timeline.entries.length,
+                'recorded entry',
+                'recorded entries',
+              )}`
             : 'Every event, message, tool call, and proposal for this task.'}
         </p>
         <div>

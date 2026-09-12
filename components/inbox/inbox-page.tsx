@@ -3,10 +3,11 @@
 import { ArrowRight, ExternalLink, Inbox, MessageSquareText, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { EmptyPane } from '../shared/empty';
-import { providerName, relativeTime } from '../shared/format';
+import { providerName } from '../shared/format';
 import { ProviderMark } from '../shared/marks';
 import { MasterDetail, useMasterDetail } from '../shared/master-detail';
 import { PageIntro } from '../shared/page-intro';
+import { relativeTime } from '../shared/time';
 import type { Employee, InboxItem, Floor } from '@/lib/contracts';
 
 export function InboxPage({

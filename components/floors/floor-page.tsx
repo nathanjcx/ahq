@@ -97,12 +97,12 @@ export function FloorPage({
         }
         description={
           dashboard.workspace
-            ? 'Move between floor floors, see who is staffed, and keep unassigned work in the lobby.'
+            ? 'Move between floors, see who is staffed, and keep unassigned work in the lobby.'
             : 'Connect your workspace, hire your first employee, and give them a clear assignment.'
         }
         action={
           <button className="primary-button" disabled={!workspaceReady} onClick={onNewFloor}>
-            <Plus size={17} /> New floor floor
+            <Plus size={17} /> New floor
           </button>
         }
       />

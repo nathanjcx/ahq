@@ -3,7 +3,8 @@
 import { Bot, Clock3, Users } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { relativeTime, safeHttpsUrl } from '../shared/format';
+import { safeHttpsUrl } from '../shared/format';
+import { relativeTime } from '../shared/time';
 import type { Message } from '@/lib/contracts';
 
 export function MessageBubble({ message }: { message: Message }) {

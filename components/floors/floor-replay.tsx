@@ -9,12 +9,15 @@ import type { OfficeProvider } from '../office/office-view';
 import { webClient } from '@/lib/api/client';
 import type { ActionProposal, ActivityEvent, AuditTimeline, Task } from '@/lib/contracts';
 import { providers as providerCatalog } from '@/lib/providers';
+import { clip, normalizeWhitespace } from '@/lib/text';
 import { uiApi } from '@/lib/ui-api';
 
 /** Replay runs at ten times the recorded pace. */
 const SPEED = 10;
 const TICK_MS = 100;
 const REPLAYABLE: Task['status'][] = ['completed', 'failed', 'cancelled', 'uncertain'];
+/** How much of an entry fits under the scrubber. */
+const CAPTION_CHARS = 180;
 
 export type FloorReplayProps = {
   floorId: string;
@@ -146,7 +149,7 @@ export function entryAt(timeline: AuditTimeline, at: number): string {
             ? `${entry.tool}: ${entry.outcome}`
             : `Proposed ${entry.tool}: ${entry.summary}`;
   }
-  return text.replace(/\s+/g, ' ').slice(0, 180);
+  return clip(normalizeWhitespace(text), CAPTION_CHARS);
 }
 
 function LiveReplay({ floorId, defaultEmployeeId, onScene }: FloorReplayProps) {

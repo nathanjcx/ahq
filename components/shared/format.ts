@@ -1,3 +1,4 @@
+/** Domain labels: what a provider, a model, a status, or a file is called on screen. */
 import type { ActionProposal, ModelId, ProviderId, Task } from '@/lib/contracts';
 import { providers } from '@/lib/providers';
 
@@ -29,18 +30,6 @@ export function correctionLabel(kind: ActionProposal['correction']) {
 export function timeGreeting() {
   const hour = new Date().getHours();
   return hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
-}
-export function relativeTime(timestamp: number) {
-  const seconds = Math.max(1, Math.floor((Date.now() - timestamp) / 1000));
-  if (seconds < 60) return 'just now';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return days < 7
-    ? `${days}d ago`
-    : new Date(timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 export function fileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;

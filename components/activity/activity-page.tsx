@@ -2,8 +2,8 @@
 
 import { Activity, LockKeyhole } from 'lucide-react';
 import { EmptyPane } from '../shared/empty';
-import { relativeTime } from '../shared/format';
 import { PageIntro } from '../shared/page-intro';
+import { relativeTime } from '../shared/time';
 import type { ActivityEvent } from '@/lib/contracts';
 
 export function ActivityPage({ events }: { events: ActivityEvent[] }) {

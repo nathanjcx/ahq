@@ -1,10 +1,12 @@
 'use client';
 
 import { ChevronRight, Plus } from 'lucide-react';
-import { relativeTime, statusLabel } from '../shared/format';
+import { statusLabel } from '../shared/format';
 import { StatusMark } from '../shared/marks';
+import { relativeTime } from '../shared/time';
 import { taskGroup, type TaskGroup } from './floor-stats';
 import type { ActionProposal, Task } from '@/lib/contracts';
+import { pluralize } from '@/lib/text';
 
 const GROUPS: { id: TaskGroup; title: string; empty: string }[] = [
   { id: 'active', title: 'Active', empty: 'Nothing running on this floor.' },
@@ -35,9 +37,7 @@ export function FloorWork({
       <div className="section-title">
         <div>
           <span className="eyebrow">WORK ON THIS FLOOR</span>
-          <h3>
-            {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}
-          </h3>
+          <h3>{pluralize(tasks.length, 'task')}</h3>
         </div>
         <button className="secondary-button compact" disabled={!canAssign} onClick={onNewTask}>
           <Plus size={14} /> Assign work

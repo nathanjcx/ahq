@@ -3,8 +3,9 @@
 import { BadgeCheck, Bot, FileText, LockKeyhole, Plus, Store } from 'lucide-react';
 import { useState } from 'react';
 import { EmptyMini } from '../shared/empty';
-import { modelName, relativeTime } from '../shared/format';
+import { modelName } from '../shared/format';
 import { PageIntro } from '../shared/page-intro';
+import { relativeTime } from '../shared/time';
 import { draftPublishIssues, type EditorDraft } from './draft-issues';
 import { EmployeeEditor } from './employee-editor';
 import { groupRegistryTools } from './registry';

@@ -1,6 +1,7 @@
 import { webClient } from '@/lib/api/client';
 import type { Connection, ProviderId, ProviderReadiness } from '@/lib/contracts';
 import { providerServerUrls, type ProviderDefinition } from '@/lib/providers';
+import { pluralize } from '@/lib/text';
 
 export type ProviderSetup = {
   /** Server URLs a user can connect right now. */
@@ -37,7 +38,7 @@ export function sharingSummary(connection: Connection) {
   if (connection.visibility === 'workspace') return 'Shared with workspace';
   const people = connection.visibleToSubjects.length;
   if (connection.visibility === 'members' && people)
-    return `Shared with ${people} ${people === 1 ? 'person' : 'people'}`;
+    return `Shared with ${pluralize(people, 'person', 'people')}`;
   return 'Private';
 }
 
@@ -46,7 +47,7 @@ export function sharedReach(connection: Connection) {
   if (connection.visibility === 'workspace') return 'Everyone';
   const others = connection.visibleToSubjects.length - 1;
   if (others <= 0) return 'Only you';
-  return `You and ${others} ${others === 1 ? 'other' : 'others'}`;
+  return `You and ${pluralize(others, 'other')}`;
 }
 
 export function connectionLabel(status: Connection['status']) {

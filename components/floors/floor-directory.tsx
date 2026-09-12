@@ -1,7 +1,7 @@
 'use client';
 
 import { Archive, Building2, ChevronRight } from 'lucide-react';
-import { relativeTime } from '../shared/format';
+import { relativeTime } from '../shared/time';
 import { countsLabel, type FloorEntry } from './floor-stats';
 import { FloorSwitcher } from './floor-switcher';
 
@@ -115,7 +115,7 @@ export function FloorDirectory({
         )}
         <div className="directory-footer">
           <span>{activeFloors.length}</span>
-          <p>active floor {activeFloors.length === 1 ? 'floor' : 'floors'}</p>
+          <p>active {activeFloors.length === 1 ? 'floor' : 'floors'}</p>
         </div>
       </div>
     </aside>

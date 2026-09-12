@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Sheet } from '../shared/sheet';
 import { DecideButtons, ProposalEvidence, ProposalHeading } from '../tasks/proposal-card';
 import type { ActionProposal } from '@/lib/contracts';
+import { pluralize } from '@/lib/text';
 
 /** Proposals this viewer is the one to decide. */
 export function reviewable(proposals: ActionProposal[]) {
@@ -39,7 +40,7 @@ export function ReviewBar({
         </span>
         <span>
           <strong>
-            {pending.length} {pending.length === 1 ? 'action needs' : 'actions need'} your review
+            {pluralize(pending.length, 'action')} {pending.length === 1 ? 'needs' : 'need'} your review
           </strong>
           <small>Nothing is written to a connected service until you approve it.</small>
         </span>
@@ -79,7 +80,9 @@ function ReviewSheet({
   return (
     <Sheet
       title="Actions to review"
-      subtitle={`${proposals.length} external ${proposals.length === 1 ? 'write is' : 'writes are'} waiting on your decision.`}
+      subtitle={`${pluralize(proposals.length, 'external write')} ${
+        proposals.length === 1 ? 'is' : 'are'
+      } waiting on your decision.`}
       onClose={onClose}
       footer={
         <>

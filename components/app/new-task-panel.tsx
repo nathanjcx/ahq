@@ -80,7 +80,7 @@ export function NewTaskPanel({
         }}
       >
         <label>
-          Floor floor
+          Floor
           <select value={floorId} onChange={(event) => setProjectId(event.target.value)}>
             <option value="">Lobby · Unassigned</option>
             {activeFloors.map((floor) => (

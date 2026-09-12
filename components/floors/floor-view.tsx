@@ -3,12 +3,13 @@
 import { Archive, ChevronDown, Pencil, RotateCcw } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import type { OfficeEmployee } from '../office/office-view';
-import { relativeTime } from '../shared/format';
 import { Avatar } from '../shared/marks';
+import { relativeTime } from '../shared/time';
 import type { FloorSummary } from './floor-stats';
 import { FloorTeam } from './floor-team';
 import { FloorWork } from './floor-work';
 import type { ActionProposal, Employee, Floor, Task } from '@/lib/contracts';
+import { pluralize } from '@/lib/text';
 
 type Region = 'board' | 'work' | 'team';
 
@@ -94,9 +95,7 @@ export function FloorView({
                 {relativeTime(summary.lastActivity)}
               </small>
               {floor.openHandoffs > 0 && (
-                <span className="handoff-badge">
-                  {floor.openHandoffs} open {floor.openHandoffs === 1 ? 'handoff' : 'handoffs'}
-                </span>
+                <span className="handoff-badge">{pluralize(floor.openHandoffs, 'open handoff')}</span>
               )}
               {archived && <span className="archived-badge">Archived</span>}
             </div>
