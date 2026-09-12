@@ -2,6 +2,7 @@ import type {
   Capability,
   CorrectionDescriptor,
   ModelId,
+  Persona,
   ProviderId,
   TaskStatus,
   ToolMode,
@@ -59,6 +60,7 @@ export interface TaskContext {
     instructions: string;
     skills: { name: string; description?: string; content: string }[];
     capabilities: Capability[];
+    persona?: Persona;
   };
   connections: PrivateConnection[];
   /** Policies for every provider the task's connections cover. */

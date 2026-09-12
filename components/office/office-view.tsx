@@ -6,20 +6,35 @@ import { Canvas, events as createPointerEvents } from '@react-three/fiber';
 import type { CanvasProps } from '@react-three/fiber';
 import * as THREE from 'three';
 import { OfficeScene, isActiveEmployee } from './office-scene';
-import type { OfficeEmployee } from './office-scene';
+import type { OfficeEmployee, OfficeProvider } from './office-scene';
 import './office-view.css';
+import './office.css';
 
-export type { OfficeEmployee } from './office-scene';
+export type { OfficeEmployee, OfficeProvider } from './office-scene';
 
+/**
+ * The office's public props. Everything past `emptyMessage` is the live floor:
+ * what people are doing, what the room can reach, and how much light it has left.
+ */
 export type OfficeViewProps = {
-  /** People shown in the office. Only active statuses take the floor. */
+  /** People shown in the office. Only active statuses take the floor. Each carries its own activity. */
   employees: OfficeEmployee[];
-  /** Called when a person or their label is clicked. */
+  /** Called when a person, their label, their bubble, or the review tray is clicked. */
   onSelect?: (id: string) => void;
   /** Visible name of the lobby or project floor. */
   label?: string;
   /** Contextual guidance shown when this floor has no employees. */
   emptyMessage?: string;
+  /** An archived floor renders desaturated and dark, and animates nothing. */
+  archived?: boolean;
+  /** Connected providers, one console each. Figures walk to them while calling a tool. */
+  providers?: OfficeProvider[];
+  /** The latest board note, shown on the whiteboard. */
+  note?: string;
+  /** Fraction of the workspace token cap used, 0 to 1. Above zero the room dims. */
+  lightBudget?: number;
+  /** Local hour, 0 to 24, for day and night. Defaults to the viewer's clock. */
+  hour?: number;
 };
 
 const ZOOM_MIN = 0.55;
@@ -110,7 +125,17 @@ const safeEvents: NonNullable<CanvasProps['events']> = (store) => {
  * architectural room from the desktop app, dressed only by the people it is
  * given. With no employees it stays a furnished, honest empty office.
  */
-export default function OfficeView({ employees, onSelect, label, emptyMessage }: OfficeViewProps) {
+export default function OfficeView({
+  employees,
+  onSelect,
+  label,
+  emptyMessage,
+  archived,
+  providers,
+  note,
+  lightBudget,
+  hour,
+}: OfficeViewProps) {
   const [eventSource, setEventSource] = useState<HTMLDivElement | null>(null);
   const [zoom, setZoom] = useState(1);
   const [angle, setAngle] = useState(0);
@@ -145,7 +170,7 @@ export default function OfficeView({ employees, onSelect, label, emptyMessage }:
     setSupported(detectWebGL());
   }, [supported]);
 
-  const motion = !reducedMotion;
+  const motion = !reducedMotion && !archived;
   const fallback = <Fallback employees={employees} onSelect={onSelect} emptyMessage={emptyMessage} />;
 
   return (
@@ -156,6 +181,7 @@ export default function OfficeView({ employees, onSelect, label, emptyMessage }:
       aria-label={`Interactive 3D office${label ? ` · ${label}` : ''}`}
       aria-description="Drag to pan. Use the arrow keys when the office is focused. Hold Ctrl and scroll to zoom."
       data-office-empty={employees.length ? undefined : 'true'}
+      data-office-archived={archived ? 'true' : undefined}
       tabIndex={0}
     >
       {label && <p className="office-view-floor">{label}</p>}
@@ -288,6 +314,10 @@ export default function OfficeView({ employees, onSelect, label, emptyMessage }:
               angle={angle}
               resetKey={resetKey}
               eventSource={eventSource}
+              providers={providers}
+              note={note}
+              lightBudget={lightBudget}
+              hour={hour}
             />
           </Canvas>
         )}

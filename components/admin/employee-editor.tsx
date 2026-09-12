@@ -2,7 +2,8 @@
 
 import { Check, LockKeyhole, Plus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import type { ModelId } from '@/lib/contracts';
+import type { ModelId, Persona } from '@/lib/contracts';
+import { PERSONA_LIMITS, PERSONA_TRAITS, type PersonaTrait } from '@/lib/personas';
 import { lines } from '../shared/format';
 import { Sheet } from '../shared/sheet';
 import { CapabilityRows, type CapabilityRow } from './capability-rows';
@@ -40,6 +41,13 @@ export function EmployeeEditor({
   const [media, setMedia] = useState<MediaRow[]>(() =>
     (draft?.media ?? []).map((item) => ({ ...item, rowId: editorRowId() })),
   );
+  const [voice, setVoice] = useState(draft?.persona?.voice ?? '');
+  const [traits, setTraits] = useState<PersonaTrait[]>(() =>
+    (draft?.persona?.traits ?? []).filter((trait): trait is PersonaTrait =>
+      (PERSONA_TRAITS as readonly string[]).includes(trait),
+    ),
+  );
+  const [catchphrase, setCatchphrase] = useState(draft?.persona?.catchphrase ?? '');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const skillCharacters = skills.reduce((total, skill) => total + skill.content.length, 0);
@@ -49,6 +57,16 @@ export function EmployeeEditor({
       : skillCharacters > 600_000
         ? 'Private skill content must total 600,000 characters or less.'
         : null;
+
+  /** Character only. An empty voice means this employee has no persona at all. */
+  function persona(): Persona | undefined {
+    if (!voice.trim()) return undefined;
+    return {
+      voice: voice.trim(),
+      traits,
+      ...(catchphrase.trim() ? { catchphrase: catchphrase.trim() } : {}),
+    };
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -74,6 +92,10 @@ export function EmployeeEditor({
       setFormError(skillLimitError);
       return;
     }
+    if (!voice.trim() && (traits.length || catchphrase.trim())) {
+      setFormError('A persona needs a voice before traits or a catchphrase.');
+      return;
+    }
     setFormError(null);
     setSaving(true);
     try {
@@ -97,6 +119,7 @@ export function EmployeeEditor({
         capabilities: capabilities.map(({ rowId: _rowId, ...capability }) => capability),
         media: media.map(({ rowId: _rowId, ...item }) => item),
         skills: hashedSkills,
+        persona: persona(),
       });
     } finally {
       setSaving(false);
@@ -189,6 +212,56 @@ export function EmployeeEditor({
         <section>
           <span className="editor-step">03</span>
           <div>
+            <h3>Persona</h3>
+            <p>
+              How this employee sounds, and up to {PERSONA_LIMITS.traits} traits. Character never changes what
+              they are allowed to do.
+            </p>
+          </div>
+        </section>
+        <div className="form-grid">
+          <label className="full-field">
+            Voice
+            <textarea
+              value={voice}
+              onChange={(e) => setVoice(e.target.value)}
+              maxLength={PERSONA_LIMITS.voice}
+              placeholder="One or two sentences on how this employee speaks and works…"
+            />
+          </label>
+          <div className="full-field registry-tools" role="group" aria-label="Persona traits">
+            {PERSONA_TRAITS.map((trait) => {
+              const chosen = traits.includes(trait);
+              return (
+                <label key={trait} className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={chosen}
+                    disabled={!chosen && traits.length >= PERSONA_LIMITS.traits}
+                    onChange={() =>
+                      setTraits((current) =>
+                        chosen ? current.filter((item) => item !== trait) : [...current, trait],
+                      )
+                    }
+                  />
+                  <strong>{trait}</strong>
+                </label>
+              );
+            })}
+          </div>
+          <label className="full-field">
+            Catchphrase
+            <input
+              value={catchphrase}
+              onChange={(e) => setCatchphrase(e.target.value)}
+              maxLength={PERSONA_LIMITS.catchphrase}
+              placeholder="Used at most once per task, never in tool arguments."
+            />
+          </label>
+        </div>
+        <section>
+          <span className="editor-step">04</span>
+          <div>
             <h3>MCP capabilities</h3>
             <p>Required connections block hiring until every listed tool is granted.</p>
           </div>
@@ -207,7 +280,7 @@ export function EmployeeEditor({
         </section>
         <CapabilityRows capabilities={capabilities} registry={registry} onChange={setCapabilities} />
         <section>
-          <span className="editor-step">04</span>
+          <span className="editor-step">05</span>
           <div>
             <h3>Private skills</h3>
             <p>Add versioned skill files that the employee needs at runtime.</p>
@@ -228,7 +301,7 @@ export function EmployeeEditor({
         </section>
         <SkillRows skills={skills} onChange={setSkills} />
         <section>
-          <span className="editor-step">05</span>
+          <span className="editor-step">06</span>
           <div>
             <h3>Marketplace gallery</h3>
             <p>Add up to ten images or videos. Customers can view every item.</p>

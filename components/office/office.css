@@ -1,0 +1,176 @@
+/* The live office: speech bubbles, attention pips, and the sound toggle. */
+
+/* One stack above each head: the bubble sits over the label, never across it. */
+.office-stack {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+}
+
+.office-bubble {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  width: max-content;
+  max-width: 196px;
+  min-width: 96px;
+  margin: 0;
+  padding: 7px 9px 8px;
+  border: 1px solid #d7e0d1;
+  border-bottom-color: var(--bubble-color, #9cb094);
+  border-radius: 9px;
+  background: #fffdf4f2;
+  color: #33473c;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1.32;
+  text-align: left;
+  box-shadow: 0 4px 14px #1c2f2418;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(3px);
+  transition:
+    opacity 0.45s ease,
+    transform 0.45s ease;
+}
+
+.office-bubble:not([data-visible='true']) {
+  pointer-events: none;
+}
+
+.office-bubble[data-visible='true'] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* The tail takes the provider's colour while a tool is being called. */
+.office-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 9px;
+  height: 9px;
+  translate: -50% 0;
+  rotate: 45deg;
+  border-right: 1px solid var(--bubble-color, #9cb094);
+  border-bottom: 1px solid var(--bubble-color, #9cb094);
+  background: #fffdf4;
+}
+
+.office-bubble > span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.office-bubble-icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--bubble-color, #7d9476);
+}
+
+.office-bubble:focus-visible {
+  outline: 2px solid #d8b576;
+  outline-offset: 2px;
+}
+
+/* Something on this floor needs a person. */
+.office-attention {
+  width: 8px;
+  height: 8px;
+  margin-left: 2px;
+  border-radius: 2px;
+  background: #e0b262;
+  box-shadow: 0 0 7px #e0b26290;
+}
+
+.office-attention-stuck {
+  background: #d2764c;
+  box-shadow: 0 0 7px #d2764c90;
+  animation: office-attention-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes office-attention-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* An archived floor is a dark, colourless record of itself. */
+.office-view[data-office-archived='true'] canvas {
+  filter: grayscale(0.72) brightness(0.68) contrast(0.95);
+}
+
+.office-view[data-office-archived='true'] .office-bubble,
+.office-view[data-office-archived='true'] .office-note,
+.office-view[data-office-archived='true'] .office-attention {
+  display: none;
+}
+
+/* The speaker toggle lives in the office legend. */
+.office-sound {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: #829080;
+  font: inherit;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.office-sound:hover {
+  border-color: #b8c8a8;
+  color: #5d7050;
+}
+
+.office-sound[aria-pressed='true'] {
+  border-color: #aec1a2;
+  background: #eef3e8;
+  color: #4f6644;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .office-bubble {
+    transition: none;
+  }
+  .office-attention-stuck {
+    animation: none;
+  }
+}
+
+/* The whiteboard's latest note. */
+.office-note {
+  width: max-content;
+  max-width: 210px;
+  max-height: 62px;
+  padding: 7px 9px;
+  border: 1px solid #b8b098;
+  border-radius: 6px;
+  background: #f4efddf2;
+  color: #3d4a42;
+  font-size: 11px;
+  line-height: 1.35;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+@container (max-width: 520px) {
+  /* Not enough width to read the board note without covering the room. */
+  .office-note {
+    display: none;
+  }
+}
