@@ -1,8 +1,8 @@
 'use client';
 
-import { Canvas, events as createPointerEvents } from '@react-three/fiber';
+import { Canvas, events as createPointerEvents, useFrame, useThree } from '@react-three/fiber';
 import type { CanvasProps } from '@react-three/fiber';
-import { Component, useEffect, useState } from 'react';
+import { Component, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import * as THREE from 'three';
 import type { LabelMode } from './office-labels';
@@ -43,7 +43,32 @@ export type OfficeViewProps = {
   dressing?: OfficeDressing;
   /** Called when a prop is clicked: the binder, a notebook, a card, a shelf, a lamp. */
   onSelectProp?: SelectProp;
+  /** Reports what the renderer did on the last frame. The lab shows it; nothing else asks. */
+  onRenderStats?: (stats: RenderStats) => void;
 };
+
+/** What one frame cost the renderer. Draw calls are the number the budget is written in. */
+export type RenderStats = { calls: number; triangles: number; geometries: number; textures: number };
+
+/** How often the read-out is refreshed. Often enough to watch, rarely enough to be free. */
+const STATS_SECONDS = 0.5;
+
+function RenderStatsProbe({ report }: { report: (stats: RenderStats) => void }) {
+  const gl = useThree((state) => state.gl);
+  const last = useRef(-1);
+  useFrame((state) => {
+    if (state.clock.elapsedTime - last.current < STATS_SECONDS) return;
+    last.current = state.clock.elapsedTime;
+    const { render, memory } = gl.info;
+    report({
+      calls: render.calls,
+      triangles: render.triangles,
+      geometries: memory.geometries,
+      textures: memory.textures,
+    });
+  });
+  return null;
+}
 
 const ZOOM_MIN = 0.55;
 const ZOOM_MAX = 2.5;
@@ -52,15 +77,26 @@ const ROTATE_STEP = 30;
 
 const clampZoom = (value: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value));
 
+let webgl: boolean | undefined;
+
+/**
+ * Whether this browser can draw the office. Asked once and remembered: the
+ * answer cannot change, and probing costs a throwaway canvas and a context.
+ */
 function detectWebGL(): boolean {
-  if (typeof document === 'undefined') return false;
+  if (webgl !== undefined) return webgl;
   try {
     const canvas = document.createElement('canvas');
-    return Boolean(canvas.getContext('webgl2') ?? canvas.getContext('webgl'));
+    webgl = Boolean(canvas.getContext('webgl2') ?? canvas.getContext('webgl'));
   } catch {
-    return false;
+    webgl = false;
   }
+  return webgl;
 }
+
+/** The answer never changes, so there is nothing to subscribe to. */
+const never = () => () => {};
+const unsupportedOnServer = () => false;
 
 function Fallback({
   employees,
@@ -146,13 +182,14 @@ export default function OfficeView({
   labels = 'names',
   dressing,
   onSelectProp,
+  onRenderStats,
 }: OfficeViewProps) {
   const [eventSource, setEventSource] = useState<HTMLDivElement | null>(null);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
   const [zoom, setZoom] = useState(1);
   const [angle, setAngle] = useState(0);
   const [resetKey, setResetKey] = useState(0);
-  const [supported, setSupported] = useState(detectWebGL);
+  const supported = useSyncExternalStore(never, detectWebGL, unsupportedOnServer);
   const [reducedMotion, setReducedMotion] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
   );
@@ -176,11 +213,6 @@ export default function OfficeView({
     eventSource.addEventListener('wheel', onWheel, { passive: false });
     return () => eventSource.removeEventListener('wheel', onWheel);
   }, [eventSource]);
-
-  useEffect(() => {
-    if (supported) return;
-    setSupported(detectWebGL());
-  }, [supported]);
 
   const motion = !reducedMotion && !archived;
   // The office remembers who was picked, so that figure keeps its label in a crowd.
@@ -340,6 +372,7 @@ export default function OfficeView({
               dressing={dressing}
               onSelectProp={onSelectProp}
             />
+            {onRenderStats && <RenderStatsProbe report={onRenderStats} />}
           </Canvas>
         )}
       </SceneBoundary>

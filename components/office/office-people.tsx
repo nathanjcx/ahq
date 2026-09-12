@@ -7,7 +7,7 @@ import type { CSSProperties } from 'react';
 import * as THREE from 'three';
 import type { Activity, EmployeeActivity } from './activity';
 import { labelPriority, type LabelMode } from './office-labels';
-import { useOverlayEntry, useOverlayRelayout } from './office-overlay';
+import { useOverlayLabel, useOverlayRelayout } from './office-overlay';
 import { Box, C, Cylinder, Round } from './office-primitives';
 import { JanitorCart } from './office-props';
 import type { OfficeEmployee } from './office-scene';
@@ -327,39 +327,46 @@ export function EmployeeAvatar({
   const walk = useRef({ from: new THREE.Vector3(), to: new THREE.Vector3(), t: 1 });
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
-  const [pose, setPose] = useState<Pose>(() => poseFor(state.activity, 0, 0, employee.traits ?? []));
+  /** The frame loop's pose. Null until the first frame, and ignored without motion. */
+  const [animated, setAnimated] = useState<Pose | null>(null);
   const elapsed = useRef(index * 7.3 + 7);
   const lastPoseUpdate = useRef(-1);
   const placed = useRef(false);
   const color = employee.color || C.sage;
-  const traits = employee.traits ?? [];
+  const traits = useMemo(() => employee.traits ?? [], [employee.traits]);
   const appearance = useMemo(() => appearanceFor(employee.id), [employee.id]);
   const activity = state.activity;
   const seated = SEATED.includes(activity);
   const status = statusOf(state);
-  const entry = useOverlayEntry(employee.id);
+  const label = useOverlayLabel(employee.id);
   const relayout = useOverlayRelayout();
   const headroom = seated ? 1.95 : 2.24;
+  // Reduced motion still changes pose, it just never tweens between them.
+  const still = useMemo(() => poseFor(activity, 0, 0, traits), [activity, traits]);
+  const pose = motion ? (animated ?? still) : still;
+  const [homeX, homeY, homeZ] = station.at;
+  const facing = station.facing;
 
   // The office's own declutter pass needs to know who matters most.
   useLayoutEffect(() => {
-    if (!entry) return;
-    entry.priority = labelPriority({
-      activity,
-      ...(selected ? { selected } : {}),
-      ...(state.attention ? { attention: state.attention } : {}),
-    });
-    entry.forced = Boolean(hovered || focused || selected || pinned);
+    label?.rank(
+      labelPriority({
+        activity,
+        ...(selected ? { selected } : {}),
+        ...(state.attention ? { attention: state.attention } : {}),
+      }),
+      Boolean(hovered || focused || selected || pinned),
+    );
   });
 
   // A new station starts a walk. Reduced motion, and the first placement, snap.
   useEffect(() => {
     if (!group.current) return;
-    const target = scratch.set(...station.at);
+    const target = scratch.set(homeX, homeY, homeZ);
     if (!motion || !placed.current) {
       placed.current = true;
       group.current.position.copy(target);
-      group.current.rotation.y = station.facing;
+      group.current.rotation.y = facing;
       walk.current.t = 1;
       return;
     }
@@ -367,12 +374,7 @@ export function EmployeeAvatar({
     walk.current.from.copy(group.current.position);
     walk.current.to.copy(target);
     walk.current.t = 0;
-  }, [motion, station.at[0], station.at[1], station.at[2], station.facing]);
-
-  // Reduced motion still changes pose, it just never tweens between them.
-  useEffect(() => {
-    if (!motion) setPose(poseFor(activity, 0, 0, traits));
-  }, [motion, activity, employee.id]);
+  }, [motion, homeX, homeY, homeZ, facing]);
 
   useEffect(() => {
     if (!hovered) return;
@@ -396,25 +398,29 @@ export function EmployeeAvatar({
         const eased = journey.t * journey.t * (3 - 2 * journey.t);
         figure.position.lerpVectors(journey.from, journey.to, eased);
         heading.copy(journey.to).sub(journey.from);
-        const walking = journey.t < 0.82 && heading.lengthSq() > 0.09;
+        const turning = journey.t < 0.82 && heading.lengthSq() > 0.09;
         figure.rotation.y = turnToward(
           figure.rotation.y,
-          walking ? Math.atan2(heading.x, heading.z) : station.facing,
+          turning ? Math.atan2(heading.x, heading.z) : facing,
           step * 4.5,
         );
       } else {
-        figure.rotation.y = turnToward(figure.rotation.y, station.facing, step * 4.5);
+        figure.rotation.y = turnToward(figure.rotation.y, facing, step * 4.5);
       }
-      // Articulated limbs update at 20fps.
+      // Articulated limbs update at 20fps. A figure crossing the floor walks
+      // rather than carrying its desk pose with it.
       if (elapsed.current - lastPoseUpdate.current > 0.05) {
         lastPoseUpdate.current = elapsed.current;
-        setPose(poseFor(activity, elapsed.current, (Date.now() - state.since) / 1000, traits));
+        setAnimated(
+          journey.t < 1
+            ? REST
+            : poseFor(activity, elapsed.current, (Date.now() - state.since) / 1000, traits),
+        );
       }
     }
-    if (entry) entry.anchor.set(figure.position.x, headroom, figure.position.z);
+    label?.anchor.set(figure.position.x, headroom, figure.position.z);
   });
 
-  const walking = walk.current.t < 1;
   const bubble = state.bubble;
   return (
     <group ref={group} position={station.at} rotation={[0, station.facing, 0]}>
@@ -429,13 +435,7 @@ export function EmployeeAvatar({
         }}
         onPointerOut={() => setHovered(false)}
       >
-        <Figure
-          color={color}
-          appearance={appearance}
-          index={index}
-          pose={walking ? REST : pose}
-          kind={employee.kind}
-        />
+        <Figure color={color} appearance={appearance} index={index} pose={pose} kind={employee.kind} />
         {/* The janitor brings the cart with them, parked at their side, and leaves it to sit down. */}
         {employee.kind === 'janitor' && !seated && (
           <JanitorCart position={[0.85, 0, -0.22]} rotation={-0.55} />
@@ -459,7 +459,7 @@ export function EmployeeAvatar({
         {mode === 'names' && (
           <button
             ref={(element) => {
-              if (entry) entry.pill = element;
+              label?.attach('pill', element);
               relayout();
             }}
             type="button"
@@ -484,7 +484,7 @@ export function EmployeeAvatar({
         {bubble && (
           <div
             ref={(element) => {
-              if (entry) entry.bubble = element;
+              label?.attach('bubble', element);
               relayout();
             }}
             className="office-bubble"

@@ -7,6 +7,7 @@ import { deriveActivities, type EmployeeActivity } from './activity';
 import type { LabelMode } from './office-labels';
 import type { SelectProp } from './office-props';
 import type { OfficeDressing, OfficeEmployee, OfficeProvider } from './office-scene';
+import type { RenderStats } from './office-view';
 import { useActivityCues } from './sound';
 import type { Dashboard, FloorPost } from '@/lib/contracts';
 import { providers as providerCatalog } from '@/lib/providers';
@@ -49,6 +50,8 @@ export type OfficeStageProps = {
   onSelect?: (id: string) => void;
   /** Called when a prop is clicked: the binder, a notebook, a card, a shelf, a lamp. */
   onSelectProp?: SelectProp;
+  /** Reports what the renderer did on the last frame. Only the lab asks. */
+  onRenderStats?: (stats: RenderStats) => void;
 };
 
 /** Turns one dashboard and one board into everything the room shows. */
@@ -143,6 +146,7 @@ function Stage({
   labels,
   onSelect,
   onSelectProp,
+  onRenderStats,
 }: Omit<OfficeStageProps, 'live' | 'floorId'> & { scene: OfficeSceneData }) {
   const dressed = useMemo(
     () =>
@@ -167,6 +171,7 @@ function Stage({
       hour={scene.hour}
       dressing={scene}
       onSelectProp={onSelectProp}
+      onRenderStats={onRenderStats}
     />
   );
 }

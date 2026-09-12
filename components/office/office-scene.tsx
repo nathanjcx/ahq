@@ -163,44 +163,47 @@ function Framing({
   /** Where the busiest part of the floor is, for the close framing. */
   cluster: Point;
 }) {
-  const { camera, size, invalidate } = useThree();
+  const { camera, size, invalidate, get } = useThree();
   const pan = useOfficePan(camera, source, invalidate, resetKey);
   const previousReset = useRef(resetKey);
   useLayoutEffect(() => {
-    if (!(camera instanceof THREE.OrthographicCamera)) return;
+    // The live camera, read from the renderer rather than captured at render:
+    // fitting the room is an imperative pass over an object React does not own.
+    const view = get().camera;
+    if (!(view instanceof THREE.OrthographicCamera)) return;
     if (previousReset.current !== resetKey) {
       pan.set(0, 0);
       previousReset.current = resetKey;
     }
     const compact = size.width < COMPACT_WIDTH;
     const azimuth = Math.PI / 4 + (angle * Math.PI) / 180;
-    camera.position.set(Math.sin(azimuth) * 28, 24.5, Math.cos(azimuth) * 28);
-    camera.lookAt(compact ? new THREE.Vector3(...cluster) : new THREE.Vector3(0, 0.6, 0));
-    camera.updateMatrixWorld(true);
+    view.position.set(Math.sin(azimuth) * 28, 24.5, Math.cos(azimuth) * 28);
+    view.lookAt(compact ? new THREE.Vector3(...cluster) : new THREE.Vector3(0, 0.6, 0));
+    view.updateMatrixWorld(true);
     const bounds = new THREE.Box3();
     for (const x of [-ROOM.x, ROOM.x])
       for (const y of [0, ROOM.y])
         for (const z of [-ROOM.z, ROOM.z])
-          bounds.expandByPoint(corner.set(x, y, z).applyMatrix4(camera.matrixWorldInverse));
+          bounds.expandByPoint(corner.set(x, y, z).applyMatrix4(view.matrixWorldInverse));
     const width = bounds.max.x - bounds.min.x;
     const height = bounds.max.y - bounds.min.y;
     if (!compact) {
       // Centre the projected plate rather than assuming the floor origin is its
       // visual centre; the close framing is already centred on the cluster.
       const center = bounds.getCenter(corner);
-      camera.translateX(center.x);
-      camera.translateY(center.y);
+      view.translateX(center.x);
+      view.translateY(center.y);
     }
-    camera.translateX(pan.x);
-    camera.translateY(pan.y);
-    camera.updateMatrixWorld(true);
+    view.translateX(pan.x);
+    view.translateY(pan.y);
+    view.updateMatrixWorld(true);
     const safeWidth = Math.max(100, size.width - (compact ? 12 : 32));
     const safeHeight = Math.max(100, size.height - 24);
     const fit = Math.min(safeWidth / width, safeHeight / height);
-    camera.zoom = fit * (compact ? FILL_COMPACT : FILL) * zoom;
-    camera.updateProjectionMatrix();
+    view.zoom = fit * (compact ? FILL_COMPACT : FILL) * zoom;
+    view.updateProjectionMatrix();
     invalidate();
-  }, [camera, size.width, size.height, zoom, angle, resetKey, pan, invalidate, cluster]);
+  }, [get, size.width, size.height, zoom, angle, resetKey, pan, invalidate, cluster]);
   return null;
 }
 
@@ -316,7 +319,9 @@ export function OfficeScene({
 }: OfficeSceneProps) {
   const { size } = useThree();
   const surfaces = useSurfaceTextures();
-  const seats = useRef(new Map<string, number>());
+  // Sticky desk assignments. A plain stable object rather than a ref: losing it
+  // only means the room picks the chairs again, which nobody can tell apart.
+  const seats = useMemo(() => new Map<string, number>(), []);
   const room = dressing.room ?? 'floor';
   const { schedule, meeting } = dressing;
   const light = useMemo(() => {
@@ -351,7 +356,7 @@ export function OfficeScene({
     const stations = layoutStations({
       people: present.map((employee, index) => ({ id: employee.id, state: states[index] })),
       providers,
-      seats: seats.current,
+      seats,
     });
     return present.map((employee, index) => ({
       employee,
@@ -361,7 +366,7 @@ export function OfficeScene({
       home: stations[index].home,
       ...(stations[index].accent ? { accent: stations[index].accent } : {}),
     }));
-  }, [present, providers, room, onFloor, meeting]);
+  }, [present, providers, room, onFloor, meeting, seats]);
   const shelves = useMemo(
     () =>
       dressing.records?.shelves ?? (dressing.memory ? defaultShelves(dressing.memory) : ([] as ShelfSpec[])),

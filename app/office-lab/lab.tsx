@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { Activity, EmployeeActivity } from '@/components/office/activity';
 import type { LabelMode } from '@/components/office/office-labels';
 import type { BoardCard, ShelfSpec } from '@/components/office/office-layout';
 import type { EmployeeKind } from '@/components/office/office-people';
 import type { OfficeDressing, OfficeEmployee, OfficeProvider } from '@/components/office/office-scene';
 import { OfficeStage, type OfficeSceneData } from '@/components/office/office-stage';
+import type { RenderStats } from '@/components/office/office-view';
 
 /**
  * Presets are the scenes the baselines photograph. Each is fully determined by its name, the hour,
@@ -209,15 +210,32 @@ export function OfficeLab({
   seed: number;
 }) {
   const { employees, scene, label } = useMemo(() => buildScene(preset, hour, seed), [preset, hour, seed]);
+  const [stats, setStats] = useState<RenderStats | null>(null);
+  const report = useCallback(
+    (next: RenderStats) => setStats((current) => (current?.calls === next.calls ? current : next)),
+    [],
+  );
   return (
-    <main className="office-lab" data-preset={preset} style={{ width: 1280, height: 720, margin: 0 }}>
-      <OfficeStage
-        live={false}
-        scene={scene}
-        employees={employees}
-        label={label}
-        labels={labels as LabelMode}
-      />
-    </main>
+    <>
+      <main className="office-lab" data-preset={preset} style={{ width: 1280, height: 720, margin: 0 }}>
+        <OfficeStage
+          live={false}
+          scene={scene}
+          employees={employees}
+          label={label}
+          labels={labels as LabelMode}
+          onRenderStats={report}
+        />
+      </main>
+      {/* Outside the photographed stage, so the read-out never lands in a baseline. */}
+      <p
+        data-office-stats={stats ? String(stats.calls) : ''}
+        style={{ font: '12px ui-monospace, monospace', margin: '6px 0 0' }}
+      >
+        {stats
+          ? `${stats.calls} draw calls · ${stats.triangles.toLocaleString()} triangles · ${stats.geometries} geometries · ${stats.textures} textures`
+          : 'measuring…'}
+      </p>
+    </>
   );
 }

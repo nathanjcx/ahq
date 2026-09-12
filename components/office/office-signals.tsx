@@ -6,7 +6,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, JSX } from 'react';
 import * as THREE from 'three';
 import { boardLayout, CALENDAR_ENTRIES, type BoardCard, type CalendarEntry } from './office-layout';
-import { useOverlayEntry, useOverlayRelayout } from './office-overlay';
+import { useOverlayLabel, useOverlayRelayout } from './office-overlay';
 import { Box, C, Round, type Point } from './office-primitives';
 import { STATUS_COLOR, type SelectProp } from './office-props';
 
@@ -149,15 +149,13 @@ export function ProviderConsole({
   motion: boolean;
 }): JSX.Element {
   // One shared material, so every indicator flickers and breathes together.
-  const bars = useMemo(
-    () => new THREE.MeshBasicMaterial({ color: degraded ? DEGRADED : color, toneMapped: false }),
-    [],
-  );
+  const bars = useMemo(() => new THREE.MeshBasicMaterial({ toneMapped: false }), []);
   useEffect(() => () => bars.dispose(), [bars]);
-  useEffect(() => {
-    if (motion) return;
+  // The frame loop takes the colour over while the office is animating; this is
+  // what the bars read on a still frame, and the first colour they ever have.
+  useLayoutEffect(() => {
     bars.color.set(degraded ? DEGRADED : color);
-  }, [bars, color, degraded, motion]);
+  }, [bars, color, degraded]);
   useFrame((state) => {
     if (!motion) return;
     const t = state.clock.elapsedTime;
@@ -203,20 +201,18 @@ export function ProviderConsole({
  * gives way to a bubble that has nowhere else to go.
  */
 export function BoardNote({ position, note }: { position: Point; note?: string }): JSX.Element | null {
-  const entry = useOverlayEntry('office-note');
+  const label = useOverlayLabel('office-note', true);
   const relayout = useOverlayRelayout();
   useLayoutEffect(() => {
-    if (!entry) return;
-    entry.pinned = true;
-    entry.anchor.set(...position);
-  }, [entry, position]);
+    label?.anchor.set(...position);
+  }, [label, position]);
   if (!note) return null;
   return (
     <Html position={position} center zIndexRange={[18, 8]}>
       <div
         className="office-note"
         ref={(element) => {
-          if (entry) entry.pill = element;
+          label?.attach('pill', element);
           relayout();
         }}
       >
@@ -284,13 +280,11 @@ export function TaskCards({
   cards: BoardCard[];
   onSelectProp?: SelectProp;
 }): JSX.Element | null {
-  const entry = useOverlayEntry('office-board');
+  const label = useOverlayLabel('office-board', true);
   const relayout = useOverlayRelayout();
   useLayoutEffect(() => {
-    if (!entry) return;
-    entry.pinned = true;
-    entry.anchor.set(...position);
-  }, [entry, position]);
+    label?.anchor.set(...position);
+  }, [label, position]);
   const shown = boardLayout(cards).cards;
   if (!shown.length) return null;
   return (
@@ -298,7 +292,7 @@ export function TaskCards({
       <div
         className="office-board"
         ref={(element) => {
-          if (entry) entry.pill = element;
+          label?.attach('pill', element);
           relayout();
         }}
       >
@@ -336,13 +330,11 @@ export function CalendarCard({
   entries: CalendarEntry[];
   onSelectProp?: SelectProp;
 }): JSX.Element | null {
-  const entry = useOverlayEntry('office-calendar');
+  const label = useOverlayLabel('office-calendar', true);
   const relayout = useOverlayRelayout();
   useLayoutEffect(() => {
-    if (!entry) return;
-    entry.pinned = true;
-    entry.anchor.set(...position);
-  }, [entry, position]);
+    label?.anchor.set(...position);
+  }, [label, position]);
   if (!entries.length) return null;
   const shown = entries.slice(0, CALENDAR_ENTRIES);
   return (
@@ -350,7 +342,7 @@ export function CalendarCard({
       <div
         className="office-calendar"
         ref={(element) => {
-          if (entry) entry.pill = element;
+          label?.attach('pill', element);
           relayout();
         }}
       >
