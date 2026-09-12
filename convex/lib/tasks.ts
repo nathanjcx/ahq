@@ -1,7 +1,24 @@
 import type { Doc, Id } from '../_generated/dataModel';
 import type { MutationCtx } from '../_generated/server';
-import { canSeeConnection, cleanText, randomToken, usagePeriod, type Ctx } from '../shared';
+import {
+  canSeeConnection,
+  cleanText,
+  randomToken,
+  usagePeriod,
+  type Ctx,
+  type WorkspaceRole,
+} from '../shared';
+import { assertAcyclic, dependentsOf, readyToStart } from './dependencies';
 import { systemPost } from './posts';
+
+/** Task fields the roadmap and the dependency graph add to plain task creation. */
+export type TaskPlan = {
+  projectId?: Id<'projects'>;
+  milestoneId?: Id<'milestones'>;
+  cadence?: 'once' | 'daily';
+  deadlineAt?: number;
+  dependsOn?: Id<'tasks'>[];
+};
 
 export async function requireFloor(
   ctx: Ctx,
@@ -99,6 +116,112 @@ export async function insertJob(
   });
 }
 
+/**
+ * The queue command that hands a task to the worker. Tasks that wait on a dependency get theirs only
+ * when the dependency completes, and the unique key makes a double release a no-op.
+ */
+export async function queueStartTask(
+  ctx: MutationCtx,
+  task: Pick<Doc<'tasks'>, '_id' | 'workspaceId'>,
+  payload: Record<string, unknown> = {},
+) {
+  await insertJob(ctx, {
+    workspaceId: task.workspaceId,
+    taskId: task._id,
+    uniqueKey: `start:${task._id}`,
+    kind: 'start_task',
+    payload: JSON.stringify({ taskId: task._id, ...payload }),
+  });
+}
+
+/** Whether every dependency a task names has completed. */
+export async function dependenciesReady(ctx: Ctx, dependsOn: readonly Id<'tasks'>[]) {
+  if (!dependsOn.length) return true;
+  const docs = await Promise.all(dependsOn.map((id) => ctx.db.get(id)));
+  const statuses = new Map(
+    docs.filter((doc) => doc !== null).map((doc) => [String(doc._id), { status: doc.status }]),
+  );
+  return readyToStart({ id: 'task', dependsOn: dependsOn.map(String) }, statuses);
+}
+
+/**
+ * Checks proposed dependencies before they are stored: every one is a task of this workspace, and
+ * following them upwards never arrives back at the task itself. Only the ancestors are read, so the
+ * check costs the depth of the graph rather than the size of the workspace.
+ */
+export async function assertDependencies(
+  ctx: Ctx,
+  workspaceId: Id<'workspaces'>,
+  taskId: Id<'tasks'> | null,
+  dependsOn: readonly Id<'tasks'>[],
+) {
+  if (new Set(dependsOn).size !== dependsOn.length)
+    throw new Error('A task cannot depend on the same task twice');
+  const self = taskId ? String(taskId) : 'new task';
+  const nodes = [{ id: self, dependsOn: dependsOn.map(String) }];
+  const seen = new Set<string>();
+  const queue = [...dependsOn];
+  while (queue.length) {
+    const id = queue.shift();
+    if (!id || seen.has(String(id))) continue;
+    seen.add(String(id));
+    const dependency = await ctx.db.get(id);
+    if (!dependency || dependency.workspaceId !== workspaceId)
+      throw new Error('A dependency must be a task in this workspace');
+    // The proposed edges replace whatever the task itself stores, so its stored node is left out.
+    if (String(dependency._id) === self) continue;
+    const next = dependency.dependsOn ?? [];
+    nodes.push({ id: String(dependency._id), dependsOn: next.map(String) });
+    queue.push(...next);
+  }
+  assertAcyclic(nodes);
+}
+
+/**
+ * A finished task settles the tasks waiting on it: dependents whose dependencies have all completed
+ * are queued, and a dependency that failed or was cancelled blocks them with the reason.
+ */
+export async function releaseDependents(ctx: MutationCtx, task: Doc<'tasks'>, status: string) {
+  if (!['completed', 'failed', 'cancelled'].includes(status)) return;
+  // Nothing indexes `dependsOn`, so the waiting set is scanned; waiting tasks are few by nature.
+  const waiting = await ctx.db
+    .query('tasks')
+    .withIndex('by_status', (q) => q.eq('status', 'waiting'))
+    .collect();
+  const candidates = waiting
+    .filter((doc) => doc.workspaceId === task.workspaceId)
+    .map((doc) => ({ id: String(doc._id), dependsOn: (doc.dependsOn ?? []).map(String), doc }));
+  const now = Date.now();
+  for (const { doc } of dependentsOf(String(task._id), candidates)) {
+    if (status !== 'completed') {
+      await ctx.db.patch(doc._id, {
+        status: 'blocked',
+        error: `Blocked: ${task.title} ${status}`,
+        updatedAt: now,
+      });
+      continue;
+    }
+    if (!(await dependenciesReady(ctx, doc.dependsOn ?? []))) continue;
+    await ctx.db.patch(doc._id, { status: 'queued', error: undefined, updatedAt: now });
+    await queueStartTask(ctx, doc);
+  }
+}
+
+/** A task is edited by the person who created it or by a workspace owner or administrator. */
+export async function requireEditableTask(
+  ctx: Ctx,
+  workspace: Doc<'workspaces'>,
+  actor: { subject: string },
+  role: WorkspaceRole,
+  taskId: Id<'tasks'>,
+) {
+  const task = await ctx.db.get(taskId);
+  if (!task || task.workspaceId !== workspace._id) throw new Error('Task not found');
+  if (task.createdBy !== actor.subject && role !== 'owner' && role !== 'admin')
+    throw new Error('Only the person who created this task or an administrator can change it');
+  return task;
+}
+
 /** The single path that puts a task and its first queue command into the database. */
 export async function startTask(
   ctx: MutationCtx,
@@ -115,16 +238,24 @@ export async function startTask(
     sourceProposalId?: Id<'proposals'>;
     messageExternalId?: string;
     jobPayload?: Record<string, unknown>;
-  },
+  } & TaskPlan,
 ) {
   const now = Date.now();
   const title = cleanText(input.title, 'Title', 200);
   const prompt = cleanText(input.prompt, 'Prompt', 50_000);
+  const dependsOn = input.dependsOn ?? [];
+  // A task that still waits on a dependency is stored, shown, and left alone until it is released.
+  const ready = await dependenciesReady(ctx, dependsOn);
   const taskId = await ctx.db.insert('tasks', {
     workspaceId: input.workspace._id,
     ...(input.floor ?? {}),
     ...(input.sourceTaskId ? { sourceTaskId: input.sourceTaskId } : {}),
     ...(input.sourceProposalId ? { sourceProposalId: input.sourceProposalId } : {}),
+    ...(input.projectId ? { projectId: input.projectId } : {}),
+    ...(input.milestoneId ? { milestoneId: input.milestoneId } : {}),
+    ...(input.cadence ? { cadence: input.cadence } : {}),
+    ...(input.deadlineAt !== undefined ? { deadlineAt: input.deadlineAt } : {}),
+    ...(dependsOn.length ? { dependsOn } : {}),
     createdBy: input.createdBy,
     createdByName: input.createdByName,
     visibility: input.floor ? 'workspace' : 'private',
@@ -133,7 +264,7 @@ export async function startTask(
     employeeName: input.version.name,
     title,
     prompt,
-    status: 'queued',
+    status: ready ? 'queued' : 'waiting',
     model: input.version.model,
     createdAt: now,
     updatedAt: now,
@@ -147,15 +278,17 @@ export async function startTask(
     text: prompt,
     createdAt: now,
   });
-  await insertJob(ctx, {
-    workspaceId: input.workspace._id,
-    taskId,
-    uniqueKey: `start:${taskId}`,
-    kind: 'start_task',
-    payload: JSON.stringify({ taskId, ...(input.jobPayload ?? {}) }),
-  });
   const task = await ctx.db.get(taskId);
-  if (task) await systemPost(ctx, task, `${input.version.name} started: ${title}`);
+  if (task) {
+    if (ready) await queueStartTask(ctx, task, input.jobPayload ?? {});
+    await systemPost(
+      ctx,
+      task,
+      ready
+        ? `${input.version.name} started: ${title}`
+        : `${input.version.name} is waiting on ${dependsOn.length} task(s): ${title}`,
+    );
+  }
   return taskId;
 }
 
