@@ -1,7 +1,9 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
 import type { Doc } from './_generated/dataModel';
-import type { ProviderId } from '../lib/contracts';
+import type { Persona, ProviderId } from '../lib/contracts';
+import { PERSONA_LIMITS, isPersonaTrait } from '../lib/personas';
+import { persona as personaValidator } from './schema';
 import { registryToolsFor } from './registry';
 import { cleanText, identity, requirePlatformAdmin, requireWorkspace, sha256, type Ctx } from './shared';
 
@@ -75,7 +77,25 @@ const draftFields = {
   media: v.array(media),
   instructions: v.string(),
   skills: v.array(skill),
+  persona: v.optional(personaValidator),
 };
+
+/** Character, within fixed limits: a persona is never a place to smuggle instructions. */
+function normalizePersona(value: Persona | undefined): Persona | undefined {
+  if (!value || (!value.voice.trim() && !value.traits.length && !value.catchphrase?.trim())) return undefined;
+  const voice = cleanText(value.voice, 'Persona voice', PERSONA_LIMITS.voice);
+  if (value.traits.length > PERSONA_LIMITS.traits)
+    throw new Error(`A persona has at most ${PERSONA_LIMITS.traits} traits`);
+  const traits = value.traits.map((trait) => {
+    if (!isPersonaTrait(trait)) throw new Error(`"${trait}" is not a persona trait`);
+    return trait;
+  });
+  if (new Set(traits).size !== traits.length) throw new Error('A persona has duplicate traits');
+  const catchphrase = value.catchphrase?.trim()
+    ? cleanText(value.catchphrase, 'Persona catchphrase', PERSONA_LIMITS.catchphrase)
+    : undefined;
+  return { voice, traits, ...(catchphrase ? { catchphrase } : {}) };
+}
 
 function publicListing(version: Doc<'employeeVersions'>) {
   return {
@@ -91,6 +111,7 @@ function publicListing(version: Doc<'employeeVersions'>) {
     model: version.model,
     color: version.color,
     media: version.media,
+    persona: version.persona,
     publishedAt: version.publishedAt,
   };
 }
@@ -152,6 +173,7 @@ export const adminList = query({
         media: draft.media,
         instructions: draft.instructions,
         skills: draft.skills,
+        persona: draft.persona,
         updatedAt: draft.updatedAt,
       }));
   },
@@ -187,6 +209,7 @@ export const saveDraft = mutation({
       skills: await Promise.all(
         args.skills.map(async (item) => ({ ...item, sha256: await sha256(item.content) })),
       ),
+      persona: normalizePersona(args.persona),
       updatedAt: Date.now(),
     };
     if (args.draftId) {
@@ -230,6 +253,7 @@ export const publish = mutation({
       media: draft.media,
       instructions: draft.instructions,
       skills,
+      persona: draft.persona,
       publishedBy: actor.subject,
       publishedAt: Date.now(),
     });

@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import type { QueryCtx } from './_generated/server';
 import type { Id } from './_generated/dataModel';
 import { registryToolsFor } from './registry';
 import {
@@ -15,6 +16,30 @@ import {
   workspaceForIdentity,
 } from './shared';
 import { periodUsage } from './work';
+
+/** Statuses the workspace is still waiting on; only these carry a live message into the office. */
+const ACTIVE_TASK_STATUSES = ['queued', 'running', 'awaiting_approval'];
+const LAST_MESSAGE_CHARS = 500;
+
+/**
+ * The newest assistant output for one live task, so the office can show what is
+ * being said. Reads from the end of the task's messages, and only for active tasks.
+ */
+async function latestAssistantMessage(ctx: QueryCtx, taskId: Id<'tasks'>) {
+  const messages = await ctx.db
+    .query('messages')
+    .withIndex('by_task', (q) => q.eq('taskId', taskId))
+    .order('desc')
+    .take(5);
+  const message = messages.find((row) => row.role === 'assistant' && row.text.trim());
+  return message
+    ? {
+        text: message.text.slice(0, LAST_MESSAGE_CHARS),
+        createdAt: message.createdAt,
+        ...(message.phase ? { phase: message.phase } : {}),
+      }
+    : undefined;
+}
 
 export const bootstrap = mutation({
   args: { name: v.string() },
@@ -150,6 +175,7 @@ export const dashboard = query({
           model: version.model,
           status: version.retiredAt ? 'retired' : missingCapabilities.length ? 'blocked' : 'ready',
           missingCapabilities,
+          persona: version.persona,
         };
       }),
     );
@@ -212,27 +238,32 @@ export const dashboard = query({
         updatedAt: project.updatedAt,
         openHandoffs: openHandoffs.get(project._id) ?? 0,
       })),
-      tasks: visibleTasks.map((task) => ({
-        id: task._id,
-        projectId: task.projectId,
-        projectContext: task.projectContext,
-        sourceTaskId: task.sourceTaskId,
-        employeeId: task.employeeId,
-        employeeName: task.employeeName,
-        createdBy: task.createdBy,
-        createdByName: task.createdByName,
-        isOwner: task.createdBy === actor.subject,
-        visibility: task.visibility,
-        title: task.title,
-        prompt: task.prompt,
-        status: task.status,
-        createdAt: task.createdAt,
-        updatedAt: task.updatedAt,
-        sessionId: task.sessionId,
-        error: task.error,
-        model: task.model,
-        usage: task.usage,
-      })),
+      tasks: await Promise.all(
+        visibleTasks.map(async (task) => ({
+          id: task._id,
+          projectId: task.projectId,
+          projectContext: task.projectContext,
+          sourceTaskId: task.sourceTaskId,
+          employeeId: task.employeeId,
+          employeeName: task.employeeName,
+          createdBy: task.createdBy,
+          createdByName: task.createdByName,
+          isOwner: task.createdBy === actor.subject,
+          visibility: task.visibility,
+          title: task.title,
+          prompt: task.prompt,
+          status: task.status,
+          createdAt: task.createdAt,
+          updatedAt: task.updatedAt,
+          sessionId: task.sessionId,
+          error: task.error,
+          model: task.model,
+          usage: task.usage,
+          lastMessage: ACTIVE_TASK_STATUSES.includes(task.status)
+            ? await latestAssistantMessage(ctx, task._id)
+            : undefined,
+        })),
+      ),
       events: events
         .filter((event) => visibleTaskIds.has(event.taskId))
         .sort((a, b) => b.sequence - a.sequence)

@@ -3,6 +3,7 @@ import { strToU8, zipSync } from 'fflate';
 import type { SessionCreateParamsNonStreaming } from 'openai/resources/beta/agents/sessions/sessions';
 import type { TokenUsage } from 'openai/resources/beta/agents/agents';
 import type { TaskContext } from '../../services/types';
+import { personaInstructions } from '../personas';
 import { requiredEnv } from './secrets';
 import { toolPolicy } from './tool-policy';
 let client: OpenAI | undefined;
@@ -66,7 +67,9 @@ export function sessionConfiguration(context: TaskContext): SessionCreateParamsN
   return {
     agent: {
       model: task.model,
-      instructions: `${operatingRules}${context.project ? `\n${floorRules}` : ''}\n\n${version.instructions}`,
+      instructions: `${operatingRules}${context.project ? `\n${floorRules}` : ''}\n\n${version.instructions}${
+        version.persona ? `\n\n${personaInstructions(version.persona)}` : ''
+      }`,
       multi_agent: { enabled: false },
       tools,
     },

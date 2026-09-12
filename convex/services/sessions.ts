@@ -27,6 +27,7 @@ export const taskContext = query({
         instructions: version.instructions,
         skills: version.skills,
         capabilities: version.capabilities,
+        persona: version.persona,
       },
       connections: connections.map(privateConnection),
       policies,
