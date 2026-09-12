@@ -42,7 +42,7 @@ export interface Job {
 
 /** Everything the worker and gateway need for one task, from `services/sessions:taskContext` and `services/actions:gatewayContext`. */
 export interface TaskContext {
-  project?: { id: string; name: string; brief: string };
+  floor?: { id: string; name: string; brief: string };
   task: {
     id: string;
     workspaceId: string;
@@ -70,7 +70,7 @@ export interface TaskContext {
 
 /** What `services/actions:gatewayContext` returns: live authorization for one run token. */
 export interface GatewayContext {
-  task: { id: string; workspaceId: string; status: TaskStatus; createdBy: string; projectId?: string };
+  task: { id: string; workspaceId: string; status: TaskStatus; createdBy: string; floorId?: string };
   employeeVersion: { id: string; capabilities: Capability[] };
   connections: PrivateConnection[];
   policies: ToolPolicy[];

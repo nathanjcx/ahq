@@ -138,9 +138,9 @@ export const requestCorrection = mutation({
         version,
         title: `Correct: ${original.summary}`,
         prompt: `Review the requested correction for action ${original._id}. The original action was: ${original.summary}. Correction limits: ${original.correctionReason}. Prepare the safest supported correction or clear manual steps. Do not repeat the original action.`,
-        project:
-          originalTask.projectId && originalTask.projectContext
-            ? { projectId: originalTask.projectId, projectContext: originalTask.projectContext }
+        floor:
+          originalTask.floorId && originalTask.floorContext
+            ? { floorId: originalTask.floorId, floorContext: originalTask.floorContext }
             : undefined,
         sourceProposalId: original._id,
         messageExternalId: `correction:${original._id}`,

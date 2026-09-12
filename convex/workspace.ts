@@ -83,7 +83,7 @@ export const dashboard = query({
         isPlatformAdmin: isPlatformAdmin(actor.subject),
         employees: [],
         connections: [],
-        projects: [],
+        floors: [],
         tasks: [],
         events: [],
         proposals: [],
@@ -91,7 +91,7 @@ export const dashboard = query({
         artifacts: [],
       };
     const { workspace, role } = found;
-    const [installations, allConnections, projects, tasks, events, proposals, inbox, artifacts, usage] =
+    const [installations, allConnections, floors, tasks, events, proposals, inbox, artifacts, usage] =
       await Promise.all([
         ctx.db
           .query('installations')
@@ -102,7 +102,7 @@ export const dashboard = query({
           .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
           .collect(),
         ctx.db
-          .query('projects')
+          .query('floors')
           .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
           .collect(),
         ctx.db
@@ -179,13 +179,13 @@ export const dashboard = query({
         };
       }),
     );
-    const openHandoffs = new Map<Id<'projects'>, number>();
-    for (const project of projects) {
+    const openHandoffs = new Map<Id<'floors'>, number>();
+    for (const floor of floors) {
       const posts = await ctx.db
-        .query('projectPosts')
-        .withIndex('by_project_kind', (q) => q.eq('projectId', project._id).eq('kind', 'handoff'))
+        .query('floorPosts')
+        .withIndex('by_floor_kind', (q) => q.eq('floorId', floor._id).eq('kind', 'handoff'))
         .collect();
-      openHandoffs.set(project._id, posts.filter((post) => post.handoff?.status === 'pending').length);
+      openHandoffs.set(floor._id, posts.filter((post) => post.handoff?.status === 'pending').length);
     }
     return {
       workspace: {
@@ -228,21 +228,21 @@ export const dashboard = query({
         inboxMode: connection.inboxMode,
         error: connection.error,
       })),
-      projects: projects.map((project) => ({
-        id: project._id,
-        name: project.name,
-        brief: project.brief,
-        employeeIds: project.employeeIds,
-        archivedAt: project.archivedAt,
-        createdAt: project.createdAt,
-        updatedAt: project.updatedAt,
-        openHandoffs: openHandoffs.get(project._id) ?? 0,
+      floors: floors.map((floor) => ({
+        id: floor._id,
+        name: floor.name,
+        brief: floor.brief,
+        employeeIds: floor.employeeIds,
+        archivedAt: floor.archivedAt,
+        createdAt: floor.createdAt,
+        updatedAt: floor.updatedAt,
+        openHandoffs: openHandoffs.get(floor._id) ?? 0,
       })),
       tasks: await Promise.all(
         visibleTasks.map(async (task) => ({
           id: task._id,
-          projectId: task.projectId,
-          projectContext: task.projectContext,
+          floorId: task.floorId,
+          floorContext: task.floorContext,
           sourceTaskId: task.sourceTaskId,
           employeeId: task.employeeId,
           employeeName: task.employeeName,

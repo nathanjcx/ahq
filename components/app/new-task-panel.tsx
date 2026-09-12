@@ -2,36 +2,34 @@
 
 import { ArrowRight, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { Employee, Project } from '@/lib/contracts';
+import type { Employee, Floor } from '@/lib/contracts';
 import { Sheet } from '../shared/sheet';
 
 export function NewTaskPanel({
   employees,
-  projects,
+  floors,
   defaultEmployee,
-  defaultProjectId,
+  defaultFloorId,
   configured,
   onClose,
   onCreate,
 }: {
   employees: Employee[];
-  projects: Project[];
+  floors: Floor[];
   defaultEmployee: string | null;
-  defaultProjectId: string | null;
+  defaultFloorId: string | null;
   configured: boolean;
   onClose: () => void;
-  onCreate: (employeeId: string, title: string, prompt: string, projectId?: string) => Promise<void>;
+  onCreate: (employeeId: string, title: string, prompt: string, floorId?: string) => Promise<void>;
 }) {
-  const activeProjects = projects.filter((project) => !project.archivedAt);
-  const [projectId, setProjectId] = useState(
-    defaultProjectId && activeProjects.some((project) => project.id === defaultProjectId)
-      ? defaultProjectId
-      : '',
+  const activeFloors = floors.filter((floor) => !floor.archivedAt);
+  const [floorId, setProjectId] = useState(
+    defaultFloorId && activeFloors.some((floor) => floor.id === defaultFloorId) ? defaultFloorId : '',
   );
-  const selectedProject = activeProjects.find((project) => project.id === projectId);
+  const selectedFloor = activeFloors.find((floor) => floor.id === floorId);
   const ready = employees.filter(
     (employee) =>
-      employee.status === 'ready' && (!selectedProject || selectedProject.employeeIds.includes(employee.id)),
+      employee.status === 'ready' && (!selectedFloor || selectedFloor.employeeIds.includes(employee.id)),
   );
   const [employeeId, setEmployeeId] = useState(
     defaultEmployee && ready.some((e) => e.id === defaultEmployee) ? defaultEmployee : (ready[0]?.id ?? ''),
@@ -39,7 +37,7 @@ export function NewTaskPanel({
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const unavailableProject = Boolean(projectId && !selectedProject);
+  const unavailableFloor = Boolean(floorId && !selectedFloor);
   useEffect(() => {
     if (!ready.some((employee) => employee.id === employeeId)) setEmployeeId(ready[0]?.id ?? '');
   }, [employeeId, ready]);
@@ -58,7 +56,7 @@ export function NewTaskPanel({
             !employeeId ||
             !ready.length ||
             submitting ||
-            unavailableProject ||
+            unavailableFloor ||
             !title.trim() ||
             !prompt.trim()
           }
@@ -73,30 +71,30 @@ export function NewTaskPanel({
         className="form-stack task-form"
         onSubmit={async (event) => {
           event.preventDefault();
-          if (submitting || unavailableProject || !employeeId || !title.trim() || !prompt.trim()) return;
+          if (submitting || unavailableFloor || !employeeId || !title.trim() || !prompt.trim()) return;
           setSubmitting(true);
           try {
-            await onCreate(employeeId, title.trim(), prompt.trim(), projectId || undefined);
+            await onCreate(employeeId, title.trim(), prompt.trim(), floorId || undefined);
           } finally {
             setSubmitting(false);
           }
         }}
       >
         <label>
-          Project floor
-          <select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
+          Floor floor
+          <select value={floorId} onChange={(event) => setProjectId(event.target.value)}>
             <option value="">Lobby · Unassigned</option>
-            {activeProjects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
+            {activeFloors.map((floor) => (
+              <option key={floor.id} value={floor.id}>
+                {floor.name}
               </option>
             ))}
           </select>
           <small>
-            {unavailableProject
+            {unavailableFloor
               ? 'This floor is no longer active. Choose another floor or the lobby.'
-              : selectedProject
-                ? selectedProject.brief
+              : selectedFloor
+                ? selectedFloor.brief
                 : 'This task will stay in the lobby.'}
           </small>
         </label>
@@ -112,7 +110,7 @@ export function NewTaskPanel({
               </option>
             ))}
           </select>
-          {selectedProject && !ready.length && (
+          {selectedFloor && !ready.length && (
             <small>Add a ready employee to this floor before assigning work.</small>
           )}
         </label>

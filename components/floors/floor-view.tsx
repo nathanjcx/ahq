@@ -2,7 +2,7 @@
 
 import { Archive, ChevronDown, Pencil, RotateCcw } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
-import type { ActionProposal, Employee, Project, Task } from '@/lib/contracts';
+import type { ActionProposal, Employee, Floor, Task } from '@/lib/contracts';
 import type { OfficeEmployee } from '../office/office-view';
 import { Avatar } from '../shared/marks';
 import { relativeTime } from '../shared/format';
@@ -21,7 +21,7 @@ const REGIONS: { id: Region; label: string }[] = [
 const BRIEF_CLAMP = 220;
 
 export function FloorView({
-  project,
+  floor,
   floorLabel,
   summary,
   staff,
@@ -33,11 +33,11 @@ export function FloorView({
   onEmployee,
   onTask,
   onNewTask,
-  onEditProject,
+  onEditFloor,
   onArchive,
   replay,
 }: {
-  project: Project;
+  floor: Floor;
   floorLabel: string;
   summary: FloorSummary;
   staff: Employee[];
@@ -50,7 +50,7 @@ export function FloorView({
   onEmployee: (id: string) => void;
   onTask: (id: string) => void;
   onNewTask: (employeeId?: string) => void;
-  onEditProject: () => void;
+  onEditFloor: () => void;
   onArchive: (archived: boolean) => void;
   /** An optional control for this floor's scene, shown beside Edit and Archive. */
   replay?: ReactNode;
@@ -58,7 +58,7 @@ export function FloorView({
   const [region, setRegion] = useState<Region>('board');
   const [briefOpen, setBriefOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const archived = Boolean(project.archivedAt);
+  const archived = Boolean(floor.archivedAt);
   const canAct = configured && !archived;
 
   return (
@@ -66,7 +66,7 @@ export function FloorView({
       <header className="floor-heading">
         <div>
           <span className="eyebrow">{archived ? 'ARCHIVED FLOOR' : floorLabel.toUpperCase()}</span>
-          <h2>{project.name}</h2>
+          <h2>{floor.name}</h2>
           <button
             className="floor-details-toggle"
             aria-expanded={detailsOpen}
@@ -76,8 +76,8 @@ export function FloorView({
             <ChevronDown size={14} />
           </button>
           <div className="floor-details-body" data-open={detailsOpen}>
-            <p className={briefOpen ? 'brief-open' : undefined}>{project.brief}</p>
-            {project.brief.length > BRIEF_CLAMP && (
+            <p className={briefOpen ? 'brief-open' : undefined}>{floor.brief}</p>
+            {floor.brief.length > BRIEF_CLAMP && (
               <button className="text-button" onClick={() => setBriefOpen((open) => !open)}>
                 {briefOpen ? 'Show less' : 'Show full brief'}
               </button>
@@ -93,9 +93,9 @@ export function FloorView({
                 {staff.length} staffed · {summary.active} active · updated{' '}
                 {relativeTime(summary.lastActivity)}
               </small>
-              {project.openHandoffs > 0 && (
+              {floor.openHandoffs > 0 && (
                 <span className="handoff-badge">
-                  {project.openHandoffs} open {project.openHandoffs === 1 ? 'handoff' : 'handoffs'}
+                  {floor.openHandoffs} open {floor.openHandoffs === 1 ? 'handoff' : 'handoffs'}
                 </span>
               )}
               {archived && <span className="archived-badge">Archived</span>}
@@ -104,7 +104,7 @@ export function FloorView({
         </div>
         <div className="floor-heading-actions">
           {replay}
-          <button className="secondary-button compact" onClick={onEditProject}>
+          <button className="secondary-button compact" onClick={onEditFloor}>
             <Pencil size={14} /> Edit
           </button>
           <button
@@ -137,8 +137,8 @@ export function FloorView({
         </section>
         <section className="floor-region region-team" aria-label="Floor team">
           <FloorTeam
-            floorName={`${floorLabel} · ${project.name}`}
-            projectId={project.id}
+            floorName={`${floorLabel} · ${floor.name}`}
+            floorId={floor.id}
             configured={configured}
             archived={archived}
             staff={staff}
@@ -146,7 +146,7 @@ export function FloorView({
             canAssign={canAct}
             onEmployee={onEmployee}
             onNewTask={onNewTask}
-            onEditProject={onEditProject}
+            onEditFloor={onEditFloor}
           />
         </section>
         <section className="floor-region region-work" aria-label="Floor work">

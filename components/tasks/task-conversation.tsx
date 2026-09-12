@@ -27,10 +27,10 @@ export function TaskConversation({
   return (
     <>
       <div className="message-stream">
-        {task.projectContext && (
-          <details className="task-project-context">
-            <summary>Project brief at task start</summary>
-            <p>{task.projectContext.brief}</p>
+        {task.floorContext && (
+          <details className="task-floor-context">
+            <summary>Floor brief at task start</summary>
+            <p>{task.floorContext.brief}</p>
           </details>
         )}
         {task.prompt &&

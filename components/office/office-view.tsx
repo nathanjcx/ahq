@@ -22,7 +22,7 @@ export type OfficeViewProps = {
   employees: OfficeEmployee[];
   /** Called when a person, their label, their bubble, or the review tray is clicked. */
   onSelect?: (id: string) => void;
-  /** Visible name of the lobby or project floor. */
+  /** Visible name of the lobby or floor floor. */
   label?: string;
   /** Contextual guidance shown when this floor has no employees. */
   emptyMessage?: string;

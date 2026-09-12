@@ -16,9 +16,9 @@ export const taskContext = query({
     const { version, connections, policies } = await activeTaskContext(ctx, task);
     return {
       task: publicTask(task),
-      project:
-        task.projectId && task.projectContext
-          ? { id: task.projectId, name: task.projectContext.name, brief: task.projectContext.brief }
+      floor:
+        task.floorId && task.floorContext
+          ? { id: task.floorId, name: task.floorContext.name, brief: task.floorContext.brief }
           : undefined,
       employeeVersion: {
         id: version._id,

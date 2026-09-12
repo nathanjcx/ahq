@@ -18,13 +18,13 @@ export const uiApi = {
   hire: api.marketplace.hire,
 
   // Floors
-  createProject: api.projects.create,
-  updateProject: api.projects.update,
-  setProjectArchived: api.projects.setArchived,
-  projectBoard: api.projects.board,
-  postToBoard: api.projects.post,
-  requestHandoff: api.projects.requestHandoff,
-  decideHandoff: api.projects.decideHandoff,
+  createFloor: api.floors.create,
+  updateFloor: api.floors.update,
+  setFloorArchived: api.floors.setArchived,
+  floorBoard: api.floors.board,
+  postToBoard: api.floors.post,
+  requestHandoff: api.floors.requestHandoff,
+  decideHandoff: api.floors.decideHandoff,
 
   // Tasks
   createTask: api.tasks.create,

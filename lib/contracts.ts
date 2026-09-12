@@ -84,7 +84,7 @@ export interface ModelUsage extends TokenUsage {
   model: ModelId;
   tasks: number;
 }
-export interface Project {
+export interface Floor {
   id: string;
   name: string;
   brief: string;
@@ -94,9 +94,9 @@ export interface Project {
   updatedAt: number;
   openHandoffs: number;
 }
-export interface ProjectPost {
+export interface FloorPost {
   id: string;
-  projectId: string;
+  floorId: string;
   kind: 'note' | 'system' | 'handoff';
   authorSubject?: string;
   authorName: string;
@@ -115,8 +115,8 @@ export interface ProjectPost {
 }
 export interface Task {
   id: string;
-  projectId?: string;
-  projectContext?: { name: string; brief: string };
+  floorId?: string;
+  floorContext?: { name: string; brief: string };
   sourceTaskId?: string;
   employeeId: string;
   employeeName: string;
@@ -208,7 +208,7 @@ export interface Dashboard {
   isPlatformAdmin: boolean;
   employees: Employee[];
   connections: Connection[];
-  projects: Project[];
+  floors: Floor[];
   tasks: Task[];
   events: ActivityEvent[];
   proposals: ActionProposal[];
@@ -221,7 +221,7 @@ export const emptyDashboard: Dashboard = {
   isPlatformAdmin: false,
   employees: [],
   connections: [],
-  projects: [],
+  floors: [],
   tasks: [],
   events: [],
   proposals: [],

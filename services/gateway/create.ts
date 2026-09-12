@@ -75,7 +75,7 @@ export function createGateway(options: GatewayOptions = {}) {
       const request: GatewayRequest = { backend, requestId, runToken };
       let mcp;
       if (target === 'floor') {
-        if (!context.task.projectId)
+        if (!context.task.floorId)
           throw new GatewayError('revoked', 'This task is not on a floor, so it has no board.');
         mcp = floorServer(request, context.task.id);
       } else {

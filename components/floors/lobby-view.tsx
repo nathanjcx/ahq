@@ -8,7 +8,7 @@ import { relativeTime, statusLabel } from '../shared/format';
 import { Avatar, StatusMark } from '../shared/marks';
 import { FloorScene } from './floor-scene';
 
-/** The ground floor: the office scene plus whoever and whatever is not on a project floor. */
+/** The ground floor: the office scene plus whoever and whatever is not on a floor floor. */
 export function LobbyView({
   configured,
   lobbyEmployees,
@@ -36,7 +36,7 @@ export function LobbyView({
         <div>
           <span className="eyebrow">LOBBY</span>
           <h2>Lobby</h2>
-          <p>Tasks created without a project stay here.</p>
+          <p>Tasks created without a floor stay here.</p>
         </div>
         <div className="floor-heading-actions">
           <button
@@ -59,7 +59,7 @@ export function LobbyView({
             lobbyEmployees.length
               ? 'This team needs its connections set up. Select an employee to review access.'
               : hasEmployees
-                ? 'The lobby is clear. Employees staffed on project floors appear there.'
+                ? 'The lobby is clear. Employees staffed on floor floors appear there.'
                 : 'Your office is ready. Hire your first employee to get started.'
           }
           onEmployee={onEmployee}
@@ -92,7 +92,7 @@ export function LobbyView({
             <EmptyMini
               icon={<Users size={19} />}
               title="No one waiting in the lobby"
-              text="Employees without an active project appear here."
+              text="Employees without an active floor appear here."
             />
           )}
         </aside>

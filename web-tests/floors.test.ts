@@ -9,7 +9,7 @@ import {
   secret,
 } from './support';
 
-describe('workspace projects', () => {
+describe('workspace floors', () => {
   it('shares floor tasks in one workspace while keeping private tasks and tenants apart', async () => {
     const t = harness();
     await linearWorkspace(t);
@@ -20,27 +20,27 @@ describe('workspace projects', () => {
     await owner.mutation(api.workspace.bootstrap, { name: 'Acme' });
     await outsider.mutation(api.workspace.bootstrap, { name: 'Other' });
     const { employeeId } = await owner.mutation(api.marketplace.hire, { versionId });
-    const { projectId } = await owner.mutation(api.projects.create, {
+    const { floorId } = await owner.mutation(api.floors.create, {
       name: 'Launch',
       brief: 'Prepare the launch.',
       employeeIds: [employeeId],
     });
 
-    expect((await colleague.query(api.workspace.dashboard, {})).projects).toEqual([
-      expect.objectContaining({ id: projectId, name: 'Launch', employeeIds: [employeeId] }),
+    expect((await colleague.query(api.workspace.dashboard, {})).floors).toEqual([
+      expect.objectContaining({ id: floorId, name: 'Launch', employeeIds: [employeeId] }),
     ]);
-    await colleague.mutation(api.projects.update, {
-      projectId,
+    await colleague.mutation(api.floors.update, {
+      floorId,
       name: 'Product launch',
       brief: 'Prepare the product launch.',
       employeeIds: [employeeId],
     });
-    await expect(outsider.mutation(api.projects.setArchived, { projectId, archived: true })).rejects.toThrow(
-      'Project not found',
+    await expect(outsider.mutation(api.floors.setArchived, { floorId, archived: true })).rejects.toThrow(
+      'Floor not found',
     );
 
     const { taskId } = await owner.mutation(api.tasks.create, {
-      projectId,
+      floorId,
       employeeId,
       title: 'Floor launch task',
       prompt: 'Review the launch records.',
@@ -54,13 +54,13 @@ describe('workspace projects', () => {
     expect((await colleague.query(api.workspace.dashboard, {})).tasks).toEqual([
       expect.objectContaining({ id: taskId, visibility: 'workspace', isOwner: false }),
     ]);
-    expect((await colleague.query(api.projects.board, { projectId })).map((post) => post.text)).toEqual([
+    expect((await colleague.query(api.floors.board, { floorId })).map((post) => post.text)).toEqual([
       'Operations analyst started: Floor launch task',
     ]);
-    await expect(outsider.query(api.projects.board, { projectId })).rejects.toThrow('Project not found');
+    await expect(outsider.query(api.floors.board, { floorId })).rejects.toThrow('Floor not found');
   });
 
-  it('validates staffing and blocks new project work after archive', async () => {
+  it('validates staffing and blocks new floor work after archive', async () => {
     const t = harness();
     await linearWorkspace(t);
     const [{ versionId }, { versionId: secondVersionId }] = await Promise.all([
@@ -76,64 +76,64 @@ describe('workspace projects', () => {
       versionId: secondVersionId,
     });
     const { employeeId: foreignEmployeeId } = await outsider.mutation(api.marketplace.hire, { versionId });
-    const { projectId: foreignProjectId } = await outsider.mutation(api.projects.create, {
-      name: 'Other project',
+    const { floorId: foreignProjectId } = await outsider.mutation(api.floors.create, {
+      name: 'Other floor',
       brief: 'Belongs to another workspace.',
       employeeIds: [foreignEmployeeId],
     });
 
     await expect(
-      user.mutation(api.projects.create, {
+      user.mutation(api.floors.create, {
         name: 'Duplicate team',
         brief: 'Invalid staffing.',
         employeeIds: [employeeId, employeeId],
       }),
     ).rejects.toThrow('same employee more than once');
     await expect(
-      user.mutation(api.projects.create, {
+      user.mutation(api.floors.create, {
         name: 'Foreign team',
         brief: 'Invalid staffing.',
         employeeIds: [foreignEmployeeId],
       }),
     ).rejects.toThrow('Employee not found');
     await expect(
-      user.mutation(api.projects.create, { name: ' ', brief: 'Brief', employeeIds: [] }),
-    ).rejects.toThrow('Project name is required');
+      user.mutation(api.floors.create, { name: ' ', brief: 'Brief', employeeIds: [] }),
+    ).rejects.toThrow('Floor name is required');
 
-    const { projectId } = await user.mutation(api.projects.create, {
+    const { floorId } = await user.mutation(api.floors.create, {
       name: 'Operations',
       brief: 'Run daily operations.',
       employeeIds: [employeeId],
     });
-    const { projectId: secondProjectId } = await user.mutation(api.projects.create, {
+    const { floorId: secondProjectId } = await user.mutation(api.floors.create, {
       name: 'Planning',
       brief: 'Plan the next quarter.',
       employeeIds: [employeeId],
     });
-    expect(projectId).not.toBe(secondProjectId);
+    expect(floorId).not.toBe(secondProjectId);
     await expect(
       user.mutation(api.tasks.create, {
-        projectId,
+        floorId,
         employeeId: secondEmployeeId,
         title: 'Wrong employee',
         prompt: 'Start this task.',
       }),
-    ).rejects.toThrow('Employee is not assigned to this project');
+    ).rejects.toThrow('Employee is not assigned to this floor');
     await expect(
       user.mutation(api.tasks.create, {
-        projectId: foreignProjectId,
+        floorId: foreignProjectId,
         employeeId,
-        title: 'Foreign project',
+        title: 'Foreign floor',
         prompt: 'Do not start this task.',
       }),
-    ).rejects.toThrow('Project not found');
+    ).rejects.toThrow('Floor not found');
 
     const { taskId: unassignedTaskId } = await user.mutation(api.tasks.create, {
       employeeId: secondEmployeeId,
       title: 'Legacy task',
-      prompt: 'Remain outside a project.',
+      prompt: 'Remain outside a floor.',
     });
-    expect((await t.run((ctx) => ctx.db.get(unassignedTaskId)))?.projectId).toBeUndefined();
+    expect((await t.run((ctx) => ctx.db.get(unassignedTaskId)))?.floorId).toBeUndefined();
 
     const { connectionId } = await connectLinear(t, { subject: 'owner', orgId: 'acme' });
     await t.mutation(api.services.inbox.ingestInbox, {
@@ -143,56 +143,56 @@ describe('workspace projects', () => {
     });
     const itemId = (await user.query(api.workspace.dashboard, {})).inbox[0].id;
 
-    await user.mutation(api.projects.setArchived, { projectId, archived: true });
+    await user.mutation(api.floors.setArchived, { floorId, archived: true });
     await expect(
       user.mutation(api.tasks.create, {
-        projectId,
+        floorId,
         employeeId,
         title: 'Archived task',
         prompt: 'Do not start this.',
       }),
-    ).rejects.toThrow('Project is archived');
-    await expect(user.mutation(api.inbox.assign, { itemId, employeeId, projectId })).rejects.toThrow(
-      'Project is archived',
+    ).rejects.toThrow('Floor is archived');
+    await expect(user.mutation(api.inbox.assign, { itemId, employeeId, floorId })).rejects.toThrow(
+      'Floor is archived',
     );
     const { taskId: inboxTaskId } = await user.mutation(api.inbox.assign, { itemId, employeeId });
-    expect((await t.run((ctx) => ctx.db.get(inboxTaskId)))?.projectId).toBeUndefined();
+    expect((await t.run((ctx) => ctx.db.get(inboxTaskId)))?.floorId).toBeUndefined();
 
     await t.mutation(api.services.inbox.ingestInbox, {
       secret,
       connectionId,
-      items: [{ externalId: 'issue-2', title: 'Project issue', preview: 'Assign it.', createdAt: 2 }],
+      items: [{ externalId: 'issue-2', title: 'Floor issue', preview: 'Assign it.', createdAt: 2 }],
     });
     const projectItemId = (await user.query(api.workspace.dashboard, {})).inbox.find(
-      (item) => item.title === 'Project issue',
+      (item) => item.title === 'Floor issue',
     )?.id;
-    if (!projectItemId) throw new Error('Expected project inbox item');
-    await user.mutation(api.projects.setArchived, { projectId, archived: false });
+    if (!projectItemId) throw new Error('Expected floor inbox item');
+    await user.mutation(api.floors.setArchived, { floorId, archived: false });
     const { taskId: projectInboxTaskId } = await user.mutation(api.inbox.assign, {
       itemId: projectItemId,
       employeeId,
-      projectId,
+      floorId,
     });
     expect(await t.run((ctx) => ctx.db.get(projectInboxTaskId))).toMatchObject({
-      projectId,
-      projectContext: { name: 'Operations', brief: 'Run daily operations.' },
+      floorId,
+      floorContext: { name: 'Operations', brief: 'Run daily operations.' },
     });
   });
 
-  it('keeps the original project context on correction tasks after edits and archive', async () => {
+  it('keeps the original floor context on correction tasks after edits and archive', async () => {
     const t = harness();
     await linearWorkspace(t);
     const { versionId } = await publishEmployee(t);
     const user = t.withIdentity(orgIdentity('owner', 'acme'));
     await user.mutation(api.workspace.bootstrap, { name: 'Acme' });
     const { employeeId } = await user.mutation(api.marketplace.hire, { versionId });
-    const { projectId } = await user.mutation(api.projects.create, {
-      name: 'Original project',
-      brief: 'Use the original project rules.',
+    const { floorId } = await user.mutation(api.floors.create, {
+      name: 'Original floor',
+      brief: 'Use the original floor rules.',
       employeeIds: [employeeId],
     });
     const { taskId } = await user.mutation(api.tasks.create, {
-      projectId,
+      floorId,
       employeeId,
       title: 'Original task',
       prompt: 'Make the reviewed change.',
@@ -210,7 +210,7 @@ describe('workspace projects', () => {
         tool: 'update_issue',
         arguments: '{}',
         argumentsHash: 'hash',
-        dedupeKey: 'project-correction',
+        dedupeKey: 'floor-correction',
         summary: 'Update the issue',
         status: 'succeeded',
         correction: 'manual',
@@ -220,18 +220,18 @@ describe('workspace projects', () => {
       });
     });
 
-    await user.mutation(api.projects.update, {
-      projectId,
-      name: 'Renamed project',
+    await user.mutation(api.floors.update, {
+      floorId,
+      name: 'Renamed floor',
       brief: 'This brief applies only to future tasks.',
       employeeIds: [],
     });
-    await user.mutation(api.projects.setArchived, { projectId, archived: true });
+    await user.mutation(api.floors.setArchived, { floorId, archived: true });
     expect(
       (await user.query(api.workspace.dashboard, {})).tasks.find((task) => task.id === taskId),
     ).toMatchObject({
-      projectId,
-      projectContext: { name: 'Original project', brief: 'Use the original project rules.' },
+      floorId,
+      floorContext: { name: 'Original floor', brief: 'Use the original floor rules.' },
     });
     const correction = await user.mutation(api.actions.requestCorrection, { proposalId });
     if (correction.kind !== 'task') throw new Error('Expected correction task');
@@ -239,14 +239,14 @@ describe('workspace projects', () => {
       secret,
       taskId: correction.taskId,
     });
-    expect(context.project).toEqual({
-      id: projectId,
-      name: 'Original project',
-      brief: 'Use the original project rules.',
+    expect(context.floor).toEqual({
+      id: floorId,
+      name: 'Original floor',
+      brief: 'Use the original floor rules.',
     });
     expect(await t.run((ctx) => ctx.db.get(correction.taskId))).toMatchObject({
-      projectId,
-      projectContext: { name: 'Original project', brief: 'Use the original project rules.' },
+      floorId,
+      floorContext: { name: 'Original floor', brief: 'Use the original floor rules.' },
     });
   });
 });

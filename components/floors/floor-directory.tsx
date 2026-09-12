@@ -9,21 +9,21 @@ export function FloorDirectory({
   workspaceName,
   activeFloors,
   archivedFloors,
-  selectedProjectId,
+  selectedFloorId,
   unassignedTaskCount,
   canCreate,
-  onSelectProject,
-  onNewProject,
+  onSelectFloor,
+  onNewFloor,
 }: {
   workspaceName?: string;
   /** Active floors, most recently active first. */
   activeFloors: FloorEntry[];
   archivedFloors: FloorEntry[];
-  selectedProjectId: string | null;
+  selectedFloorId: string | null;
   unassignedTaskCount: number;
   canCreate: boolean;
-  onSelectProject: (id: string | null) => void;
-  onNewProject: () => void;
+  onSelectFloor: (id: string | null) => void;
+  onNewFloor: () => void;
 }) {
   return (
     <aside className="floor-directory" aria-label="Building directory">
@@ -31,12 +31,12 @@ export function FloorDirectory({
         activeFloors={activeFloors}
         archivedFloors={archivedFloors}
         selected={
-          activeFloors.concat(archivedFloors).find((entry) => entry.project.id === selectedProjectId) ?? null
+          activeFloors.concat(archivedFloors).find((entry) => entry.floor.id === selectedFloorId) ?? null
         }
         unassignedTaskCount={unassignedTaskCount}
         canCreate={canCreate}
-        onSelectProject={onSelectProject}
-        onNewProject={onNewProject}
+        onSelectFloor={onSelectFloor}
+        onNewFloor={onNewFloor}
       />
       <div className="directory-rail card">
         <div className="directory-head">
@@ -50,9 +50,9 @@ export function FloorDirectory({
         </div>
         <div className="directory-list">
           <button
-            data-active={!selectedProjectId}
-            aria-pressed={!selectedProjectId}
-            onClick={() => onSelectProject(null)}
+            data-active={!selectedFloorId}
+            aria-pressed={!selectedFloorId}
+            onClick={() => onSelectFloor(null)}
           >
             <span className="floor-number">L</span>
             <span>
@@ -63,20 +63,20 @@ export function FloorDirectory({
             </span>
             <ChevronRight size={14} />
           </button>
-          {activeFloors.map(({ project, number, summary }) => (
+          {activeFloors.map(({ floor, number, summary }) => (
             <button
-              key={project.id}
-              data-active={selectedProjectId === project.id}
-              aria-pressed={selectedProjectId === project.id}
-              onClick={() => onSelectProject(project.id)}
+              key={floor.id}
+              data-active={selectedFloorId === floor.id}
+              aria-pressed={selectedFloorId === floor.id}
+              onClick={() => onSelectFloor(floor.id)}
             >
               <span className="floor-number">{number}</span>
               <span>
                 <strong>
-                  <span>{project.name}</span>
-                  {project.openHandoffs > 0 && (
-                    <em className="handoff-badge" title={`${project.openHandoffs} open handoffs`}>
-                      {project.openHandoffs}
+                  <span>{floor.name}</span>
+                  {floor.openHandoffs > 0 && (
+                    <em className="handoff-badge" title={`${floor.openHandoffs} open handoffs`}>
+                      {floor.openHandoffs}
                     </em>
                   )}
                 </strong>
@@ -89,8 +89,8 @@ export function FloorDirectory({
         </div>
         {!activeFloors.length && (
           <div className="directory-empty">
-            <p>Create a floor for each project, then staff it with the employees it needs.</p>
-            <button className="text-button" onClick={onNewProject} disabled={!canCreate}>
+            <p>Create a floor for each floor, then staff it with the employees it needs.</p>
+            <button className="text-button" onClick={onNewFloor} disabled={!canCreate}>
               Add first floor
             </button>
           </div>
@@ -98,16 +98,16 @@ export function FloorDirectory({
         {archivedFloors.length > 0 && (
           <div className="directory-archive">
             <span>ARCHIVED</span>
-            {archivedFloors.map(({ project, number }) => (
+            {archivedFloors.map(({ floor, number }) => (
               <button
-                key={project.id}
-                data-active={selectedProjectId === project.id}
-                aria-pressed={selectedProjectId === project.id}
-                onClick={() => onSelectProject(project.id)}
+                key={floor.id}
+                data-active={selectedFloorId === floor.id}
+                aria-pressed={selectedFloorId === floor.id}
+                onClick={() => onSelectFloor(floor.id)}
               >
                 <Archive size={13} />
                 <span>
-                  {number} · {project.name}
+                  {number} · {floor.name}
                 </span>
               </button>
             ))}
@@ -115,7 +115,7 @@ export function FloorDirectory({
         )}
         <div className="directory-footer">
           <span>{activeFloors.length}</span>
-          <p>active project {activeFloors.length === 1 ? 'floor' : 'floors'}</p>
+          <p>active floor {activeFloors.length === 1 ? 'floor' : 'floors'}</p>
         </div>
       </div>
     </aside>

@@ -178,7 +178,7 @@ export default defineSchema({
     .index('by_workspace', ['workspaceId'])
     .index('by_workspace_version', ['workspaceId', 'versionId']),
 
-  projects: defineTable({
+  floors: defineTable({
     workspaceId: v.id('workspaces'),
     createdBy: v.string(),
     name: v.string(),
@@ -188,9 +188,9 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index('by_workspace', ['workspaceId']),
-  projectPosts: defineTable({
+  floorPosts: defineTable({
     workspaceId: v.id('workspaces'),
-    projectId: v.id('projects'),
+    floorId: v.id('floors'),
     kind: v.union(v.literal('note'), v.literal('system'), v.literal('handoff')),
     authorSubject: v.optional(v.string()),
     authorName: v.string(),
@@ -209,8 +209,8 @@ export default defineSchema({
     ),
     createdAt: v.number(),
   })
-    .index('by_project', ['projectId', 'createdAt'])
-    .index('by_project_kind', ['projectId', 'kind']),
+    .index('by_floor', ['floorId', 'createdAt'])
+    .index('by_floor_kind', ['floorId', 'kind']),
 
   connections: defineTable({
     workspaceId: v.id('workspaces'),
@@ -258,8 +258,8 @@ export default defineSchema({
 
   tasks: defineTable({
     workspaceId: v.id('workspaces'),
-    projectId: v.optional(v.id('projects')),
-    projectContext: v.optional(v.object({ name: v.string(), brief: v.string() })),
+    floorId: v.optional(v.id('floors')),
+    floorContext: v.optional(v.object({ name: v.string(), brief: v.string() })),
     sourceTaskId: v.optional(v.id('tasks')),
     createdBy: v.string(),
     createdByName: v.string(),
@@ -282,7 +282,7 @@ export default defineSchema({
     usage: v.optional(tokenUsage),
   })
     .index('by_workspace', ['workspaceId'])
-    .index('by_project', ['projectId'])
+    .index('by_floor', ['floorId'])
     .index('by_run_token', ['runToken'])
     .index('by_status', ['status'])
     .index('by_source_proposal', ['sourceProposalId']),

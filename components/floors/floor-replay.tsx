@@ -17,7 +17,7 @@ const TICK_MS = 100;
 const REPLAYABLE: Task['status'][] = ['completed', 'failed', 'cancelled', 'uncertain'];
 
 export type FloorReplayProps = {
-  projectId: string;
+  floorId: string;
   /** Whether a Convex client exists. Without one there is nothing to replay. */
   live: boolean;
   /** The employee ids on this floor, so replay only dresses people who are here. */
@@ -103,7 +103,7 @@ export function sceneAt(
   const finished = timeline.entries.every((entry) => entry.at <= at);
   const task: Task = {
     id: taskId,
-    projectId: undefined,
+    floorId: undefined,
     employeeId: employeeId ?? '',
     employeeName: timeline.task.employeeName,
     createdBy: '',
@@ -149,7 +149,7 @@ export function entryAt(timeline: AuditTimeline, at: number): string {
   return text.replace(/\s+/g, ' ').slice(0, 180);
 }
 
-function LiveReplay({ projectId, employeeIds, onScene }: FloorReplayProps) {
+function LiveReplay({ floorId, employeeIds, onScene }: FloorReplayProps) {
   const dashboard = useQuery(uiApi.dashboard, {});
   const [open, setOpen] = useState(false);
   const [taskId, setTaskId] = useState('');
@@ -163,10 +163,10 @@ function LiveReplay({ projectId, employeeIds, onScene }: FloorReplayProps) {
   const finished = useMemo(
     () =>
       (dashboard?.tasks ?? [])
-        .filter((task) => task.projectId === projectId && REPLAYABLE.includes(task.status))
+        .filter((task) => task.floorId === floorId && REPLAYABLE.includes(task.status))
         .sort((a, b) => b.updatedAt - a.updatedAt)
         .slice(0, 30),
-    [dashboard, projectId],
+    [dashboard, floorId],
   );
   const task = finished.find((item) => item.id === taskId);
   const span = timeline?.entries.length

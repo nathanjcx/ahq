@@ -2,7 +2,7 @@
 
 import { ArrowRight, ExternalLink, Inbox, MessageSquareText, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { Employee, InboxItem, Project } from '@/lib/contracts';
+import type { Employee, InboxItem, Floor } from '@/lib/contracts';
 import { EmptyPane } from '../shared/empty';
 import { providerName, relativeTime } from '../shared/format';
 import { ProviderMark } from '../shared/marks';
@@ -12,29 +12,29 @@ import { PageIntro } from '../shared/page-intro';
 export function InboxPage({
   items,
   employees,
-  projects,
+  floors,
   configured,
   onRead,
   onAssign,
 }: {
   items: InboxItem[];
   employees: Employee[];
-  projects: Project[];
+  floors: Floor[];
   configured: boolean;
   onRead: (id: string) => void;
-  onAssign: (itemId: string, employeeId: string, projectId?: string) => void;
+  onAssign: (itemId: string, employeeId: string, floorId?: string) => void;
 }) {
   const [selected, setSelected] = useState(items[0]?.id ?? null);
   const { open, openDetail, closeDetail } = useMasterDetail();
   const item = items.find((entry) => entry.id === selected);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
-  const [projectId, setProjectId] = useState('');
+  const [floorId, setProjectId] = useState('');
   const [employeeId, setEmployeeId] = useState('');
   const shown = filter === 'unread' ? items.filter((entry) => entry.status === 'unread') : items;
-  const activeProjects = projects.filter((project) => !project.archivedAt);
-  const selectedProject = activeProjects.find((project) => project.id === projectId);
-  const eligibleEmployees = selectedProject
-    ? employees.filter((employee) => selectedProject.employeeIds.includes(employee.id))
+  const activeFloors = floors.filter((floor) => !floor.archivedAt);
+  const selectedFloor = activeFloors.find((floor) => floor.id === floorId);
+  const eligibleEmployees = selectedFloor
+    ? employees.filter((employee) => selectedFloor.employeeIds.includes(employee.id))
     : employees;
   useEffect(() => {
     if (employeeId && !eligibleEmployees.some((employee) => employee.id === employeeId)) setEmployeeId('');
@@ -126,12 +126,12 @@ export function InboxPage({
                   ) : (
                     <>
                       <label>
-                        Project floor
-                        <select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
+                        Floor floor
+                        <select value={floorId} onChange={(event) => setProjectId(event.target.value)}>
                           <option value="">Lobby · Unassigned</option>
-                          {activeProjects.map((project) => (
-                            <option key={project.id} value={project.id}>
-                              {project.name}
+                          {activeFloors.map((floor) => (
+                            <option key={floor.id} value={floor.id}>
+                              {floor.name}
                             </option>
                           ))}
                         </select>
@@ -152,10 +152,10 @@ export function InboxPage({
                         disabled={
                           !employeeId ||
                           !configured ||
-                          Boolean(projectId && !selectedProject) ||
+                          Boolean(floorId && !selectedFloor) ||
                           item.status === 'assigned'
                         }
-                        onClick={() => onAssign(item.id, employeeId, projectId || undefined)}
+                        onClick={() => onAssign(item.id, employeeId, floorId || undefined)}
                       >
                         {item.status === 'assigned' ? 'Assigned' : 'Assign'}
                       </button>

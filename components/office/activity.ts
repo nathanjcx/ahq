@@ -1,4 +1,4 @@
-import type { ActionProposal, ActivityEvent, ProjectPost, ProviderId, Task } from '@/lib/contracts';
+import type { ActionProposal, ActivityEvent, FloorPost, ProviderId, Task } from '@/lib/contracts';
 
 /**
  * What a figure in the office is doing. Derived only from the journal the system
@@ -38,7 +38,7 @@ export interface ActivityInput {
   tasks: Task[];
   events: ActivityEvent[];
   proposals: ActionProposal[];
-  posts: ProjectPost[];
+  posts: FloorPost[];
   now: number;
 }
 
@@ -162,7 +162,7 @@ function activityFor({
   active?: Task;
   taskEvents: ActivityEvent[];
   latestEvent?: ActivityEvent;
-  handoff?: ProjectPost;
+  handoff?: FloorPost;
   employeeByName: Map<string, string>;
   now: number;
 }): EmployeeActivity {
@@ -224,7 +224,7 @@ function activityFor({
 function bubbleFor(
   task: Task | undefined,
   activity: Activity,
-  handoff: ProjectPost | undefined,
+  handoff: FloorPost | undefined,
   now: number,
 ): string | undefined {
   const message = task?.lastMessage;

@@ -15,20 +15,20 @@ export function FloorSwitcher({
   selected,
   unassignedTaskCount,
   canCreate,
-  onSelectProject,
-  onNewProject,
+  onSelectFloor,
+  onNewFloor,
 }: {
   activeFloors: FloorEntry[];
   archivedFloors: FloorEntry[];
   selected: FloorEntry | null;
   unassignedTaskCount: number;
   canCreate: boolean;
-  onSelectProject: (id: string | null) => void;
-  onNewProject: () => void;
+  onSelectFloor: (id: string | null) => void;
+  onNewFloor: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const choose = (id: string | null) => {
-    onSelectProject(id);
+    onSelectFloor(id);
     setOpen(false);
   };
 
@@ -40,14 +40,14 @@ export function FloorSwitcher({
         </span>
         <span>
           <small>{selected ? `FLOOR ${Number(selected.number)}` : 'GROUND FLOOR'}</small>
-          <strong>{selected ? selected.project.name : 'Lobby'}</strong>
+          <strong>{selected ? selected.floor.name : 'Lobby'}</strong>
         </span>
         <ChevronDown size={16} />
       </button>
       {open && (
         <Sheet
           title="Building directory"
-          subtitle="Every project floor, and the lobby for work with no floor of its own."
+          subtitle="Every floor floor, and the lobby for work with no floor of its own."
           onClose={() => setOpen(false)}
           footer={
             <button
@@ -55,10 +55,10 @@ export function FloorSwitcher({
               disabled={!canCreate}
               onClick={() => {
                 setOpen(false);
-                onNewProject();
+                onNewFloor();
               }}
             >
-              <Plus size={16} /> New project floor
+              <Plus size={16} /> New floor floor
             </button>
           }
         >
@@ -73,15 +73,15 @@ export function FloorSwitcher({
               </span>
               {!selected && <Check size={16} />}
             </button>
-            {activeFloors.map(({ project, number, summary }) => {
-              const active = selected?.project.id === project.id;
+            {activeFloors.map(({ floor, number, summary }) => {
+              const active = selected?.floor.id === floor.id;
               return (
-                <button key={project.id} data-active={active} onClick={() => choose(project.id)}>
+                <button key={floor.id} data-active={active} onClick={() => choose(floor.id)}>
                   <span className="floor-number">{number}</span>
                   <span>
                     <strong>
-                      <span>{project.name}</span>
-                      {project.openHandoffs > 0 && <em className="handoff-badge">{project.openHandoffs}</em>}
+                      <span>{floor.name}</span>
+                      {floor.openHandoffs > 0 && <em className="handoff-badge">{floor.openHandoffs}</em>}
                     </strong>
                     <small>{countsLabel(summary)}</small>
                   </span>
@@ -93,15 +93,15 @@ export function FloorSwitcher({
           {archivedFloors.length > 0 && (
             <div className="directory-archive">
               <span>ARCHIVED</span>
-              {archivedFloors.map(({ project, number }) => (
+              {archivedFloors.map(({ floor, number }) => (
                 <button
-                  key={project.id}
-                  data-active={selected?.project.id === project.id}
-                  onClick={() => choose(project.id)}
+                  key={floor.id}
+                  data-active={selected?.floor.id === floor.id}
+                  onClick={() => choose(floor.id)}
                 >
                   <Archive size={14} />
                   <span>
-                    {number} · {project.name}
+                    {number} · {floor.name}
                   </span>
                 </button>
               ))}

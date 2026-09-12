@@ -2,7 +2,7 @@
 
 import { ListTodo, Plus } from 'lucide-react';
 import { useState } from 'react';
-import type { ActionProposal, Employee, Project, Task, TaskVisibility } from '@/lib/contracts';
+import type { ActionProposal, Employee, Floor, Task, TaskVisibility } from '@/lib/contracts';
 import { EmptyPane, EmptySection } from '../shared/empty';
 import { relativeTime } from '../shared/format';
 import { StatusMark } from '../shared/marks';
@@ -11,15 +11,13 @@ import { PageIntro } from '../shared/page-intro';
 import { TaskDetail } from './task-detail';
 import './tasks.css';
 
-export function taskFloorName(task: Task, projects: Project[]) {
-  return (
-    task.projectContext?.name ?? projects.find((project) => project.id === task.projectId)?.name ?? 'Lobby'
-  );
+export function taskFloorName(task: Task, floors: Floor[]) {
+  return task.floorContext?.name ?? floors.find((floor) => floor.id === task.floorId)?.name ?? 'Lobby';
 }
 
 export function TasksPage({
   tasks,
-  projects,
+  floors,
   proposals,
   employees = [],
   selectedId,
@@ -34,7 +32,7 @@ export function TasksPage({
   onRequestHandoff,
 }: {
   tasks: Task[];
-  projects: Project[];
+  floors: Floor[];
   proposals: ActionProposal[];
   /** Workspace employees, used to offer a handoff to someone else on the task's floor. */
   employees?: Employee[];
@@ -47,7 +45,7 @@ export function TasksPage({
   onDecide: (id: string, approved: boolean) => void;
   onCorrect: (id: string) => void;
   onSetVisibility?: (taskId: string, visibility: TaskVisibility) => void;
-  onRequestHandoff?: (projectId: string, toEmployeeId: string, brief: string, taskId: string) => void;
+  onRequestHandoff?: (floorId: string, toEmployeeId: string, brief: string, taskId: string) => void;
 }) {
   const [projectFilter, setProjectFilter] = useState('all');
   const { open, openDetail, closeDetail } = useMasterDetail();
@@ -55,11 +53,11 @@ export function TasksPage({
     projectFilter === 'all'
       ? true
       : projectFilter === 'lobby'
-        ? !task.projectId
-        : task.projectId === projectFilter,
+        ? !task.floorId
+        : task.floorId === projectFilter,
   );
   const selected = shownTasks.find((task) => task.id === selectedId) ?? shownTasks[0];
-  const floor = projects.find((project) => project.id === selected?.projectId);
+  const floor = floors.find((floor) => floor.id === selected?.floorId);
   const floorEmployees = employees.filter((employee) => floor?.employeeIds.includes(employee.id));
   return (
     <div>
@@ -87,14 +85,14 @@ export function TasksPage({
                   {shownTasks.length} {shownTasks.length === 1 ? 'task' : 'tasks'}
                 </strong>
                 <label className="task-floor-filter">
-                  <span className="sr-only">Filter by project floor</span>
+                  <span className="sr-only">Filter by floor floor</span>
                   <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
                     <option value="all">All floors</option>
                     <option value="lobby">Lobby</option>
-                    {projects.map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {project.name}
-                        {project.archivedAt ? ' · Archived' : ''}
+                    {floors.map((floor) => (
+                      <option key={floor.id} value={floor.id}>
+                        {floor.name}
+                        {floor.archivedAt ? ' · Archived' : ''}
                       </option>
                     ))}
                   </select>
@@ -120,7 +118,7 @@ export function TasksPage({
                         {task.isOwner ? 'Shared with the workspace' : `Shared by ${task.createdByName}`}
                       </small>
                     )}
-                    <span className="task-floor-label">{taskFloorName(task, projects)}</span>
+                    <span className="task-floor-label">{taskFloorName(task, floors)}</span>
                   </span>
                 </button>
               ))}
@@ -138,7 +136,7 @@ export function TasksPage({
               <TaskDetail
                 key={selected.id}
                 task={selected}
-                floorName={taskFloorName(selected, projects)}
+                floorName={taskFloorName(selected, floors)}
                 proposals={proposals.filter((proposal) => proposal.taskId === selected.id)}
                 floorEmployees={floorEmployees}
                 onSend={onSend}

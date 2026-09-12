@@ -51,7 +51,7 @@ export function sessionConfiguration(context: TaskContext): SessionCreateParamsN
     ];
   });
   // The floor board is internal: no provider, no policy row, no proposal.
-  if (context.project)
+  if (context.floor)
     tools.push({
       type: 'mcp' as const,
       server_label: 'astra_floor',
@@ -67,7 +67,7 @@ export function sessionConfiguration(context: TaskContext): SessionCreateParamsN
   return {
     agent: {
       model: task.model,
-      instructions: `${operatingRules}${context.project ? `\n${floorRules}` : ''}\n\n${version.instructions}${
+      instructions: `${operatingRules}${context.floor ? `\n${floorRules}` : ''}\n\n${version.instructions}${
         version.persona ? `\n\n${personaInstructions(version.persona)}` : ''
       }`,
       multi_agent: { enabled: false },

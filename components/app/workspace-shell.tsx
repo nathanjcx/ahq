@@ -5,13 +5,13 @@ import type {
   ActionProposal,
   Dashboard,
   Listing,
-  Project,
+  Floor,
   ProviderConfig,
   ProviderReadiness,
   RegistryTool,
 } from '@/lib/contracts';
 import type { EditorDraft } from '../admin/draft-issues';
-import { ProjectPanel } from '../floors/project-panel';
+import { FloorPanel } from '../floors/floor-panel';
 import type { Actions } from './actions';
 import { nav, pageTitle, type Page } from './nav';
 import { NewTaskPanel } from './new-task-panel';
@@ -55,8 +55,8 @@ export function WorkspaceShell({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
-  const [projectEditor, setProjectEditor] = useState<Project | 'new' | null>(null);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [floorEditor, setFloorEditor] = useState<Floor | 'new' | null>(null);
+  const [selectedFloorId, setSelectedProjectId] = useState<string | null>(null);
   const [taskProjectId, setTaskProjectId] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
@@ -77,8 +77,8 @@ export function WorkspaceShell({
     setSidebarOpen(false);
   }
 
-  function openNewTask(projectId: string | null = null, employeeId: string | null = null) {
-    setTaskProjectId(projectId);
+  function openNewTask(floorId: string | null = null, employeeId: string | null = null) {
+    setTaskProjectId(floorId);
     setSelectedEmployee(employeeId);
     setNewTaskOpen(true);
   }
@@ -170,14 +170,14 @@ export function WorkspaceShell({
             run={run}
             go={go}
             onNotice={setNotice}
-            selectedProjectId={selectedProjectId}
-            onSelectProject={setSelectedProjectId}
+            selectedFloorId={selectedFloorId}
+            onSelectFloor={setSelectedProjectId}
             selectedEmployee={selectedEmployee}
             onSelectEmployee={setSelectedEmployee}
             selectedTask={selectedTask}
             onSelectTask={setSelectedTask}
             onNewTask={openNewTask}
-            onProjectEditor={setProjectEditor}
+            onFloorEditor={setFloorEditor}
             onCorrect={(id) => {
               const proposal = dashboard.proposals.find((item) => item.id === id);
               if (proposal) void requestCorrection(proposal);
@@ -198,14 +198,14 @@ export function WorkspaceShell({
       {newTaskOpen && (
         <NewTaskPanel
           employees={dashboard.employees}
-          projects={dashboard.projects}
+          floors={dashboard.floors}
           defaultEmployee={selectedEmployee}
-          defaultProjectId={taskProjectId}
+          defaultFloorId={taskProjectId}
           configured={configured}
           onClose={() => setNewTaskOpen(false)}
-          onCreate={async (employeeId, title, prompt, projectId) => {
+          onCreate={async (employeeId, title, prompt, floorId) => {
             const created = await run(
-              () => actions.createTask(employeeId, prompt, title, projectId),
+              () => actions.createTask(employeeId, prompt, title, floorId),
               'Task started',
             );
             if (created) {
@@ -215,38 +215,38 @@ export function WorkspaceShell({
           }}
         />
       )}
-      {projectEditor && (
-        <ProjectPanel
-          project={projectEditor === 'new' ? null : projectEditor}
+      {floorEditor && (
+        <FloorPanel
+          floor={floorEditor === 'new' ? null : floorEditor}
           employees={dashboard.employees}
           configured={configured && Boolean(workspace)}
-          onClose={() => setProjectEditor(null)}
+          onClose={() => setFloorEditor(null)}
           onSave={async (name, brief, employeeIds) => {
             let createdProjectId: string | undefined;
             const saved = await run(
               async () => {
-                if (projectEditor === 'new') {
-                  const result = await actions.createProject(name, brief, employeeIds);
-                  createdProjectId = (result as { projectId: string }).projectId;
+                if (floorEditor === 'new') {
+                  const result = await actions.createFloor(name, brief, employeeIds);
+                  createdProjectId = (result as { floorId: string }).floorId;
                 } else {
-                  await actions.updateProject(projectEditor.id, name, brief, employeeIds);
+                  await actions.updateFloor(floorEditor.id, name, brief, employeeIds);
                 }
               },
-              projectEditor === 'new' ? 'Floor created' : 'Floor updated',
+              floorEditor === 'new' ? 'Floor created' : 'Floor updated',
             );
             if (saved) {
               if (createdProjectId) setSelectedProjectId(createdProjectId);
-              setProjectEditor(null);
+              setFloorEditor(null);
             }
           }}
-          onArchive={async (project, archived) => {
+          onArchive={async (floor, archived) => {
             const saved = await run(
-              () => actions.setProjectArchived(project.id, archived),
+              () => actions.setFloorArchived(floor.id, archived),
               archived ? 'Floor archived' : 'Floor restored',
             );
             if (saved) {
               if (archived) setSelectedProjectId(null);
-              setProjectEditor(null);
+              setFloorEditor(null);
             }
           }}
         />

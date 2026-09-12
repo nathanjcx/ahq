@@ -6,7 +6,7 @@ import type {
   Dashboard,
   Listing,
   Message,
-  ProjectPost,
+  FloorPost,
   ProviderConfig,
   ProviderReadiness,
   RegistryTool,
@@ -22,7 +22,7 @@ import type { AuditResponse } from '../lib/api/schemas';
 test('every Convex query the interface reads satisfies its UI contract', () => {
   expectTypeOf<FunctionReturnType<typeof api.workspace.dashboard>>().toExtend<Dashboard>();
   expectTypeOf<FunctionReturnType<typeof api.marketplace.list>>().toExtend<Listing[]>();
-  expectTypeOf<FunctionReturnType<typeof api.projects.board>>().toExtend<ProjectPost[]>();
+  expectTypeOf<FunctionReturnType<typeof api.floors.board>>().toExtend<FloorPost[]>();
   expectTypeOf<FunctionReturnType<typeof api.integrations.readiness>>().toExtend<ProviderReadiness[]>();
   expectTypeOf<FunctionReturnType<typeof api.admin.providerConfigs>>().toExtend<ProviderConfig[]>();
   expectTypeOf<FunctionReturnType<typeof api.admin.registryTools>>().toExtend<RegistryTool[]>();

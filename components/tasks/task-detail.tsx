@@ -41,14 +41,14 @@ export function TaskDetail({
   onDecide: (id: string, approved: boolean) => void;
   onCorrect: (id: string) => void;
   onSetVisibility?: (taskId: string, visibility: TaskVisibility) => void;
-  onRequestHandoff?: (projectId: string, toEmployeeId: string, brief: string, taskId: string) => void;
+  onRequestHandoff?: (floorId: string, toEmployeeId: string, brief: string, taskId: string) => void;
 }) {
   const [tab, setTab] = useState<TaskTab>('conversation');
   const [handoffOpen, setHandoffOpen] = useState(false);
   const [notice, setNotice] = useState('');
   const pending = proposals.filter((proposal) => proposal.status === 'pending').length;
   const usage = task.usage;
-  const projectId = task.projectId;
+  const floorId = task.floorId;
   const candidates = floorEmployees.filter((employee) => employee.id !== task.employeeId);
   const correctedBy = new Map(
     proposals.flatMap((proposal) =>
@@ -77,7 +77,7 @@ export function TaskDetail({
             <StatusMark status={task.status} />
             {statusLabel(task.status)}
           </span>
-          {projectId && candidates.length > 0 && (
+          {floorId && candidates.length > 0 && (
             <button className="text-button" onClick={() => setHandoffOpen(true)}>
               <UserRoundPlus size={14} />
               Hand off…
@@ -153,13 +153,13 @@ export function TaskDetail({
           </div>
         )}
       </div>
-      {handoffOpen && projectId && (
+      {handoffOpen && floorId && (
         <HandoffSheet
           task={task}
           candidates={candidates}
           onClose={() => setHandoffOpen(false)}
           onSubmit={(toEmployeeId, brief) => {
-            onRequestHandoff(projectId, toEmployeeId, brief, task.id);
+            onRequestHandoff(floorId, toEmployeeId, brief, task.id);
             setHandoffOpen(false);
             setNotice('Handoff requested. It waits on the floor board until someone accepts it.');
           }}

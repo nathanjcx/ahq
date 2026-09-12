@@ -7,7 +7,7 @@ import { canSeeTask, cleanText, randomToken, requireWorkspace } from './shared';
 import {
   assertEmployeeReady,
   assertTokenCap,
-  assignmentForProject,
+  assignmentForFloor,
   insertJob,
   startTask,
   taskTimeline,
@@ -18,7 +18,7 @@ export const create = mutation({
     employeeId: v.id('installations'),
     prompt: v.string(),
     title: v.string(),
-    projectId: v.optional(v.id('projects')),
+    floorId: v.optional(v.id('floors')),
   },
   returns: v.object({ taskId: v.id('tasks') }),
   handler: async (ctx, args) => {
@@ -33,8 +33,8 @@ export const create = mutation({
       version,
       title: args.title,
       prompt: args.prompt,
-      project: args.projectId
-        ? await assignmentForProject(ctx, workspace._id, args.projectId, args.employeeId)
+      floor: args.floorId
+        ? await assignmentForFloor(ctx, workspace._id, args.floorId, args.employeeId)
         : undefined,
     });
     return { taskId };

@@ -7,7 +7,7 @@ import type {
   Employee,
   InboxItem,
   Listing,
-  Project,
+  Floor,
   ProviderConfig,
   ProviderReadiness,
   RegistryTool,
@@ -196,7 +196,7 @@ const connections: Connection[] = [
   },
 ];
 
-const projects: Project[] = [
+const floors: Floor[] = [
   {
     id: 'proj_launch',
     name: 'Spring launch',
@@ -235,8 +235,8 @@ const tasks: Task[] = [
   },
   {
     id: 'task_running',
-    projectId: 'proj_launch',
-    projectContext: { name: 'Spring launch', brief: 'Ship the March release.' },
+    floorId: 'proj_launch',
+    floorContext: { name: 'Spring launch', brief: 'Ship the March release.' },
     employeeId: 'emp_ada',
     employeeName: 'Ada',
     createdBy: 'user_dana',
@@ -259,8 +259,8 @@ const tasks: Task[] = [
   },
   {
     id: 'task_awaiting',
-    projectId: 'proj_launch',
-    projectContext: { name: 'Spring launch', brief: 'Ship the March release.' },
+    floorId: 'proj_launch',
+    floorContext: { name: 'Spring launch', brief: 'Ship the March release.' },
     employeeId: 'emp_bruno',
     employeeName: 'Bruno',
     createdBy: 'user_ivan',
@@ -283,8 +283,8 @@ const tasks: Task[] = [
   },
   {
     id: 'task_completed',
-    projectId: 'proj_launch',
-    projectContext: { name: 'Spring launch', brief: 'Ship the March release.' },
+    floorId: 'proj_launch',
+    floorContext: { name: 'Spring launch', brief: 'Ship the March release.' },
     sourceTaskId: 'task_running',
     employeeId: 'emp_bruno',
     employeeName: 'Bruno',
@@ -335,8 +335,8 @@ const tasks: Task[] = [
   },
   {
     id: 'task_uncertain',
-    projectId: 'proj_support',
-    projectContext: { name: 'Support backlog', brief: 'Triage the open support queue.' },
+    floorId: 'proj_support',
+    floorContext: { name: 'Support backlog', brief: 'Triage the open support queue.' },
     employeeId: 'emp_mina',
     employeeName: 'Mina',
     createdBy: 'user_ivan',
@@ -626,7 +626,7 @@ export const dashboard: Dashboard = {
   isPlatformAdmin: true,
   employees,
   connections,
-  projects,
+  floors,
   tasks,
   events,
   proposals,

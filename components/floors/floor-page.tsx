@@ -1,7 +1,7 @@
 'use client';
 
 import { Plus } from 'lucide-react';
-import type { Dashboard, Employee, Project, Task } from '@/lib/contracts';
+import type { Dashboard, Employee, Floor, Task } from '@/lib/contracts';
 import type { Actions } from '../app/actions';
 import type { Page } from '../app/nav';
 import type { OfficeEmployee } from '../office/office-view';
@@ -42,10 +42,10 @@ export function FloorPage({
   onPage,
   onEmployee,
   onTask,
-  selectedProjectId,
-  onSelectProject,
-  onNewProject,
-  onEditProject,
+  selectedFloorId,
+  onSelectFloor,
+  onNewFloor,
+  onEditFloor,
   onNewTask,
 }: {
   dashboard: Dashboard;
@@ -55,24 +55,24 @@ export function FloorPage({
   onPage: (page: Page) => void;
   onEmployee: (id: string) => void;
   onTask: (id: string) => void;
-  selectedProjectId: string | null;
-  onSelectProject: (id: string | null) => void;
-  onNewProject: () => void;
-  onEditProject: (project: Project) => void;
-  onNewTask: (projectId: string | null, employeeId?: string | null) => void;
+  selectedFloorId: string | null;
+  onSelectFloor: (id: string | null) => void;
+  onNewFloor: () => void;
+  onEditFloor: (floor: Floor) => void;
+  onNewTask: (floorId: string | null, employeeId?: string | null) => void;
 }) {
-  const entries: FloorEntry[] = [...dashboard.projects]
+  const entries: FloorEntry[] = [...dashboard.floors]
     .sort((a, b) => a.createdAt - b.createdAt)
-    .map((project, index) => ({
-      project,
+    .map((floor, index) => ({
+      floor,
       number: String(index + 1).padStart(2, '0'),
-      summary: summarizeFloor(project, dashboard.tasks),
+      summary: summarizeFloor(floor, dashboard.tasks),
     }));
   const activeFloors = entries
-    .filter((entry) => !entry.project.archivedAt)
+    .filter((entry) => !entry.floor.archivedAt)
     .sort((a, b) => b.summary.lastActivity - a.summary.lastActivity);
-  const archivedFloors = entries.filter((entry) => entry.project.archivedAt);
-  const selected = entries.find((entry) => entry.project.id === selectedProjectId) ?? null;
+  const archivedFloors = entries.filter((entry) => entry.floor.archivedAt);
+  const selected = entries.find((entry) => entry.floor.id === selectedFloorId) ?? null;
 
   const workspaceReady = configured && Boolean(dashboard.workspace);
   const decideHandoff = async (postId: string, accepted: boolean) => {
@@ -97,12 +97,12 @@ export function FloorPage({
         }
         description={
           dashboard.workspace
-            ? 'Move between project floors, see who is staffed, and keep unassigned work in the lobby.'
+            ? 'Move between floor floors, see who is staffed, and keep unassigned work in the lobby.'
             : 'Connect your workspace, hire your first employee, and give them a clear assignment.'
         }
         action={
-          <button className="primary-button" disabled={!workspaceReady} onClick={onNewProject}>
-            <Plus size={17} /> New project floor
+          <button className="primary-button" disabled={!workspaceReady} onClick={onNewFloor}>
+            <Plus size={17} /> New floor floor
           </button>
         }
       />
@@ -111,11 +111,11 @@ export function FloorPage({
           workspaceName={dashboard.workspace?.name}
           activeFloors={activeFloors}
           archivedFloors={archivedFloors}
-          selectedProjectId={selected?.project.id ?? null}
-          unassignedTaskCount={dashboard.tasks.filter((task) => !task.projectId).length}
+          selectedFloorId={selected?.floor.id ?? null}
+          unassignedTaskCount={dashboard.tasks.filter((task) => !task.floorId).length}
           canCreate={workspaceReady}
-          onSelectProject={onSelectProject}
-          onNewProject={onNewProject}
+          onSelectFloor={onSelectFloor}
+          onNewFloor={onNewFloor}
         />
         {selected ? (
           <SelectedFloor
@@ -128,7 +128,7 @@ export function FloorPage({
             onEmployee={onEmployee}
             onTask={onTask}
             onNewTask={onNewTask}
-            onEditProject={onEditProject}
+            onEditFloor={onEditFloor}
             onDecideHandoff={decideHandoff}
           />
         ) : (
@@ -176,7 +176,7 @@ function SelectedFloor({
   onEmployee,
   onTask,
   onNewTask,
-  onEditProject,
+  onEditFloor,
   onDecideHandoff,
 }: {
   entry: FloorEntry;
@@ -187,30 +187,30 @@ function SelectedFloor({
   run: (work: () => Promise<unknown>, success: string) => Promise<boolean>;
   onEmployee: (id: string) => void;
   onTask: (id: string) => void;
-  onNewTask: (projectId: string | null, employeeId?: string | null) => void;
-  onEditProject: (project: Project) => void;
+  onNewTask: (floorId: string | null, employeeId?: string | null) => void;
+  onEditFloor: (floor: Floor) => void;
   onDecideHandoff: (postId: string, accepted: boolean) => void;
 }) {
-  const { project, summary } = entry;
-  const staff = project.employeeIds
+  const { floor, summary } = entry;
+  const staff = floor.employeeIds
     .map((id) => dashboard.employees.find((employee) => employee.id === id))
     .filter((employee): employee is Employee => Boolean(employee));
-  const tasks = dashboard.tasks.filter((task) => task.projectId === project.id);
+  const tasks = dashboard.tasks.filter((task) => task.floorId === floor.id);
   const activeTasks = tasks.filter((task) => ACTIVE_TASK_STATUSES.includes(task.status));
   const boardProps = {
     staff,
-    canPost: configured && !project.archivedAt,
+    canPost: configured && !floor.archivedAt,
     onTask,
-    onPost: (text: string) => void run(() => actions.postToBoard(project.id, text), 'Posted to the board'),
+    onPost: (text: string) => void run(() => actions.postToBoard(floor.id, text), 'Posted to the board'),
     onRequestHandoff: (toEmployeeId: string, brief: string) =>
-      void run(() => actions.requestHandoff(project.id, toEmployeeId, brief), 'Handoff requested'),
+      void run(() => actions.requestHandoff(floor.id, toEmployeeId, brief), 'Handoff requested'),
     onDecideHandoff,
   };
 
   return (
     <FloorView
-      key={project.id}
-      project={project}
+      key={floor.id}
+      floor={floor}
       floorLabel={floorLabel}
       summary={summary}
       staff={staff}
@@ -219,7 +219,7 @@ function SelectedFloor({
       proposals={dashboard.proposals}
       board={
         configured ? (
-          <LiveFloorBoard projectId={project.id} {...boardProps} />
+          <LiveFloorBoard floorId={floor.id} {...boardProps} />
         ) : (
           <FloorBoard posts={[]} {...boardProps} />
         )
@@ -227,11 +227,11 @@ function SelectedFloor({
       configured={configured}
       onEmployee={onEmployee}
       onTask={onTask}
-      onNewTask={(employeeId) => onNewTask(project.id, employeeId ?? null)}
-      onEditProject={() => onEditProject(project)}
+      onNewTask={(employeeId) => onNewTask(floor.id, employeeId ?? null)}
+      onEditFloor={() => onEditFloor(floor)}
       onArchive={(archived) =>
         void run(
-          () => actions.setProjectArchived(project.id, archived),
+          () => actions.setFloorArchived(floor.id, archived),
           archived ? 'Floor archived' : 'Floor restored',
         )
       }
@@ -253,12 +253,12 @@ function Lobby({
   activeFloors: FloorEntry[];
   onEmployee: (id: string) => void;
   onTask: (id: string) => void;
-  onNewTask: (projectId: string | null) => void;
+  onNewTask: (floorId: string | null) => void;
   onAllTasks: () => void;
 }) {
-  const lobbyTasks = dashboard.tasks.filter((task) => !task.projectId);
+  const lobbyTasks = dashboard.tasks.filter((task) => !task.floorId);
   const activeTasks = lobbyTasks.filter((task) => ACTIVE_TASK_STATUSES.includes(task.status));
-  const staffedElsewhere = new Set(activeFloors.flatMap((entry) => entry.project.employeeIds));
+  const staffedElsewhere = new Set(activeFloors.flatMap((entry) => entry.floor.employeeIds));
   const busyInLobby = new Set(activeTasks.map((task) => task.employeeId));
   const lobbyEmployees = dashboard.employees.filter(
     (employee) => !staffedElsewhere.has(employee.id) || busyInLobby.has(employee.id),

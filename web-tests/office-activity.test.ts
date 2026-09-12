@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ActionProposal, ActivityEvent, ProjectPost, Task } from '../lib/contracts';
+import type { ActionProposal, ActivityEvent, FloorPost, Task } from '../lib/contracts';
 import {
   BUBBLE_MS,
   CELEBRATING_MS,
@@ -18,7 +18,7 @@ const bo = { id: 'emp_bo', name: 'Bo' };
 
 function task(overrides: Partial<Task> & Pick<Task, 'id' | 'status'>): Task {
   return {
-    projectId: 'prj_1',
+    floorId: 'prj_1',
     employeeId: ada.id,
     employeeName: ada.name,
     createdBy: 'user_1',
@@ -65,10 +65,10 @@ function proposal(overrides: Partial<ActionProposal> = {}): ActionProposal {
   };
 }
 
-function handoffPost(overrides: Partial<ProjectPost> = {}): ProjectPost {
+function handoffPost(overrides: Partial<FloorPost> = {}): FloorPost {
   return {
     id: 'pst_1',
-    projectId: 'prj_1',
+    floorId: 'prj_1',
     kind: 'handoff',
     authorName: bo.name,
     text: 'Handoff requested',

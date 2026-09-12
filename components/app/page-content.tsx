@@ -3,7 +3,7 @@
 import type {
   Dashboard,
   Listing,
-  Project,
+  Floor,
   ProviderConfig,
   ProviderReadiness,
   RegistryTool,
@@ -36,14 +36,14 @@ export type PageContentProps = {
   run: (work: () => Promise<unknown>, success: string) => Promise<boolean>;
   go: (page: Page) => void;
   onNotice: (text: string) => void;
-  selectedProjectId: string | null;
-  onSelectProject: (id: string | null) => void;
+  selectedFloorId: string | null;
+  onSelectFloor: (id: string | null) => void;
   selectedEmployee: string | null;
   onSelectEmployee: (id: string | null) => void;
   selectedTask: string | null;
   onSelectTask: (id: string | null) => void;
-  onNewTask: (projectId?: string | null, employeeId?: string | null) => void;
-  onProjectEditor: (project: Project | 'new') => void;
+  onNewTask: (floorId?: string | null, employeeId?: string | null) => void;
+  onFloorEditor: (floor: Floor | 'new') => void;
   onCorrect: (proposalId: string) => void;
 };
 
@@ -66,10 +66,10 @@ export function PageContent(props: PageContentProps) {
           props.onSelectTask(id);
           go('tasks');
         }}
-        selectedProjectId={props.selectedProjectId}
-        onSelectProject={props.onSelectProject}
-        onNewProject={() => props.onProjectEditor('new')}
-        onEditProject={props.onProjectEditor}
+        selectedFloorId={props.selectedFloorId}
+        onSelectFloor={props.onSelectFloor}
+        onNewFloor={() => props.onFloorEditor('new')}
+        onEditFloor={props.onFloorEditor}
         onNewTask={props.onNewTask}
       />
     );
@@ -79,11 +79,11 @@ export function PageContent(props: PageContentProps) {
       <InboxPage
         items={dashboard.inbox}
         employees={dashboard.employees}
-        projects={dashboard.projects}
+        floors={dashboard.floors}
         configured={props.configured}
         onRead={(id) => run(() => actions.markRead(id), 'Marked as read')}
-        onAssign={(itemId, employeeId, projectId) =>
-          run(() => actions.assign(itemId, employeeId, projectId), 'Assigned to your employee')
+        onAssign={(itemId, employeeId, floorId) =>
+          run(() => actions.assign(itemId, employeeId, floorId), 'Assigned to your employee')
         }
       />
     );
@@ -104,7 +104,7 @@ export function PageContent(props: PageContentProps) {
     return (
       <TasksPage
         tasks={dashboard.tasks}
-        projects={dashboard.projects}
+        floors={dashboard.floors}
         proposals={dashboard.proposals}
         selectedId={props.selectedTask}
         configured={props.configured}
@@ -120,8 +120,8 @@ export function PageContent(props: PageContentProps) {
         onSetVisibility={(taskId, visibility) =>
           run(() => actions.setTaskVisibility(taskId, visibility), 'Visibility updated')
         }
-        onRequestHandoff={(projectId, toEmployeeId, brief, taskId) =>
-          run(() => actions.requestHandoff(projectId, toEmployeeId, brief, taskId), 'Handoff requested')
+        onRequestHandoff={(floorId, toEmployeeId, brief, taskId) =>
+          run(() => actions.requestHandoff(floorId, toEmployeeId, brief, taskId), 'Handoff requested')
         }
       />
     );

@@ -25,7 +25,7 @@ export const gatewayContext = query({
         workspaceId: task.workspaceId,
         status: task.status,
         createdBy: task.createdBy,
-        projectId: task.projectId,
+        floorId: task.floorId,
       },
       employeeVersion: { id: version._id, capabilities: version.capabilities },
       connections: connections.map(privateConnection),

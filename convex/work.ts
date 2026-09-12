@@ -2,26 +2,26 @@ import type { Doc, Id } from './_generated/dataModel';
 import type { MutationCtx } from './_generated/server';
 import { canSeeConnection, cleanText, randomToken, usagePeriod, type Ctx } from './shared';
 
-export async function requireProject(
+export async function requireFloor(
   ctx: Ctx,
   workspaceId: Id<'workspaces'>,
-  projectId: Id<'projects'>,
-): Promise<Doc<'projects'>> {
-  const project = await ctx.db.get(projectId);
-  if (!project || project.workspaceId !== workspaceId) throw new Error('Project not found');
-  return project;
+  floorId: Id<'floors'>,
+): Promise<Doc<'floors'>> {
+  const floor = await ctx.db.get(floorId);
+  if (!floor || floor.workspaceId !== workspaceId) throw new Error('Floor not found');
+  return floor;
 }
 
-export async function assignmentForProject(
+export async function assignmentForFloor(
   ctx: Ctx,
   workspaceId: Id<'workspaces'>,
-  projectId: Id<'projects'>,
+  floorId: Id<'floors'>,
   employeeId: Id<'installations'>,
 ) {
-  const project = await requireProject(ctx, workspaceId, projectId);
-  if (project.archivedAt !== undefined) throw new Error('Project is archived');
-  if (!project.employeeIds.includes(employeeId)) throw new Error('Employee is not assigned to this project');
-  return { projectId: project._id, projectContext: { name: project.name, brief: project.brief } };
+  const floor = await requireFloor(ctx, workspaceId, floorId);
+  if (floor.archivedAt !== undefined) throw new Error('Floor is archived');
+  if (!floor.employeeIds.includes(employeeId)) throw new Error('Employee is not assigned to this floor');
+  return { floorId: floor._id, floorContext: { name: floor.name, brief: floor.brief } };
 }
 
 /** An employee is ready when its version is live and the viewer can reach every required capability. */
@@ -99,10 +99,10 @@ export async function insertJob(
 }
 
 export async function systemPost(ctx: MutationCtx, task: Doc<'tasks'>, text: string) {
-  if (!task.projectId) return;
-  await ctx.db.insert('projectPosts', {
+  if (!task.floorId) return;
+  await ctx.db.insert('floorPosts', {
     workspaceId: task.workspaceId,
-    projectId: task.projectId,
+    floorId: task.floorId,
     kind: 'system',
     authorName: task.employeeName,
     text: text.slice(0, 2_000),
@@ -122,7 +122,7 @@ export async function startTask(
     version: Doc<'employeeVersions'>;
     title: string;
     prompt: string;
-    project?: { projectId: Id<'projects'>; projectContext: { name: string; brief: string } };
+    floor?: { floorId: Id<'floors'>; floorContext: { name: string; brief: string } };
     sourceTaskId?: Id<'tasks'>;
     sourceProposalId?: Id<'proposals'>;
     messageExternalId?: string;
@@ -134,12 +134,12 @@ export async function startTask(
   const prompt = cleanText(input.prompt, 'Prompt', 50_000);
   const taskId = await ctx.db.insert('tasks', {
     workspaceId: input.workspace._id,
-    ...(input.project ?? {}),
+    ...(input.floor ?? {}),
     ...(input.sourceTaskId ? { sourceTaskId: input.sourceTaskId } : {}),
     ...(input.sourceProposalId ? { sourceProposalId: input.sourceProposalId } : {}),
     createdBy: input.createdBy,
     createdByName: input.createdByName,
-    visibility: input.project ? 'workspace' : 'private',
+    visibility: input.floor ? 'workspace' : 'private',
     employeeId: input.employeeId,
     versionId: input.version._id,
     employeeName: input.version.name,
@@ -278,17 +278,17 @@ export async function finalAssistantMessage(ctx: Ctx, taskId: Id<'tasks'>) {
 export async function insertNote(
   ctx: MutationCtx,
   input: {
-    project: Doc<'projects'>;
+    floor: Doc<'floors'>;
     authorSubject?: string;
     authorName: string;
     text: string;
     taskId?: Id<'tasks'>;
   },
 ) {
-  if (input.project.archivedAt !== undefined) throw new Error('Project is archived');
-  const postId = await ctx.db.insert('projectPosts', {
-    workspaceId: input.project.workspaceId,
-    projectId: input.project._id,
+  if (input.floor.archivedAt !== undefined) throw new Error('Floor is archived');
+  const postId = await ctx.db.insert('floorPosts', {
+    workspaceId: input.floor.workspaceId,
+    floorId: input.floor._id,
     kind: 'note',
     authorSubject: input.authorSubject,
     authorName: input.authorName,
@@ -303,7 +303,7 @@ export async function insertNote(
 export async function insertHandoff(
   ctx: MutationCtx,
   input: {
-    project: Doc<'projects'>;
+    floor: Doc<'floors'>;
     authorSubject?: string;
     authorName: string;
     toEmployeeId: Id<'installations'>;
@@ -311,18 +311,18 @@ export async function insertHandoff(
     sourceTaskId?: Id<'tasks'>;
   },
 ) {
-  if (input.project.archivedAt !== undefined) throw new Error('Project is archived');
+  if (input.floor.archivedAt !== undefined) throw new Error('Floor is archived');
   const installation = await ctx.db.get(input.toEmployeeId);
-  if (!installation || installation.workspaceId !== input.project.workspaceId)
+  if (!installation || installation.workspaceId !== input.floor.workspaceId)
     throw new Error('Employee not found');
-  if (!input.project.employeeIds.includes(installation._id))
-    throw new Error('Employee is not assigned to this project');
+  if (!input.floor.employeeIds.includes(installation._id))
+    throw new Error('Employee is not assigned to this floor');
   const version = await ctx.db.get(installation.versionId);
   if (!version) throw new Error('Employee version is retired');
   const brief = cleanText(input.brief, 'Handoff brief', 5_000);
-  const postId = await ctx.db.insert('projectPosts', {
-    workspaceId: input.project.workspaceId,
-    projectId: input.project._id,
+  const postId = await ctx.db.insert('floorPosts', {
+    workspaceId: input.floor.workspaceId,
+    floorId: input.floor._id,
     kind: 'handoff',
     authorSubject: input.authorSubject,
     authorName: input.authorName,

@@ -9,14 +9,14 @@ import {
   finalAssistantMessage,
   insertHandoff,
   insertNote,
-  requireProject,
+  requireFloor,
   startTask,
 } from './work';
 
-function projectFields(name: string, brief: string) {
+function floorFields(name: string, brief: string) {
   return {
-    name: cleanText(name, 'Project name', 120),
-    brief: cleanText(brief, 'Project brief', 5_000),
+    name: cleanText(name, 'Floor name', 120),
+    brief: cleanText(brief, 'Floor brief', 5_000),
   };
 }
 
@@ -26,17 +26,17 @@ async function validateEmployees(
   employeeIds: Id<'installations'>[],
 ) {
   if (new Set(employeeIds).size !== employeeIds.length)
-    throw new Error('A project cannot include the same employee more than once');
+    throw new Error('A floor cannot include the same employee more than once');
   for (const employeeId of employeeIds) {
     const employee = await ctx.db.get(employeeId);
     if (!employee || employee.workspaceId !== workspaceId) throw new Error('Employee not found');
   }
 }
 
-function publicPost(post: Doc<'projectPosts'>) {
+function publicPost(post: Doc<'floorPosts'>) {
   return {
     id: post._id,
-    projectId: post.projectId,
+    floorId: post.floorId,
     kind: post.kind,
     authorSubject: post.authorSubject,
     authorName: post.authorName,
@@ -49,13 +49,13 @@ function publicPost(post: Doc<'projectPosts'>) {
 
 export const create = mutation({
   args: { name: v.string(), brief: v.string(), employeeIds: v.array(v.id('installations')) },
-  returns: v.object({ projectId: v.id('projects') }),
+  returns: v.object({ floorId: v.id('floors') }),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
-    const fields = projectFields(args.name, args.brief);
+    const fields = floorFields(args.name, args.brief);
     await validateEmployees(ctx, workspace._id, args.employeeIds);
     const now = Date.now();
-    const projectId = await ctx.db.insert('projects', {
+    const floorId = await ctx.db.insert('floors', {
       workspaceId: workspace._id,
       createdBy: actor.subject,
       ...fields,
@@ -63,13 +63,13 @@ export const create = mutation({
       createdAt: now,
       updatedAt: now,
     });
-    return { projectId };
+    return { floorId };
   },
 });
 
 export const update = mutation({
   args: {
-    projectId: v.id('projects'),
+    floorId: v.id('floors'),
     name: v.string(),
     brief: v.string(),
     employeeIds: v.array(v.id('installations')),
@@ -77,22 +77,22 @@ export const update = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const { workspace } = await requireWorkspace(ctx);
-    const project = await requireProject(ctx, workspace._id, args.projectId);
-    const fields = projectFields(args.name, args.brief);
+    const floor = await requireFloor(ctx, workspace._id, args.floorId);
+    const fields = floorFields(args.name, args.brief);
     await validateEmployees(ctx, workspace._id, args.employeeIds);
-    await ctx.db.patch(project._id, { ...fields, employeeIds: args.employeeIds, updatedAt: Date.now() });
+    await ctx.db.patch(floor._id, { ...fields, employeeIds: args.employeeIds, updatedAt: Date.now() });
     return null;
   },
 });
 
 export const setArchived = mutation({
-  args: { projectId: v.id('projects'), archived: v.boolean() },
+  args: { floorId: v.id('floors'), archived: v.boolean() },
   returns: v.null(),
   handler: async (ctx, args) => {
     const { workspace } = await requireWorkspace(ctx);
-    const project = await requireProject(ctx, workspace._id, args.projectId);
-    await ctx.db.patch(project._id, {
-      archivedAt: args.archived ? project.archivedAt || Date.now() : undefined,
+    const floor = await requireFloor(ctx, workspace._id, args.floorId);
+    await ctx.db.patch(floor._id, {
+      archivedAt: args.archived ? floor.archivedAt || Date.now() : undefined,
       updatedAt: Date.now(),
     });
     return null;
@@ -102,13 +102,13 @@ export const setArchived = mutation({
 // No `returns` validator on the board: it would restate the whole post document including its
 // nested handoff record, which the schema already defines.
 export const board = query({
-  args: { projectId: v.id('projects') },
+  args: { floorId: v.id('floors') },
   handler: async (ctx, args) => {
     const { workspace } = await requireWorkspace(ctx);
-    await requireProject(ctx, workspace._id, args.projectId);
+    await requireFloor(ctx, workspace._id, args.floorId);
     const posts = await ctx.db
-      .query('projectPosts')
-      .withIndex('by_project', (q) => q.eq('projectId', args.projectId))
+      .query('floorPosts')
+      .withIndex('by_floor', (q) => q.eq('floorId', args.floorId))
       .order('desc')
       .take(200);
     return posts.reverse().map(publicPost);
@@ -116,13 +116,13 @@ export const board = query({
 });
 
 export const post = mutation({
-  args: { projectId: v.id('projects'), text: v.string() },
+  args: { floorId: v.id('floors'), text: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
-    const project = await requireProject(ctx, workspace._id, args.projectId);
+    const floor = await requireFloor(ctx, workspace._id, args.floorId);
     await insertNote(ctx, {
-      project,
+      floor,
       authorSubject: actor.subject,
       authorName: actor.name,
       text: args.text,
@@ -133,22 +133,22 @@ export const post = mutation({
 
 export const requestHandoff = mutation({
   args: {
-    projectId: v.id('projects'),
+    floorId: v.id('floors'),
     toEmployeeId: v.id('installations'),
     brief: v.string(),
     sourceTaskId: v.optional(v.id('tasks')),
   },
-  returns: v.object({ postId: v.id('projectPosts') }),
+  returns: v.object({ postId: v.id('floorPosts') }),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
-    const project = await requireProject(ctx, workspace._id, args.projectId);
+    const floor = await requireFloor(ctx, workspace._id, args.floorId);
     if (args.sourceTaskId) {
       const source = await ctx.db.get(args.sourceTaskId);
       if (!source || source.workspaceId !== workspace._id || !canSeeTask(source, actor.subject))
         throw new Error('Task not found');
     }
     return insertHandoff(ctx, {
-      project,
+      floor,
       authorSubject: actor.subject,
       authorName: actor.name,
       toEmployeeId: args.toEmployeeId,
@@ -160,14 +160,14 @@ export const requestHandoff = mutation({
 
 /** A person accepts a handoff, which starts a floor task carrying the source task's final message. */
 export const decideHandoff = mutation({
-  args: { postId: v.id('projectPosts'), accepted: v.boolean() },
+  args: { postId: v.id('floorPosts'), accepted: v.boolean() },
   returns: v.object({ taskId: v.optional(v.id('tasks')) }),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
     const post = await ctx.db.get(args.postId);
     if (!post || post.workspaceId !== workspace._id || !post.handoff) throw new Error('Handoff not found');
     if (post.handoff.status !== 'pending') return { taskId: post.handoff.taskId };
-    const project = await requireProject(ctx, workspace._id, post.projectId);
+    const floor = await requireFloor(ctx, workspace._id, post.floorId);
     const now = Date.now();
     if (!args.accepted) {
       await ctx.db.patch(post._id, {
@@ -175,8 +175,8 @@ export const decideHandoff = mutation({
       });
       return {};
     }
-    if (!project.employeeIds.includes(post.handoff.toEmployeeId))
-      throw new Error('Employee is not assigned to this project');
+    if (!floor.employeeIds.includes(post.handoff.toEmployeeId))
+      throw new Error('Employee is not assigned to this floor');
     await assertTokenCap(ctx, workspace);
     const { version } = await assertEmployeeReady(ctx, workspace, actor.subject, post.handoff.toEmployeeId);
     // A handoff a person wrote is an instruction. One an agent requested through the floor tools has
@@ -200,15 +200,15 @@ export const decideHandoff = mutation({
       version,
       title: post.handoff.brief.slice(0, 200),
       prompt,
-      project: { projectId: project._id, projectContext: { name: project.name, brief: project.brief } },
+      floor: { floorId: floor._id, floorContext: { name: floor.name, brief: floor.brief } },
       sourceTaskId: post.taskId,
     });
     await ctx.db.patch(post._id, {
       handoff: { ...post.handoff, status: 'accepted', decidedBy: actor.subject, decidedAt: now, taskId },
     });
-    await ctx.db.insert('projectPosts', {
+    await ctx.db.insert('floorPosts', {
       workspaceId: workspace._id,
-      projectId: project._id,
+      floorId: floor._id,
       kind: 'system',
       authorName: version.name,
       text: 'Accepted handoff → task created',

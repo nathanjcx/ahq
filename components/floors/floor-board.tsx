@@ -3,7 +3,7 @@
 import { useQuery } from 'convex/react';
 import { ArrowUpRight, MessagesSquare, Send, UserPlus, X } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
-import type { Employee, ProjectPost } from '@/lib/contracts';
+import type { Employee, FloorPost } from '@/lib/contracts';
 import { asId, uiApi } from '@/lib/ui-api';
 import { EmptyPane } from '../shared/empty';
 import { relativeTime, safeHttpsUrl } from '../shared/format';
@@ -11,7 +11,7 @@ import { SkeletonList } from '../shared/skeleton';
 
 export type FloorBoardProps = {
   /** Board posts oldest first, or undefined while the subscription loads. */
-  posts: ProjectPost[] | undefined;
+  posts: FloorPost[] | undefined;
   /** Employees staffed on this floor, the only valid handoff targets. */
   staff: Employee[];
   /** Whether this viewer can post and decide handoffs on this floor. */
@@ -23,11 +23,8 @@ export type FloorBoardProps = {
 };
 
 /** Subscribes to the floor board. Only mount this where a Convex client exists. */
-export function LiveFloorBoard({
-  projectId,
-  ...props
-}: { projectId: string } & Omit<FloorBoardProps, 'posts'>) {
-  const posts = useQuery(uiApi.projectBoard, { projectId: asId<'projects'>(projectId) });
+export function LiveFloorBoard({ floorId, ...props }: { floorId: string } & Omit<FloorBoardProps, 'posts'>) {
+  const posts = useQuery(uiApi.floorBoard, { floorId: asId<'floors'>(floorId) });
   return <FloorBoard posts={posts} {...props} />;
 }
 
@@ -139,7 +136,7 @@ export function FloorBoard({
   );
 }
 
-function NotePost({ post }: { post: ProjectPost }) {
+function NotePost({ post }: { post: FloorPost }) {
   return (
     <article className="board-post">
       <header>
@@ -151,7 +148,7 @@ function NotePost({ post }: { post: ProjectPost }) {
   );
 }
 
-function SystemPost({ post, onTask }: { post: ProjectPost; onTask: (taskId: string) => void }) {
+function SystemPost({ post, onTask }: { post: FloorPost; onTask: (taskId: string) => void }) {
   const taskId = post.taskId;
   return (
     <p className="board-system">
@@ -176,8 +173,8 @@ function HandoffPost({
   onTask,
   onDecide,
 }: {
-  post: ProjectPost;
-  handoff: NonNullable<ProjectPost['handoff']>;
+  post: FloorPost;
+  handoff: NonNullable<FloorPost['handoff']>;
   canDecide: boolean;
   onTask: (taskId: string) => void;
   onDecide: (postId: string, accepted: boolean) => void;

@@ -21,7 +21,7 @@ export function FloorScene({
   employeeCount,
   officeEmployees,
   emptyMessage,
-  projectId,
+  floorId,
   live = false,
   scene,
   controls,
@@ -34,7 +34,7 @@ export function FloorScene({
   officeEmployees: OfficeEmployee[];
   emptyMessage: string;
   /** The floor on show. Omit for the lobby. */
-  projectId?: string;
+  floorId?: string;
   /** Whether a Convex client exists, so the office may subscribe for live work. */
   live?: boolean;
   /** Replaces live work, so replay never touches the subscription. */
@@ -63,7 +63,7 @@ export function FloorScene({
           label={label}
           emptyMessage={emptyMessage}
           archived={archived}
-          projectId={projectId}
+          floorId={floorId}
           live={live && !archived}
           scene={scene}
           labels={labels.mode}

@@ -2,30 +2,30 @@
 
 import { Archive, Check, LoaderCircle, RotateCcw, Users } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import type { Employee, Project } from '@/lib/contracts';
+import type { Employee, Floor } from '@/lib/contracts';
 import { Sheet } from '../shared/sheet';
 import { Avatar } from '../shared/marks';
 
-export function ProjectPanel({
-  project,
+export function FloorPanel({
+  floor,
   employees,
   configured,
   onClose,
   onSave,
   onArchive,
 }: {
-  project: Project | null;
+  floor: Floor | null;
   employees: Employee[];
   configured: boolean;
   onClose: () => void;
   onSave: (name: string, brief: string, employeeIds: string[]) => Promise<void>;
-  onArchive: (project: Project, archived: boolean) => Promise<void>;
+  onArchive: (floor: Floor, archived: boolean) => Promise<void>;
 }) {
-  const [name, setName] = useState(project?.name ?? '');
-  const [brief, setBrief] = useState(project?.brief ?? '');
-  const [employeeIds, setEmployeeIds] = useState<string[]>(project?.employeeIds ?? []);
+  const [name, setName] = useState(floor?.name ?? '');
+  const [brief, setBrief] = useState(floor?.brief ?? '');
+  const [employeeIds, setEmployeeIds] = useState<string[]>(floor?.employeeIds ?? []);
   const [busy, setBusy] = useState(false);
-  const archived = Boolean(project?.archivedAt);
+  const archived = Boolean(floor?.archivedAt);
 
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -37,24 +37,24 @@ export function ProjectPanel({
 
   return (
     <Sheet
-      title={project ? `Edit ${project.name}` : 'Create project floor'}
-      subtitle="A project floor groups its shared brief, staffing, and your private task queue."
+      title={floor ? `Edit ${floor.name}` : 'Create floor floor'}
+      subtitle="A floor floor groups its shared brief, staffing, and your private task queue."
       onClose={onClose}
       footer={
         <button
           className="primary-button full"
           type="submit"
-          form="project-form"
+          form="floor-form"
           disabled={!configured || busy || !name.trim() || !brief.trim()}
         >
           {busy ? <LoaderCircle size={16} className="spin" /> : <Check size={16} />}
-          {project ? 'Save floor' : 'Create floor'}
+          {floor ? 'Save floor' : 'Create floor'}
         </button>
       }
     >
-      <form id="project-form" className="form-stack project-form" onSubmit={save}>
+      <form id="floor-form" className="form-stack floor-form" onSubmit={save}>
         <label>
-          Project name
+          Floor name
           <input
             value={name}
             maxLength={120}
@@ -64,20 +64,20 @@ export function ProjectPanel({
           />
         </label>
         <label>
-          Project brief
+          Floor brief
           <textarea
             className="large-textarea"
             value={brief}
             maxLength={5000}
             onChange={(event) => setBrief(event.target.value)}
-            placeholder="Describe the mandate, priorities, and standing constraints for this project."
+            placeholder="Describe the mandate, priorities, and standing constraints for this floor."
             required
           />
           <small>Shared with your workspace. New tasks receive a copy of this brief.</small>
         </label>
         <fieldset className="staffing-picker">
           <legend>Staff this floor</legend>
-          <p>Employees can work on more than one project.</p>
+          <p>Employees can work on more than one floor.</p>
           {employees.length ? (
             <div>
               {employees.map((employee) => {
@@ -110,8 +110,8 @@ export function ProjectPanel({
           )}
         </fieldset>
       </form>
-      {project && (
-        <div className="project-archive-control">
+      {floor && (
+        <div className="floor-archive-control">
           <div>
             <strong>{archived ? 'Restore this floor' : 'Archive this floor'}</strong>
             <p>
@@ -125,7 +125,7 @@ export function ProjectPanel({
             disabled={busy || !configured}
             onClick={async () => {
               setBusy(true);
-              await onArchive(project, !archived);
+              await onArchive(floor, !archived);
               setBusy(false);
             }}
           >

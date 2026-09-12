@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import { useQuery } from 'convex/react';
 import { useEffect, useMemo, useState } from 'react';
-import type { Dashboard, ProjectPost } from '@/lib/contracts';
+import type { Dashboard, FloorPost } from '@/lib/contracts';
 import { providers as providerCatalog } from '@/lib/providers';
 import { asId, uiApi } from '@/lib/ui-api';
 import { deriveActivities, type EmployeeActivity } from './activity';
@@ -35,7 +35,7 @@ export type OfficeStageProps = {
   /** Who is on this floor, in the shape the 3D scene understands. */
   employees: OfficeEmployee[];
   /** The floor being shown. Omit for the lobby, which holds unassigned work. */
-  projectId?: string;
+  floorId?: string;
   /** Whether a Convex client exists. Without one the office stays furnished and still. */
   live: boolean;
   /** Overrides live data, so replay never touches the subscription. */
@@ -51,13 +51,11 @@ export type OfficeStageProps = {
 /** Turns one dashboard and one board into everything the room shows. */
 export function deriveScene(
   dashboard: Dashboard,
-  posts: ProjectPost[],
-  projectId: string | undefined,
+  posts: FloorPost[],
+  floorId: string | undefined,
   now: number,
 ): OfficeSceneData {
-  const tasks = dashboard.tasks.filter((task) =>
-    projectId ? task.projectId === projectId : !task.projectId,
-  );
+  const tasks = dashboard.tasks.filter((task) => (floorId ? task.floorId === floorId : !task.floorId));
   const taskIds = new Set(tasks.map((task) => task.id));
   const connected = dashboard.connections.filter((connection) => connection.status === 'connected');
   const providers: OfficeProvider[] = [];
@@ -121,13 +119,13 @@ function useNow(intervalMs: number) {
 function LiveStage(props: Omit<OfficeStageProps, 'live' | 'scene'>) {
   const dashboard = useQuery(uiApi.dashboard, {});
   const posts = useQuery(
-    uiApi.projectBoard,
-    props.projectId ? { projectId: asId<'projects'>(props.projectId) } : 'skip',
+    uiApi.floorBoard,
+    props.floorId ? { floorId: asId<'floors'>(props.floorId) } : 'skip',
   );
   const now = useNow(5_000);
   const scene = useMemo(
-    () => (dashboard ? deriveScene(dashboard, posts ?? [], props.projectId, now) : emptyScene),
-    [dashboard, posts, props.projectId, now],
+    () => (dashboard ? deriveScene(dashboard, posts ?? [], props.floorId, now) : emptyScene),
+    [dashboard, posts, props.floorId, now],
   );
   useActivityCues(scene.activities);
   return <Stage {...props} scene={scene} />;
@@ -141,7 +139,7 @@ function Stage({
   emptyMessage,
   labels,
   onSelect,
-}: Omit<OfficeStageProps, 'live' | 'projectId'> & { scene: OfficeSceneData }) {
+}: Omit<OfficeStageProps, 'live' | 'floorId'> & { scene: OfficeSceneData }) {
   const dressed = useMemo(
     () =>
       employees.map((employee) => {

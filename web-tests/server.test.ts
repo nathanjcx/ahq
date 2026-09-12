@@ -83,7 +83,7 @@ it('builds an isolated hosted session with only the employee/tool grant intersec
   process.env.MCP_GATEWAY_URL = 'https://gateway.example';
   const context = {
     task: { id: 'task1', model: 'gpt-5.6-terra', prompt: 'Review the pipeline.' },
-    project: { id: 'project1', name: 'Growth', brief: 'A user-authored project brief.' },
+    floor: { id: 'project1', name: 'Growth', brief: 'A user-authored floor brief.' },
     employeeVersion: {
       id: 'version1',
       instructions: 'Private instructions',
@@ -102,8 +102,8 @@ it('builds an isolated hosted session with only the employee/tool grant intersec
     runToken: 'private-run-token',
   } as TaskContext;
   const config = sessionConfiguration(context);
-  expect(config.agent?.instructions).not.toContain(context.project!.brief);
-  expect(initialTaskInput(context)).toContain(context.project!.brief);
+  expect(config.agent?.instructions).not.toContain(context.floor!.brief);
+  expect(initialTaskInput(context)).toContain(context.floor!.brief);
   expect(initialTaskInput(context)).toContain(context.task.prompt);
   expect(initialTaskInput({ task: context.task })).toBe(context.task.prompt);
   expect(config.input).toBeUndefined();
@@ -119,7 +119,7 @@ it('builds an isolated hosted session with only the employee/tool grant intersec
   });
   expect(config.agent?.instructions).toContain('never claim a handoff was accepted');
   expect(
-    sessionConfiguration({ ...context, project: undefined }).agent?.tools?.some(
+    sessionConfiguration({ ...context, floor: undefined }).agent?.tools?.some(
       (tool) => 'server_label' in tool && tool.server_label === 'astra_floor',
     ),
   ).toBe(false);

@@ -12,7 +12,7 @@ import { FloorScene } from './floor-scene';
 
 export function FloorTeam({
   floorName,
-  projectId,
+  floorId,
   configured,
   archived,
   staff,
@@ -20,11 +20,11 @@ export function FloorTeam({
   canAssign,
   onEmployee,
   onNewTask,
-  onEditProject,
+  onEditFloor,
 }: {
   floorName: string;
   /** This floor, so the office can read its board and replay its finished tasks. */
-  projectId: string;
+  floorId: string;
   /** Whether a Convex client exists. */
   configured: boolean;
   archived: boolean;
@@ -33,7 +33,7 @@ export function FloorTeam({
   canAssign: boolean;
   onEmployee: (id: string) => void;
   onNewTask: (employeeId: string) => void;
-  onEditProject: () => void;
+  onEditFloor: () => void;
 }) {
   const [replay, setReplay] = useState<OfficeSceneData | undefined>(undefined);
   return (
@@ -42,12 +42,12 @@ export function FloorTeam({
         label={floorName}
         archived={archived}
         compact
-        projectId={projectId}
+        floorId={floorId}
         live={configured}
         scene={replay}
         controls={
           <FloorReplay
-            projectId={projectId}
+            floorId={floorId}
             live={configured && !archived}
             employeeIds={staff.map((employee) => employee.id)}
             onScene={setReplay}
@@ -58,7 +58,7 @@ export function FloorTeam({
         emptyMessage={
           staff.length
             ? 'This team needs its connections set up. Select an employee to review access.'
-            : 'This floor is ready. Edit the floor to add its project team.'
+            : 'This floor is ready. Edit the floor to add its floor team.'
         }
         onEmployee={onEmployee}
       />
@@ -66,7 +66,7 @@ export function FloorTeam({
         <div className="section-title">
           <div>
             <span className="eyebrow">STAFFING</span>
-            <h3>Project team</h3>
+            <h3>Floor team</h3>
           </div>
           <span className="staff-count">{staff.length}</span>
         </div>
@@ -103,7 +103,7 @@ export function FloorTeam({
             text="Edit this floor to add one or more employees."
           />
         )}
-        <button className="floor-team-edit" onClick={onEditProject}>
+        <button className="floor-team-edit" onClick={onEditFloor}>
           <Pencil size={14} /> {archived ? 'Manage floor' : 'Edit staffing'}
         </button>
       </div>

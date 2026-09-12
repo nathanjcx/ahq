@@ -17,10 +17,10 @@ export type Actions = {
   bootstrap: (name: string) => Promise<unknown>;
   setTokenCap: (monthlyTokenCap: number) => Promise<unknown>;
   hire: (versionId: string) => Promise<unknown>;
-  createTask: (employeeId: string, prompt: string, title: string, projectId?: string) => Promise<unknown>;
-  createProject: (name: string, brief: string, employeeIds: string[]) => Promise<unknown>;
-  updateProject: (projectId: string, name: string, brief: string, employeeIds: string[]) => Promise<unknown>;
-  setProjectArchived: (projectId: string, archived: boolean) => Promise<unknown>;
+  createTask: (employeeId: string, prompt: string, title: string, floorId?: string) => Promise<unknown>;
+  createFloor: (name: string, brief: string, employeeIds: string[]) => Promise<unknown>;
+  updateFloor: (floorId: string, name: string, brief: string, employeeIds: string[]) => Promise<unknown>;
+  setFloorArchived: (floorId: string, archived: boolean) => Promise<unknown>;
   sendMessage: (taskId: string, text: string) => Promise<unknown>;
   cancelTask: (taskId: string) => Promise<unknown>;
   decide: (proposalId: string, approved: boolean) => Promise<unknown>;
@@ -33,7 +33,7 @@ export type Actions = {
     inboxResources: string,
   ) => Promise<unknown>;
   markRead: (itemId: string) => Promise<unknown>;
-  assign: (itemId: string, employeeId: string, projectId?: string) => Promise<unknown>;
+  assign: (itemId: string, employeeId: string, floorId?: string) => Promise<unknown>;
   saveDraft: (draft: Record<string, unknown>) => Promise<unknown>;
   publish: (draftId: string) => Promise<unknown>;
   retire: (versionId: string) => Promise<unknown>;
@@ -45,9 +45,9 @@ export type Actions = {
     visibleToSubjects: string[],
   ) => Promise<unknown>;
   // Floors
-  postToBoard: (projectId: string, text: string) => Promise<unknown>;
+  postToBoard: (floorId: string, text: string) => Promise<unknown>;
   requestHandoff: (
-    projectId: string,
+    floorId: string,
     toEmployeeId: string,
     brief: string,
     sourceTaskId?: string,
@@ -78,9 +78,9 @@ export const offlineActions: Actions = {
   setTokenCap: unavailable,
   hire: unavailable,
   createTask: unavailable,
-  createProject: unavailable,
-  updateProject: unavailable,
-  setProjectArchived: unavailable,
+  createFloor: unavailable,
+  updateFloor: unavailable,
+  setFloorArchived: unavailable,
   sendMessage: unavailable,
   cancelTask: unavailable,
   decide: unavailable,
@@ -108,9 +108,9 @@ export function useWorkspaceActions(): Actions {
   const setTokenCap = useMutation(uiApi.setTokenCap);
   const hire = useMutation(uiApi.hire);
   const createTask = useMutation(uiApi.createTask);
-  const createProject = useMutation(uiApi.createProject);
-  const updateProject = useMutation(uiApi.updateProject);
-  const setProjectArchived = useMutation(uiApi.setProjectArchived);
+  const createFloor = useMutation(uiApi.createFloor);
+  const updateFloor = useMutation(uiApi.updateFloor);
+  const setFloorArchived = useMutation(uiApi.setFloorArchived);
   const sendMessage = useMutation(uiApi.sendMessage);
   const cancelTask = useMutation(uiApi.cancelTask);
   const decide = useMutation(uiApi.decideAction);
@@ -136,23 +136,23 @@ export function useWorkspaceActions(): Actions {
     bootstrap: (name) => bootstrap({ name }),
     setTokenCap: (monthlyTokenCap) => setTokenCap({ monthlyTokenCap }),
     hire: (versionId) => hire({ versionId: asId(versionId) }),
-    createTask: (employeeId, prompt, title, projectId) =>
+    createTask: (employeeId, prompt, title, floorId) =>
       createTask({
         employeeId: asId(employeeId),
         prompt,
         title,
-        projectId: projectId ? asId<'projects'>(projectId) : undefined,
+        floorId: floorId ? asId<'floors'>(floorId) : undefined,
       }),
-    createProject: (name, brief, employeeIds) =>
-      createProject({ name, brief, employeeIds: employeeIds.map((id) => asId<'installations'>(id)) }),
-    updateProject: (projectId, name, brief, employeeIds) =>
-      updateProject({
-        projectId: asId(projectId),
+    createFloor: (name, brief, employeeIds) =>
+      createFloor({ name, brief, employeeIds: employeeIds.map((id) => asId<'installations'>(id)) }),
+    updateFloor: (floorId, name, brief, employeeIds) =>
+      updateFloor({
+        floorId: asId(floorId),
         name,
         brief,
         employeeIds: employeeIds.map((id) => asId<'installations'>(id)),
       }),
-    setProjectArchived: (projectId, archived) => setProjectArchived({ projectId: asId(projectId), archived }),
+    setFloorArchived: (floorId, archived) => setFloorArchived({ floorId: asId(floorId), archived }),
     sendMessage: (taskId, text) => sendMessage({ taskId: asId(taskId), text }),
     cancelTask: (taskId) => cancelTask({ taskId: asId(taskId) }),
     decide: (proposalId, approved) => decide({ proposalId: asId(proposalId), approved }),
@@ -166,11 +166,11 @@ export function useWorkspaceActions(): Actions {
         inboxResources,
       }),
     markRead: (itemId) => markRead({ itemId: asId(itemId) }),
-    assign: (itemId, employeeId, projectId) =>
+    assign: (itemId, employeeId, floorId) =>
       assign({
         itemId: asId(itemId),
         employeeId: asId(employeeId),
-        projectId: projectId ? asId<'projects'>(projectId) : undefined,
+        floorId: floorId ? asId<'floors'>(floorId) : undefined,
       }),
     // The employee editor still builds an untyped record; Convex validates every field on arrival.
     saveDraft: (draft) => saveDraft(draft as Parameters<typeof saveDraft>[0]),
@@ -179,10 +179,10 @@ export function useWorkspaceActions(): Actions {
     setTaskVisibility: (taskId, visibility) => setTaskVisibility({ taskId: asId(taskId), visibility }),
     setConnectionSharing: (connectionId, visibility, visibleToSubjects) =>
       setConnectionSharing({ connectionId: asId(connectionId), visibility, visibleToSubjects }),
-    postToBoard: (projectId, text) => postToBoard({ projectId: asId(projectId), text }),
-    requestHandoff: (projectId, toEmployeeId, brief, sourceTaskId) =>
+    postToBoard: (floorId, text) => postToBoard({ floorId: asId(floorId), text }),
+    requestHandoff: (floorId, toEmployeeId, brief, sourceTaskId) =>
       requestHandoff({
-        projectId: asId(projectId),
+        floorId: asId(floorId),
         toEmployeeId: asId(toEmployeeId),
         brief,
         sourceTaskId: sourceTaskId ? asId<'tasks'>(sourceTaskId) : undefined,
