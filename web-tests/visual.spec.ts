@@ -80,6 +80,8 @@ for (const viewport of viewports) {
   });
 
   test(`every panel and sheet opens inside a ${viewport.width}px viewport`, async ({ page }) => {
+    // A dozen navigations, sheets, and full-page screenshots against a development server.
+    test.slow();
     const errors = watchErrors(page);
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await open(page);
