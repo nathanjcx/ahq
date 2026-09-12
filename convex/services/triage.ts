@@ -3,7 +3,7 @@ import type { Doc, Id } from '../_generated/dataModel';
 import { mutation, query } from '../_generated/server';
 import type { MutationCtx } from '../_generated/server';
 import { MEMORY_LIMITS, proposeMemory } from '../lib/memory';
-import { channelFor, insertPost } from '../lib/posts';
+import { channelFor, findChannel, insertPost } from '../lib/posts';
 import { ensureSettings, settingsFor } from '../lib/schedule';
 import { assignmentForFloor, insertJob, openSessionTask, startTask } from '../lib/tasks';
 import { isAttendedTime } from '../lib/time';
@@ -104,6 +104,7 @@ async function postToChannels(
   floorIds: Id<'floors'>[],
   post: {
     kind: Doc<'posts'>['kind'];
+    flag?: Doc<'posts'>['flag'];
     authorName: string;
     authorEmployeeId?: Id<'installations'>;
     text: string;
@@ -332,6 +333,132 @@ export const resolve = mutation({
     });
     await ctx.db.patch(alert._id, { status: 'fixed', updatedAt: now });
     return { alertId: alert._id };
+  },
+});
+
+/** The tools only the emergency allow-list admits, which are the ones a report is owed for. */
+function emergencyOnlyTools(settings: { triageAllowList: string[]; emergencyAllowList: string[] }) {
+  return new Set(settings.emergencyAllowList.filter((tool) => !settings.triageAllowList.includes(tool)));
+}
+
+/** Whether this run reached a tool nothing but the emergency rule would have admitted. */
+async function usedEmergencyAuthority(ctx: Ctx, task: Doc<'tasks'>) {
+  const settings = await settingsFor(ctx, task.workspaceId);
+  const emergencyOnly = emergencyOnlyTools(settings);
+  if (!emergencyOnly.size) return false;
+  const calls = await ctx.db
+    .query('toolCalls')
+    .withIndex('by_task', (q) => q.eq('taskId', task._id))
+    .take(200);
+  return calls.some((call) => call.outcome === 'succeeded' && emergencyOnly.has(call.tool));
+}
+
+/** The incident reports this run has already filed, including a placeholder filed for it. */
+async function incidentReportsFor(ctx: Ctx, task: Doc<'tasks'>) {
+  const channel = await findChannel(ctx, task.workspaceId, 'triage', '');
+  if (!channel) return [];
+  const posts = await ctx.db
+    .query('posts')
+    .withIndex('by_channel_kind', (q) => q.eq('channelId', channel._id).eq('kind', 'finding'))
+    .order('desc')
+    .take(100);
+  return posts.filter(
+    (post) => post.taskId === task._id && (post.flag === 'incident' || post.flag === 'missing'),
+  );
+}
+
+const REPORT_SECTIONS = [
+  ['issue', 'Issue'],
+  ['reproduction', 'Reproduction'],
+  ['fix', 'Fix'],
+  ['reason', 'Why it acted without permission'],
+  ['sideEffects', 'Side effects'],
+  ['risks', 'Knock-on risks'],
+] as const;
+
+/**
+ * The incident report the emergency rule requires: what broke, how it was reproduced, what was
+ * changed, why it was done without permission, and what it might have knocked over. It goes to the
+ * triage channel and to every affected floor, and the Triage page lists it through
+ * `triage:incidentReports`.
+ */
+export const fileIncidentReport = mutation({
+  args: {
+    secret: v.string(),
+    runToken: v.string(),
+    issue: v.string(),
+    reproduction: v.string(),
+    fix: v.string(),
+    reason: v.string(),
+    sideEffects: v.string(),
+    risks: v.string(),
+  },
+  returns: v.object({ filed: v.boolean(), alertId: v.union(v.id('alerts'), v.null()) }),
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const task = await taskForRunToken(ctx, args.runToken);
+    const installation = await ctx.db.get(task.employeeId);
+    if (!installation || installation.kind !== 'triage') throw new Error('Triage access required');
+    const workspace = await ctx.db.get(task.workspaceId);
+    if (!workspace) throw new Error('Workspace not found');
+    const alert = await alertForTask(ctx, task._id);
+    const body = [
+      `Incident report: ${alert?.title ?? task.title}`,
+      ...REPORT_SECTIONS.map(
+        ([field, label]) => `${label}: ${cleanText(args[field], label, 5_000)}`,
+      ),
+    ].join('\n');
+    await postToChannels(ctx, workspace, alert?.affectedFloorIds ?? [], {
+      kind: 'finding',
+      flag: 'incident',
+      authorName: task.employeeName,
+      authorEmployeeId: task.employeeId,
+      text: body,
+      taskId: task._id,
+    });
+    return { filed: true, alertId: alert?._id ?? null };
+  },
+});
+
+/**
+ * The end of a triage run, and the one place the mandatory report is enforced.
+ *
+ * A run that reached the emergency allow-list and filed no report does not get to leave it unwritten:
+ * the platform files a placeholder marked `missing` in its place, so the Triage page shows the gap
+ * rather than nothing, and posts an escalation to the workspace channel for the next meeting.
+ */
+export const closeRun = mutation({
+  args: { secret: v.string(), taskId: v.id('tasks') },
+  returns: v.object({ emergency: v.boolean(), reportMissing: v.boolean() }),
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new Error('Task not found');
+    const workspace = await ctx.db.get(task.workspaceId);
+    if (!workspace) throw new Error('Workspace not found');
+    if (!(await usedEmergencyAuthority(ctx, task))) return { emergency: false, reportMissing: false };
+    if ((await incidentReportsFor(ctx, task)).length) return { emergency: true, reportMissing: false };
+    const alert = await alertForTask(ctx, task._id);
+    const title = alert?.title ?? task.title;
+    await postToChannels(ctx, workspace, alert?.affectedFloorIds ?? [], {
+      kind: 'finding',
+      flag: 'missing',
+      authorName: 'Triage',
+      text: [
+        `Incident report missing: ${title}`,
+        `${task.employeeName} used the emergency allow-list on this incident and filed no incident report.`,
+        'The issue, the reproduction, the fix, why it acted without permission, and the side effects are all unrecorded. Read the timeline for what it actually called.',
+      ].join('\n'),
+      taskId: task._id,
+    });
+    await insertPost(ctx, {
+      channel: await channelFor(ctx, workspace._id, 'workspace', ''),
+      kind: 'system',
+      authorName: 'Triage',
+      text: `Escalation: ${task.employeeName} acted under the emergency rule on "${title}" and filed no incident report.`,
+      taskId: task._id,
+    });
+    return { emergency: true, reportMissing: true };
   },
 });
 

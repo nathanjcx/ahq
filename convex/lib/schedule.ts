@@ -1,5 +1,3 @@
-import type { AlertPaging } from '../../lib/contracts/triage';
-import type { JobKind } from '../../lib/jobs';
 import {
   defaultWorkspaceSettings,
   type ScheduleSummary,
@@ -10,6 +8,8 @@ import {
   type TaskStatus,
   type WorkspaceSettings,
 } from '../../lib/contracts';
+import type { AlertPaging } from '../../lib/contracts/triage';
+import type { JobKind } from '../../lib/jobs';
 import type { Id } from '../_generated/dataModel';
 import type { MutationCtx } from '../_generated/server';
 import type { Ctx } from '../shared';
@@ -188,6 +188,8 @@ export interface PlannerAlert {
   triageTaskId?: string;
   /** How far the emergency rule has run on this incident, from its notification ledger. */
   paging: AlertPaging;
+  /** Every page ever recorded for this incident, spent ones included, so a page has a stable key. */
+  pagesSent: number;
 }
 export interface PlannerFinding {
   findingId: string;
@@ -325,13 +327,15 @@ export function planTick(input: PlannerInput): PlannedJob[] {
       if (paging.acknowledged || paging.attempts >= paging.required) continue;
       if ((paging.nextAttemptAt ?? now) > now) continue;
       const responder = input.instances.find((instance) => instance.kind === 'triage');
-      const taskId = alert.triageTaskId ?? responder?.standingTaskId;
+      // A page rides the responder's standing session by preference: it runs no turn, and the
+      // incident's own task is busy with one exactly when the page matters most.
+      const taskId = responder?.standingTaskId ?? alert.triageTaskId;
       if (!responder || !taskId) continue;
       planned.push({
         kind: 'page',
         taskId,
         employeeId: responder.employeeId,
-        uniqueKey: `page:${alert.alertId}:${paging.attempts + 1}`,
+        uniqueKey: `page:${alert.alertId}:${alert.pagesSent + 1}`,
         date,
         model: responder.model,
         findingIds: [],

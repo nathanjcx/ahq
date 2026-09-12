@@ -40,6 +40,7 @@ function alert(alertId: string, extra: Partial<PlannerAlert> = {}): PlannerAlert
     severity: 'high',
     createdAt: 1,
     paging: { attempts: 0, required: 3, acknowledged: false },
+    pagesSent: 0,
     ...extra,
   };
 }
@@ -302,13 +303,21 @@ describe('the emergency rule', () => {
           alerts: [
             alert('bad', {
               triageTaskId: 'alert-task',
-              paging: { attempts, required: 3, acknowledged: false, lastAttemptAt, nextAttemptAt: lastAttemptAt === undefined ? mondayNight : lastAttemptAt + 7 * 60_000 },
+              pagesSent: attempts,
+              paging: {
+                attempts,
+                required: 3,
+                acknowledged: false,
+                lastAttemptAt,
+                nextAttemptAt: lastAttemptAt === undefined ? mondayNight : lastAttemptAt + 7 * 60_000,
+              },
             }),
           ],
         }),
       ).filter((job) => job.kind === 'page');
-    // The first page goes out at once, on the incident's own task.
-    expect(at(0).map((job) => [job.taskId, job.uniqueKey])).toEqual([['alert-task', 'page:bad:1']]);
+    // The first page goes out at once, on the responder's standing session rather than on the
+    // incident's own task, which is busy with the turn.
+    expect(at(0).map((job) => [job.taskId, job.uniqueKey])).toEqual([['triage-task', 'page:bad:1']]);
     // The second waits for the interval, then goes out with the next attempt number.
     expect(at(1, mondayNight - 60_000)).toEqual([]);
     expect(at(1, mondayNight - 8 * 60_000).map((job) => job.uniqueKey)).toEqual(['page:bad:2']);

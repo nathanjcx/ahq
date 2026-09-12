@@ -210,19 +210,20 @@ async function tickWorkspace(ctx: MutationCtx, workspace: Doc<'workspaces'>, now
 
   // Each open incident carries its own notification ledger, which is what the planner re-pages from.
   const plannerAlerts: PlannerAlert[] = await Promise.all(
-    alerts.map(async (alert) => ({
-      alertId: alert._id,
-      severity: alert.severity,
-      createdAt: alert.createdAt,
-      triageTaskId: alert.triageTaskId,
-      paging: alertPaging(
-        await ctx.db
-          .query('notifications')
-          .withIndex('by_alert', (q) => q.eq('alertId', alert._id))
-          .collect(),
-        now,
-      ),
-    })),
+    alerts.map(async (alert) => {
+      const pages = await ctx.db
+        .query('notifications')
+        .withIndex('by_alert', (q) => q.eq('alertId', alert._id))
+        .collect();
+      return {
+        alertId: alert._id,
+        severity: alert.severity,
+        createdAt: alert.createdAt,
+        triageTaskId: alert.triageTaskId,
+        paging: alertPaging(pages, now),
+        pagesSent: pages.length,
+      };
+    }),
   );
 
   const planned = planTick({

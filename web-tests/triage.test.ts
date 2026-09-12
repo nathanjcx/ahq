@@ -224,6 +224,7 @@ describe('triage authority', () => {
       allowList: ['create_pull_request'],
       emergencyAllowList: ['merge_pull_request', 'deploy'],
       unattendedAttempts: 0,
+      emergency: false,
     });
 
     vi.setSystemTime(unattendedNow);
@@ -254,24 +255,40 @@ describe('triage authority', () => {
       expect.objectContaining({ attempt: 1, acknowledgedAt: unattendedNow }),
     ]);
 
-    // A page older than the twenty-minute window never authorizes anything.
-    const second = await t.mutation(api.services.notifications.attempt, {
-      secret,
-      workspaceId,
-      kind: 'triage',
-      title: incident.title,
-      text: incident.detail,
-      alertId,
-    });
-    expect(second[0].attempt).toBe(2);
-    await t.mutation(api.services.notifications.markDelivered, {
-      secret,
-      id: second[0].id,
-      channel: 'in_app',
-    });
+    // Pages after the acknowledgement start the count again, and it only grows from there.
+    const page = async () => {
+      const rows = await t.mutation(api.services.notifications.attempt, {
+        secret,
+        workspaceId,
+        kind: 'triage',
+        title: incident.title,
+        text: incident.detail,
+        alertId,
+      });
+      for (const row of rows)
+        await t.mutation(api.services.notifications.markDelivered, {
+          secret,
+          id: row.id,
+          channel: 'in_app',
+        });
+      return rows[0];
+    };
+    vi.setSystemTime(unattendedNow + 60_000);
+    const second = await page();
+    expect(second.attempt).toBe(2);
     expect((await authority()).unattendedAttempts).toBe(1);
-    vi.setSystemTime(unattendedNow + 21 * 60_000);
-    expect((await authority()).unattendedAttempts).toBe(0);
+    vi.setSystemTime(unattendedNow + 8 * 60_000);
+    await page();
+    vi.setSystemTime(unattendedNow + 15 * 60_000);
+    await page();
+    // Three attempts stand, but the first of them is not yet twenty minutes old.
+    expect(await authority()).toMatchObject({ unattendedAttempts: 3, emergency: false });
+    vi.setSystemTime(unattendedNow + 22 * 60_000);
+    expect(await authority()).toMatchObject({ unattendedAttempts: 3, emergency: true });
+    // Answering resets the rule: every page sent before the answer is spent, and the emergency
+    // allow-list shuts again until three new ones stand unanswered.
+    await user.mutation(api.notifications.acknowledge, { id: second.id });
+    expect(await authority()).toMatchObject({ unattendedAttempts: 0, emergency: false });
   });
 
   it('posts the post-mortem to the affected floors and proposes the prevention to memory', async () => {

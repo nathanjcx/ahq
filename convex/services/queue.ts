@@ -153,22 +153,26 @@ export const claimJobs = mutation({
       attempts: number;
     }> = [];
     const selectedTasks = new Set<string>();
+    // A page runs no session, so it neither waits behind a turn on the same task nor holds one back.
+    const holdsSession = (kind: string) => kind !== 'page_alert';
     const limit = Number.isFinite(args.limit) ? Math.max(0, Math.min(50, Math.floor(args.limit))) : 0;
     for (const job of candidates) {
       if (output.length >= limit) break;
       const taskKey = String(job.taskId);
-      if (selectedTasks.has(taskKey)) continue;
-      const activeLeases = await ctx.db
-        .query('jobs')
-        .withIndex('by_task_state', (q) => q.eq('taskId', job.taskId).eq('state', 'leased'))
-        .collect();
-      const activeLeaseExpiresAt = activeLeases.reduce(
-        (latest, active) => Math.max(latest, active.leaseExpiresAt || 0),
-        0,
-      );
-      if (activeLeaseExpiresAt > now) {
-        await ctx.db.patch(job._id, { availableAt: activeLeaseExpiresAt, updatedAt: now });
-        continue;
+      if (holdsSession(job.kind)) {
+        if (selectedTasks.has(taskKey)) continue;
+        const activeLeases = await ctx.db
+          .query('jobs')
+          .withIndex('by_task_state', (q) => q.eq('taskId', job.taskId).eq('state', 'leased'))
+          .collect();
+        const activeLeaseExpiresAt = activeLeases.reduce(
+          (latest, active) => Math.max(latest, active.leaseExpiresAt || 0),
+          0,
+        );
+        if (activeLeaseExpiresAt > now) {
+          await ctx.db.patch(job._id, { availableAt: activeLeaseExpiresAt, updatedAt: now });
+          continue;
+        }
       }
       const task = await ctx.db.get(job.taskId);
       if (!task) {
@@ -215,7 +219,7 @@ export const claimJobs = mutation({
       }
       // Invariant: one worker runs a job at a time. The lease token is minted and stored here, and
       // every later mutation for this job requires it, so a second replica's claim cannot complete,
-      // renew, or fail the same attempt. At most one job per task is leased at once.
+      // renew, or fail the same attempt. At most one session-holding job per task is leased at once.
       const leaseToken = crypto.randomUUID();
       const attempts = job.attempts + 1;
       await ctx.db.patch(job._id, {
@@ -246,7 +250,7 @@ export const claimJobs = mutation({
         /* Old jobs may contain plain text. */
       }
       output.push({ id: job._id, kind: job.kind, taskId: job.taskId, payload, leaseToken, attempts });
-      selectedTasks.add(taskKey);
+      if (holdsSession(job.kind)) selectedTasks.add(taskKey);
     }
     return output;
   },

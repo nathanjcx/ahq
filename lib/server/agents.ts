@@ -4,7 +4,7 @@ import type { TokenUsage } from 'openai/resources/beta/agents/agents';
 import type { SessionCreateParamsNonStreaming } from 'openai/resources/beta/agents/sessions/sessions';
 import type { TaskContext } from '../../services/types';
 import type { EmployeeKind, ModelId, TaskKind } from '../contracts';
-import { FLOOR_RULES, MEMORY_RULES, PACING_RULES, composeInstructions } from '../instructions';
+import { FLOOR_RULES, MEMORY_RULES, PACING_RULES, TRIAGE_RULES, composeInstructions } from '../instructions';
 import { query, mutate } from './backend';
 import { compileWorkingMemory, type WorkingMemory, type WorkingMemoryInputs } from './memory';
 import { requiredEnv } from './secrets';
@@ -43,7 +43,7 @@ const SERVER_TOOLS: Record<InternalServer, string[]> = {
   memory: ['remember', 'recall', 'read_memory', 'read_board'],
   shift: ['submit_report', 'submit_summary'],
   audit: ['read_reports', 'read_journal', 'read_artifact', 'read_memory', 'read_channel', 'submit_findings'],
-  triage: ['report_reproduction', 'resolve_alert'],
+  triage: ['report_reproduction', 'resolve_alert', 'file_incident_report'],
   janitor: ['merge', 'contest', 'archive', 'promote', 'read_memory'],
 };
 
@@ -144,6 +144,7 @@ export function sessionConfiguration(
     PACING_RULES,
     ...(internal.includes('memory') ? [MEMORY_RULES] : []),
     ...(internal.includes('floor') ? [FLOOR_RULES] : []),
+    ...(internal.includes('triage') ? [TRIAGE_RULES] : []),
   ];
   return {
     agent: {

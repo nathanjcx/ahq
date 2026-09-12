@@ -85,7 +85,38 @@ const resolveAlert: InternalTool = {
   },
 };
 
-export const triageTools = [reportReproduction, resolveAlert];
+/**
+ * The report the emergency rule requires. Filing it is not optional: a run that used the emergency
+ * allow-list and ended without one has a placeholder filed against it at run close and an escalation
+ * posted to the workspace channel, so the gap is on the record either way.
+ */
+const fileIncidentReport: InternalTool = {
+  name: 'file_incident_report',
+  description:
+    'File the incident report the emergency rule requires after you acted without permission: what broke, how you reproduced it, what you changed, why you could not wait for a person, and what it may have knocked over. Mandatory; the platform records its absence.',
+  properties: {
+    issue: { type: 'string', description: 'What was broken, in production terms.' },
+    reproduction: { type: 'string', description: 'How you reproduced it.' },
+    fix: { type: 'string', description: 'What you changed, and how you verified it.' },
+    reason: { type: 'string', description: 'Why you acted without a person’s permission.' },
+    sideEffects: { type: 'string', description: 'What else your change touched.' },
+    risks: { type: 'string', description: 'Knock-on risks a person should watch for.' },
+  },
+  required: ['issue', 'reproduction', 'fix', 'reason', 'sideEffects', 'risks'],
+  async run(request, _context, args) {
+    return request.backend.mutate<Record<string, unknown>>('services/triage:fileIncidentReport', {
+      runToken: request.runToken,
+      issue: requireString(args, 'issue'),
+      reproduction: requireString(args, 'reproduction'),
+      fix: requireString(args, 'fix'),
+      reason: requireString(args, 'reason'),
+      sideEffects: requireString(args, 'sideEffects'),
+      risks: requireString(args, 'risks'),
+    });
+  },
+};
+
+export const triageTools = [reportReproduction, resolveAlert, fileIncidentReport];
 
 /**
  * A provider write a triage run makes directly, without a proposal.
@@ -181,7 +212,7 @@ export async function dispatchTriageWrite(
     ...(emergency.includes(tool)
       ? {
           instruction:
-            'You acted without permission under the emergency rule. Verify the fix, then file the incident report: the issue, the reproduction, the fix, why you acted, and the side effects and knock-on risks.',
+            'You acted without permission under the emergency rule. Verify the fix, then call file_incident_report before this run ends: the issue, the reproduction, the fix, why you acted, and the side effects and knock-on risks. If you do not, the platform files the gap in your name and escalates it.',
         }
       : {}),
   };

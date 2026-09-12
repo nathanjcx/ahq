@@ -284,7 +284,8 @@ export const timeline = query({
 
 /**
  * The post-mortems and incident reports the triage floor has filed, newest first. They are findings
- * in the triage channel; one is an emergency report when its run reached the emergency allow-list.
+ * in the triage channel; one is an emergency report when its run reached the emergency allow-list,
+ * and one is `missing` when the platform filed the placeholder because the run never wrote its own.
  */
 export const incidentReports = query({
   args: {},
@@ -327,6 +328,7 @@ export const incidentReports = query({
           emergency: calls.some(
             (call) => emergencyOnly.has(call.tool) && call.outcome === 'succeeded',
           ),
+          missing: post.flag === 'missing',
           createdAt: post._creationTime,
         };
       }),

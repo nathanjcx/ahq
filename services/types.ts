@@ -1,4 +1,3 @@
-import type { JobKind } from '../lib/jobs';
 import type {
   Capability,
   CorrectionDescriptor,
@@ -10,6 +9,7 @@ import type {
   TaskStatus,
   ToolMode,
 } from '../lib/contracts';
+import type { JobKind } from '../lib/jobs';
 
 /** A reviewed tool with its execution policy, as stored in `registryTools`. */
 export interface ToolPolicy {
