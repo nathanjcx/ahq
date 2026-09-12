@@ -1,20 +1,111 @@
 import type { Doc, Id } from '../_generated/dataModel';
 import type { MutationCtx } from '../_generated/server';
-import { cleanText } from '../shared';
-import { requireFloor } from './tasks';
+import { cleanText, type Ctx } from '../shared';
 
-/** Posts on floor boards. The channels workstream generalizes these into channels and posts. */
-export async function systemPost(ctx: MutationCtx, task: Doc<'tasks'>, text: string) {
-  if (!task.floorId) return;
-  await ctx.db.insert('floorPosts', {
-    workspaceId: task.workspaceId,
-    floorId: task.floorId,
-    kind: 'system',
-    authorName: task.employeeName,
-    text: text.slice(0, 2_000),
-    taskId: task._id,
+export type ChannelKind = Doc<'channels'>['kind'];
+export type PostKind = Doc<'posts'>['kind'];
+export type Handoff = NonNullable<Doc<'posts'>['handoff']>;
+
+export const POST_TEXT_LIMIT = 5_000;
+
+/** Channels for a whole workspace carry no scope; floor and project channels carry their id. */
+const WORKSPACE_SCOPE_NAMES: Record<'workspace' | 'triage' | 'audit', string> = {
+  workspace: 'Workspace',
+  triage: 'Triage',
+  audit: 'Audit',
+};
+
+/** The live name of a channel's scope, so a renamed floor renames its channel. */
+export async function channelName(ctx: Ctx, kind: ChannelKind, scopeId: string) {
+  if (kind === 'floor') return (await ctx.db.get(scopeId as Id<'floors'>))?.name ?? 'Floor';
+  if (kind === 'project') return (await ctx.db.get(scopeId as Id<'projects'>))?.name ?? 'Project';
+  return WORKSPACE_SCOPE_NAMES[kind];
+}
+
+/** The channel for one scope, or null when nothing has been posted there yet. */
+export function findChannel(
+  ctx: Ctx,
+  workspaceId: Id<'workspaces'>,
+  kind: ChannelKind,
+  scopeId: string,
+): Promise<Doc<'channels'> | null> {
+  return ctx.db
+    .query('channels')
+    .withIndex('by_workspace_kind_scope', (q) =>
+      q.eq('workspaceId', workspaceId).eq('kind', kind).eq('scopeId', scopeId),
+    )
+    .unique();
+}
+
+/** Channels are created the first time something is posted to them, or when a person opens one. */
+export async function channelFor(
+  ctx: MutationCtx,
+  workspaceId: Id<'workspaces'>,
+  kind: ChannelKind,
+  scopeId: string,
+): Promise<Doc<'channels'>> {
+  const existing = await findChannel(ctx, workspaceId, kind, scopeId);
+  if (existing) return existing;
+  const channelId = await ctx.db.insert('channels', {
+    workspaceId,
+    kind,
+    scopeId,
+    name: await channelName(ctx, kind, scopeId),
     createdAt: Date.now(),
   });
+  const created = await ctx.db.get(channelId);
+  if (!created) throw new Error('Channel not found');
+  return created;
+}
+
+export interface PostInput {
+  channel: Doc<'channels'>;
+  kind: PostKind;
+  authorSubject?: string;
+  authorEmployeeId?: Id<'installations'>;
+  authorName: string;
+  text: string;
+  taskId?: Id<'tasks'>;
+  toEmployeeId?: Id<'installations'>;
+  reportId?: Id<'reports'>;
+  handoff?: Handoff;
+}
+
+/** The one path that writes a post. Text is trimmed and capped; the channel fixes the workspace. */
+export async function insertPost(ctx: MutationCtx, input: PostInput) {
+  const postId = await ctx.db.insert('posts', {
+    workspaceId: input.channel.workspaceId,
+    channelId: input.channel._id,
+    kind: input.kind,
+    authorSubject: input.authorSubject,
+    authorEmployeeId: input.authorEmployeeId,
+    authorName: input.authorName,
+    text: cleanText(input.text, 'Post', POST_TEXT_LIMIT),
+    taskId: input.taskId,
+    toEmployeeId: input.toEmployeeId,
+    reportId: input.reportId,
+    handoff: input.handoff,
+    createdAt: Date.now(),
+  });
+  return { postId };
+}
+
+/** A task's own trace: its floor channel, and its project channel when the task belongs to one. */
+export async function systemPost(ctx: MutationCtx, task: Doc<'tasks'>, text: string) {
+  const scopes: [ChannelKind, string][] = [
+    ...(task.floorId ? ([['floor', task.floorId]] as [ChannelKind, string][]) : []),
+    ...(task.projectId ? ([['project', task.projectId]] as [ChannelKind, string][]) : []),
+  ];
+  for (const [kind, scopeId] of scopes) {
+    await insertPost(ctx, {
+      channel: await channelFor(ctx, task.workspaceId, kind, scopeId),
+      kind: 'system',
+      authorEmployeeId: task.employeeId,
+      authorName: task.employeeName,
+      text: text.slice(0, 2_000),
+      taskId: task._id,
+    });
+  }
 }
 
 export async function insertNote(
@@ -22,23 +113,22 @@ export async function insertNote(
   input: {
     floor: Doc<'floors'>;
     authorSubject?: string;
+    authorEmployeeId?: Id<'installations'>;
     authorName: string;
     text: string;
     taskId?: Id<'tasks'>;
   },
 ) {
   if (input.floor.archivedAt !== undefined) throw new Error('Floor is archived');
-  const postId = await ctx.db.insert('floorPosts', {
-    workspaceId: input.floor.workspaceId,
-    floorId: input.floor._id,
+  return insertPost(ctx, {
+    channel: await channelFor(ctx, input.floor.workspaceId, 'floor', input.floor._id),
     kind: 'note',
     authorSubject: input.authorSubject,
+    authorEmployeeId: input.authorEmployeeId,
     authorName: input.authorName,
-    text: cleanText(input.text, 'Post', 5_000),
+    text: input.text,
     taskId: input.taskId,
-    createdAt: Date.now(),
   });
-  return { postId };
 }
 
 /** A handoff names a staffed employee, a brief, and the task whose result carries the context. */
@@ -47,6 +137,7 @@ export async function insertHandoff(
   input: {
     floor: Doc<'floors'>;
     authorSubject?: string;
+    authorEmployeeId?: Id<'installations'>;
     authorName: string;
     toEmployeeId: Id<'installations'>;
     brief: string;
@@ -61,22 +152,51 @@ export async function insertHandoff(
     throw new Error('Employee is not assigned to this floor');
   const version = await ctx.db.get(installation.versionId);
   if (!version) throw new Error('Employee version is retired');
-  const brief = cleanText(input.brief, 'Handoff brief', 5_000);
-  const postId = await ctx.db.insert('floorPosts', {
-    workspaceId: input.floor.workspaceId,
-    floorId: input.floor._id,
+  const brief = cleanText(input.brief, 'Handoff brief', POST_TEXT_LIMIT);
+  return insertPost(ctx, {
+    channel: await channelFor(ctx, input.floor.workspaceId, 'floor', input.floor._id),
     kind: 'handoff',
     authorSubject: input.authorSubject,
+    authorEmployeeId: input.authorEmployeeId,
     authorName: input.authorName,
     text: brief,
     taskId: input.sourceTaskId,
-    handoff: {
-      toEmployeeId: installation._id,
-      toEmployeeName: version.name,
-      brief,
-      status: 'pending',
-    },
-    createdAt: Date.now(),
+    handoff: { toEmployeeId: installation._id, toEmployeeName: version.name, brief, status: 'pending' },
   });
-  return { postId };
+}
+
+/** One post exactly as the interface renders it. */
+export function publicPost(post: Doc<'posts'>) {
+  return {
+    id: post._id,
+    channelId: post.channelId,
+    kind: post.kind,
+    authorSubject: post.authorSubject,
+    authorEmployeeId: post.authorEmployeeId,
+    authorName: post.authorName,
+    text: post.text,
+    taskId: post.taskId,
+    toEmployeeId: post.toEmployeeId,
+    handoff: post.handoff,
+    createdAt: post.createdAt,
+  };
+}
+
+/** Newest posts in one channel, oldest first, optionally paging back from a timestamp. */
+export async function recentPosts(
+  ctx: Ctx,
+  channelId: Id<'channels'>,
+  limit: number,
+  before?: number,
+): Promise<Doc<'posts'>[]> {
+  const posts = await ctx.db
+    .query('posts')
+    .withIndex('by_channel', (q) =>
+      before === undefined
+        ? q.eq('channelId', channelId)
+        : q.eq('channelId', channelId).lt('createdAt', before),
+    )
+    .order('desc')
+    .take(limit);
+  return posts.reverse();
 }

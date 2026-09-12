@@ -1,29 +1,17 @@
 import { v } from 'convex/values';
 import { mutation } from '../_generated/server';
-import type { MutationCtx } from '../_generated/server';
 import { requireService } from '../shared';
-import { requireFloor } from '../lib/tasks';
-import { insertHandoff, insertNote } from '../lib/posts';
-import { taskForRunToken } from './context';
+import { handoffFromRun, postFromRun } from './channels';
 
-/** Agents post notes and request handoffs from a floor task. People accept them. */
-async function floorForRun(ctx: MutationCtx, runToken: string) {
-  const task = await taskForRunToken(ctx, runToken);
-  if (!task.floorId) throw new Error('This task is not on a floor');
-  return { task, floor: await requireFloor(ctx, task.workspaceId, task.floorId) };
-}
-
+/**
+ * The floor tool names the gateway already calls. Both writes now land in the floor's channel;
+ * these stay as thin wrappers until the worker moves to `services/channels`.
+ */
 export const post = mutation({
   args: { secret: v.string(), runToken: v.string(), text: v.string() },
   handler: async (ctx, args) => {
     requireService(args.secret);
-    const { task, floor } = await floorForRun(ctx, args.runToken);
-    return insertNote(ctx, {
-      floor,
-      authorName: task.employeeName,
-      text: args.text,
-      taskId: task._id,
-    });
+    return postFromRun(ctx, args.runToken, args.text);
   },
 });
 
@@ -36,13 +24,6 @@ export const requestHandoff = mutation({
   },
   handler: async (ctx, args) => {
     requireService(args.secret);
-    const { task, floor } = await floorForRun(ctx, args.runToken);
-    return insertHandoff(ctx, {
-      floor,
-      authorName: task.employeeName,
-      toEmployeeId: args.toEmployeeId,
-      brief: args.brief,
-      sourceTaskId: task._id,
-    });
+    return handoffFromRun(ctx, args.runToken, args.toEmployeeId, args.brief);
   },
 });

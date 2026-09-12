@@ -15,6 +15,7 @@ import {
   usagePeriod,
   workspaceForIdentity,
 } from './shared';
+import { findChannel } from './lib/posts';
 import { periodUsage } from './lib/tasks';
 
 /** Statuses the workspace is still waiting on; only these carry a live message into the office. */
@@ -181,10 +182,13 @@ export const dashboard = query({
     );
     const openHandoffs = new Map<Id<'floors'>, number>();
     for (const floor of floors) {
-      const posts = await ctx.db
-        .query('floorPosts')
-        .withIndex('by_floor_kind', (q) => q.eq('floorId', floor._id).eq('kind', 'handoff'))
-        .collect();
+      const channel = await findChannel(ctx, workspace._id, 'floor', floor._id);
+      const posts = channel
+        ? await ctx.db
+            .query('posts')
+            .withIndex('by_channel_kind', (q) => q.eq('channelId', channel._id).eq('kind', 'handoff'))
+            .collect()
+        : [];
       openHandoffs.set(floor._id, posts.filter((post) => post.handoff?.status === 'pending').length);
     }
     return {
