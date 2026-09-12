@@ -8,7 +8,7 @@ import { JsonView } from '../shared/json-view';
 import { ProviderMark } from '../shared/marks';
 import { StateDiff, changedFields } from '../shared/state-diff';
 
-export const CANNOT_DECIDE = 'Only the connection owner or a workspace admin can decide';
+const CANNOT_DECIDE = 'Only the connection owner or a workspace admin can decide';
 
 function shortId(id: string) {
   return id.slice(-6);

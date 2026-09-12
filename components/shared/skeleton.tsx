@@ -3,7 +3,7 @@
  * subscription or a fetch shows these instead of a spinner in an empty box.
  */
 
-export type SkeletonKind = 'message' | 'post' | 'entry' | 'member' | 'row';
+export type SkeletonKind = 'message' | 'post' | 'entry' | 'member';
 
 const WIDTHS: Record<SkeletonKind, string[][]> = {
   message: [['38%'], ['100%', '92%', '64%']],
@@ -16,7 +16,6 @@ const WIDTHS: Record<SkeletonKind, string[][]> = {
     ['100%', '55%'],
   ],
   member: [['44%'], ['62%']],
-  row: [['58%'], ['36%']],
 };
 
 export function SkeletonList({
