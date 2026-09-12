@@ -3,7 +3,7 @@ import { optionalString, requireString, stringList, untrusted, type InternalTool
 
 const KINDS = ['fact', 'decision', 'preference', 'procedure', 'glossary', 'status'];
 
-export const merge: InternalTool = {
+const merge: InternalTool = {
   name: 'merge',
   description:
     'Replace two or more overlapping claims in one scope with a single claim. Each input is archived pointing at the merge.',
@@ -30,7 +30,7 @@ export const merge: InternalTool = {
   },
 };
 
-export const contest: InternalTool = {
+const contest: InternalTool = {
   name: 'contest',
   description:
     'Mark a claim as contested so it reaches no model, naming the claim it conflicts with when there is one. The conflict is posted as a question for a person to settle.',
@@ -52,7 +52,7 @@ export const contest: InternalTool = {
   },
 };
 
-export const archive: InternalTool = {
+const archive: InternalTool = {
   name: 'archive',
   description: 'Retire a claim that is stale or wrong.',
   properties: { id: { type: 'string', description: 'The claim to archive.' } },
@@ -66,7 +66,7 @@ export const archive: InternalTool = {
   },
 };
 
-export const promote: InternalTool = {
+const promote: InternalTool = {
   name: 'promote',
   description:
     'Propose an active scoped claim for the whole workspace. It waits for an administrator; promoting is not approving.',
@@ -85,7 +85,7 @@ export const promote: InternalTool = {
   },
 };
 
-export const readMemory: InternalTool = {
+const readMemory: InternalTool = {
   name: 'read_memory',
   description:
     'The workspace’s memory as the janitor sees it: the fill of every scope against its budget, and the claims waiting on a decision first.',

@@ -21,7 +21,7 @@ function requireKind(args: Record<string, unknown>) {
 }
 
 /** `remember`, so a later shift is not wrong. One atomic claim per call; the instructions say so too. */
-export const remember: InternalTool = {
+const remember: InternalTool = {
   name: 'remember',
   description:
     'File one atomic claim a later shift would be wrong without. Your own notes take effect at once; a floor or project claim is a proposal a person or the janitor decides. Never record a credential or anything told in confidence.',
@@ -50,7 +50,7 @@ export const remember: InternalTool = {
   },
 };
 
-export const recall: InternalTool = {
+const recall: InternalTool = {
   name: 'recall',
   description: 'Search the memory this task may read by tag and keyword. Best matches first.',
   properties: {
@@ -71,7 +71,7 @@ export const recall: InternalTool = {
   },
 };
 
-export const readMemory: InternalTool = {
+const readMemory: InternalTool = {
   name: 'read_memory',
   description:
     'Read the active claims of every scope this task may see: workspace, project, floor, and your own notes, with the recent task summaries of your floor.',
@@ -87,7 +87,7 @@ export const readMemory: InternalTool = {
   },
 };
 
-export const readBoard: InternalTool = {
+const readBoard: InternalTool = {
   name: 'read_board',
   description: 'Read the recent posts on your floor, your project, and the workspace channel.',
   properties: { limit: { type: 'number', description: 'Posts per channel, up to 50.' } },

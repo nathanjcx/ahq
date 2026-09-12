@@ -15,7 +15,7 @@ function requireDate(args: Record<string, unknown>, field = 'date') {
   return date;
 }
 
-export const readReports: InternalTool = {
+const readReports: InternalTool = {
   name: 'read_reports',
   description:
     'The night you are auditing: every shift of that working day with its report, its tool calls, its artifacts, the workspace standard, and yesterday’s findings that are still open.',
@@ -33,7 +33,7 @@ export const readReports: InternalTool = {
   },
 };
 
-export const readJournal: InternalTool = {
+const readJournal: InternalTool = {
   name: 'read_journal',
   description:
     'One task’s journal: its events, the employee’s own messages, and every tool call with its outcome. This is the record a report is checked against.',
@@ -48,7 +48,7 @@ export const readJournal: InternalTool = {
   },
 };
 
-export const readArtifact: InternalTool = {
+const readArtifact: InternalTool = {
   name: 'read_artifact',
   description:
     'Read an archived deliverable as text. Large files come back truncated with their true size, so ask for what you need rather than the whole archive.',
@@ -79,7 +79,7 @@ export const readArtifact: InternalTool = {
   },
 };
 
-export const readMemory: InternalTool = {
+const readMemory: InternalTool = {
   name: 'read_memory',
   description: 'Search this workspace’s memory by tag and keyword, to check a claim against it.',
   properties: { query: { type: 'string', description: 'Words or tags to search for.' } },
@@ -93,7 +93,7 @@ export const readMemory: InternalTool = {
   },
 };
 
-export const readChannel: InternalTool = {
+const readChannel: InternalTool = {
   name: 'read_channel',
   description: 'Read the recent posts on the channels this audit run can see.',
   properties: { limit: { type: 'number', description: 'Posts per channel, up to 50.' } },
@@ -141,7 +141,7 @@ function parseFindings(value: unknown): FindingInput[] {
  * The one write an audit run makes: its own findings. Recording them also re-verifies yesterday's,
  * because whether a finding was addressed is decided by the same record this run just read.
  */
-export const submitFindings: InternalTool = {
+const submitFindings: InternalTool = {
   name: 'submit_findings',
   description:
     'File the night’s findings, one per claim, each with the evidence from the journal and the action it requires. Filing also re-checks yesterday’s findings against today’s record.',

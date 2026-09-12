@@ -98,7 +98,7 @@ async function journalCall(
 }
 
 /** Tools a server discovers at call time rather than declaring: the triage allow-lists. */
-export interface DynamicTools {
+interface DynamicTools {
   list(
     request: GatewayRequest,
   ): Promise<{ name: string; description: string; inputSchema: Record<string, unknown> }[]>;

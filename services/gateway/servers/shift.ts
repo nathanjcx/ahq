@@ -1,7 +1,7 @@
 import { boundedNumber, requireString, stringList, type InternalTool } from './shared';
 
 /** The structured report a shift ends with. Without one the platform infers it and marks it inferred. */
-export const submitReport: InternalTool = {
+const submitReport: InternalTool = {
   name: 'submit_report',
   description:
     'End this shift with its report. File it once, at the end: what you finished, what is in progress, what blocks you, what comes next, the risks, and how confident you are of the deadline.',
@@ -38,7 +38,7 @@ export const submitReport: InternalTool = {
 };
 
 /** The structured outcome of a finished task, which later shifts read as a recent summary. */
-export const submitSummary: InternalTool = {
+const submitSummary: InternalTool = {
   name: 'submit_summary',
   description:
     'Close this task with its outcome: what it produced, the decisions taken, what is still open, and the deliverables it archived.',

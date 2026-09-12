@@ -24,7 +24,7 @@ const memoryRules = `Remember sparingly. A memory is one atomic claim a later sh
 const floorRules = `This task is on a floor: post a short note on the board when you finish a milestone, request a handoff when another employee on the floor should take the next step, and never claim a handoff was accepted, because only a person can accept one.`;
 
 /** The internal tool servers the gateway serves, one path segment each under `/mcp/`. */
-export const INTERNAL_SERVERS = ['floor', 'memory', 'shift', 'audit', 'triage', 'janitor'] as const;
+const INTERNAL_SERVERS = ['floor', 'memory', 'shift', 'audit', 'triage', 'janitor'] as const;
 export type InternalServer = (typeof INTERNAL_SERVERS)[number];
 
 export function isInternalServer(value: string): value is InternalServer {
@@ -40,6 +40,12 @@ const SERVER_LABELS: Record<InternalServer, string> = {
   janitor: 'astra_janitor',
 };
 
+/**
+ * What each server advertises, so a session can name its tools without asking the gateway. The
+ * gateway builds the same lists from `services/gateway/servers/*`; the runtime harness asserts the
+ * two agree for every role, because a session that names a tool the gateway does not serve would
+ * fail on the first call rather than at startup.
+ */
 const SERVER_TOOLS: Record<InternalServer, string[]> = {
   floor: ['floor_post', 'floor_handoff'],
   memory: ['remember', 'recall', 'read_memory', 'read_board'],

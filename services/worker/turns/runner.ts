@@ -70,7 +70,7 @@ async function sessionFor(runtime: WorkerRuntime, request: TurnRequest) {
   return sessionId;
 }
 
-export const openAiTurnRunner: TurnRunner = {
+const openAiTurnRunner: TurnRunner = {
   async run(runtime, request) {
     const sessionId = await sessionFor(runtime, request);
     await runtime.api.beta.agents.sessions.events.create(sessionId, {

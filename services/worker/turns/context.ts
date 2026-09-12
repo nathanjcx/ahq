@@ -18,7 +18,6 @@ export interface TurnPayload {
   model?: ModelId;
   findingIds?: string[];
   meetingId?: string;
-  entryId?: string;
   turnId?: string;
   alertId?: string;
   projectId?: string;
@@ -47,7 +46,18 @@ export function taskContext(taskId: string) {
 export async function recordTurn(job: Job, taskId: string, result: TurnResult) {
   await mutate('services/sessions:recordEvents', {
     taskId,
-    events: [],
+    // A turn cut short by the run-time limit says so, rather than reading as a turn with little to say.
+    events:
+      result.status === 'timed_out'
+        ? [
+            {
+              externalId: `turn-timeout:${job.id}`,
+              type: 'task.timeout',
+              text: 'The configured run time limit was reached and the turn was cancelled.',
+              createdAt: Date.now(),
+            },
+          ]
+        : [],
     ...(result.text
       ? {
           messages: [

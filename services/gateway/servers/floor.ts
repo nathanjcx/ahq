@@ -1,6 +1,6 @@
 import { requireString, type InternalTool } from './shared';
 
-export const floorPost: InternalTool = {
+const floorPost: InternalTool = {
   name: 'floor_post',
   description: 'Post a short note on this floor board. Use it when you finish a milestone.',
   properties: { text: { type: 'string', description: 'The note to post.' } },
@@ -14,7 +14,7 @@ export const floorPost: InternalTool = {
   },
 };
 
-export const floorHandoff: InternalTool = {
+const floorHandoff: InternalTool = {
   name: 'floor_handoff',
   description:
     'Request a handoff to another employee on this floor. A person accepts or declines it; requesting is not accepting.',

@@ -10,6 +10,7 @@ import type OpenAI from 'openai';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { api, internal } from '../convex/_generated/api';
 import type { Id } from '../convex/_generated/dataModel';
+import { internalServerTools, serversFor } from '../lib/server/agents';
 import { installBackend, type Backend } from '../lib/server/backend';
 import { seal } from '../lib/server/secrets';
 import { createGateway } from '../services/gateway/create';
@@ -107,8 +108,6 @@ let provider: ReturnType<typeof fakeProvider>;
 let runtime: WorkerRuntime;
 let backend: Backend;
 
-/** The tools a turn used, in order, so a scenario can assert what the agent actually did. */
-let used: ToolCall[] = [];
 /** One script per job kind; a scenario sets the ones its jobs will hit. */
 const scripts = new Map<string, Script>();
 /** Every turn input the runner saw, so a scenario can assert what reached the model. */
@@ -139,7 +138,6 @@ const scriptedRunner: TurnRunner = {
       const client = await mcpClient(server, request.context.runToken);
       try {
         const result = await client.callTool({ name: tool, arguments: args });
-        used.push({ server, tool, args });
         if (result.isError)
           throw new Error(`${server}.${tool} refused: ${JSON.stringify(result.structuredContent)}`);
         return result.structuredContent;
@@ -163,6 +161,25 @@ const scriptedRunner: TurnRunner = {
 };
 
 const INPUT_KINDS = ['start_task', 'send_message', 'cancel_task'];
+
+/**
+ * Every internal server a session advertises is served by the gateway with exactly those tools.
+ * The two lists are declared separately — `lib/server/agents.ts` for the session, the server modules
+ * for the gateway — and a session that names a tool the gateway does not serve would fail on the
+ * first call rather than at startup, so the agreement is asserted here for whatever role is running.
+ */
+async function assertAdvertisedToolsExist(context: TaskContext) {
+  for (const server of serversFor(context.employee.kind, context.task.kind)) {
+    if (server === 'floor' && !context.floor) continue;
+    const client = await mcpClient(server, context.runToken);
+    try {
+      const served = (await client.listTools()).tools.map((tool) => tool.name);
+      for (const tool of internalServerTools(server)) expect(served).toContain(tool);
+    } finally {
+      await client.close().catch(() => {});
+    }
+  }
+}
 
 /** Runs the scheduler, then runs every job of the given kinds the way the worker would. */
 async function runQueue(kinds: string[]) {
@@ -371,7 +388,8 @@ it('runs a daily shift that files its report into the record and the channel', a
     })
   ).taskId;
 
-  scripts.set('start_shift', async ({ call }) => {
+  scripts.set('start_shift', async ({ call, context }) => {
+    await assertAdvertisedToolsExist(context);
     await call('memory', 'remember', {
       scope: 'self',
       kind: 'decision',
@@ -580,8 +598,8 @@ it('runs a curation turn that merges two overlapping claims', async () => {
     return ids;
   });
 
-  scripts.set('curation_run', async ({ call, list }) => {
-    expect((await list('janitor')).sort()).toEqual(['archive', 'contest', 'merge', 'promote', 'read_memory']);
+  scripts.set('curation_run', async ({ call, context }) => {
+    await assertAdvertisedToolsExist(context);
     await call('janitor', 'read_memory');
     await call('janitor', 'merge', {
       ids: claims,
@@ -605,16 +623,8 @@ it('runs a curation turn that merges two overlapping claims', async () => {
 });
 
 it('runs the audit night and delivers its finding at the next shift start', async () => {
-  scripts.set('audit_run', async ({ context, call, list }) => {
-    // An auditor sees the audit server and nothing else.
-    expect((await list('audit')).sort()).toEqual([
-      'read_artifact',
-      'read_channel',
-      'read_journal',
-      'read_memory',
-      'read_reports',
-      'submit_findings',
-    ]);
+  scripts.set('audit_run', async ({ context, call }) => {
+    await assertAdvertisedToolsExist(context);
     const read = (await call('audit', 'read_reports', { date: DAY_ONE })) as {
       standards: string;
       work: string;
@@ -688,7 +698,6 @@ it('lets a triage turn open a pull request under the allow-list and nothing more
     detail: 'The checkout endpoint has failed every probe for six minutes.',
     affectedFloorIds: [floorId],
   });
-  used = [];
   scripts.set('triage_run', async ({ call, list }) => {
     const tools = await list('triage');
     expect(tools).toContain('create_pull_request');

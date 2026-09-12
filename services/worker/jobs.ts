@@ -76,9 +76,12 @@ async function runTurnJob(runtime: WorkerRuntime, job: Job) {
   const turn = turnFor(job.kind);
   if (!turn) throw new Error(`Unsupported queue job: ${job.kind}`);
   await turn(runtime, job);
-  const context = await query<TaskContext>('services/sessions:taskContext', { taskId: job.taskId });
-  if (['completed', 'failed', 'cancelled'].includes(context.task.status))
-    await taskSummary(runtime, job, context);
+  // Only a shift can leave a work task finished; every other turn kind runs on a session task.
+  if (job.kind === 'start_shift' || job.kind === 'review_shift') {
+    const context = await query<TaskContext>('services/sessions:taskContext', { taskId: job.taskId });
+    if (['completed', 'failed', 'cancelled'].includes(context.task.status))
+      await taskSummary(runtime, job, context);
+  }
   await mutate('services/queue:completeJob', { jobId: job.id, leaseToken: job.leaseToken });
 }
 

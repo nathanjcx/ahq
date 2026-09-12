@@ -45,7 +45,7 @@ export function admittedTools(authority: TriageAuthority): { tools: string[]; em
   return { tools: [...new Set([...authority.allowList, ...emergency])], emergency };
 }
 
-export const reportReproduction: InternalTool = {
+const reportReproduction: InternalTool = {
   name: 'report_reproduction',
   description:
     'Post what you reproduced to the triage channel and the affected floors: the steps, what you saw, and what it means for the work on those floors.',
@@ -60,7 +60,7 @@ export const reportReproduction: InternalTool = {
   },
 };
 
-export const resolveAlert: InternalTool = {
+const resolveAlert: InternalTool = {
   name: 'resolve_alert',
   description:
     'Close the fix with its post-mortem: the cause, the fix, the prevention, and the regression test that would catch it again. This closes the fix, not the incident; a person confirms the incident.',
@@ -124,14 +124,10 @@ export async function dispatchTriageWrite(
           ? 'That tool is not on this workspace’s triage allow-list.'
           : 'That tool needs approval, or the emergency allow-list, which is closed while a person can still answer.',
       );
-    const mode = toolPolicy(target.policies, connection.provider, tool).mode;
-    if (mode !== 'write')
+    const policy = toolPolicy(target.policies, connection.provider, tool);
+    if (policy.mode !== 'write')
       throw new GatewayError('policy_denied', 'That tool is not reviewed as an external write.');
-    checkResourceScope(
-      connection.resourceScope,
-      args,
-      toolPolicy(target.policies, connection.provider, tool),
-    );
+    checkResourceScope(connection.resourceScope, args, policy);
   } catch (error) {
     const failure =
       error instanceof GatewayError ? error : new GatewayError('policy_denied', safeError(error));
