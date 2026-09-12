@@ -1,245 +1,148 @@
-# Web deployment
+# Deployment
 
-This guide is for the web migration as of September 11, 2026. Follow the sections in order. The service configuration is ready to review, but this document does not claim that an account has been created, a provider has been connected, or a Railway deployment has completed.
+Deploying Astra HQ is two jobs. First a platform administrator brings up the four pieces described in [architecture](architecture.md): Convex, web, worker, gateway. Then the same administrator configures every provider inside the running application, on the Operations page. No provider setting is an environment variable.
 
-## 1. Preserve the demo and choose the source
+This document does not claim that any account exists, that a provider has been connected, or that a deployment has completed.
 
-Before touching a production deployment, verify the preserved demo branch:
+## 1. Convex and Clerk
 
-```sh
-git fetch origin
-git show origin/demo:package.json >/dev/null
-git rev-parse origin/demo
-```
-
-The expected commit is `110d2ba`. If `origin/demo` does not exist, create it from that commit and push it once:
-
-```sh
-git branch demo 110d2ba
-git push origin demo
-```
-
-Do not overwrite an existing `demo` branch. Deploy `main` after the migration is merged. Do not run a seed function or import demo data into the production Convex deployment.
-
-## 2. Create Convex and Clerk first
-
-Create a Convex project and a production deployment. The repository's `convex/auth.config.ts` expects Clerk's Frontend API URL in `CLERK_JWT_ISSUER_DOMAIN` and uses `applicationID: "convex"`. Convex documents this issuer setup in [its Clerk guide](https://docs.convex.dev/auth/clerk).
+Create a Convex project with a production deployment, and a Clerk production application.
 
 In Clerk:
 
-1. Create a production application and copy its `pk_live_` publishable key and `sk_live_` secret key.
-2. Activate Clerk's Convex integration, then enable Organizations. Require organization membership for a company workspace, then create the first organization or invite the operators who will test it. Workspace roles control workspace administration. Publishing uses the separate platform administrator allowlist.
-3. Copy the production Frontend API URL into `CLERK_JWT_ISSUER_DOMAIN`. It must be the issuer for the same Clerk instance, not the development URL.
-4. Add the final web origin to Clerk's allowed origins and redirect URLs. The origin is the value used for `APP_URL`.
-5. Record the Clerk user IDs of platform administrators. Put those IDs, comma separated, in `PLATFORM_ADMIN_USER_IDS` in Convex.
+1. Copy the `pk_live_` publishable key and the `sk_live_` secret key.
+2. Activate Clerk's Convex integration, then enable Organizations. A workspace is keyed by organization when the signed-in session has one, and by user otherwise. Organization role decides workspace owner, admin, or member.
+3. Copy the production Frontend API URL. It becomes `CLERK_JWT_ISSUER_DOMAIN` in Convex. `convex/auth.config.ts` uses `applicationID: "convex"`.
+4. Add the final web origin to Clerk's allowed origins and redirect URLs. That origin is `APP_URL`.
+5. Record the Clerk user IDs of the platform administrators.
 
-Set these variables in the Convex production deployment. Convex stores environment variables per deployment, and `npx convex deploy` publishes functions and schema without copying variables from the web host. See [Convex environment variables](https://docs.convex.dev/production/environment-variables).
+Set the Convex deployment variables. Convex stores variables per deployment, and `npx convex deploy` does not copy them from the web host.
 
 ```sh
 npx convex env set --prod CLERK_JWT_ISSUER_DOMAIN 'https://your-production-clerk-frontend-api.example.com'
 npx convex env set --prod AHQ_SERVICE_SECRET 'generate-a-separate-random-secret'
 npx convex env set --prod PLATFORM_ADMIN_USER_IDS 'user_...'
-npx convex env set --prod MCP_SERVER_URLS_JSON '{"linear":["https://mcp.linear.app/mcp"]}'
-npx convex env set --prod MCP_TOOL_REGISTRY_JSON '{"linear":[{"name":"list_issues","description":"List permitted issues","mode":"read"},{"name":"get_issue","description":"Read one permitted issue","mode":"read"}]}'
-```
-
-The example commands are illustrative. Set the complete URL and tool registries from `.env.example` before connecting providers. `MCP_SERVER_URLS_JSON` is an exact per-provider URL admission list. `MCP_TOOL_REGISTRY_JSON` is an exact per-provider list of discovered, reviewed tools that a published employee can request. Each entry has `name`, `description`, and `mode` with `read`, `write`, or `blocked`. A tool still needs a connection grant, employee capability, policy, and resource scope at runtime. Generate `AHQ_SERVICE_SECRET` and `CREDENTIAL_ENCRYPTION_KEY` independently. For the encryption key, use 32 random bytes encoded as base64, for example `openssl rand -base64 32`. The web and gateway validate this key as an AES-256-GCM key.
-
-Deploy the Convex code from the final migration checkout:
-
-```sh
 npx convex deploy
 ```
 
-Copy the resulting `https://...convex.cloud` URL. It becomes `NEXT_PUBLIC_CONVEX_URL` and, unless `CONVEX_URL` is set explicitly, the server-side fallback as well.
+Generate `AHQ_SERVICE_SECRET` and `CREDENTIAL_ENCRYPTION_KEY` independently. The encryption key is 32 random bytes in base64, for example `openssl rand -base64 32`; web, worker, and gateway validate it as an AES-256-GCM key. Copy the deployment's `https://...convex.cloud` URL for `NEXT_PUBLIC_CONVEX_URL`.
 
-## 3. Create the Railway project and services
+## 2. Railway services
 
-Create one Railway project linked to the migration repository. Railway reads `Dockerfile` and injects `PORT`; the services in this repository listen on that value. Railway's healthcheck switches traffic only after the endpoint returns a `2xx`, and it does not keep polling after deployment. See [Railway Dockerfiles](https://docs.railway.com/builds/dockerfiles) and [healthchecks](https://docs.railway.com/deployments/healthchecks).
-
-Create three services from the same repository and commit. Each builds the same Dockerfile image. Set these start commands in the service settings:
+One project, three services, one Dockerfile image, the same commit. Railway injects `PORT` and each process listens on it. `railway.json` supplies the shared build and the `/health` healthcheck default; set the start command and healthcheck on each service.
 
 | Service   | Start command     | Healthcheck | Public access                                          |
 | --------- | ----------------- | ----------- | ------------------------------------------------------ |
-| `web`     | `npm start`       | `/health`   | Add the application domain and HTTPS                   |
+| `web`     | `npm start`       | `/health`   | Application domain over HTTPS                          |
 | `worker`  | `npm run worker`  | `/health`   | Keep private                                           |
-| `gateway` | `npm run gateway` | `/health`   | Add an HTTPS domain; require bearer tokens at `/mcp/*` |
+| `gateway` | `npm run gateway` | `/health`   | HTTPS domain; every `/mcp/*` request needs a run token |
 
-The root `railway.json` supplies the shared Docker build and web healthcheck default. Set the command and healthcheck on each service in Railway; do not rely on one repository-level `startCommand` for all three processes. Railway runs staged variable changes only after they are deployed, so review the staged changes before applying them. Shared variables can reduce duplication, but keep secrets sealed and do not expose them as build arguments. See [Railway start commands](https://docs.railway.com/deployments/start-command) and [Railway variables](https://docs.railway.com/variables).
+The hosted Agents session connects to the gateway from OpenAI's side, so `MCP_GATEWAY_URL` must be a public HTTPS origin, not a private Railway address.
 
-Set `APP_URL` to the final web origin, for example `https://hq.example.com`. Set `MCP_GATEWAY_URL` to the gateway's public HTTPS origin, for example `https://mcp.example.com`. The OpenAI hosted session uses a service-origin MCP transport, so the gateway needs a stable HTTPS address that the OpenAI service can reach. Protect it with the bearer task token and provider admission checks. Railway private DNS can still be used for web-to-gateway traffic, but it is not the address supplied to the hosted Agents session.
+## 3. Environment variables
 
-## 4. Add variables
+This is the complete list the code reads. Everything else that used to live here is now Convex data, edited on the Operations page.
 
-The exact names come from the current web, worker, gateway, and Convex code. Add the common values to each Railway service that needs them. The simplest safe setup is to share the non-public runtime configuration with all three services, then seal secrets in Railway. Only the Convex URL and Clerk publishable key belong in `NEXT_PUBLIC_*` variables. Next.js includes those public values in the browser build. Keep every secret server-side.
+| Variable                            | Where                        | Required               | Purpose                                         |
+| ----------------------------------- | ---------------------------- | ---------------------- | ----------------------------------------------- |
+| `NEXT_PUBLIC_CONVEX_URL`            | web, worker, gateway         | yes                    | Convex URL, browser and server fallback         |
+| `CONVEX_URL`                        | web, worker, gateway         | no                     | Server-side Convex URL override                 |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | web                          | yes                    | Clerk browser SDK                               |
+| `CLERK_SECRET_KEY`                  | web                          | yes                    | Clerk server SDK                                |
+| `CLERK_JWT_ISSUER_DOMAIN`           | Convex                       | yes                    | Issuer Convex validates                         |
+| `APP_URL`                           | web                          | yes                    | Origin checks, OAuth callback, relay URL        |
+| `AHQ_SERVICE_SECRET`                | web, worker, gateway, Convex | yes                    | Authenticates service functions                 |
+| `CREDENTIAL_ENCRYPTION_KEY`         | web, worker, gateway         | yes for integrations   | Seals and unseals every stored secret           |
+| `OPENAI_API_KEY`                    | worker                       | yes for tasks          | Agents API                                      |
+| `MCP_GATEWAY_URL`                   | worker                       | yes for tasks          | Gateway origin written into session tools       |
+| `S3_ENDPOINT`                       | web, worker                  | yes for archived files | S3-compatible endpoint                          |
+| `S3_BUCKET`                         | web, worker                  | yes for archived files | Artifact bucket                                 |
+| `S3_ACCESS_KEY_ID`                  | web, worker                  | yes for archived files | Bucket access key                               |
+| `S3_SECRET_ACCESS_KEY`              | web, worker                  | yes for archived files | Bucket secret                                   |
+| `S3_REGION`                         | web, worker                  | no                     | Defaults to `auto`                              |
+| `S3_FORCE_PATH_STYLE`               | web, worker                  | no                     | Defaults to `false`                             |
+| `PLATFORM_ADMIN_USER_IDS`           | web, Convex                  | yes for configuration  | Clerk user IDs allowed on Operations            |
+| `WORKER_CONCURRENCY`                | worker                       | no                     | Job slots, default 4, bounded 1 to 16           |
+| `WORKER_MONITORS`                   | worker                       | no                     | Monitor slots, default 16, bounded 1 to 64      |
+| `MAX_TURN_SECONDS`                  | worker                       | no                     | Run time limit, default 900, bounded 60 to 3600 |
 
-| Variable                            | Railway services     | Convex | Required               | Purpose                                                                  |
-| ----------------------------------- | -------------------- | ------ | ---------------------- | ------------------------------------------------------------------------ |
-| `NEXT_PUBLIC_CONVEX_URL`            | web, worker, gateway | no     | yes                    | Convex browser URL and fallback                                          |
-| `CONVEX_URL`                        | web, worker, gateway | no     | no                     | Server-side Convex URL override                                          |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | web                  | no     | yes                    | Clerk browser SDK                                                        |
-| `CLERK_SECRET_KEY`                  | web                  | no     | yes                    | Clerk server SDK                                                         |
-| `CLERK_JWT_ISSUER_DOMAIN`           | no                   | yes    | yes                    | Clerk issuer for Convex auth                                             |
-| `APP_URL`                           | web                  | no     | yes                    | Origin checks and OAuth callback base                                    |
-| `AHQ_SERVICE_SECRET`                | web, worker, gateway | yes    | yes                    | Authenticates service calls into Convex                                  |
-| `CREDENTIAL_ENCRYPTION_KEY`         | web, worker, gateway | no     | yes for integrations   | 32 base64 encoded random bytes                                           |
-| `OPENAI_API_KEY`                    | worker               | no     | yes for tasks          | Server-side Agents API key                                               |
-| `MCP_GATEWAY_URL`                   | worker               | no     | yes for tasks          | Public HTTPS gateway origin                                              |
-| `S3_ENDPOINT`                       | web, worker          | no     | yes for archived files | S3-compatible endpoint                                                   |
-| `S3_FORCE_PATH_STYLE`               | web, worker          | no     | no                     | Defaults to `false`; use the bucket's documented URL style               |
-| `S3_REGION`                         | web, worker          | no     | no                     | Defaults to `auto`                                                       |
-| `S3_BUCKET`                         | web, worker          | no     | yes for archived files | Artifact bucket                                                          |
-| `S3_ACCESS_KEY_ID`                  | web, worker          | no     | yes for archived files | Bucket access key                                                        |
-| `S3_SECRET_ACCESS_KEY`              | web, worker          | no     | yes for archived files | Bucket secret                                                            |
-| `MCP_SERVER_URLS_JSON`              | no                   | yes    | yes                    | Exact provider URL admission allowlist                                   |
-| `MCP_TOOL_REGISTRY_JSON`            | no                   | yes    | yes for publishing     | Exact reviewed provider tools allowed in published employee capabilities |
-| `PLATFORM_ADMIN_USER_IDS`           | no                   | yes    | yes for publishing     | Clerk user IDs allowed to publish                                        |
-| `INBOX_WEBHOOK_SECRETS_JSON`        | web                  | no     | only for push inbox    | Connection ID to HMAC secret map                                         |
-| `NATIVE_INBOX_SECRETS_JSON`         | web                  | no     | for native inbox       | One app-level webhook secret per provider                                |
-| `MCP_TOOL_POLICIES_JSON`            | web, worker, gateway | no     | no                     | Explicit tool policy overrides                                           |
-| `MCP_OAUTH_CONFIG_JSON`             | web, worker, gateway | no     | yes for integrations   | Provider OAuth clients                                                   |
-| `WORKER_CONCURRENCY`                | worker               | no     | no                     | Defaults to 4, capped at 16                                              |
-| `MAX_TURN_SECONDS`                  | worker               | no     | no                     | Defaults to 900, bounded to 60 through 3600                              |
-| `TASK_RESERVED_COST_USD`            | no                   | yes    | no                     | Global reservation override                                              |
-| `TASK_RESERVED_COST_USD_LUNA`       | no                   | yes    | no                     | Luna reservation override                                                |
-| `TASK_RESERVED_COST_USD_TERRA`      | no                   | yes    | no                     | Terra reservation override                                               |
-| `TASK_RESERVED_COST_USD_SOL`        | no                   | yes    | no                     | Sol reservation override                                                 |
-| `TASK_RESERVED_COST_USD_ASTRA`      | no                   | yes    | no                     | Astra reservation override                                               |
+Keep `CLERK_SECRET_KEY` on web only and `OPENAI_API_KEY` on worker only. `PLATFORM_ADMIN_USER_IDS` must hold the same list in Convex and on the web service, because Convex guards the configuration functions and the web service guards the routes that seal secrets. Leave `PORT` unset. `ALLOW_INSECURE_MCP_FOR_TESTS` exists for the test suite and only has an effect when `NODE_ENV=test`; never set it on a deployed service.
 
-Railway supplies `PORT`. Leave it unset so each process binds to Railway's assigned port. Only the server URLs in the built-in provider registry (`lib/providers.ts`) are accepted, and each one must also be listed in Convex's `MCP_SERVER_URLS_JSON` for that provider before a connection is saved. There is no custom server URL. The code also requires HTTPS and blocks IP addresses, credentials, fragments, and non-standard ports.
+## 4. Artifact storage
 
-`MCP_TOOL_POLICIES_JSON` is fail-closed for restricted resources. An entry can set `mode` to `read`, `write`, or `blocked`; a restricted non-empty `resourceScope` also needs a configured `resourceArgument` such as `projectId`. Only the configured comma-separated IDs are accepted. The gateway never infers a resource argument from arbitrary tool parameters. A correction descriptor must name the read tool, ID argument, version field, expected version argument, and fields. Default approval rules vary by provider, so review each discovered tool before enabling it.
+The worker downloads completed session files and writes them to the bucket; the web service reads them back for authenticated downloads, so both need the credentials. Use a private bucket. Convex stores only the object key, size, and checksum, and authorizes each download. The worker skips files over 25 MB and stops after 100 files per task, journaling both limits.
 
-### OAuth client registration
+## 5. Configure providers on the Operations page
 
-Every provider is connected by OAuth. A user clicks "Connect <provider>" and signs in; the user never pastes a token, chooses a server URL, picks tools, or types a resource scope. The web service refuses to start OAuth for a provider unless all three of these are true:
+Sign in as a user whose Clerk ID is in `PLATFORM_ADMIN_USER_IDS` and open Operations. Every service reads this configuration, so a change takes effect on the next agent call and the next sign-in. Nothing here is redeployed.
 
-1. The server URL is listed for that provider in Convex's `MCP_SERVER_URLS_JSON`.
-2. The provider has an entry in `MCP_TOOL_REGISTRY_JSON` with at least one tool whose `mode` is not `blocked`.
-3. `MCP_OAUTH_CONFIG_JSON` has a client for that provider id, or for that exact server URL.
+The page has a readiness card per provider that names the next missing item, a configuration card per provider, and the tool registry.
 
-The Integrations page shows per-provider readiness so an operator can see which of the three is missing. Workspace owners and admins and platform administrators see the specific missing items.
+**Enabled servers.** Tick the MCP servers users may connect. The choices come from the built-in registry in `lib/providers.ts`; there is no free-form URL. Convex re-checks the URL when a connection is saved, and requires HTTPS with no embedded credentials.
 
-Register one OAuth client per provider. Use this exact callback for every client:
+**OAuth clients.** One client per provider, or one per exact server URL when a single product needs its own scopes. A client with no server URL is the provider default and covers every enabled server. Register this exact callback with every provider:
 
 ```text
-https://your-web-origin.example.com/api/integrations/callback
+https://<web-origin>/api/integrations/callback
 ```
 
-Put the resulting client IDs and secrets in `MCP_OAUTH_CONFIG_JSON`. The application accepts this shape:
+Fields are the client id, the client secret, the scopes, and optional fixed `authorizationUrl`, `tokenUrl`, and `tokenAuthMethod` (`client_secret_basic`, `client_secret_post`, or `none`) for a provider whose MCP server does not publish usable OAuth metadata. The browser posts the secret once to the web service, which seals it before Convex sees it. Afterwards the page shows only whether a secret is set and when it changed. Saving a client without a new secret keeps the stored one.
 
-```json
-{
-  "linear": {
-    "clientId": "client-id",
-    "clientSecret": "client-secret",
-    "scopes": "scope-a scope-b",
-    "authorizationUrl": "https://provider.example/authorize",
-    "tokenUrl": "https://provider.example/token",
-    "tokenAuthMethod": "client_secret_post"
-  }
-}
+**Native inbox secrets.** Providers with followable resources (GitHub, Linear, Slack) verify webhooks with one app-level signing secret. The card shows the URL to configure with the provider:
+
+```text
+https://<web-origin>/api/webhooks/native/<provider>
 ```
 
-`clientSecret`, `authorizationUrl`, `tokenUrl`, and `tokenAuthMethod` are optional when the provider's MCP server publishes compatible OAuth metadata. `tokenAuthMethod` is `client_secret_basic`, `client_secret_post`, or `none`. Use the provider's documented values. A key may also be an exact server URL, which overrides the provider-id entry for that server; use that only when one product needs different scopes. A Google Workspace example is in [the Google Workspace MCP guide](google-workspace-mcp.md). Do not paste a provider access token into this JSON. The credential returned by consent is sealed with `CREDENTIAL_ENCRYPTION_KEY` before Convex stores it.
+Paste the provider's signing secret; the web service seals it. Clearing it makes that endpoint return 404. See [inbox delivery](inbox-delivery.md).
 
-After consent, the connection's allowed tools are the intersection of the tools discovered on the server and the non-blocked tools in `MCP_TOOL_REGISTRY_JSON` for that provider. Connecting fails when that intersection is empty, so review and register tools before asking a user to connect. The connection owner can narrow the tools further and set a resource scope afterwards on the connection's "Manage access" panel.
+**Tool registry.** A tool exists for agents only when the registry has a row for its provider and name. A row holds the tool name, a description, and:
 
-### Provider prerequisites
+- `mode` is `read`, `write`, or `blocked`. A name that reads as destructive (`delete`, `purge`, `destroy`, `remove`) cannot be saved as `read`.
+- `resourceArgument` names the argument compared against a connection's resource restriction. Without it, a restricted connection blocks the tool rather than guessing.
+- A correction descriptor names the read tool, the id argument, the version field, the expected-version argument, and the fields a compensating update restores. A write with a descriptor is proposed as correctable; a write without one can only ever get a manual correction task.
 
-Each provider needs one-time setup by the operator before any user can connect it.
+**Import from my connection.** The registry section can seed rows from the tools discovered on one of the administrator's own connections. Imported rows arrive as `blocked` with an empty description and any MCP annotations the server reported. Annotations are hints for the reviewer and never grant anything. Review each row, write its description, and set its mode.
 
-- Linear: create an OAuth application in Linear settings with the callback above and put its client id and secret under `linear`. No further provider approval is required.
-- GitHub: create a GitHub App (preferred) or an OAuth App with the same callback. Organization repositories require an organization owner to install or approve the app. Organizations that enforce SAML require SSO authorization on first sign-in.
-- Slack: create a Slack app with the needed scopes and the same callback. Slack MCP only allows internal apps or apps listed in the Slack Marketplace; unlisted distributed apps are prohibited. An internal app works immediately for the operator's own Slack workspace. Serving other companies requires a Marketplace listing, after which each customer's Slack administrator approves the install.
-- Google Workspace: a Google Cloud project with the product APIs and MCP services enabled, a configured consent screen, and a `Web application` OAuth client. Developer Preview. Gmail and Drive scopes are restricted: an external audience requires Google OAuth verification and a security assessment, and until that completes only listed test users can connect and they see an unverified-app warning. Workspace administrators may block third-party apps. See [the Google Workspace MCP guide](google-workspace-mcp.md).
+A user can start sign-in for a provider only when the server is enabled, an OAuth client covers it, and at least one tool for that provider is not blocked. Connecting fails when none of the discovered tools are in the registry.
+
+## 6. Provider prerequisites
+
+Each provider needs one-time setup outside the application before anyone can connect it.
+
+- Linear: create an OAuth application in Linear settings with the callback above. No further provider approval is required.
+- GitHub: create a GitHub App (preferred) or an OAuth App with the same callback. Organization repositories require an organization owner to install or approve the app. Organizations enforcing SAML require SSO authorization on first sign-in.
+- Slack: create a Slack app with the needed scopes and the same callback. Slack MCP allows internal apps and apps listed in the Slack Marketplace; unlisted distributed apps are prohibited. An internal app works immediately for your own Slack workspace. Serving other companies requires a Marketplace listing, after which each customer's Slack administrator approves the install.
+- Google Workspace: a Google Cloud project with the product APIs and MCP services enabled, a configured consent screen, and a `Web application` OAuth client. Developer Preview. Gmail and Drive scopes are restricted: an external audience requires Google OAuth verification and a security assessment, and until that completes only listed test users can connect and they see an unverified-app warning. Workspace administrators may block third-party apps. See [the Google Workspace guide](google-workspace-mcp.md).
 - Canva: apply on Canva's MCP waitlist. After approval, add the redirect URI to Canva's allowlist. Until then only the developer's own team can connect.
 
-## 5. Configure artifact storage
+## 7. Inbox delivery
 
-The worker downloads completed Agents artifacts and writes them to the configured S3-compatible bucket. The bucket is required for tasks that produce files. A Railway Storage Bucket or another S3-compatible service is acceptable. Copy its endpoint, region, bucket name, access key ID, and secret into both web and worker. [Railway storage buckets](https://docs.railway.com/storage-buckets) document the current bucket product and credentials.
+Connecting an MCP server does not create any subscription. GitHub, Linear, and Slack deliver to the native endpoints configured in step 5. Everything else, including Google Workspace, uses the normalized relay at `/api/webhooks/inbox/<connectionId>`, signed with the connection's own relay secret. The owner reveals or rotates that secret from Manage access on the connection. [Inbox delivery](inbox-delivery.md) has the signatures, the payload, and the test procedure.
 
-Use a private bucket. The application authorizes downloads through Convex before it returns an artifact, and stores only the object key and checksum in the task record. The worker refuses artifacts larger than 25 MB. Do not add a public bucket URL to task messages.
+## 8. Acceptance steps
 
-## 6. Configure the provider registry and relay
+Run these with a test Clerk organization and test provider records, and record the results. Until then the deployment is not proven.
 
-The built-in registry currently contains these providers:
-
-| Provider         | MCP server URL                                                                                        | Current note                                                                                           |
-| ---------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Linear           | `https://mcp.linear.app/mcp`                                                                          | External changes are reviewed.                                                                         |
-| Slack            | `https://mcp.slack.com/mcp`                                                                           | Requires an internal or marketplace-listed Slack app.                                                  |
-| Google Workspace | Gmail, Drive, Docs, Sheets, Slides, Calendar endpoints in [the Google guide](google-workspace-mcp.md) | Developer Preview. The user selects products and signs in once. Gmail prepares drafts and cannot send. |
-| GitHub           | `https://api.githubcopilot.com/mcp/`                                                                  | Organization repositories need the app installed or approved by an organization owner.                 |
-| Canva            | `https://mcp.canva.com/mcp`                                                                           | Waitlist approval required. Tools depend on the Canva account.                                         |
-
-Connecting an MCP server does not create an inbox subscription. GitHub, Linear, and Slack have native signature-verified webhook endpoints at `POST /api/webhooks/native/<provider>`. Set `NATIVE_INBOX_SECRETS_JSON` on the web service with one app-level secret per provider:
-
-```json
-{ "github": "...", "linear": "...", "slack": "..." }
-```
-
-Configure the same secret once in the GitHub App's webhook settings, the Linear OAuth application's webhook settings, and the Slack app's Event Subscriptions. A delivery is routed to every connected user whose connection lists the event's resource in its "Inbox" resources on the Manage access panel: a GitHub repository as `owner/name` or its numeric ID, a Linear team ID, or a Slack channel ID. See [inbox delivery](inbox-delivery.md) for the signature, normalization, and testing details.
-
-Google Workspace uses the normalized relay below. For each push connection, generate a random secret and add it to the web variable like this:
-
-```json
-{ "<connectionId>": "<random-relay-secret>" }
-```
-
-The relay must normalize only events visible to that connection's owner, then POST to:
-
-```text
-POST https://your-web-origin.example.com/api/webhooks/inbox/<connectionId>
-x-ahq-timestamp: <unix-seconds>
-x-ahq-signature: <hex HMAC-SHA256>
-```
-
-Sign the exact raw request body as `HMAC_SHA256(secret, timestamp + "." + rawBody)`. The body is JSON with at most 100 items:
-
-```json
-{
-  "items": [
-    {
-      "externalId": "provider-event-id",
-      "title": "Short title",
-      "preview": "Redacted preview",
-      "sourceUrl": "https://provider.example/item/1",
-      "createdAt": 1720000000000
-    }
-  ],
-  "cursor": "provider-cursor"
-}
-```
-
-`sourceUrl` must use HTTPS. Timestamps must be within five minutes of receipt. Never log full webhook bodies, OAuth responses, bearer tokens, or provider content. Store only the normalized fields needed for the inbox.
-
-Google push ingestion needs a separately configured Google Pub/Sub and provider watch or relay. The app does not register that subscription when an MCP connection is created. The same explicit relay protocol applies after the provider-side watch is authorized.
-
-## 7. Connect providers, publish an employee, and test
-
-Complete these steps with a test account and a test provider workspace:
-
-1. Sign in through Clerk and create or join the intended organization. Bootstrap the workspace in the UI.
-2. Open Integrations, click Connect for the provider, and sign in. Confirm the connection shows the reviewed tools. OAuth consent does not grant every discovered tool to every employee.
-3. Add the exact names, descriptions, and modes of the tools you reviewed to Convex's `MCP_TOOL_REGISTRY_JSON`. Configure execution policies on Railway separately. As a platform administrator, create a marketplace draft with its required and optional capabilities, private instructions, skills, and public media. Publish it, then hire the published employee.
-4. Run a read-only task. Verify live task updates, the worker's session, and the recorded MCP read. Revoke a required connection and verify the next task is blocked before an Agents session starts.
-5. Restore the connection and run a write-capable task against a test record. Confirm the UI shows a proposal and correction limits, with no provider mutation before approval. Approve it, inspect the result, then exercise its documented correction path.
-6. Configure native inbox webhooks or the normalized relay after provider visibility and signature verification pass. Send one signed event twice and confirm deduplication.
-7. Restart the worker during a test session. Confirm SSE reconnection, saved-item recovery, explicit history gaps, and no repeated external write. Download a generated artifact through its authenticated Files link.
-
-Do not call this production ready until these checks have been run with real accounts and their results recorded. The repository contains no account credentials and this guide does not fabricate a successful provider call.
+1. **Configure providers.** On Operations, enable the servers, add an OAuth client per provider, set the native inbox secrets, then import and review tools until each provider's readiness card reports everything configured. Confirm the page never redisplays a secret.
+2. **Connect.** As an ordinary user, open Integrations and connect one provider. Confirm the connection lists only reviewed tools, and that a provider with no reviewed tool refuses to start sign-in.
+3. **Run a read task.** Publish and hire an employee whose capability uses those tools, then run a read-only task. Confirm live events in the UI, one worker job, and one journaled read with a duration in the Audit tab.
+4. **Approve a write.** Run a task that needs a write. Confirm the UI shows a proposal with the arguments, the captured record version, and the correction limit, and that nothing reached the provider before approval. Approve it and check the recorded result.
+5. **Undo it with a correction.** For a tool with a correction descriptor, request the correction. Confirm the precondition read appears in the audit trail, the compensating write restores only the configured fields, and a second correction is refused. For a tool without a descriptor, confirm the app creates a correction task instead.
+6. **Check the Audit tab.** Confirm the timeline interleaves messages, events, tool calls, and proposal transitions, that a denied attempt shows its reason, and that the JSON export contains the unsealed arguments and results.
+7. **Restart a worker.** Restart it mid-session. Confirm another replica or the restarted process picks the session back up, the timeline records the disconnection and the recovery gap, and no external write repeats.
+8. **Share a connection.** As the owner, share it with a teammate from Manage access. Confirm the teammate can start a task that uses it, cannot approve a write through it, and that the owner sees the pending proposal even on a private task.
+9. **Accept a handoff on a floor.** Create a floor, staff it, run a floor task, and have the agent request a handoff. Confirm a person has to accept it, and that accepting creates a floor task carrying the source task's final message.
 
 ## References
 
 - [Convex with Clerk](https://docs.convex.dev/auth/clerk)
-- [Convex production deployment](https://docs.convex.dev/production/overview)
+- [Convex environment variables](https://docs.convex.dev/production/environment-variables)
 - [Convex `npx convex deploy`](https://docs.convex.dev/cli/reference/deploy)
-- [Railway variables](https://docs.railway.com/variables)
+- [Railway Dockerfiles](https://docs.railway.com/builds/dockerfiles)
 - [Railway healthchecks](https://docs.railway.com/deployments/healthchecks)
+- [Railway variables](https://docs.railway.com/variables)
+- [Railway storage buckets](https://docs.railway.com/storage-buckets)
 - [OpenAI Agents sessions](https://developers.openai.com/api/docs/guides/agents-api/sessions)
-- [OpenAI Agents events](https://developers.openai.com/api/docs/guides/agents-api/sessions/events)
 - [OpenAI MCP connections](https://developers.openai.com/api/docs/guides/agents-api/tools/mcp)
 - [OpenAI hosted environments](https://developers.openai.com/api/docs/guides/agents-api/environments/openai-hosted)
-
-For current Railway buckets, use the base endpoint and leave `S3_FORCE_PATH_STYLE=false`. Older buckets may require `true`; the bucket Credentials tab states the URL style. Both web and worker need S3 credentials because the web service serves authenticated file downloads. See [Railway bucket URL styles](https://docs.railway.com/storage-buckets#url-style).

@@ -58,6 +58,27 @@ User-facing modules take Clerk identity. Service modules take the service secret
 
 Function references use the file path, for example `services/queue:claimJobs`.
 
+`convex/work.ts` holds no functions of its own. It is the shared writer every caller goes through, so task creation, readiness, the cap check, job insertion, board posts, handoffs, and the sealed timeline have one implementation.
+
+## Service modules
+
+The worker and the gateway are directories, not single files. Both run on the shared helpers in `lib/server/`.
+
+| Module                         | Purpose                                                                            |
+| ------------------------------ | ---------------------------------------------------------------------------------- |
+| `services/gateway.ts`          | Process entry: checks its secrets, then listens                                    |
+| `services/gateway/create.ts`   | Request handling, run token resolution, body limits, health, protocol failures     |
+| `services/gateway/tools.ts`    | The per connection MCP server, the floor MCP server, authorization, proposals      |
+| `services/gateway/errors.ts`   | The failure taxonomy and its two shapes, protocol error and tool result            |
+| `services/worker/main.ts`      | Process entry: subscription, pull timer, health, graceful shutdown                 |
+| `services/worker/queue.ts`     | One claim pass for jobs and session monitors, sized by free slots                  |
+| `services/worker/jobs.ts`      | Runs one claimed job: session creation, input, cancellation, approved writes       |
+| `services/worker/monitor.ts`   | One session's event stream, reconciliation, run time limit, stream lease heartbeat |
+| `services/worker/artifacts.ts` | Archives session files and writes journal events                                   |
+| `services/worker/state.ts`     | Worker identity, slot pools, bounded tunables                                      |
+| `services/worker/health.ts`    | The health JSON                                                                    |
+| `services/actions.ts`          | The approved write executor, including the correction precondition read            |
+
 ## Visibility and sharing
 
 Every shareable record carries `visibility` and `visibleToSubjects`.
@@ -74,7 +95,7 @@ Names shown in shared views come from Clerk claims captured at write time (`crea
 
 ## Usage, not cost
 
-The app records token usage per task and per workspace period, by model: `input`, `cached`, `output`. Cache hit rate is `cached / input`. No dollar estimate is stored or shown. A workspace may set an optional monthly token cap on `input + output`; when set, task creation and follow-up messages are refused once the period's recorded usage reaches it. There is no reservation. In-flight tasks can overshoot the cap by their own usage.
+The app records token usage per task and per workspace period, by model: `input`, `cached`, `output`. Cache hit rate is `cached / input`. No dollar estimate is stored or shown. A workspace may set an optional monthly token cap on `input + output`; when set, task creation, follow-up messages, and inbox assignment are refused once the period's recorded usage reaches it. Accepting a handoff and creating a correction task are not checked. There is no reservation. In-flight tasks can overshoot the cap by their own usage.
 
 ## Agents and the gateway
 
@@ -96,6 +117,11 @@ Failures use a fixed taxonomy. Protocol failures return JSON-RPC errors with a c
 | -32004 | `provider_error`    | Upstream MCP failed                                            |
 | -32005 | `approval_required` | Write became a proposal (informational, not an error)          |
 | -32006 | `provider_timeout`  | Upstream did not answer in time                                |
+| -32700 | `malformed_request` | Body is not valid JSON, or the endpoint is unknown             |
+| -32600 | `request_too_large` | Request body is larger than 1 MB                               |
+| -32602 | `invalid_arguments` | A required tool argument is missing or not a string            |
+
+The last three are request rejections the gateway makes before any policy or provider is involved.
 
 ## Tool policy
 
@@ -111,10 +137,10 @@ The audit timeline for a task merges events, messages, tool calls, proposals, an
 
 The worker is replica-safe by construction. All coordination is through Convex leases:
 
-- Jobs are claimed with `claimJobs(workerId, limit)` where the limit is the worker's free job slots.
-- Session monitors are claimed with `claimStreams(workerId, limit)` which returns tasks whose stream lease is free or expired. Leases renew on a heartbeat and release on shutdown. The worker still claims one task at a time with `services/queue:claimStream(taskId, workerId)`; the batched form arrives with the worker workstream.
+- Jobs are claimed with `claimJobs(workerId, limit)` where the limit is the worker's free job slots. A job lease lasts 60 seconds and `renewLease` extends it every 20 seconds. At most one job per task is leased.
+- Session monitors are claimed with `claimStreams(workerId, limit)`, sized by free monitor slots. A task is claimable when its stream lease is empty, expired, or already this worker's, and the 120 second lease is stamped in the same mutation. `renewStream` is the monitor heartbeat, every 40 seconds; a heartbeat that reports another owner aborts the monitor. `releaseStream` returns one session.
 - The subscription carries counts and a wake revision only. Workers pull; they do not receive lists.
-- Shutdown stops claiming, waits for in-flight jobs up to a deadline, and releases stream leases so another replica takes over.
+- Shutdown stops claiming, unsubscribes, waits up to 30 seconds for in-flight jobs, releases every stream lease, then exits.
 - Health reports connection state, in-flight jobs, active monitors, free slots, and last claim time.
 
 ## Floors
@@ -132,11 +158,11 @@ components/
   floors/       floor page, board, staffing, handoffs
   inbox/
   employees/
-  tasks/        list, conversation, proposal card, audit tab, share panel
+  tasks/        list, detail, conversation, proposal card, audit tab, visibility menu, handoff sheet
   files/
   activity/
   marketplace/  listing, detail, hire
-  integrations/ cards, product picker, manage access, sharing
+  integrations/ cards, product picker, manage access, sharing, relay secret
   admin/        marketplace studio, operations (providers, registry, usage)
   shared/       Sheet, PageIntro, Avatar, marks, empty states, formatting
 ```

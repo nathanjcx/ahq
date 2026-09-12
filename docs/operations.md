@@ -1,92 +1,161 @@
 # Operations
 
-This runbook describes the running web migration. It assumes the services were configured using [the deployment guide](deployment.md). It does not replace provider incident procedures or claim that a restart reverses an external action.
+A runbook for a deployment configured with [the deployment guide](deployment.md). It does not replace provider incident procedures, and no restart reverses an external action.
 
 ## Service map
 
-| Component            | Role                                                                            | Check                                                   |
-| -------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Convex               | Authenticated workspace data, queue, journal, marketplace, and subscriptions    | Convex dashboard deployment and function logs           |
-| web                  | Clerk sessions, UI, API routes, OAuth callback, file authorization, inbox relay | Railway web deployment and `/`                          |
-| worker               | Queue leases, Agents sessions, SSE recovery, artifact archive                   | Railway worker `/health`                                |
-| gateway              | Bearer authenticated MCP discovery and calls                                    | Railway gateway `/health`                               |
-| S3-compatible bucket | Private artifact archive                                                        | Provider bucket metrics and an authorized file download |
+| Component            | Role                                                                                                                     | Check                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| Convex               | All state, the job queue, the journal, operational configuration, subscriptions                                          | Convex dashboard deployment and function logs  |
+| web                  | Clerk sessions, UI, API routes, OAuth callback, audit unsealing, file downloads, webhooks, sealing administrator secrets | Railway web deployment and `/health`           |
+| worker               | Queue jobs, Agents sessions, session monitoring, artifact archive                                                        | Railway worker `/health`                       |
+| gateway              | The only MCP server an agent can reach                                                                                   | Railway gateway `/health`                      |
+| S3-compatible bucket | Private artifact archive                                                                                                 | Bucket metrics and an authorized file download |
 
-The browser receives live state through Convex subscriptions over WebSocket. It does not poll the worker. The worker reads OpenAI Agents session events over SSE and writes journal batches to Convex. An Agents session uses an OpenAI hosted environment with network access disabled, `connection_origin: "service"` MCP transports, and `multi_agent.enabled: false`. Agent-originated calls use the gateway. Web connection discovery and approved worker writes use the same MCP client and admission policy.
+The browser receives live state through Convex subscriptions. The worker reads Agents session events over SSE and writes journal batches to Convex. Sessions run in an OpenAI hosted environment with network access disabled, `connection_origin: "service"` MCP transports, and `multi_agent.enabled: false`.
+
+### The worker is replica-safe
+
+Run as many worker replicas as you need. All coordination is Convex leases, and nothing depends on a replica's local state.
+
+- **Jobs.** `services/queue:claimJobs(workerId, limit)` where the limit is the replica's free job slots, capped at 50 per call. A claim mints a lease token, stored on the job; every later mutation for that attempt must present it, so a second replica cannot complete, renew, or fail the same attempt. The lease lasts 60 seconds and the running job renews it every 20 seconds. At most one job per task is leased at a time; a job for a task with a live lease is pushed out to that lease's expiry.
+- **Session streams.** `claimStreams(workerId, limit)` returns tasks whose stream lease is empty, expired, or already this replica's, and stamps a 120 second lease inside the same mutation. Tasks with a pending input job are skipped, because a monitor would race the job that sends the input. The monitor heartbeat is `renewStream` every 40 seconds; a heartbeat that reports another owner aborts the monitor immediately.
+- **Slots.** `WORKER_CONCURRENCY` (default 4, bounded 1 to 16) sizes job slots. `WORKER_MONITORS` (default 16, bounded 1 to 64) sizes monitor slots. Claims are sized by free slots, so a replica never takes work it cannot run.
+- **Wake signal.** The subscription carries counts and a wake revision only. Workers pull. A Convex cron bumps the revision every minute so due jobs and expired leases are picked up even if a push is missed, and each worker also pulls every 15 seconds.
+
+Health is JSON on `/health`, HTTP 200 while the Convex subscription is live and HTTP 503 otherwise:
+
+```json
+{
+  "status": "ok",
+  "service": "worker",
+  "workerId": "…",
+  "connected": true,
+  "inFlightJobs": 0,
+  "activeMonitors": 0,
+  "freeJobSlots": 4,
+  "freeMonitorSlots": 16,
+  "lastClaimAt": 0,
+  "lastSubscriptionAt": 0
+}
+```
+
+`status` is `connecting` before the first subscription update, `ok` once connected, and `stopping` during shutdown. On `SIGTERM` or `SIGINT` the worker stops claiming, unsubscribes, waits up to 30 seconds for in-flight jobs, releases every stream lease so another replica takes the sessions over without waiting the lease out, closes health, and exits. A replica killed without that grace period loses its sessions for at most the remaining 120 seconds of each stream lease; an expired job lease on an approved write is not retried, it is marked uncertain.
 
 ## Routine checks
 
-After each deployment, check the web, worker, and gateway logs for startup errors. Request `/mcp/<connectionId>` without credentials and expect rejection. Request `/health` with a normal HTTP client and expect `{"status":"ok","service":"mcp-gateway"}`. The worker reports `connecting` with HTTP 503 until its Convex subscription is live, then reports `ok`.
+After a deployment, read the startup logs of all three services. Request `/mcp/<connectionId>` on the gateway without a bearer token and expect HTTP 401 with `reason: "unauthorized"`. Request the gateway's `/health` and expect `{"status":"ok","service":"mcp-gateway"}`.
 
-Sign in with a test Clerk organization and open the dashboard. Confirm that the live workspace query updates after creating a test task. Run one read-only task and check that the worker claims a job, the Agents session has the expected model and task metadata, the gateway lists only the selected tools, and the UI receives events. Do not log prompts, credentials, raw MCP responses, or full inbox payloads while diagnosing the run.
+Then sign in with a test organization, run one read-only task, and confirm the worker claims a job, the gateway lists only the reviewed tools inside the employee's capability, and the Audit tab shows the read. Do not log prompts, credentials, raw MCP responses, or inbox payloads while diagnosing.
 
-## Task recovery
+## Gateway failure taxonomy
 
-The worker leases jobs and renews the lease every 20 seconds. If it exits, Railway restarts it. On startup it subscribes to Convex again and monitors active sessions. When the Agents event stream disconnects, it reconnects with backoff and reconciles saved session items. It records a gap marker when intermediate events could not be replayed. A reconnect must never be treated as permission to repeat a provider write.
+Protocol failures are JSON-RPC errors with a stable `reason` and the request id. Tool failures come back as an MCP result with `isError` and structured content `{ code, reason, message, retryable, requestId }`, because the model has to reason about them. The gateway logs the reason and the request id only.
 
-The worker watchdog cancels a turn after `MAX_TURN_SECONDS`, which defaults to 900 seconds and is bounded to 60 through 3600. Cancellation stops new dispatch, but a request already sent to a provider may have an unknown result. Mark that task outcome uncertain and reconcile with provider evidence before retrying. Restarting a service does not undo provider effects.
+| Code   | Reason              | HTTP | Retryable | Raised when                                                                                                              |
+| ------ | ------------------- | ---- | --------- | ------------------------------------------------------------------------------------------------------------------------ |
+| -32001 | `unauthorized`      | 401  | no        | No bearer token, an unknown run token, or the authorization query failed                                                 |
+| -32002 | `revoked`           | 403  | no        | The connection is not available to this task, not connected, the grant was revoked, or the task is not on a floor        |
+| -32003 | `policy_denied`     | 403  | no        | Tool blocked or outside the capability, outside the resource restriction, or a correction whose read tool is not granted |
+| -32004 | `provider_error`    | 502  | yes       | The upstream MCP server failed, or returned an unusable result                                                           |
+| -32005 | `approval_required` | 200  | no        | A write became a proposal; informational, not an error                                                                   |
+| -32006 | `provider_timeout`  | 504  | yes       | The upstream did not answer in time                                                                                      |
+| -32700 | `malformed_request` | 400  | no        | The body is not valid JSON, or the endpoint path is unknown                                                              |
+| -32600 | `request_too_large` | 413  | no        | The request body is larger than 1 MB                                                                                     |
+| -32602 | `invalid_arguments` | 400  | no        | A required floor tool argument is missing or not a string                                                                |
 
-If the worker is down, keep the web and gateway available only if that is useful for inspection. Do not approve new writes while there is no worker to record the dispatch result. Check Convex queue depth and leases, worker logs, the worker health endpoint, the OpenAI API status, and S3 access. If jobs remain leased past the lease timeout, inspect for a stale worker before making any manual queue change. The scheduled queue wakeup reclaims expired leases automatically.
+`policy_denied` and `revoked` raised while authorizing a call are also journaled as denied attempts. A failure to list tools is not, because discovery is not a call attempt.
 
-## Approval and correction
+## Audit trail
 
-The gateway turns write tools into immutable action proposals. The UI must show the normalized target, arguments, captured version when available and the correction limit. A reviewer approves the exact proposal. The executor rechecks the task, connection, employee capability, resource scope, version, and expiry before dispatch.
+Every task has a timeline that merges four sources in time order: session events, messages, tool calls, and proposals with their transitions. The web service unseals it for viewers who can see the task; the Audit tab renders it and exports the same JSON.
 
-The action ledger distinguishes succeeded, failed, outcome unknown, and correction states. If a dispatch times out, stop dependent work and reconcile using the provider. Do not blindly retry a non-idempotent operation. A correction may restore selected fields only when the provider and tool supply a verified conditional operation. It may be manual, partial, or unavailable. There is no universal undo for messages, notifications, workflow side effects, or files copied outside the application.
+Journaled for each tool call: the operation id, the connection, the tool, the outcome (`started`, `succeeded`, `failed`, `denied`), a reason code on failures and denials, the duration, sealed arguments, a sealed result, and the result's SHA-256. An approved write also carries its proposal id and the SHA-256 of the lease token that authorized it, so the ledger shows which attempt dispatched it. Evidence over 50,000 bytes is replaced by its digest, byte count, and a truncation marker; a single field over 100 KB is refused outright.
+
+Denied attempts are journaled with the reason before the refusal reaches the agent, so the timeline shows what was tried and why it was stopped. A terminal outcome cannot contradict a recorded one: a `started` row must exist before a success or failure, its arguments and proposal must match, and a second, different terminal outcome for the same operation is refused.
+
+Sealed evidence is readable only by a service holding `CREDENTIAL_ENCRYPTION_KEY`. Convex holds ciphertext. An entry that cannot be decrypted with the current key is displayed as unavailable rather than dropped.
+
+## Corrections
+
+A correction is a new, separately approved write that compensates for a previous one. What is possible depends on the tool's registry row.
+
+- **Supported.** The registry row has a correction descriptor, so the original proposal captured the record through the audited read tool before the write and stored the version the write returned. Requesting the correction builds a proposal that restores only the configured fields, conditioned on that version. When it is executed, the worker first re-reads the live record through the configured read tool, under the correction's own lease, journaled as `precondition:<proposalId>`. If the version moved, the correction fails cleanly instead of dispatching a write that the provider would reject. One correction per original action; a second is refused.
+- **Partial and manual.** No verified conditional operation exists. Requesting a correction creates a correction task for the same employee, on the same floor, with the original action's summary and its stated limits. The employee prepares the safest supported correction or clear manual steps and never repeats the original action.
+- **Irreversible and unknown.** The request is refused and the UI shows the reason with no button.
+
+Today the gateway records a write as `supported` when its registry row has a descriptor and as `manual` when it does not. `partial`, `irreversible`, and `unknown` are accepted by the schema and handled by the UI, but nothing currently assigns them.
+
+A correction restores fields. It does not recall notifications, webhooks, downstream automation, or anything a person already read. Do not describe any action as undoable.
+
+Two outcomes are not the same thing:
+
+- **failed** means the write never reached the provider. Nothing changed externally. It is safe to decide again.
+- **uncertain** means the request was dispatched and the result is unknown: a timeout, a transport error after dispatch, or a worker lease that expired mid-flight. The proposal and the task both go to `uncertain`, and the write is never retried automatically. Reconcile with provider evidence before doing anything else.
+
+## Usage, not cost
+
+The app records token usage. It stores no dollar figure and shows none.
+
+Each usage report from a session is recorded against the task, in a per-report journal keyed by the report's external id, and in a per workspace, period, and model aggregate: `input`, `cached`, `output`, and a task count. A report with no external id is treated as the session total and takes the maximum rather than adding. The period is the calendar month, `YYYY-MM`. Cache hit rate is `cached / input`. Workspace settings shows usage by model for the current period.
+
+A workspace owner or admin may set an optional monthly token cap on `input + output`. Nothing is reserved: the cap is checked when new work is accepted, and it refuses task creation, follow-up messages, and inbox assignment once the period's recorded usage has reached it. Accepting a handoff and creating a correction task are not checked, so a capped workspace can still finish and unwind work in flight. An in-flight task can overshoot the cap by its own usage. A cap of 0 means no cap.
+
+Upstream charges are separate from all of this: OpenAI model and hosted-session charges, Railway compute, egress and storage, and any provider's own fees. Missing upstream usage is unknown, not zero.
 
 ## Expired credentials
 
-When an MCP call fails with an authorization error after a refresh attempt, the provider has revoked or expired the grant. The connection is marked `degraded` with the error `Authorization expired. Reconnect this integration to continue.` The owner sees a Reconnect button on the connection, which runs OAuth again; a successful reconnect restores `connected`. Tasks that require that connection stay blocked until then. Reconnecting does not widen access, because allowed tools are recomputed as the intersection of discovered tools and the reviewed registry.
+When a refresh fails with an authorization error, the provider has revoked or expired the grant. The connection is marked `degraded` with `Authorization expired. Reconnect this integration to continue.`, and the agent's call fails with `revoked`. The owner reconnects from Integrations, which runs OAuth again and restores `connected`. Tasks needing that connection stay blocked until then.
 
-## Inbox relay
+Reconnecting never widens access beyond the registry: allowed tools are recomputed as the intersection of the tools discovered on the server and the non-blocked rows in the registry. That recomputation resets a narrowed tool list back to the full intersection, so an owner who had switched tools off must switch them off again on Manage access. The resource restriction, inbox resources, sharing, and relay secret are preserved.
 
-The webhook endpoint is `POST /api/webhooks/inbox/<connectionId>`. A relay signs the exact raw JSON body with the connection's secret:
+## Secret rotation
 
-```text
-hex(HMAC-SHA256(secret, timestamp + "." + rawBody))
-```
+`CREDENTIAL_ENCRYPTION_KEY` now seals four kinds of stored secret plus the audit journal:
 
-Send the Unix timestamp in `x-ahq-timestamp` and the hex digest in `x-ahq-signature`. The timestamp must be within five minutes. The body accepts no more than 100 normalized items and an optional cursor. The endpoint has no provider subscription management. Operators must configure each provider's relay, watch, or Pub/Sub path separately and filter events to the connection owner before signing.
+1. Provider credentials on each connection.
+2. OAuth client secrets in the provider configuration.
+3. Native inbox signing secrets in the provider configuration.
+4. Each connection's inbox relay secret.
+5. Tool-call arguments and results in the audit trail, and the short-lived OAuth state cookie.
 
-To rotate a relay secret, pause delivery, deploy the new value in `INBOX_WEBHOOK_SECRETS_JSON`, update the relay with the same value, then resume delivery and send a signed test item. Each connection accepts one secret at a time. A connection ID is a Convex identifier, so do not guess it or reuse one across accounts.
+The code reads exactly one key. `credentialKeyVersion` is stored on a connection but the unseal path ignores it, so there is no dual-key reader: whatever is not re-sealed becomes unreadable the moment the key changes. Either write a migration that reads the old key and re-seals with the new one before swapping, or accept the manual path and re-establish each secret in this order:
 
-GitHub, Linear, and Slack use native webhooks at `POST /api/webhooks/native/<provider>` instead. Each provider has one app-level secret in `NATIVE_INBOX_SECRETS_JSON`, configured once in the GitHub App webhook settings, the Linear OAuth application webhook settings, and the Slack app's Event Subscriptions. A verified delivery is routed to every connected user whose connection lists the event's resource in its Inbox resources: a GitHub repository as `owner/name` or its numeric ID, a Linear team ID, or a Slack channel ID. Owners set those resources on the connection's Manage access panel. Rotating one of these secrets changes delivery for every connection of that provider, so update the provider app and the variable in the same window. See [inbox delivery](inbox-delivery.md).
+1. Pause webhook delivery at the providers and stop approving writes.
+2. Swap the key on web, worker, and gateway together. They must never run with different keys.
+3. Re-enter each OAuth client secret and each native inbox secret on the Operations page. Re-entering seals under the new key, and the provider-side value does not change.
+4. Rotate every connection's relay secret from Manage access, and give the new value to each relay. Rotation generates a new secret and seals it under the new key.
+5. Have each connection owner reconnect, which re-seals the provider credential. Until then those connections fail with an authorization error.
+6. Resume delivery and approvals, and confirm one read task and one signed test delivery.
 
-## Secrets and rotation
+Audit evidence written under the old key stays sealed. It is shown as undecryptable rather than lost, which is the reason to prefer the migration over the manual path.
 
-Store secrets in Railway sealed variables or an equivalent secret manager. Keep `OPENAI_API_KEY` on the worker only, `CLERK_SECRET_KEY` on the web service only, and S3 keys on the web and worker services. Web, worker, and gateway share `CREDENTIAL_ENCRYPTION_KEY` to seal credentials and audit evidence or unseal credentials for MCP calls. Keep `AHQ_SERVICE_SECRET` identical across the web, worker, gateway, and Convex deployment.
-
-To rotate `CREDENTIAL_ENCRYPTION_KEY`, first add a migration that can read the old key and re-seal credentials with the new key. Deploy that reader, re-seal every stored credential, verify a read-only provider call, then remove the old key. Do not replace the key first, because existing ciphertext would become unreadable. Rotate `AHQ_SERVICE_SECRET` by updating Convex and all Railway services together during a quiet window, then run a task and health checks.
-
-## Costs and limits
-
-The app reserves a default amount per task before dispatch: Luna `$0.25`, Terra `$1`, Sol `$2`, and Astra `$5`. The worker estimates usage from token counts using the model rates in `lib/server/agents.ts`. The estimate includes input, cached input, and output token rates, but excludes large-context premiums and separate hosted or tool charges. It is a budget control and usage estimate, not a guaranteed OpenAI invoice.
-
-OpenAI API and hosted-session charges are separate from Railway compute, egress, and storage charges. Provider services may have their own plans or usage fees. Set workspace budgets and task reservation overrides conservatively, then compare the journal estimate with the provider billing consoles. Missing upstream usage remains unknown rather than zero.
-
-The initial worker subscription reads pending jobs across the deployment. Before a large rollout, measure Convex query read limits and subscription traffic under expected queue depth. Split the queue and worker subscriptions before those limits are reached.
+Rotate `AHQ_SERVICE_SECRET` by updating Convex and all three services in the same window, then run a task and the health checks. Keep `OPENAI_API_KEY` on the worker, `CLERK_SECRET_KEY` on the web service, and S3 keys on web and worker.
 
 ## Failure guide
 
-If sign-in returns a configuration error, compare `APP_URL`, the Clerk publishable and secret keys, organization membership, and `CLERK_JWT_ISSUER_DOMAIN` in Convex. If the dashboard is empty, check that the browser was built with the correct `NEXT_PUBLIC_CONVEX_URL` and that the signed-in organization has a workspace.
+Provider configuration lives in Convex, so most of these are answered on the Operations page rather than in a variable.
 
-If a connection is rejected, compare its URL byte for byte with `MCP_SERVER_URLS_JSON` in Convex. Only the registry URLs in `lib/providers.ts` are accepted, so a URL absent from either list cannot be connected. When the Integrations page reports a provider as not ready, it names the missing piece: the enabled server URL, a non-blocked tool in `MCP_TOOL_REGISTRY_JSON`, or an OAuth client in `MCP_OAUTH_CONFIG_JSON`. If discovery works but a task cannot call a tool, inspect the employee capability, connection allowed tools, `MCP_TOOL_POLICIES_JSON`, and the resource scope. A non-empty restricted scope requires a configured resource argument and matching permitted IDs.
-
-If OAuth returns to an error, check the exact callback URI, provider client, `APP_URL`, `MCP_OAUTH_CONFIG_JSON`, consent audience, and provider scopes. If a Google connection works for reads but a push inbox is empty, configure the external watch and relay. Connecting MCP does not create that subscription.
-
-If artifacts fail, check S3 endpoint, region, bucket, key permissions, and object size. The worker archives completed session files at or below 25 MB, up to 100 files per task. Previously archived files are not downloaded again. If a file is missing, preserve the task record and inspect the bucket key and worker log without printing the file.
+- **Sign-in fails.** Compare `APP_URL`, the Clerk keys, and `CLERK_JWT_ISSUER_DOMAIN` in Convex. An empty dashboard usually means the browser bundle has the wrong `NEXT_PUBLIC_CONVEX_URL`, or the signed-in organization has no workspace yet.
+- **Operations page is missing or read-only.** The signed-in Clerk user ID must be in `PLATFORM_ADMIN_USER_IDS` in both Convex and the web service. Convex rejects the queries otherwise, and the web routes that seal secrets reject the writes.
+- **A provider cannot be connected.** The readiness card names the first missing item: no enabled server, no OAuth client covering an enabled server, no reviewed tool, or no native inbox secret. `This MCP server is not enabled by your administrator` means the URL is not ticked; `Sign-in for this server is not set up yet` means no client covers it; `None of the tools on this server are in the reviewed tool registry yet` means every discovered tool is blocked or absent.
+- **OAuth returns an error.** Check the callback is exactly `https://<web-origin>/api/integrations/callback`, that `APP_URL` matches the origin the user is on, and that the client id, secret, and scopes on Operations match the provider. A second consent prompt for one product of a multi-product provider means the client's scopes do not cover that product.
+- **Discovery works but a call is refused.** Read the reason in the Audit tab. `policy_denied` points at the registry row's mode, the employee capability, or the resource restriction. A non-empty restriction also requires a `resourceArgument` on the registry row; without one the gateway refuses rather than guessing which argument names the resource.
+- **A write is stuck awaiting approval.** Only the owner of the connection that would execute it, or a workspace owner or admin, can decide it. The creator of a task borrowing someone else's shared connection cannot.
+- **Webhooks return 404.** The native endpoint 404s for an unknown provider path and for a provider whose inbox secret is not set. The relay endpoint 404s when the connection has no relay secret; rotate it once from Manage access to create one.
+- **Artifacts are missing.** Check the S3 endpoint, region, bucket, and key permissions on both web and worker. Files over 25 MB and files past the 100-file limit are skipped with a journal entry, not silently.
+- **Jobs sit leased.** Look for a stale replica before touching the queue. Expired leases are recovered on the next claim pass: ordinary commands are requeued, an approved write is not, because its outcome is unknown.
 
 ## Safe deploy and rollback
 
-Deploy Convex functions first, then deploy the three Railway services with the same commit and matching environment. Verify health endpoints and a read-only task before approving a write. If a deployment fails, inspect the new service logs and healthcheck result. Railway's healthcheck is a startup gate, not continuous monitoring.
+Deploy Convex functions first, then the three services on the same commit with matching variables. Verify the health endpoints and one read-only task before approving a write.
 
-For rollback, stop or disable new task dispatch, wait for active writes to settle, and reconcile any outcome-unknown actions with provider evidence. Restore the last known application release and compatible environment variables. A code rollback changes the application; it cannot reverse a provider write or a file already downloaded by a user.
+To roll back, stop new dispatch, let active writes settle, and reconcile every uncertain action with provider evidence. Then restore the previous release and its variables. Provider configuration is data and does not roll back with the code; a schema change that alters `providerConfigs` or `registryTools` needs its own plan.
 
 ## References
 
 - [OpenAI Agents sessions](https://developers.openai.com/api/docs/guides/agents-api/sessions)
 - [OpenAI Agents events and items](https://developers.openai.com/api/docs/guides/agents-api/sessions/events)
-- [OpenAI observability and usage](https://developers.openai.com/api/docs/guides/agents-api/observability)
 - [Convex deployment settings](https://docs.convex.dev/dashboard/deployments/deployment-settings)
 - [Railway healthchecks](https://docs.railway.com/deployments/healthchecks)
 - [Railway variables](https://docs.railway.com/variables)

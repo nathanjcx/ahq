@@ -1,60 +1,75 @@
-# Migration verification
+# Verification
 
-Verified locally on September 11, 2026. Production accounts and provider credentials have not been configured.
+What is proven, and what is not, as of September 12, 2026. No production account, provider credential, or live deployment exists for this build. Nothing below claims a real provider call succeeded.
 
-## Checks
+`npm run typecheck` passes. `npm test` runs 65 tests in 12 files, all passing.
 
-- `npm run typecheck` passes.
-- `npm test` passes all 35 tests. Coverage includes tenant privacy, Clerk organization claims, tool grants, write approvals, cancellation, uncertain outcomes, correction conditions, queue leases, stale turn completion, budget rollover, signed inbox delivery, and project floors.
-- The real local Convex backend compiled the schema and functions. Runtime checks exercised organization workspace creation, private draft publication, public listing redaction, hiring, task creation, and cancellation.
-- `docker build -t ahq-web-check .` builds the production application. The image starts all three service commands as a non-root user.
-- Web, gateway, and worker health endpoints returned HTTP 200. The worker connected to the local Convex subscription. An unauthenticated MCP request returned HTTP 401.
-- Playwright passed desktop and mobile navigation against the production Docker web service. It also checked modal focus, Tab wrapping, Escape, focus restoration, browser errors, and mobile viewport width.
-- `npm audit --omit=dev` reported zero vulnerabilities.
+## The runtime harness
 
-The code reduction and quality review removed the desktop/demo runtime, obsolete UI, unused dependencies, and redundant branches. It corrected queue races, audit acknowledgement handling, permission revocation, server-side skill hashes, and deployment variable scopes.
+`web-tests/runtime.test.ts` runs the real gateway (`createGateway`) and the real approved-write executor against a `convex-test` backend and a fake upstream MCP server on loopback. The provider server is a small issue store with a version field, so corrections and preconditions are exercised end to end. Its cases:
 
-## Project floors
+- Only the reviewed tools inside the employee's capability are listed.
+- A read is journaled with its duration.
+- A blocked tool is refused and the denial is journaled.
+- A write becomes a pending proposal with the record captured beforehand.
+- An unknown run token gets a JSON-RPC `unauthorized` error.
+- A malformed body is rejected.
+- An approved write is executed against the provider.
+- A correction restores the record, and a second correction is refused.
+- A correction whose record moved on fails cleanly instead of leaving the outcome uncertain.
+- The whole operation appears in the audit timeline.
 
-The local Convex backend also compiled the project schema and functions. Runtime checks created three project floors, staffed them, and assigned tasks. They verified that editing a project preserves existing task context, archiving blocks new work, restoring permits the floor again, and coworkers cannot read each other's private tasks. Unit checks cover inbox project assignments and correction context after archiving. Session configuration checks confirm that a project brief does not enter privileged employee instructions.
+`web-tests/worker-leases.test.ts` covers the replica-safety claims in [operations](operations.md): only one worker monitors a session at a time, an expired lease hands the session over and the former owner's heartbeat reports it lost, shutdown releases a lease while another worker's release is refused, and a worker with no free slots claims nothing.
 
-Browser checks exercised floor selection, employee filtering, task creation, saved project context, keyboard staffing selection, failed-save retention, automatic navigation after creation, archive/restore, archived task filtering, and mobile drawer focus and width. Screenshots were inspected across successive desktop and mobile passes. The populated views used a temporary UI fixture with data from the local test workspace. That route and its authentication stubs were removed before the production build.
+## Convex and web tests by area
 
-After fixture removal, `npm run build`, TypeScript, and all 35 tests passed. Both Playwright navigation tests passed against `npm start`, and the web health endpoint returned HTTP 200. The production build's route list contains no QA route.
+| File                      | Tests | Area                                                                                                                                         |
+| ------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `actions.test.ts`         | 6     | Re-authorization before dispatch, no retry on unknown outcome, correction fields and version preconditions                                   |
+| `admin-config.test.ts`    | 4     | Operational configuration in Convex: server admission, readiness, service config, registry validation, importing discovered tools as blocked |
+| `data-boundaries.test.ts` | 6     | Tenant isolation, private employee packages, Clerk organization claims, revoked grants, registry access                                      |
+| `data-jobs.test.ts`       | 8     | Job leases, one command per task, cancellation priority, terminal tasks, action results after revocation                                     |
+| `inbox-routing.test.ts`   | 3     | Reviewed-tool grants at connect time, resource-routed delivery, shared connection visibility                                                 |
+| `native-inbox.test.ts`    | 4     | GitHub, Linear, and Slack signature verification, freshness, normalization, deduplication                                                    |
+| `projects.test.ts`        | 3     | Floor task visibility, staffing and archive rules, correction task context                                                                   |
+| `server.test.ts`          | 8     | Sealing, network admission, tool grants, resource restrictions, relay signatures                                                             |
+| `sharing.test.ts`         | 5     | Task privacy, who may decide a write, journaled denials, handoff acceptance, agent floor tools                                               |
+| `usage.test.ts`           | 4     | Per period and model aggregation, session totals, the monthly cap, who may set it                                                            |
 
-The reduction pass removed the replaced office layout and unused CSS. The quality pass corrected stale project selection, repeated task submission, archived history access, lobby staffing, keyboard focus, and employee status display. An independent review found no remaining scoped issues.
+`web-tests/ui-smoke.spec.ts` is a Playwright pair: desktop navigation across every page with modal focus, Tab wrapping, Escape, focus restoration, and no page errors; and mobile navigation with the drawer closing and no horizontal overflow. It runs against a served build and needs a browser, so it is not part of `npm test`.
 
-- [Project floors, desktop](screenshots/floors-desktop.png)
-- [Project floors, mobile](screenshots/floors-mobile.png)
-- [Floor staffing, desktop](screenshots/floor-staffing-desktop.png)
-- [Floor staffing, mobile](screenshots/floor-staffing-mobile.png)
+## UI inspected with temporary fixtures
 
-See [project floors](project-floors.md) for behavior and deployment order.
+The application has no seeded data, so each UI workstream rendered its populated states with a temporary fixture route and inspected them at desktop and mobile sizes. The workstreams report that every fixture and its authentication stub was removed before the production build. Nothing in these passes involved a live provider.
 
-## Integration onboarding
+- **Task detail**: conversation, streaming phases, proposal card with arguments and correction limits, visibility menu, handoff sheet.
+- **Audit tab**: interleaved messages, events, tool calls, and proposal transitions, denied entries with reasons, state diffs, and the JSON export.
+- **Sharing panel**: connection visibility between private, named members, and workspace, the member list, and the borrowing member's view.
+- **Floors**: floor directory, board with notes, system posts and handoff requests, staffing, and the lobby.
+- **Operations**: readiness cards, per provider enabled servers, OAuth client form, native inbox secret state, and the tool registry sheet with modes, resource arguments, and correction descriptors.
 
-Verified locally on September 12, 2026 after the onboarding rework. `npm run typecheck`, all 37 tests, and `npm run build` pass. New unit checks cover reviewed-tool grants at connection time, refusal of a server with no reviewed tools, the readiness query, and resource-routed inbox delivery with deduplication and tenant isolation. Native webhook parsing tests were updated for the per-provider endpoint.
-
-Both Playwright navigation tests passed against `npm run dev` with no backend. A temporary fixture route rendered the Integrations page with fake readiness and connection data to inspect the setup-needed, ready-to-connect, connected, and needs-attention states, the Google product picker, the access panel, and the member view. The fixture was removed before the production build; the route list contains no QA route.
+Earlier passes were captured as screenshots of the production build with no connected account:
 
 - [Integrations, desktop](screenshots/integrations-desktop.png)
 - [Integrations, mobile](screenshots/integrations-mobile.png)
 - [Manage access, desktop](screenshots/integration-access-desktop.png)
 - [Google product picker, desktop](screenshots/google-products-desktop.png)
-
-Live OAuth sign-in, token reuse across Google product servers, the re-consent fallback, credential expiry marking, and real webhook deliveries remain unverified until provider accounts exist.
-
-## Visual review
-
-These screenshots show the production build with no connected account or seeded records:
-
+- [Project floors, desktop](screenshots/floors-desktop.png)
+- [Project floors, mobile](screenshots/floors-mobile.png)
+- [Floor staffing, desktop](screenshots/floor-staffing-desktop.png)
+- [Floor staffing, mobile](screenshots/floor-staffing-mobile.png)
 - [Office, desktop](screenshots/office-desktop.png)
 - [Office, mobile](screenshots/office-mobile.png)
 
-Marketplace media and admin editing were also reviewed at desktop and mobile sizes using a temporary local fixture. That fixture was removed and is not shipped.
+## Not verified
 
-## Checks requiring accounts
+These paths have no automated coverage and no live run. Treat them as unproven until the acceptance steps in [deployment](deployment.md) are run with real accounts and the results recorded.
 
-Follow [deployment](deployment.md) to configure Convex, Clerk, Railway, storage, OpenAI, and provider clients. Then run its final acceptance steps with test provider records. Live OAuth consent, Agents sessions, provider reads and writes, compensation, cloud artifact storage, and production rollout remain unverified until those accounts are available.
+- **OpenAI Agents sessions.** Session creation, the event stream, reconnection and item recovery, the run time limit and cancellation, usage reporting, and artifact archiving are all exercised only against test doubles or not at all.
+- **Real OAuth.** No provider consent screen has been completed. Discovery, token refresh, the multi-product Google flow, the re-consent fallback, and expiry marking are unverified.
+- **Clerk members.** Organization membership lookup for the sharing member list goes through the Clerk API and has never run against a real organization.
+- **Real webhooks.** Signature verification and normalization are unit tested with constructed payloads. No provider has delivered a real event to either endpoint.
+- **Multiple replicas under load.** The lease invariants are tested in a single process against `convex-test`. Two real workers competing for jobs and sessions, and Convex read limits at depth, have not been measured.
+- **S3 storage, the Docker image, and Railway.** Not exercised in this pass.
 
-Replay displays the recorded journal. It does not rerun provider actions or recover intermediate events that OpenAI did not persist. Correction requires an explicitly verified conditional MCP operation; otherwise the app creates a manual correction task. Costs are estimates, not invoice guarantees.
+The audit tab displays the recorded journal. It does not rerun provider actions, and it cannot recover intermediate events the provider did not persist.

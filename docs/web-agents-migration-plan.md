@@ -1,5 +1,7 @@
 # Astra HQ web migration plan
 
+This document predates platform v2 and is kept as history. [Architecture](architecture.md) describes the current system.
+
 Historical exploration dated September 11, 2026. Implementation was authorized afterward. Use [deployment](deployment.md) and [operations](operations.md) for the current application; the text below records the original investigation.
 
 The checkout is on `main`, fast-forwarded from `3a670b6` to upstream `110d2ba`. No application code, dependencies, demo branches, or deployments were changed during this exploration. This document is the only new repository file.
