@@ -12,6 +12,8 @@ import {
 import { correctionDescriptor, provider, toolMode } from './schema';
 import { requirePlatformAdmin } from './shared';
 
+// No `returns` validator on providerConfigs or registryTools: both restate whole configuration
+// documents built in convex/registry.ts, and the contract test pins their shape.
 export const providerConfigs = query({
   args: {},
   handler: async (ctx) => {
@@ -24,6 +26,7 @@ export const providerConfigs = query({
 
 export const setEnabledUrls = mutation({
   args: { provider, enabledUrls: v.array(v.string()) },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const actor = await requirePlatformAdmin(ctx);
     const known = providerServerUrls(getProvider(args.provider));
@@ -65,6 +68,7 @@ export const saveRegistryTool = mutation({
     resourceArgument: v.optional(v.string()),
     correction: v.optional(correctionDescriptor),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const actor = await requirePlatformAdmin(ctx);
     const { name, description } = validateRegistryTool(args);
@@ -90,6 +94,7 @@ export const saveRegistryTool = mutation({
 
 export const deleteRegistryTool = mutation({
   args: { provider, name: v.string() },
+  returns: v.null(),
   handler: async (ctx, args) => {
     await requirePlatformAdmin(ctx);
     const existing = await ctx.db
@@ -104,6 +109,7 @@ export const deleteRegistryTool = mutation({
 /** Seeds the registry from tools discovered on the administrator's own connection, blocked until reviewed. */
 export const importDiscoveredTools = mutation({
   args: { connectionId: v.id('connections') },
+  returns: v.object({ imported: v.number() }),
   handler: async (ctx, args) => {
     const actor = await requirePlatformAdmin(ctx);
     const connection = await ctx.db.get(args.connectionId);

@@ -24,6 +24,7 @@ async function decidable(
 
 export const decide = mutation({
   args: { proposalId: v.id('proposals'), approved: v.boolean() },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { workspace, actor, role } = await requireWorkspace(ctx);
     const { proposal, task } = await decidable(ctx, workspace._id, args.proposalId, actor.subject, role);
@@ -99,6 +100,10 @@ export const decide = mutation({
 
 export const requestCorrection = mutation({
   args: { proposalId: v.id('proposals') },
+  returns: v.union(
+    v.object({ kind: v.literal('task'), taskId: v.id('tasks') }),
+    v.object({ kind: v.literal('proposal'), proposalId: v.id('proposals') }),
+  ),
   handler: async (ctx, args) => {
     const { workspace, actor, role } = await requireWorkspace(ctx);
     const { proposal: original, task: originalTask } = await decidable(

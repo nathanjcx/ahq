@@ -2,7 +2,7 @@ import { v } from 'convex/values';
 import { mutation } from './_generated/server';
 import type { Doc, Id } from './_generated/dataModel';
 import type { Ctx } from './shared';
-import { canSeeConnection, requireWorkspace } from './shared';
+import { canSeeConnection, requireWorkspace, untrustedBlock } from './shared';
 import { assertEmployeeReady, assertTokenCap, assignmentForProject, startTask } from './work';
 
 /** An inbox item is visible to whoever can use the connection that delivered it. */
@@ -21,6 +21,7 @@ async function visibleItem(
 
 export const markRead = mutation({
   args: { itemId: v.id('inbox') },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
     const item = await visibleItem(ctx, workspace._id, args.itemId, actor.subject);
@@ -35,6 +36,7 @@ export const assign = mutation({
     employeeId: v.id('installations'),
     projectId: v.optional(v.id('projects')),
   },
+  returns: v.object({ taskId: v.id('tasks') }),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
     const item = await visibleItem(ctx, workspace._id, args.itemId, actor.subject);
@@ -48,7 +50,9 @@ export const assign = mutation({
       employeeId: args.employeeId,
       version,
       title: item.title,
-      prompt: `Review this ${item.provider} inbox item and handle it within your approved access.\n\n${item.title}\n${item.preview}`,
+      prompt: `Review this ${item.provider} inbox item and handle it within your approved access.\n\n${untrustedBlock(
+        `${item.title}\n${item.preview}`,
+      )}`,
       project: args.projectId
         ? await assignmentForProject(ctx, workspace._id, args.projectId, args.employeeId)
         : undefined,

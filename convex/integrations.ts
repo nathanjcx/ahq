@@ -6,6 +6,7 @@ import { canSeeConnection, requireWorkspace } from './shared';
 
 export const disconnect = mutation({
   args: { connectionId: v.id('connections') },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { workspace, actor, role } = await requireWorkspace(ctx);
     const connection = await ctx.db.get(args.connectionId);
@@ -27,6 +28,7 @@ export const disconnect = mutation({
   },
 });
 
+// No `returns` validator: readiness is assembled by convex/registry.ts and pinned by the contract test.
 export const readiness = query({
   args: {},
   handler: async (ctx) => {
@@ -58,6 +60,7 @@ export const updateAccess = mutation({
     resourceScope: v.string(),
     inboxResources: v.string(),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
     const connection = await ctx.db.get(args.connectionId);
@@ -84,6 +87,7 @@ export const setSharing = mutation({
     visibility: connectionVisibility,
     visibleToSubjects: v.array(v.string()),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
     const connection = await ctx.db.get(args.connectionId);

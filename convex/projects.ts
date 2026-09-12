@@ -2,7 +2,7 @@ import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
 import type { Doc, Id } from './_generated/dataModel';
 import type { MutationCtx } from './_generated/server';
-import { canSeeTask, cleanText, requireWorkspace } from './shared';
+import { canSeeTask, cleanText, requireWorkspace, untrustedBlock } from './shared';
 import {
   assertEmployeeReady,
   assertTokenCap,
@@ -49,6 +49,7 @@ function publicPost(post: Doc<'projectPosts'>) {
 
 export const create = mutation({
   args: { name: v.string(), brief: v.string(), employeeIds: v.array(v.id('installations')) },
+  returns: v.object({ projectId: v.id('projects') }),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
     const fields = projectFields(args.name, args.brief);
@@ -73,6 +74,7 @@ export const update = mutation({
     brief: v.string(),
     employeeIds: v.array(v.id('installations')),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { workspace } = await requireWorkspace(ctx);
     const project = await requireProject(ctx, workspace._id, args.projectId);
@@ -85,6 +87,7 @@ export const update = mutation({
 
 export const setArchived = mutation({
   args: { projectId: v.id('projects'), archived: v.boolean() },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { workspace } = await requireWorkspace(ctx);
     const project = await requireProject(ctx, workspace._id, args.projectId);
@@ -96,6 +99,8 @@ export const setArchived = mutation({
   },
 });
 
+// No `returns` validator on the board: it would restate the whole post document including its
+// nested handoff record, which the schema already defines.
 export const board = query({
   args: { projectId: v.id('projects') },
   handler: async (ctx, args) => {
@@ -112,6 +117,7 @@ export const board = query({
 
 export const post = mutation({
   args: { projectId: v.id('projects'), text: v.string() },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
     const project = await requireProject(ctx, workspace._id, args.projectId);
@@ -132,6 +138,7 @@ export const requestHandoff = mutation({
     brief: v.string(),
     sourceTaskId: v.optional(v.id('tasks')),
   },
+  returns: v.object({ postId: v.id('projectPosts') }),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
     const project = await requireProject(ctx, workspace._id, args.projectId);
@@ -154,6 +161,7 @@ export const requestHandoff = mutation({
 /** A person accepts a handoff, which starts a floor task carrying the source task's final message. */
 export const decideHandoff = mutation({
   args: { postId: v.id('projectPosts'), accepted: v.boolean() },
+  returns: v.object({ taskId: v.optional(v.id('tasks')) }),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
     const post = await ctx.db.get(args.postId);
@@ -172,11 +180,15 @@ export const decideHandoff = mutation({
     await assertTokenCap(ctx, workspace);
     const { version } = await assertEmployeeReady(ctx, workspace, actor.subject, post.handoff.toEmployeeId);
     let prompt = post.handoff.brief;
-    if (post.taskId) {
-      const source = await ctx.db.get(post.taskId);
-      const closing = source ? await finalAssistantMessage(ctx, source._id) : undefined;
-      if (source && closing)
-        prompt = `${prompt}\n\nContext from ${source.title}:\n${closing.slice(0, 20_000)}`;
+    // The carried context is another employee's output. It travels only to someone who could already
+    // read the source task, and it is delimited so this employee treats it as material, not orders.
+    const source = post.taskId ? await ctx.db.get(post.taskId) : null;
+    if (source && canSeeTask(source, actor.subject)) {
+      const closing = await finalAssistantMessage(ctx, source._id);
+      if (closing)
+        prompt = `${prompt}\n\nContext carried from ${source.title}:\n${untrustedBlock(
+          closing.slice(0, 20_000),
+        )}`;
     }
     const taskId = await startTask(ctx, {
       workspace,

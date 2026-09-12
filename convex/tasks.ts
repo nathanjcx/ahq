@@ -1,6 +1,8 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
 import { taskVisibility } from './schema';
+
+const messageRole = v.union(v.literal('user'), v.literal('assistant'), v.literal('system'));
 import { canSeeTask, cleanText, randomToken, requireWorkspace } from './shared';
 import {
   assertEmployeeReady,
@@ -18,6 +20,7 @@ export const create = mutation({
     title: v.string(),
     projectId: v.optional(v.id('projects')),
   },
+  returns: v.object({ taskId: v.id('tasks') }),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
     await assertTokenCap(ctx, workspace);
@@ -40,6 +43,16 @@ export const create = mutation({
 
 export const messages = query({
   args: { taskId: v.id('tasks') },
+  returns: v.array(
+    v.object({
+      id: v.id('messages'),
+      taskId: v.id('tasks'),
+      role: messageRole,
+      text: v.string(),
+      createdAt: v.number(),
+      phase: v.optional(v.string()),
+    }),
+  ),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
     const task = await ctx.db.get(args.taskId);
@@ -64,6 +77,7 @@ export const messages = query({
 
 export const send = mutation({
   args: { taskId: v.id('tasks'), text: v.string() },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
     const task = await ctx.db.get(args.taskId);
@@ -96,6 +110,7 @@ export const send = mutation({
 
 export const cancel = mutation({
   args: { taskId: v.id('tasks') },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
     const task = await ctx.db.get(args.taskId);
@@ -149,6 +164,7 @@ export const cancel = mutation({
 
 export const setVisibility = mutation({
   args: { taskId: v.id('tasks'), visibility: taskVisibility },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
     const task = await ctx.db.get(args.taskId);
@@ -159,7 +175,11 @@ export const setVisibility = mutation({
   },
 });
 
-/** The sealed timeline. Tool-call arguments and results stay encrypted until the web service unseals them. */
+/**
+ * The sealed timeline. Tool-call arguments and results stay encrypted until the web service unseals
+ * them. No `returns` validator: it would restate four nested journal shapes that the audit route's
+ * zod schema and web-tests/contracts.types.test.ts already pin down.
+ */
 export const auditTimeline = query({
   args: { taskId: v.id('tasks') },
   handler: async (ctx, args) => {
