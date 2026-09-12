@@ -173,7 +173,7 @@ describe('projects and roadmaps', () => {
     expect((await user.query(api.projects.list, {}))[0]).toMatchObject({ id: projectId, openTasks: 2 });
   });
 
-  it('lists the project\'s own work and names its channel for the interface', async () => {
+  it("lists the project's own work and names its channel for the interface", async () => {
     const { user, floorId, employeeId, projectId } = await setup();
     const proposal = roadmap(floorId, employeeId);
     const confirmed = await user.mutation(api.projects.confirmProposal, { projectId, proposal });
@@ -428,6 +428,22 @@ describe('planner inputs', () => {
     ).toMatchObject({ workingHours: 2, tokens: 1_000, confidence: 0.4 });
   });
 
+  it('shows the planner what the workspace has agreed', async () => {
+    const { t, projectId } = await setup();
+    const admin = t.withIdentity(orgIdentity('owner', 'acme', 'org:admin'));
+    const workspaceId = await t.run(async (ctx) => (await ctx.db.get(projectId))!.workspaceId);
+    await admin.mutation(api.memory.propose, {
+      scope: 'workspace',
+      scopeId: workspaceId,
+      kind: 'preference',
+      text: 'We ship on Fridays.',
+    });
+
+    expect((await t.query(api.services.projects.plannerInputs, { secret, projectId })).memory).toContainEqual(
+      expect.objectContaining({ scope: 'workspace', text: 'We ship on Fridays.' }),
+    );
+  });
+
   it('stores a planner proposal with the bottleneck questions the platform can see', async () => {
     const { t, floorId, employeeId, projectId, user } = await setup();
     const proposal = roadmap(floorId, employeeId);
@@ -452,9 +468,9 @@ describe('planner inputs', () => {
     });
     expect((await user.query(api.projects.get, { projectId })).deadlineAt).toBe(8 * DAY);
     // The planner reads the field rather than the brief, and the brief says nothing about a date.
-    expect(
-      (await t.query(api.services.projects.plannerInputs, { secret, projectId })).project,
-    ).toMatchObject({ deadlineAt: 8 * DAY });
+    expect((await t.query(api.services.projects.plannerInputs, { secret, projectId })).project).toMatchObject(
+      { deadlineAt: 8 * DAY },
+    );
 
     await t.mutation(api.services.projects.recordProposal, {
       secret,

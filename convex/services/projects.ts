@@ -78,7 +78,8 @@ export const plannerInputs = query({
           q
             .eq('workspaceId', project.workspaceId)
             .eq('scope', 'workspace')
-            .eq('scopeId', '')
+            // A workspace claim is scoped to the workspace itself, the way `memory` files it.
+            .eq('scopeId', String(project.workspaceId))
             .eq('status', 'active'),
         )
         .take(MEMORY_SAMPLE),
@@ -136,9 +137,7 @@ export const recordProposal = mutation({
     const seen = new Set(proposal.prompts.map((prompt) => prompt.text));
     const prompts = [
       ...proposal.prompts,
-      ...bottleneckPrompts(proposal, capacity, project.deadlineAt).filter(
-        (prompt) => !seen.has(prompt.text),
-      ),
+      ...bottleneckPrompts(proposal, capacity, project.deadlineAt).filter((prompt) => !seen.has(prompt.text)),
     ];
     await ctx.db.patch(project._id, {
       proposal: JSON.stringify({ ...proposal, prompts }),
