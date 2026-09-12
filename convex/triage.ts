@@ -3,7 +3,7 @@ import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import { findChannel, recentPosts } from './lib/posts';
 import { ensureSettings, settingsFor } from './lib/schedule';
-import { ensureTriageStaff, isOpenAlert, pagingState } from './lib/triage';
+import { alertPaging, ensureTriageStaff, isOpenAlert } from './lib/triage';
 import { cleanText, requireWorkspace, type Ctx } from './shared';
 
 const MAX_RULES = 50;
@@ -42,7 +42,7 @@ function alertNotifications(ctx: Ctx, alertId: Id<'alerts'>) {
 async function alertView(ctx: Ctx, alert: Doc<'alerts'>, now: number) {
   return {
     ...publicAlert(alert),
-    paging: pagingState(isOpenAlert(alert) ? await alertNotifications(ctx, alert._id) : [], now),
+    paging: alertPaging(isOpenAlert(alert) ? await alertNotifications(ctx, alert._id) : [], now),
   };
 }
 

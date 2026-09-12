@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
-import type { Doc } from '../_generated/dataModel';
-import { mutation, query } from '../_generated/server';
+import type { Doc, Id } from '../_generated/dataModel';
+import { mutation, query, type MutationCtx } from '../_generated/server';
 import { settingsFor } from '../lib/schedule';
 import { publicNotification } from '../notifications';
 import { cleanText, requireService, type Ctx } from '../shared';
@@ -42,8 +42,61 @@ async function workspaceSubjects(ctx: Ctx, workspace: Doc<'workspaces'>) {
 
 /**
  * One attempt to reach each subject, recorded before anything is sent. The rows come back so the
- * web service can deliver them; an attempt counts only once a channel reports delivery.
+ * worker can deliver them; an attempt counts only once a channel reports delivery.
  */
+export async function recordAttempts(
+  ctx: MutationCtx,
+  workspace: Doc<'workspaces'>,
+  input: {
+    kind: Doc<'notifications'>['kind'];
+    title: string;
+    text: string;
+    alertId?: Id<'alerts'>;
+    subjects?: string[];
+  },
+) {
+  const settings = await settingsFor(ctx, workspace._id);
+  const subjects = input.subjects?.length ? input.subjects : await workspaceSubjects(ctx, workspace);
+  const title = cleanText(input.title, 'Notification title', 200);
+  const text = cleanText(input.text, 'Notification text', 2_000);
+  const sentAt = Date.now();
+  const alertId = input.alertId;
+  const rows = [];
+  for (const subject of subjects) {
+    const prior = alertId
+      ? (
+          await ctx.db
+            .query('notifications')
+            .withIndex('by_alert', (q) => q.eq('alertId', alertId))
+            .collect()
+        ).filter((row) => row.subject === subject)
+      : [];
+    const attempt = prior.length + 1;
+    const id = await ctx.db.insert('notifications', {
+      workspaceId: workspace._id,
+      subject,
+      kind: input.kind,
+      title,
+      text,
+      alertId,
+      channels: settings.notificationChannels,
+      attempt,
+      sentAt,
+    });
+    rows.push({
+      id,
+      subject,
+      kind: input.kind,
+      title,
+      text,
+      alertId,
+      channels: settings.notificationChannels,
+      attempt,
+    });
+  }
+  return rows;
+}
+
 export const attempt = mutation({
   args: {
     secret: v.string(),
@@ -58,44 +111,7 @@ export const attempt = mutation({
     requireService(args.secret);
     const workspace = await ctx.db.get(args.workspaceId);
     if (!workspace) throw new Error('Workspace not found');
-    const settings = await settingsFor(ctx, workspace._id);
-    const subjects = args.subjects?.length ? args.subjects : await workspaceSubjects(ctx, workspace);
-    const title = cleanText(args.title, 'Notification title', 200);
-    const text = cleanText(args.text, 'Notification text', 2_000);
-    const sentAt = Date.now();
-    const rows = [];
-    for (const subject of subjects) {
-      const prior = args.alertId
-        ? (
-            await ctx.db
-              .query('notifications')
-              .withIndex('by_alert', (q) => q.eq('alertId', args.alertId))
-              .collect()
-          ).filter((row) => row.subject === subject)
-        : [];
-      const id = await ctx.db.insert('notifications', {
-        workspaceId: workspace._id,
-        subject,
-        kind: args.kind,
-        title,
-        text,
-        alertId: args.alertId,
-        channels: settings.notificationChannels,
-        attempt: prior.length + 1,
-        sentAt,
-      });
-      rows.push({
-        id,
-        subject,
-        kind: args.kind,
-        title,
-        text,
-        alertId: args.alertId,
-        channels: settings.notificationChannels,
-        attempt: prior.length + 1,
-      });
-    }
-    return rows;
+    return recordAttempts(ctx, workspace, args);
   },
 });
 

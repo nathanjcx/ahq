@@ -9,10 +9,14 @@ export interface Channel {
   name: string;
   unread: number;
 }
+/** What a post is beyond its kind, when its text would otherwise have to be parsed to know. */
+export type PostFlag = 'contested' | 'incident' | 'missing';
+
 export interface Post {
   id: string;
   channelId: string;
   kind: PostKind;
+  flag?: PostFlag;
   authorName: string;
   authorSubject?: string;
   authorEmployeeId?: string;

@@ -84,6 +84,12 @@ export const channelKind = v.union(
   v.literal('triage'),
   v.literal('audit'),
 );
+/**
+ * What a post is beyond its kind, when the text alone would have to be parsed to know: a claim the
+ * janitor contested, the incident report the emergency rule requires, and the placeholder the
+ * platform files when that report never arrived.
+ */
+export const postFlag = v.union(v.literal('contested'), v.literal('incident'), v.literal('missing'));
 export const postKind = v.union(
   v.literal('note'),
   v.literal('report'),
@@ -273,6 +279,9 @@ export default defineSchema({
     listingId: v.id('listings'),
     floorId: v.optional(v.id('floors')),
     count: v.number(),
+    /** One name per instance, as the requester asked for them, and the model they run after hours. */
+    names: v.optional(v.array(v.string())),
+    overnightModel: v.optional(model),
     requestedBy: v.string(),
     requestedByName: v.string(),
     status: v.union(v.literal('pending'), v.literal('approved'), v.literal('declined')),
@@ -304,7 +313,8 @@ export default defineSchema({
     name: v.string(),
     brief: v.string(),
     employeeIds: v.array(v.id('installations')),
-    reserved: v.optional(v.union(v.literal('lobby'), v.literal('triage'))),
+    /** Reserved floors the workspace makes itself. Only Triage is one: the lobby is a room, not a team. */
+    reserved: v.optional(v.literal('triage')),
     archivedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -317,6 +327,8 @@ export default defineSchema({
     brief: v.string(),
     floorIds: v.array(v.id('floors')),
     status: v.union(v.literal('planning'), v.literal('active'), v.literal('done'), v.literal('archived')),
+    /** When the project is due. The planner reads this; it is not parsed out of the brief. */
+    deadlineAt: v.optional(v.number()),
     /** The planner's latest proposal, kept until a person confirms or discards it. */
     proposal: v.optional(v.string()),
     createdAt: v.number(),
@@ -646,6 +658,7 @@ export default defineSchema({
     workspaceId: v.id('workspaces'),
     channelId: v.id('channels'),
     kind: postKind,
+    flag: v.optional(postFlag),
     authorSubject: v.optional(v.string()),
     authorEmployeeId: v.optional(v.id('installations')),
     authorName: v.string(),
@@ -728,6 +741,8 @@ export default defineSchema({
     addressedTo: v.optional(v.array(v.id('installations'))),
     inReplyTo: v.optional(v.id('meetingTurns')),
     text: v.string(),
+    /** What this turn cost, so a meeting shows its price per question. */
+    usage: v.optional(tokenUsage),
     /** For outcomes: the proposed follow-up, confirmed by a person. */
     outcome: v.optional(
       v.object({
@@ -827,6 +842,8 @@ export default defineSchema({
     triageRules: v.optional(v.array(v.string())),
     /** Signing secret for the generic alert endpoint, sealed by the web service. */
     alertSecretCiphertext: v.optional(v.string()),
+    /** When that secret was last written, which is all the interface may know about it. */
+    alertSecretUpdatedAt: v.optional(v.number()),
     emergencyAllowList: v.array(v.string()),
     notificationChannels: v.array(v.string()),
     plan: v.union(v.literal('subscription'), v.literal('byok')),

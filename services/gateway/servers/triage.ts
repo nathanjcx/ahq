@@ -8,14 +8,14 @@ import { GatewayError, upstreamFailure } from '../errors';
 import type { GatewayRequest } from '../tools';
 import { requireString, untrusted, type InternalTool } from './shared';
 
-/** Delivered, unanswered pages that admit the emergency allow-list. Fewer than this and it stays shut. */
-const EMERGENCY_ATTEMPTS = 3;
-
 export interface TriageAuthority {
   attended: boolean;
   allowList: string[];
   emergencyAllowList: string[];
+  /** Delivered pages nobody has answered since the first of them. */
   unattendedAttempts: number;
+  /** Whether the notification ledger and the clock have opened the emergency allow-list. */
+  emergency: boolean;
 }
 
 interface TriageWriteTarget {
@@ -33,15 +33,13 @@ export function authorityQuery(request: GatewayRequest) {
  * The provider tools a triage run may use right now.
  *
  * The ordinary allow-list is always open for a triage task: that is the authority the workspace
- * granted when it named those tools. The emergency list opens only outside attended hours, after at
- * least three pages were delivered and none was acknowledged. Both are recomputed on every call, so
- * a person acknowledging a page between discovery and use closes the emergency list again.
+ * granted when it named those tools. The emergency list opens only when `services/triage:authority`
+ * says the clock and the notification ledger both admit it — outside attended hours, three delivered
+ * pages standing unanswered for twenty minutes. Both are recomputed on every call, so a person
+ * acknowledging a page between discovery and use closes the emergency list again.
  */
 export function admittedTools(authority: TriageAuthority): { tools: string[]; emergency: string[] } {
-  const emergency =
-    !authority.attended && authority.unattendedAttempts >= EMERGENCY_ATTEMPTS
-      ? authority.emergencyAllowList
-      : [];
+  const emergency = authority.emergency ? authority.emergencyAllowList : [];
   return { tools: [...new Set([...authority.allowList, ...emergency])], emergency };
 }
 

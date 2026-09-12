@@ -22,7 +22,7 @@ import {
 } from '../lib/schedule';
 import { finalAssistantMessage, insertJob, openSessionTask } from '../lib/tasks';
 import { isWorkingTime, workingHoursBetween } from '../lib/time';
-import { ensureTriageStaff } from '../lib/triage';
+import { alertPaging, ensureTriageStaff } from '../lib/triage';
 import { model } from '../schema';
 import { requireService } from '../shared';
 import { taskForRunToken } from './context';
@@ -208,18 +208,30 @@ async function tickWorkspace(ctx: MutationCtx, workspace: Doc<'workspaces'>, now
   for (const task of tasks)
     if (triageEmployees.has(task.employeeId)) triageUsageToday += tokensByTask.get(task._id) ?? 0;
 
+  // Each open incident carries its own notification ledger, which is what the planner re-pages from.
+  const plannerAlerts: PlannerAlert[] = await Promise.all(
+    alerts.map(async (alert) => ({
+      alertId: alert._id,
+      severity: alert.severity,
+      createdAt: alert.createdAt,
+      triageTaskId: alert.triageTaskId,
+      paging: alertPaging(
+        await ctx.db
+          .query('notifications')
+          .withIndex('by_alert', (q) => q.eq('alertId', alert._id))
+          .collect(),
+        now,
+      ),
+    })),
+  );
+
   const planned = planTick({
     now,
     settings,
     tasks: plannerTasks,
     instances,
     meetings,
-    alerts: alerts.map((alert): PlannerAlert => ({
-      alertId: alert._id,
-      severity: alert.severity,
-      createdAt: alert.createdAt,
-      triageTaskId: alert.triageTaskId,
-    })),
+    alerts: plannerAlerts,
     findings,
     proposedMemories: proposed.length,
     usageToday: usage.input + usage.output,

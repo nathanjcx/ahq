@@ -1,3 +1,4 @@
+import type { JobKind } from '../lib/jobs';
 import type {
   Capability,
   CorrectionDescriptor,
@@ -33,22 +34,9 @@ export interface PrivateConnection {
   credentialKeyVersion?: string;
 }
 
-/** Queue kinds the worker runs. The first four predate the schedule; the rest arrive from it. */
-export type JobKind =
-  | 'start_task'
-  | 'send_message'
-  | 'cancel_task'
-  | 'execute_action'
-  | 'start_shift'
-  | 'review_shift'
-  | 'meeting_prep'
-  | 'meeting_answer'
-  | 'meeting_wrapup'
-  | 'curation_run'
-  | 'audit_run'
-  | 'triage_run'
-  | 'email_classify'
-  | 'plan_project';
+
+/** Queue kinds the worker runs, named once in `lib/jobs.ts` and shared with the planner. */
+export type { JobKind };
 
 export interface Job {
   id: string;

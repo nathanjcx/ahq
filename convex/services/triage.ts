@@ -7,11 +7,12 @@ import { channelFor, insertPost } from '../lib/posts';
 import { ensureSettings, settingsFor } from '../lib/schedule';
 import { assignmentForFloor, insertJob, openSessionTask, startTask } from '../lib/tasks';
 import { isAttendedTime } from '../lib/time';
-import { ATTEMPT_WINDOW_MS, ensureTriageStaff, isOpenAlert, matchesTriageRules } from '../lib/triage';
+import { alertPaging, ensureTriageStaff, isOpenAlert, matchesTriageRules } from '../lib/triage';
 import { policiesFor } from '../registry';
 import { severity as severityValidator } from '../schema';
 import { cleanText, requireService, untrustedBlock, type Ctx } from '../shared';
 import { privateConnection, taskForRunToken } from './context';
+import { recordAttempts } from './notifications';
 
 const alertSource = v.union(
   v.literal('github'),
@@ -335,9 +336,52 @@ export const resolve = mutation({
 });
 
 /**
+ * One page for one open incident, recorded and handed back for delivery.
+ *
+ * The scheduler decides when a page is due; this writes the attempt and says what it is for, so the
+ * wording of an escalation lives with the ledger rather than in the worker. A settled incident and an
+ * answered one page nobody, which is what makes an acknowledgement reset the rule.
+ */
+export const pageAlert = mutation({
+  args: { secret: v.string(), alertId: v.id('alerts') },
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const alert = await ctx.db.get(args.alertId);
+    if (!alert) throw new Error('Alert not found');
+    const workspace = await ctx.db.get(alert.workspaceId);
+    if (!workspace) throw new Error('Workspace not found');
+    const now = Date.now();
+    const paging = alertPaging(
+      await ctx.db
+        .query('notifications')
+        .withIndex('by_alert', (q) => q.eq('alertId', alert._id))
+        .collect(),
+      now,
+    );
+    if (!isOpenAlert(alert) || paging.acknowledged || paging.attempts >= paging.required) return [];
+    const attempt = paging.attempts + 1;
+    const remaining = paging.required - attempt;
+    return recordAttempts(ctx, workspace, {
+      kind: 'triage',
+      title: `Incident needs a person: ${alert.title}`,
+      text: [
+        `A ${alert.severity} incident is open outside attended hours and needs a person to go further.`,
+        remaining > 0
+          ? `Attempt ${attempt} of ${paging.required}. ${remaining} more unanswered and triage may merge and deploy under the emergency rule.`
+          : `Attempt ${attempt} of ${paging.required}. Unanswered, triage may merge and deploy under the emergency rule twenty minutes after the first attempt.`,
+      ].join('\n'),
+      alertId: alert._id,
+    });
+  },
+});
+
+/**
  * What the gateway needs to decide which triage tools to expose: whether a person is expected to be
- * watching, the two allow-lists, and how many delivered pages for this incident went unanswered in
- * the last twenty minutes.
+ * watching, the two allow-lists, and how far the emergency rule has run on this incident.
+ *
+ * The ledger is read whole, from the first page that still stands rather than over a rolling window,
+ * so the count only grows while nobody answers and `emergency` turns on exactly once three delivered
+ * pages have gone unanswered for twenty minutes. An acknowledgement resets it.
  */
 export const authority = query({
   args: { secret: v.string(), runToken: v.string() },
@@ -346,27 +390,30 @@ export const authority = query({
     allowList: v.array(v.string()),
     emergencyAllowList: v.array(v.string()),
     unattendedAttempts: v.number(),
+    emergency: v.boolean(),
   }),
   handler: async (ctx, args) => {
     requireService(args.secret);
     const task = await taskForRunToken(ctx, args.runToken);
     const settings = await settingsFor(ctx, task.workspaceId);
     const alert = await alertForTask(ctx, task._id);
-    const since = Date.now() - ATTEMPT_WINDOW_MS;
-    const attempts =
+    const now = Date.now();
+    const paging = alertPaging(
       alert && isOpenAlert(alert)
-        ? (
-            await ctx.db
-              .query('notifications')
-              .withIndex('by_alert', (q) => q.eq('alertId', alert._id))
-              .collect()
-          ).filter((row) => row.sentAt >= since && row.deliveredAt !== undefined && !row.acknowledgedAt)
-        : [];
+        ? await ctx.db
+            .query('notifications')
+            .withIndex('by_alert', (q) => q.eq('alertId', alert._id))
+            .collect()
+        : [],
+      now,
+    );
+    const attended = isAttendedTime(now, settings);
     return {
-      attended: isAttendedTime(Date.now(), settings),
+      attended,
       allowList: settings.triageAllowList,
       emergencyAllowList: settings.emergencyAllowList,
-      unattendedAttempts: attempts.length,
+      unattendedAttempts: paging.attempts,
+      emergency: !attended && paging.open,
     };
   },
 });

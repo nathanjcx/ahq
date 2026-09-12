@@ -60,6 +60,8 @@ export async function channelFor(
 export interface PostInput {
   channel: Doc<'channels'>;
   kind: Doc<'posts'>['kind'];
+  /** What this post is beyond its kind, so nothing has to read its first line to find out. */
+  flag?: Doc<'posts'>['flag'];
   authorSubject?: string;
   authorEmployeeId?: Id<'installations'>;
   authorName: string;
@@ -76,6 +78,7 @@ export async function insertPost(ctx: MutationCtx, input: PostInput) {
     workspaceId: input.channel.workspaceId,
     channelId: input.channel._id,
     kind: input.kind,
+    flag: input.flag,
     authorSubject: input.authorSubject,
     authorEmployeeId: input.authorEmployeeId,
     authorName: input.authorName,
@@ -213,6 +216,7 @@ export function publicPost(post: Doc<'posts'>) {
     id: post._id,
     channelId: post.channelId,
     kind: post.kind,
+    flag: post.flag,
     authorSubject: post.authorSubject,
     authorEmployeeId: post.authorEmployeeId,
     authorName: post.authorName,
