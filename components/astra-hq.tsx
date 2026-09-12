@@ -44,11 +44,13 @@ import {
   Store,
   UserPlus,
   Users,
-  WandSparkles,
   X,
 } from 'lucide-react';
-import { SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
+import { OrganizationSwitcher, SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
+import dynamic from 'next/dynamic';
 import { useConvexAuth, useMutation, useQuery } from 'convex/react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import type {
   ActionProposal,
@@ -63,10 +65,11 @@ import type {
   Task,
 } from '@/lib/contracts';
 import { emptyDashboard } from '@/lib/contracts';
-import { uiApi, type AdminDraft } from '@/lib/ui-api';
+import { uiApi, type AdminDraft, type AdminToolRegistry } from '@/lib/ui-api';
 import { providers as providerCatalog, getProvider } from '@/lib/providers';
 
 const Github = GitBranch;
+const OfficeView = dynamic(() => import('./office/office-view'), { ssr: false });
 
 type Page =
   | 'office'
@@ -80,6 +83,7 @@ type Page =
   | 'admin';
 
 type EditorDraft = AdminDraft & { id: string };
+type CorrectionResult = { kind: 'task'; taskId: string } | { kind: 'proposal'; proposalId: string };
 
 type Actions = {
   bootstrap: (name: string) => Promise<unknown>;
@@ -89,7 +93,7 @@ type Actions = {
   sendMessage: (taskId: string, text: string) => Promise<unknown>;
   cancelTask: (taskId: string) => Promise<unknown>;
   decide: (proposalId: string, approved: boolean) => Promise<unknown>;
-  correct: (proposalId: string) => Promise<unknown>;
+  correct: (proposalId: string) => Promise<CorrectionResult>;
   disconnect: (connectionId: string) => Promise<unknown>;
   setConnectionTools: (
     connectionId: string,
@@ -104,6 +108,9 @@ type Actions = {
 };
 
 const unavailable = async () => undefined;
+const unavailableCorrection = async (): Promise<CorrectionResult> => {
+  throw new Error('Connect the backend before requesting a correction.');
+};
 const offlineActions: Actions = {
   bootstrap: unavailable,
   setBudget: unavailable,
@@ -112,7 +119,7 @@ const offlineActions: Actions = {
   sendMessage: unavailable,
   cancelTask: unavailable,
   decide: unavailable,
-  correct: unavailable,
+  correct: unavailableCorrection,
   disconnect: unavailable,
   setConnectionTools: unavailable,
   markRead: unavailable,
@@ -122,7 +129,11 @@ const offlineActions: Actions = {
   retire: unavailable,
 };
 
-const providers = providerCatalog.map(provider=>({...provider,short:provider.id==='google-workspace'?'GW':provider.name.slice(0,2).toUpperCase(),inbox:'Event delivery needs setup'}));
+const providers = providerCatalog.map((provider) => ({
+  ...provider,
+  short: provider.id === 'google-workspace' ? 'GW' : provider.name.slice(0, 2).toUpperCase(),
+  inbox: 'Event delivery needs setup',
+}));
 
 const nav: Array<{ id: Page; label: string; icon: typeof LayoutGrid }> = [
   { id: 'office', label: 'Office', icon: LayoutGrid },
@@ -144,6 +155,7 @@ export function AstraHq({ configured }: { configured: boolean }) {
       dashboard={emptyDashboard}
       listings={[]}
       drafts={[]}
+      toolRegistry={[]}
       actions={offlineActions}
     />
   );
@@ -154,6 +166,10 @@ function ConnectedAstraHq() {
   const dashboard = useQuery(uiApi.dashboard, isAuthenticated ? {} : 'skip');
   const listings = useQuery(uiApi.listings, isAuthenticated ? {} : 'skip');
   const drafts = useQuery(uiApi.adminDrafts, isAuthenticated && dashboard?.isPlatformAdmin ? {} : 'skip');
+  const toolRegistry = useQuery(
+    uiApi.adminToolRegistry,
+    isAuthenticated && dashboard?.isPlatformAdmin ? {} : 'skip',
+  );
   const bootstrap = useMutation(uiApi.bootstrapWorkspace);
   const setBudget = useMutation(uiApi.setBudget);
   const hire = useMutation(uiApi.hire);
@@ -186,6 +202,7 @@ function ConnectedAstraHq() {
             dashboard={dashboard}
             listings={listings}
             drafts={(drafts ?? []).map((draft) => ({ ...draft, id: draft.draftId }))}
+            toolRegistry={toolRegistry ?? []}
             actions={{
               bootstrap: (name) => bootstrap({ name }),
               setBudget: (monthlyBudget) => setBudget({ monthlyBudget }),
@@ -216,16 +233,26 @@ function WorkspaceShell({
   dashboard,
   listings,
   drafts,
+  toolRegistry,
   actions,
 }: {
   configured: boolean;
   dashboard: Dashboard;
   listings: Listing[];
   drafts: EditorDraft[];
+  toolRegistry: AdminToolRegistry;
   actions: Actions;
 }) {
   const [page, setPage] = useState<Page>('office');
-  useEffect(()=>{const sync=()=>{const value=window.location.hash.slice(1);if(nav.some(item=>item.id===value)||value==='admin')setPage(value as Page);};sync();window.addEventListener('hashchange',sync);return ()=>window.removeEventListener('hashchange',sync);},[]);
+  useEffect(() => {
+    const sync = () => {
+      const value = window.location.hash.slice(1);
+      if (nav.some((item) => item.id === value) || value === 'admin') setPage(value as Page);
+    };
+    sync();
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
@@ -233,6 +260,8 @@ function WorkspaceShell({
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const workspace = dashboard.workspace;
+  const canManageWorkspace = workspace?.role === 'owner' || workspace?.role === 'admin';
+  const hasReadyEmployee = dashboard.employees.some((employee) => employee.status === 'ready');
   const pageName =
     page === 'admin' ? 'Marketplace admin' : (nav.find((item) => item.id === page)?.label ?? 'Office');
 
@@ -244,7 +273,7 @@ function WorkspaceShell({
 
   function go(next: Page) {
     setPage(next);
-    window.location.hash=next;
+    window.location.hash = next;
     setSidebarOpen(false);
   }
 
@@ -252,8 +281,25 @@ function WorkspaceShell({
     try {
       await work();
       setNotice(success);
+      return true;
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'That did not work. Please try again.');
+      return false;
+    }
+  };
+
+  const requestCorrection = async (proposal: ActionProposal) => {
+    try {
+      const result = await actions.correct(proposal.id);
+      setSelectedTask(
+        result.kind === 'task'
+          ? result.taskId
+          : (dashboard.proposals.find((item) => item.id === result.proposalId)?.taskId ?? proposal.taskId),
+      );
+      go('tasks');
+      setNotice(result.kind === 'task' ? 'Correction task created' : 'Correction ready for review');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'The correction could not be created.');
     }
   };
 
@@ -285,12 +331,6 @@ function WorkspaceShell({
             <small>{workspace ? `${dashboard.employees.length} employees` : 'Ready to set up'}</small>
           </span>
           <ChevronDown size={14} />
-        </button>
-
-        <button className="command-search" onClick={() => go('tasks')}>
-          <Search size={15} />
-          <span>Find anything</span>
-          <kbd>⌘ K</kbd>
         </button>
 
         <nav aria-label="Main navigation">
@@ -329,25 +369,27 @@ function WorkspaceShell({
         </nav>
 
         <div className="sidebar-footer">
-          <div className="budget-mini">
-            <span>
-              <CircleDollarSign size={14} /> Monthly budget
-            </span>
-            <strong>
-              {workspace
-                ? `$${Math.round(workspace.spent)} of $${Math.round(workspace.monthlyBudget)}`
-                : 'Not configured'}
-            </strong>
-            <div className="budget-track">
-              <span
-                style={{
-                  width: workspace?.monthlyBudget
-                    ? `${Math.min(100, (workspace.spent / workspace.monthlyBudget) * 100)}%`
-                    : '0%',
-                }}
-              />
+          {canManageWorkspace && (
+            <div className="budget-mini">
+              <span>
+                <CircleDollarSign size={14} /> Monthly budget
+              </span>
+              <strong>
+                {workspace
+                  ? `$${Math.round(workspace.spent)} of $${Math.round(workspace.monthlyBudget)}`
+                  : 'Not configured'}
+              </strong>
+              <div className="budget-track">
+                <span
+                  style={{
+                    width: workspace?.monthlyBudget
+                      ? `${Math.min(100, (workspace.spent / workspace.monthlyBudget) * 100)}%`
+                      : '0%',
+                  }}
+                />
+              </div>
             </div>
-          </div>
+          )}
           <button className="account-row" onClick={() => setSettingsOpen(true)}>
             <span className="avatar avatar-user">
               <Settings size={16} />
@@ -382,18 +424,39 @@ function WorkspaceShell({
             <span>{pageName}</span>
           </div>
           <div className="topbar-actions">
-            <button className="icon-button notification-button" aria-label="Notifications">
+            <button
+              className="icon-button notification-button"
+              aria-label="Open action reviews"
+              title={
+                dashboard.proposals.some((proposal) => proposal.status === 'pending')
+                  ? 'Open action reviews'
+                  : 'No action reviews'
+              }
+              disabled={!dashboard.proposals.some((proposal) => proposal.status === 'pending')}
+              onClick={() => {
+                const pending = dashboard.proposals.find((proposal) => proposal.status === 'pending');
+                if (pending) {
+                  setSelectedTask(pending.taskId);
+                  go('tasks');
+                }
+              }}
+            >
               <Bell size={17} />
               {dashboard.proposals.some((p) => p.status === 'pending') && <i />}
             </button>
             <button
               className="primary-button compact"
-              disabled={!workspace}
+              disabled={!workspace || !hasReadyEmployee}
               onClick={() => setNewTaskOpen(true)}
             >
               <Plus size={16} />
               New task
             </button>
+            {configured && (
+              <div className="clerk-organization">
+                <OrganizationSwitcher afterSelectOrganizationUrl="/" />
+              </div>
+            )}
             {configured && (
               <div className="clerk-user">
                 <UserButton />
@@ -453,7 +516,10 @@ function WorkspaceShell({
               onDecide={(id, approved) =>
                 run(() => actions.decide(id, approved), approved ? 'Action approved' : 'Action rejected')
               }
-              onCorrect={(id) => run(() => actions.correct(id), 'Correction requested')}
+              onCorrect={(id) => {
+                const proposal = dashboard.proposals.find((item) => item.id === id);
+                if (proposal) void requestCorrection(proposal);
+              }}
             />
           )}
           {page === 'files' && <FilesPage dashboard={dashboard} onTasks={() => go('tasks')} />}
@@ -462,6 +528,7 @@ function WorkspaceShell({
             <MarketplacePage
               listings={listings}
               employees={dashboard.employees}
+              connections={dashboard.connections}
               configured={configured}
               isAdmin={dashboard.isPlatformAdmin}
               onHire={(id) => run(() => actions.hire(id), 'Employee added to your workspace')}
@@ -483,6 +550,7 @@ function WorkspaceShell({
             <AdminPage
               drafts={drafts}
               listings={listings}
+              toolRegistry={toolRegistry}
               onSave={(draft) => run(() => actions.saveDraft(draft), 'Draft saved')}
               onPublish={(id) => run(() => actions.publish(id), 'Employee published')}
               onRetire={(id) => run(() => actions.retire(id), 'Version retired')}
@@ -582,6 +650,21 @@ function OfficePage({
   const active = dashboard.tasks.filter((task) =>
     ['queued', 'running', 'awaiting_approval'].includes(task.status),
   );
+  const officeEmployees = dashboard.employees
+    .filter((employee) => employee.status === 'ready')
+    .map((employee) => {
+      const work = dashboard.tasks.find(
+        (task) =>
+          task.employeeId === employee.id && ['queued', 'running', 'awaiting_approval'].includes(task.status),
+      );
+      return {
+        id: employee.id,
+        name: employee.name,
+        role: employee.role,
+        color: employee.color,
+        status: work?.status === 'awaiting_approval' ? 'review' : work ? 'working' : 'ready',
+      };
+    });
   return (
     <div className="office-page">
       <PageIntro
@@ -597,7 +680,11 @@ function OfficePage({
             : 'Connect your workspace, hire your first employee, and give them a clear assignment.'
         }
         action={
-          <button className="primary-button" disabled={!dashboard.employees.length} onClick={onNewTask}>
+          <button
+            className="primary-button"
+            disabled={!dashboard.employees.some((employee) => employee.status === 'ready')}
+            onClick={onNewTask}
+          >
             <Plus size={17} />
             Assign work
           </button>
@@ -614,48 +701,8 @@ function OfficePage({
               <SlidersHorizontal size={14} />
             </span>
           </div>
-          <div className="pixel-office" aria-label="Office floor">
-            <div className="office-window">
-              <span />
-              <span />
-              <span />
-            </div>
-            <div className="pixel-rug" />
-            <div className="pixel-plant plant-one">
-              <i />
-              <b />
-            </div>
-            <div className="pixel-plant plant-two">
-              <i />
-              <b />
-            </div>
-            {dashboard.employees.length ? (
-              dashboard.employees
-                .slice(0, 6)
-                .map((employee, index) => (
-                  <PixelDesk
-                    key={employee.id}
-                    employee={employee}
-                    index={index}
-                    onClick={() => onEmployee(employee.id)}
-                  />
-                ))
-            ) : (
-              <div className="empty-office">
-                <span className="empty-office-spark">
-                  <WandSparkles size={29} />
-                </span>
-                <h2>The desks are ready</h2>
-                <p>
-                  Hire a published employee from the marketplace. They will appear here when their required
-                  integrations are connected.
-                </p>
-                <button className="secondary-button" onClick={() => onPage('marketplace')}>
-                  <Store size={16} />
-                  Browse marketplace
-                </button>
-              </div>
-            )}
+          <div className="office-stage">
+            <OfficeView employees={officeEmployees} onSelect={onEmployee} />
           </div>
           <div className="office-legend">
             <span>
@@ -724,26 +771,6 @@ function OfficePage({
         </aside>
       </div>
     </div>
-  );
-}
-
-function PixelDesk({ employee, index, onClick }: { employee: Employee; index: number; onClick: () => void }) {
-  return (
-    <button className={`pixel-desk desk-${index + 1}`} onClick={onClick} title={`Open ${employee.name}`}>
-      <span className="desk-top">
-        <i />
-        <i />
-      </span>
-      <span className="pixel-person" style={{ '--employee-color': employee.color } as CSSProperties}>
-        <i className="hair" />
-        <i className="head" />
-        <i className="body" />
-      </span>
-      <span className="desk-label">
-        <strong>{employee.name}</strong>
-        <small>{employee.status}</small>
-      </span>
-    </button>
   );
 }
 
@@ -948,7 +975,12 @@ function EmployeesPage({
               </dl>
               <div className="profile-section">
                 <h3>Readiness</h3>
-                {selected.missingCapabilities.length ? (
+                {selected.status === 'retired' ? (
+                  <p className="readiness-warn">
+                    <Archive size={14} />
+                    This employee version is retired
+                  </p>
+                ) : selected.missingCapabilities.length ? (
                   selected.missingCapabilities.map((capability) => (
                     <p className="readiness-warn" key={capability}>
                       <Link2 size={14} />
@@ -977,7 +1009,7 @@ function EmployeesPage({
               </div>
               <button
                 className="primary-button full"
-                disabled={selected.missingCapabilities.length > 0}
+                disabled={selected.status !== 'ready'}
                 onClick={() => onTask(selected.id)}
               >
                 <Play size={15} />
@@ -1199,7 +1231,9 @@ function MessageBubble({ message }: { message: Message }) {
       </span>
       <div>
         <span>{message.role === 'user' ? 'You' : message.phase || 'Employee'}</span>
-        <p>{message.text}</p>
+        <div className="message-markdown">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
+        </div>
         <time>{relativeTime(message.createdAt)}</time>
       </div>
     </div>
@@ -1250,7 +1284,7 @@ function ProposalCard({
             Approve action
           </button>
         </div>
-      ) : ['succeeded', 'approved'].includes(proposal.status) && proposal.correction !== 'irreversible' ? (
+      ) : proposal.status === 'succeeded' && !['irreversible', 'unknown'].includes(proposal.correction) ? (
         <button className="text-button correction-button" onClick={() => onCorrect(proposal.id)}>
           <RotateCcw size={14} />
           Request correction
@@ -1350,6 +1384,7 @@ function ActivityPage({ dashboard }: { dashboard: Dashboard }) {
 function MarketplacePage({
   listings,
   employees,
+  connections,
   configured,
   isAdmin,
   onHire,
@@ -1357,15 +1392,23 @@ function MarketplacePage({
 }: {
   listings: Listing[];
   employees: Employee[];
+  connections: Connection[];
   configured: boolean;
   isAdmin: boolean;
   onHire: (id: string) => void;
   onAdmin: () => void;
 }) {
   const [query, setQuery] = useState('');
-  const shown = listings.filter((listing) =>
-    `${listing.name} ${listing.role} ${listing.category}`.toLowerCase().includes(query.toLowerCase()),
-  );
+  const [category, setCategory] = useState('all');
+  const [selected, setSelected] = useState<Listing | null>(null);
+  const categories = [...new Set(listings.map((listing) => listing.category))].sort();
+  const shown = listings.filter((listing) => {
+    const haystack = `${listing.name} ${listing.role} ${listing.category} ${listing.description} ${listing.strengths.join(' ')} ${listing.capabilities.map((capability) => providerName(capability.provider)).join(' ')}`;
+    return (
+      haystack.toLowerCase().includes(query.toLowerCase()) &&
+      (category === 'all' || listing.category === category)
+    );
+  });
   return (
     <div>
       <PageIntro
@@ -1382,7 +1425,7 @@ function MarketplacePage({
         }
       />
       <div className="market-toolbar">
-        <label>
+        <label className="market-search">
           <Search size={16} />
           <input
             value={query}
@@ -1390,20 +1433,35 @@ function MarketplacePage({
             placeholder="Search by role or skill"
           />
         </label>
-        <button className="filter-button">
+        <label className="category-filter">
           <SlidersHorizontal size={15} />
-          All categories
-        </button>
+          <select
+            value={category}
+            onChange={(event) => setCategory(event.target.value)}
+            aria-label="Filter by category"
+          >
+            <option value="all">All categories</option>
+            {categories.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
       {shown.length ? (
         <div className="market-grid">
           {shown.map((listing) => {
             const hired = employees.some((employee) => employee.versionId === listing.versionId);
+            const missing = missingRequiredCapabilities(listing, connections);
             return (
               <article className="listing-card card" key={listing.versionId}>
-                <div
+                <button
+                  type="button"
                   className="listing-visual"
                   style={{ '--listing-color': listing.color } as React.CSSProperties}
+                  onClick={() => setSelected(listing)}
+                  aria-label={`View ${listing.name}`}
                 >
                   {listing.media[0]?.type === 'image' ? (
                     <img src={listing.media[0].url} alt={listing.media[0].alt} />
@@ -1416,12 +1474,12 @@ function MarketplacePage({
                       <i className="pixel-star star-two" />
                     </>
                   )}
-                </div>
+                </button>
                 <div className="listing-copy">
                   <span className="category-pill">{listing.category}</span>
                   <h2>{listing.name}</h2>
                   <p className="listing-role">{listing.role}</p>
-                  <p>{listing.description}</p>
+                  <p className="listing-description">{listing.description}</p>
                   <div className="capability-row">
                     {listing.capabilities.slice(0, 4).map((capability) => (
                       <span key={capability.provider}>
@@ -1435,23 +1493,15 @@ function MarketplacePage({
                       <strong>Free to hire</strong>
                       <small>Usage billed separately</small>
                     </span>
-                    <button
-                      className={hired ? 'secondary-button' : 'primary-button'}
-                      disabled={hired || !configured}
-                      onClick={() => onHire(listing.versionId)}
-                    >
-                      {hired ? (
-                        <>
-                          <Check size={15} />
-                          Hired
-                        </>
-                      ) : (
-                        <>
-                          View & hire <ArrowRight size={15} />
-                        </>
-                      )}
+                    <button className="primary-button" onClick={() => setSelected(listing)}>
+                      View details <ArrowRight size={15} />
                     </button>
                   </div>
+                  {missing.length > 0 && !hired && (
+                    <p className="listing-requirement">
+                      <LockKeyhole size={13} /> Connect {missing.map(providerName).join(', ')} to hire
+                    </p>
+                  )}
                 </div>
               </article>
             );
@@ -1472,21 +1522,176 @@ function MarketplacePage({
           </div>
           <span className="eyebrow">CURATED BY YOUR PLATFORM TEAM</span>
           <h2>
-            {query ? 'No employees match that search' : 'The marketplace is ready for its first employee'}
+            {query || category !== 'all'
+              ? 'No employees match these filters'
+              : 'The marketplace is ready for its first employee'}
           </h2>
           <p>
-            {query
+            {query || category !== 'all'
               ? 'Try another role, capability, or category.'
               : 'Only reviewed, published employees appear here. Platform admins can author private instructions and publish a version when it is ready.'}
           </p>
-          {isAdmin && !query && (
+          {isAdmin && !query && category === 'all' && (
             <button className="primary-button" onClick={onAdmin}>
               Create the first listing <ArrowRight size={16} />
             </button>
           )}
         </div>
       )}
+      {selected && (
+        <MarketplaceDetail
+          listing={selected}
+          hired={employees.some((employee) => employee.versionId === selected.versionId)}
+          configured={configured}
+          missing={missingRequiredCapabilities(selected, connections)}
+          onClose={() => setSelected(null)}
+          onHire={() => onHire(selected.versionId)}
+        />
+      )}
     </div>
+  );
+}
+
+function MarketplaceDetail({
+  listing,
+  hired,
+  configured,
+  missing,
+  onClose,
+  onHire,
+}: {
+  listing: Listing;
+  hired: boolean;
+  configured: boolean;
+  missing: ProviderId[];
+  onClose: () => void;
+  onHire: () => void;
+}) {
+  const [mediaIndex, setMediaIndex] = useState(0);
+  const media = listing.media[mediaIndex];
+  const canHire = configured && !hired && missing.length === 0;
+  return (
+    <Sheet wide title={listing.name} subtitle={listing.role} onClose={onClose}>
+      <div className="market-detail">
+        <div className="market-gallery" style={{ '--listing-color': listing.color } as CSSProperties}>
+          <div className="market-gallery-stage">
+            {media?.type === 'image' && <img src={media.url} alt={media.alt} />}
+            {media?.type === 'video' && <video src={media.url} controls aria-label={media.alt} />}
+            {!media && (
+              <span className="listing-orbit">
+                <Bot size={48} />
+              </span>
+            )}
+          </div>
+          {listing.media.length > 1 && (
+            <div className="market-thumbnails" aria-label="Listing media">
+              {listing.media.map((item, index) => (
+                <button
+                  key={`${item.url}-${index}`}
+                  data-active={index === mediaIndex}
+                  onClick={() => setMediaIndex(index)}
+                >
+                  {item.type === 'image' ? (
+                    <img src={item.url} alt="" />
+                  ) : (
+                    <span>
+                      <Play size={16} />
+                    </span>
+                  )}
+                  <span className="sr-only">{item.alt}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="market-detail-copy">
+          <span className="category-pill">{listing.category}</span>
+          <h2>{listing.name}</h2>
+          <p className="listing-role">{listing.role}</p>
+          <p className="market-description">{listing.description}</p>
+          <div className="strength-grid">
+            <section>
+              <h3>
+                <CheckCircle2 size={16} /> Strengths
+              </h3>
+              {listing.strengths.length ? (
+                <ul>
+                  {listing.strengths.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>No strengths listed.</p>
+              )}
+            </section>
+            <section>
+              <h3>
+                <SlidersHorizontal size={16} /> Limits
+              </h3>
+              {listing.limitations.length ? (
+                <ul>
+                  {listing.limitations.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>No limits listed.</p>
+              )}
+            </section>
+          </div>
+          <section className="market-capabilities">
+            <h3>Integration access</h3>
+            <p>The employee receives only these approved MCP tools.</p>
+            {listing.capabilities.length ? (
+              listing.capabilities.map((capability) => (
+                <div key={capability.provider}>
+                  <ProviderMark provider={capability.provider} />
+                  <span>
+                    <strong>{providerName(capability.provider)}</strong>
+                    <small>{capability.optional ? 'Optional' : 'Required'}</small>
+                  </span>
+                  <code>{capability.tools.join(', ') || 'No tools'}</code>
+                </div>
+              ))
+            ) : (
+              <div className="capability-empty">No integrations required</div>
+            )}
+          </section>
+          {missing.length > 0 && (
+            <div className="hire-blocked">
+              <LockKeyhole size={16} />
+              <span>
+                <strong>Connections required</strong>
+                <small>
+                  Connect {missing.map(providerName).join(', ')} with every required tool before hiring.
+                </small>
+              </span>
+            </div>
+          )}
+          <div className="market-hire-bar">
+            <span>
+              <strong>Free</strong>
+              <small>OpenAI and provider usage billed separately</small>
+            </span>
+            <button
+              className={hired ? 'secondary-button' : 'primary-button'}
+              disabled={!canHire}
+              onClick={onHire}
+            >
+              {hired ? (
+                <>
+                  <Check size={15} /> Already hired
+                </>
+              ) : (
+                <>
+                  Hire employee <ArrowRight size={15} />
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Sheet>
   );
 }
 
@@ -1525,16 +1730,17 @@ function IntegrationsPage({
       </div>
       <div className="integration-grid">
         {providers.map((provider) => {
-          const connection = connections.find(
+          const providerConnections = connections.filter(
             (item) => item.provider === provider.id && item.status !== 'disconnected',
           );
+          const connectedCount = providerConnections.filter((item) => item.status === 'connected').length;
           return (
             <article className="integration-card card" key={provider.id}>
               <div className="integration-top">
                 <ProviderLogo provider={provider} />
-                <span className={`connection-state ${connection?.status || 'available'}`}>
+                <span className={`connection-state ${connectedCount ? 'connected' : 'available'}`}>
                   <i />
-                  {connection ? connection.status : 'Available'}
+                  {connectedCount ? `${connectedCount} connected` : 'Available'}
                 </span>
               </div>
               <h2>{provider.name}</h2>
@@ -1542,26 +1748,51 @@ function IntegrationsPage({
               <div className="integration-meta">
                 <span>
                   <Inbox size={14} />
-                  {connection?.inboxMode === 'push' ? 'Live inbox' : provider.inbox}
+                  {providerConnections.some((connection) => connection.inboxMode === 'push')
+                    ? 'Live inbox'
+                    : provider.inbox}
                 </span>
-                {connection && (
+                {providerConnections.length > 0 && (
                   <span>
                     <KeyRound size={14} />
-                    {connection.allowedTools.length} of {connection.tools.length} tools allowed
+                    {providerConnections.reduce((count, item) => count + item.allowedTools.length, 0)} tools
+                    allowed
                   </span>
                 )}
               </div>
-              {connection ? (
-                <div className="connection-account">
-                  <span>
-                    <strong>{connection.name}</strong>
-                    <small>{connection.account}</small>
-                  </span>
-                  <button className="text-button" onClick={() => setManaging(connection)}>
-                    Manage access
-                  </button>
-                  <button className="text-button danger-text" onClick={() => onDisconnect(connection.id)}>
-                    Disconnect
+              {providerConnections.length > 0 ? (
+                <div className="connection-accounts">
+                  {providerConnections.map((connection) => (
+                    <div className="connection-account" key={connection.id}>
+                      <span>
+                        <strong>{connection.name}</strong>
+                        <small>
+                          {connection.account} · {connection.allowedTools.length} tools
+                        </small>
+                      </span>
+                      <span className={`connection-state ${connection.status}`}>
+                        <i />
+                        {connection.status}
+                      </span>
+                      <div>
+                        <button className="text-button" onClick={() => setManaging(connection)}>
+                          Manage
+                        </button>
+                        <button
+                          className="text-button danger-text"
+                          onClick={() => onDisconnect(connection.id)}
+                        >
+                          Disconnect
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    className="secondary-button full"
+                    disabled={!configured}
+                    onClick={() => setConnecting(provider.id)}
+                  >
+                    <Plus size={15} /> Add another {provider.name} connection
                   </button>
                 </div>
               ) : (
@@ -1608,19 +1839,20 @@ function ConnectPanel({
   const [name, setName] = useState('');
   const [token, setToken] = useState('');
   const [scope, setScope] = useState('');
-  const definition=getProvider(provider);
-  const [serverUrl,setServerUrl]=useState(definition.serverUrl);
+  const definition = getProvider(provider);
+  const [serverUrl, setServerUrl] = useState(definition.serverUrl);
   const [busy, setBusy] = useState(false);
   const [tools, setTools] = useState<DiscoveredTool[]>([]);
   const [allowed, setAllowed] = useState<string[]>([]);
 
   async function request(discoverOnly: boolean) {
+    const productName = definition.products?.find((product) => product.url === serverUrl)?.name;
     const response = await fetch('/api/integrations/connect', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         provider,
-        name: name.trim() || providerName(provider),
+        name: name.trim() || productName || providerName(provider),
         serverUrl,
         accessToken: token || undefined,
         allowedTools: discoverOnly ? [] : allowed,
@@ -1691,8 +1923,30 @@ function ConnectPanel({
               />
             </label>
             <p className="form-note">{definition.note}</p>
-            {definition.products ? <label>Google Workspace product<select value={serverUrl} onChange={event=>setServerUrl(event.target.value)}>{definition.products.map(product=><option key={product.url} value={product.url}>{product.name}</option>)}</select></label> : null}
-            {!definition.serverUrl ? <label>Approved MCP server URL<input type="url" required value={serverUrl} onChange={event=>setServerUrl(event.target.value)} placeholder="https://your-instance.example/mcp" /></label> : null}
+            {definition.products ? (
+              <label>
+                Google Workspace product
+                <select value={serverUrl} onChange={(event) => setServerUrl(event.target.value)}>
+                  {definition.products.map((product) => (
+                    <option key={product.url} value={product.url}>
+                      {product.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {!definition.serverUrl ? (
+              <label>
+                Approved MCP server URL
+                <input
+                  type="url"
+                  required
+                  value={serverUrl}
+                  onChange={(event) => setServerUrl(event.target.value)}
+                  placeholder="https://your-instance.example/mcp"
+                />
+              </label>
+            ) : null}
             <label>
               Access token, if required
               <input
@@ -1713,7 +1967,8 @@ function ConnectPanel({
             </label>
             <div className="form-note">
               <LockKeyhole size={15} />A platform-approved server is selected from the registry. Arbitrary MCP
-              URLs are rejected. Resource restrictions require a verified tool mapping; broad searches are blocked on restricted connections.
+              URLs are rejected. Resource restrictions require a verified tool mapping; broad searches are
+              blocked on restricted connections.
             </div>
             <button className="primary-button full" disabled={busy}>
               {busy ? <LoaderCircle className="spin" size={16} /> : <Link2 size={16} />}
@@ -1767,10 +2022,7 @@ function ToolAccessPanel({
           <ShieldCheck size={15} />
           Removing a tool revokes access immediately, including for running agent sessions.
         </div>
-        <button
-          className="primary-button full"
-          onClick={() => onSave(selected, scope.trim())}
-        >
+        <button className="primary-button full" onClick={() => onSave(selected, scope.trim())}>
           Save access
         </button>
       </div>
@@ -1814,13 +2066,15 @@ function ToolChecklist({
 function AdminPage({
   drafts,
   listings,
+  toolRegistry,
   onSave,
   onPublish,
   onRetire,
 }: {
   drafts: EditorDraft[];
   listings: Listing[];
-  onSave: (draft: Record<string, unknown>) => void;
+  toolRegistry: AdminToolRegistry;
+  onSave: (draft: Record<string, unknown>) => Promise<boolean>;
   onPublish: (id: string) => void;
   onRetire: (id: string) => void;
 }) {
@@ -1864,27 +2118,35 @@ function AdminPage({
         </div>
         {drafts.length ? (
           <div className="admin-list">
-            {drafts.map((draft) => (
-              <article className="card" key={draft.id}>
-                <span className="draft-avatar" style={{ background: draft.color }}>
-                  <Bot size={18} />
-                </span>
-                <div>
-                  <h3>{draft.name || 'Untitled employee'}</h3>
-                  <p>
-                    {draft.role || 'Role not set'} · Updated {relativeTime(draft.updatedAt)}
-                  </p>
-                </div>
-                <span className="model-pill">{modelName(draft.model)}</span>
-                <button className="secondary-button" onClick={() => setEditing(draft)}>
-                  Edit
-                </button>
-                <button className="primary-button" onClick={() => onPublish(draft.id)}>
-                  <BadgeCheck size={15} />
-                  Publish
-                </button>
-              </article>
-            ))}
+            {drafts.map((draft) => {
+              const issues = draftPublishIssues(draft, toolRegistry);
+              return (
+                <article className="card" key={draft.id}>
+                  <span className="draft-avatar" style={{ background: draft.color }}>
+                    <Bot size={18} />
+                  </span>
+                  <div>
+                    <h3>{draft.name || 'Untitled employee'}</h3>
+                    <p>
+                      {draft.role || 'Role not set'} · Updated {relativeTime(draft.updatedAt)}
+                    </p>
+                  </div>
+                  <span className="model-pill">{modelName(draft.model)}</span>
+                  <button className="secondary-button" onClick={() => setEditing(draft)}>
+                    Edit
+                  </button>
+                  <button
+                    className="primary-button"
+                    disabled={issues.length > 0}
+                    title={issues.join(' ')}
+                    onClick={() => onPublish(draft.id)}
+                  >
+                    <BadgeCheck size={15} />
+                    {issues.length ? 'Not ready' : 'Publish'}
+                  </button>
+                </article>
+              );
+            })}
           </div>
         ) : (
           <EmptyMini
@@ -1932,10 +2194,10 @@ function AdminPage({
       {editing && (
         <EmployeeEditor
           draft={editing === 'new' ? undefined : editing}
+          toolRegistry={toolRegistry}
           onClose={() => setEditing(null)}
           onSave={async (value) => {
-            await onSave(value);
-            setEditing(null);
+            if (await onSave(value)) setEditing(null);
           }}
         />
       )}
@@ -1945,12 +2207,14 @@ function AdminPage({
 
 function EmployeeEditor({
   draft,
+  toolRegistry,
   onClose,
   onSave,
 }: {
   draft?: EditorDraft;
+  toolRegistry: AdminToolRegistry;
   onClose: () => void;
-  onSave: (value: Record<string, unknown>) => void;
+  onSave: (value: Record<string, unknown>) => Promise<void>;
 }) {
   const [name, setName] = useState(draft?.name ?? '');
   const [role, setRole] = useState(draft?.role ?? '');
@@ -1961,47 +2225,44 @@ function EmployeeEditor({
   const [instructions, setInstructions] = useState(draft?.instructions ?? '');
   const [strengths, setStrengths] = useState(draft?.strengths.join('\n') ?? '');
   const [limitations, setLimitations] = useState(draft?.limitations.join('\n') ?? '');
-  const [provider, setProvider] = useState<ProviderId>('linear');
-  const [tools, setTools] = useState('');
-  const [optional, setOptional] = useState(false);
-  const [skillName, setSkillName] = useState(draft?.skills?.[0]?.name ?? '');
-  const [skillVersion, setSkillVersion] = useState(draft?.skills?.[0]?.version ?? '1.0.0');
-  const [skillContent, setSkillContent] = useState(draft?.skills?.[0]?.content ?? '');
+  const [capabilities, setCapabilities] = useState(() =>
+    (draft?.capabilities ?? []).map((item) => ({ ...item, rowId: editorRowId() })),
+  );
+  const [skills, setSkills] = useState(() =>
+    (draft?.skills ?? []).map((item) => ({ ...item, rowId: editorRowId() })),
+  );
+  const [media, setMedia] = useState(() =>
+    (draft?.media ?? []).map((item) => ({ ...item, rowId: editorRowId() })),
+  );
+  const [saving, setSaving] = useState(false);
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const capability = {
-      provider,
-      tools: tools
-        .split(',')
-        .map((tool) => tool.trim())
-        .filter(Boolean),
-      optional,
-    };
-    const skillHash = skillContent ? await sha256(skillContent) : '';
-    onSave({
-      draftId: draft?.id,
-      name,
-      role,
-      description,
-      category,
-      color,
-      model,
-      instructions,
-      strengths: lines(strengths),
-      limitations: lines(limitations),
-      capabilities: tools.trim() ? [capability] : [],
-      media: [],
-      skills: skillName.trim()
-        ? [
-            {
-              name: skillName.trim(),
-              version: skillVersion.trim(),
-              sha256: skillHash,
-              content: skillContent,
-            },
-          ]
-        : [],
-    });
+    setSaving(true);
+    try {
+      const hashedSkills = await Promise.all(
+        skills.map(async ({ rowId: _rowId, ...skill }) => ({
+          ...skill,
+          sha256: await sha256(skill.content),
+        })),
+      );
+      await onSave({
+        draftId: draft?.id,
+        name,
+        role,
+        description,
+        category,
+        color,
+        model,
+        instructions,
+        strengths: lines(strengths),
+        limitations: lines(limitations),
+        capabilities: capabilities.map(({ rowId: _rowId, ...capability }) => capability),
+        media: media.map(({ rowId: _rowId, ...item }) => item),
+        skills: hashedSkills,
+      });
+    } finally {
+      setSaving(false);
+    }
   }
   return (
     <Sheet
@@ -2068,32 +2329,6 @@ function EmployeeEditor({
               <option value="gpt-6-astra">Astra · hardest assignments</option>
             </select>
           </label>
-          <label>
-            MCP provider
-            <select value={provider} onChange={(e) => setProvider(e.target.value as ProviderId)}>
-              {providers.map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="full-field">
-            Allowed tools
-            <input
-              value={tools}
-              onChange={(e) => setTools(e.target.value)}
-              placeholder="issues.read, issues.update"
-            />
-            <small>Comma-separated tool IDs from the capability registry.</small>
-          </label>
-          <label className="checkbox-label full-field">
-            <input type="checkbox" checked={optional} onChange={(e) => setOptional(e.target.checked)} />
-            <span>
-              <strong>Optional capability</strong>
-              <small>The employee may run without this connection.</small>
-            </span>
-          </label>
           <label className="full-field">
             Private instructions
             <textarea
@@ -2109,33 +2344,326 @@ function EmployeeEditor({
         <section>
           <span className="editor-step">03</span>
           <div>
-            <h3>Private skill</h3>
-            <p>Add a focused skill file when the employee needs one.</p>
+            <h3>MCP capabilities</h3>
+            <p>Required connections block hiring until every listed tool is granted.</p>
           </div>
+          <button
+            type="button"
+            className="secondary-button editor-add"
+            onClick={() =>
+              setCapabilities((items) => [
+                ...items,
+                { rowId: editorRowId(), provider: 'linear', tools: [], optional: false },
+              ])
+            }
+          >
+            <Plus size={14} /> Add MCP
+          </button>
         </section>
-        <div className="form-grid">
-          <label>
-            Skill name
-            <input
-              value={skillName}
-              onChange={(e) => setSkillName(e.target.value)}
-              placeholder="triage-issues"
+        <div className="editor-rows">
+          {capabilities.map((capability) => {
+            const registry = toolRegistry.find((item) => item.provider === capability.provider);
+            const registeredTools = registry?.tools ?? [];
+            const visibleTools = [
+              ...registeredTools,
+              ...capability.tools
+                .filter((name) => !registeredTools.some((tool) => tool.name === name))
+                .map((name) => ({
+                  name,
+                  description: 'Not in the current registry',
+                  mode: 'blocked' as const,
+                })),
+            ];
+            return (
+              <div className="editor-row capability-editor" key={capability.rowId}>
+                <div className="editor-row-head">
+                  <label>
+                    MCP provider
+                    <select
+                      value={capability.provider}
+                      onChange={(event) =>
+                        setCapabilities((items) =>
+                          items.map((item) =>
+                            item.rowId === capability.rowId
+                              ? { ...item, provider: event.target.value as ProviderId, tools: [] }
+                              : item,
+                          ),
+                        )
+                      }
+                    >
+                      {providers.map((entry) => (
+                        <option key={entry.id} value={entry.id}>
+                          {entry.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={capability.optional}
+                      onChange={(event) =>
+                        setCapabilities((items) =>
+                          items.map((item) =>
+                            item.rowId === capability.rowId
+                              ? { ...item, optional: event.target.checked }
+                              : item,
+                          ),
+                        )
+                      }
+                    />
+                    <span>
+                      <strong>Optional</strong>
+                      <small>Can run without it</small>
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    className="icon-button danger-text"
+                    aria-label="Remove capability"
+                    onClick={() =>
+                      setCapabilities((items) => items.filter((item) => item.rowId !== capability.rowId))
+                    }
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                {!registry?.configured && (
+                  <p className="registry-warning">
+                    <LockKeyhole size={13} /> Configure this provider in MCP_TOOL_REGISTRY_JSON before
+                    publishing.
+                  </p>
+                )}
+                <div className="registry-tools">
+                  {visibleTools.length ? (
+                    visibleTools.map((tool) => {
+                      const checked = capability.tools.includes(tool.name);
+                      return (
+                        <label key={tool.name} data-mode={tool.mode}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={tool.mode === 'blocked' && !checked}
+                            onChange={() =>
+                              setCapabilities((items) =>
+                                items.map((item) =>
+                                  item.rowId === capability.rowId
+                                    ? {
+                                        ...item,
+                                        tools: checked
+                                          ? item.tools.filter((name) => name !== tool.name)
+                                          : [...item.tools, tool.name],
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                          />
+                          <span>
+                            <strong>{tool.name}</strong>
+                            <small>{tool.description || tool.mode}</small>
+                          </span>
+                          <em>{tool.mode}</em>
+                        </label>
+                      );
+                    })
+                  ) : (
+                    <p>No tools are registered for this provider.</p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {!capabilities.length && (
+            <EmptyMini
+              icon={<Link2 size={19} />}
+              title="No MCP access"
+              text="This employee will run without external integrations."
             />
-          </label>
-          <label>
-            Version
-            <input value={skillVersion} onChange={(e) => setSkillVersion(e.target.value)} />
-          </label>
-          <label className="full-field">
-            Skill content
-            <textarea
-              className="code-area"
-              value={skillContent}
-              onChange={(e) => setSkillContent(e.target.value)}
-              spellCheck={false}
-              placeholder="# Triage issues…"
+          )}
+        </div>
+        <section>
+          <span className="editor-step">04</span>
+          <div>
+            <h3>Private skills</h3>
+            <p>Add versioned skill files that the employee needs at runtime.</p>
+          </div>
+          <button
+            type="button"
+            className="secondary-button editor-add"
+            onClick={() =>
+              setSkills((items) => [
+                ...items,
+                { rowId: editorRowId(), name: '', version: '1.0.0', sha256: '', content: '' },
+              ])
+            }
+          >
+            <Plus size={14} /> Add skill
+          </button>
+        </section>
+        <div className="editor-rows">
+          {skills.map((skill, index) => (
+            <div className="editor-row" key={skill.rowId}>
+              <div className="editor-row-head">
+                <strong>Skill {index + 1}</strong>
+                <button
+                  type="button"
+                  className="icon-button danger-text"
+                  aria-label="Remove skill"
+                  onClick={() => setSkills((items) => items.filter((item) => item.rowId !== skill.rowId))}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="form-grid">
+                <label>
+                  Name
+                  <input
+                    value={skill.name}
+                    required
+                    onChange={(event) =>
+                      setSkills((items) =>
+                        items.map((item) =>
+                          item.rowId === skill.rowId ? { ...item, name: event.target.value } : item,
+                        ),
+                      )
+                    }
+                    placeholder="triage-issues"
+                  />
+                </label>
+                <label>
+                  Version
+                  <input
+                    value={skill.version}
+                    required
+                    onChange={(event) =>
+                      setSkills((items) =>
+                        items.map((item) =>
+                          item.rowId === skill.rowId ? { ...item, version: event.target.value } : item,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+                <label className="full-field">
+                  Skill content
+                  <textarea
+                    className="code-area"
+                    value={skill.content}
+                    required
+                    onChange={(event) =>
+                      setSkills((items) =>
+                        items.map((item) =>
+                          item.rowId === skill.rowId ? { ...item, content: event.target.value } : item,
+                        ),
+                      )
+                    }
+                    spellCheck={false}
+                    placeholder="# Skill instructions"
+                  />
+                </label>
+              </div>
+            </div>
+          ))}
+          {!skills.length && (
+            <EmptyMini
+              icon={<FileText size={19} />}
+              title="No private skills"
+              text="Add only the instructions this employee needs."
             />
-          </label>
+          )}
+        </div>
+        <section>
+          <span className="editor-step">05</span>
+          <div>
+            <h3>Marketplace gallery</h3>
+            <p>Add up to ten images or videos. Customers can view every item.</p>
+          </div>
+          <button
+            type="button"
+            className="secondary-button editor-add"
+            disabled={media.length >= 10}
+            onClick={() =>
+              setMedia((items) => [...items, { rowId: editorRowId(), url: '', type: 'image', alt: '' }])
+            }
+          >
+            <Plus size={14} /> Add media
+          </button>
+        </section>
+        <div className="editor-rows">
+          {media.map((item, index) => (
+            <div className="editor-row media-editor" key={item.rowId}>
+              <div className="editor-row-head">
+                <strong>Gallery item {index + 1}</strong>
+                <button
+                  type="button"
+                  className="icon-button danger-text"
+                  aria-label="Remove media"
+                  onClick={() => setMedia((items) => items.filter((entry) => entry.rowId !== item.rowId))}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="form-grid">
+                <label>
+                  Type
+                  <select
+                    value={item.type}
+                    onChange={(event) =>
+                      setMedia((items) =>
+                        items.map((entry) =>
+                          entry.rowId === item.rowId
+                            ? { ...entry, type: event.target.value as 'image' | 'video' }
+                            : entry,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="image">Image</option>
+                    <option value="video">Video</option>
+                  </select>
+                </label>
+                <label>
+                  Public URL
+                  <input
+                    type="url"
+                    required
+                    value={item.url}
+                    onChange={(event) =>
+                      setMedia((items) =>
+                        items.map((entry) =>
+                          entry.rowId === item.rowId ? { ...entry, url: event.target.value } : entry,
+                        ),
+                      )
+                    }
+                    placeholder="https://cdn.example.com/preview.jpg"
+                  />
+                </label>
+                <label className="full-field">
+                  Accessible description
+                  <input
+                    required
+                    value={item.alt}
+                    onChange={(event) =>
+                      setMedia((items) =>
+                        items.map((entry) =>
+                          entry.rowId === item.rowId ? { ...entry, alt: event.target.value } : entry,
+                        ),
+                      )
+                    }
+                    placeholder="Describe what this image or video shows"
+                  />
+                </label>
+              </div>
+            </div>
+          ))}
+          {!media.length && (
+            <EmptyMini
+              icon={<Archive size={19} />}
+              title="No gallery media"
+              text="The marketplace will use the employee color and icon."
+            />
+          )}
         </div>
         <div className="editor-footer">
           <p>
@@ -2145,9 +2673,9 @@ function EmployeeEditor({
           <button type="button" className="secondary-button" onClick={onClose}>
             Cancel
           </button>
-          <button className="primary-button">
+          <button className="primary-button" disabled={saving}>
             <Check size={15} />
-            Save draft
+            {saving ? 'Saving…' : 'Save draft'}
           </button>
         </div>
       </form>
@@ -2215,7 +2743,7 @@ function SettingsPanel({
               Create workspace
             </button>
           </form>
-        ) : (
+        ) : dashboard.workspace.role === 'owner' || dashboard.workspace.role === 'admin' ? (
           <form
             className="form-stack"
             onSubmit={(event) => {
@@ -2239,6 +2767,14 @@ function SettingsPanel({
             </label>
             <button className="primary-button full">Save budget</button>
           </form>
+        ) : (
+          <div className="settings-status">
+            <LockKeyhole size={18} />
+            <span>
+              <strong>Budget managed by an administrator</strong>
+              <small>Your workspace owner controls the monthly OpenAI limit.</small>
+            </span>
+          </div>
         )}
         <div id="setup" className="setup-list">
           <span className="eyebrow">SETUP CHECKLIST</span>
@@ -2292,7 +2828,7 @@ function NewTaskPanel({
   onClose: () => void;
   onCreate: (employeeId: string, title: string, prompt: string) => void;
 }) {
-  const ready = employees.filter((employee) => employee.missingCapabilities.length === 0);
+  const ready = employees.filter((employee) => employee.status === 'ready');
   const [employeeId, setEmployeeId] = useState(
     defaultEmployee && ready.some((e) => e.id === defaultEmployee) ? defaultEmployee : (ready[0]?.id ?? ''),
   );
@@ -2597,6 +3133,53 @@ function lines(value: string) {
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
+}
+function missingRequiredCapabilities(listing: Listing, connections: Connection[]) {
+  return [
+    ...new Set(
+      listing.capabilities
+        .filter((capability) => {
+          if (capability.optional) return false;
+          return !connections.some(
+            (connection) =>
+              connection.provider === capability.provider &&
+              connection.status === 'connected' &&
+              capability.tools.every((tool) => connection.allowedTools.includes(tool)),
+          );
+        })
+        .map((capability) => capability.provider),
+    ),
+  ];
+}
+function draftPublishIssues(draft: EditorDraft, registry: AdminToolRegistry) {
+  const issues: string[] = [];
+  if (!draft.name.trim() || !draft.role.trim() || !draft.description.trim() || !draft.category.trim())
+    issues.push('Complete the public listing.');
+  if (!draft.instructions.trim()) issues.push('Add private instructions.');
+  if (new Set(draft.capabilities.map((item) => item.provider)).size !== draft.capabilities.length)
+    issues.push('Use one capability row per MCP provider.');
+  for (const capability of draft.capabilities) {
+    const providerRegistry = registry.find((item) => item.provider === capability.provider);
+    if (!providerRegistry?.configured) {
+      issues.push(`Configure ${providerName(capability.provider)} in the tool registry.`);
+      continue;
+    }
+    if (!capability.tools.length)
+      issues.push(`Choose at least one ${providerName(capability.provider)} tool.`);
+    const known = new Set(
+      providerRegistry.tools.filter((tool) => tool.mode !== 'blocked').map((tool) => tool.name),
+    );
+    if (capability.tools.some((tool) => !known.has(tool)))
+      issues.push(`Review unavailable ${providerName(capability.provider)} tools.`);
+  }
+  if (draft.skills.some((skill) => !skill.name.trim() || !skill.version.trim() || !skill.content.trim()))
+    issues.push('Complete every private skill.');
+  if (draft.media.some((item) => !item.url.trim() || !item.alt.trim()))
+    issues.push('Complete every gallery item.');
+  return [...new Set(issues)];
+}
+function editorRowId() {
+  return crypto.randomUUID();
 }
 async function sha256(value: string) {
   const bytes = new TextEncoder().encode(value);

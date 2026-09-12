@@ -18,6 +18,12 @@ type AdminDraft = {
   updatedAt: number;
 };
 
+type AdminToolRegistry = {
+  provider: ProviderId;
+  configured: boolean;
+  tools: { name: string; description: string; mode: 'read' | 'write' | 'blocked' }[];
+}[];
+
 const query = <Args extends Record<string, unknown>, Result>(name: string) =>
   makeFunctionReference<'query', Args, Result>(name);
 const mutation = <Args extends Record<string, unknown>, Result = null>(name: string) =>
@@ -36,7 +42,10 @@ export const uiApi = {
   sendMessage: mutation<{ taskId: string; text: string }>('tasks:send'),
   cancelTask: mutation<{ taskId: string }>('tasks:cancel'),
   decideAction: mutation<{ proposalId: string; approved: boolean }>('actions:decide'),
-  requestCorrection: mutation<{ proposalId: string }>('actions:requestCorrection'),
+  requestCorrection: mutation<
+    { proposalId: string },
+    { kind: 'task'; taskId: string } | { kind: 'proposal'; proposalId: string }
+  >('actions:requestCorrection'),
   disconnect: mutation<{ connectionId: string }>('integrations:disconnect'),
   setConnectionTools: mutation<{ connectionId: string; allowedTools: string[]; resourceScope?: string }>(
     'integrations:setTools',
@@ -44,9 +53,10 @@ export const uiApi = {
   markInboxRead: mutation<{ itemId: string }>('inbox:markRead'),
   assignInbox: mutation<{ itemId: string; employeeId: string }, { taskId: string }>('inbox:assign'),
   adminDrafts: query<Record<string, never>, AdminDraft[]>('marketplace:adminList'),
+  adminToolRegistry: query<Record<string, never>, AdminToolRegistry>('marketplace:adminToolRegistry'),
   saveDraft: mutation<Record<string, unknown>, { draftId: string }>('marketplace:saveDraft'),
   publishDraft: mutation<{ draftId: string }, { versionId: string }>('marketplace:publish'),
   retireVersion: mutation<{ versionId: string }>('marketplace:retire'),
 };
 
-export type { AdminDraft };
+export type { AdminDraft, AdminToolRegistry };
