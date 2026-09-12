@@ -47,24 +47,45 @@ export type OfficeViewProps = {
   onRenderStats?: (stats: RenderStats) => void;
 };
 
-/** What one frame cost the renderer. Draw calls are the number the budget is written in. */
-export type RenderStats = { calls: number; triangles: number; geometries: number; textures: number };
+/**
+ * What one frame cost the renderer. Draw calls are the number the budget is
+ * written in; meshes and shadow casters are where they come from, since every
+ * shadow caster is drawn a second time into the shadow map.
+ */
+export type RenderStats = {
+  calls: number;
+  triangles: number;
+  geometries: number;
+  textures: number;
+  meshes: number;
+  casters: number;
+};
 
 /** How often the read-out is refreshed. Often enough to watch, rarely enough to be free. */
 const STATS_SECONDS = 0.5;
 
 function RenderStatsProbe({ report }: { report: (stats: RenderStats) => void }) {
   const gl = useThree((state) => state.gl);
+  const scene = useThree((state) => state.scene);
   const last = useRef(-1);
   useFrame((state) => {
     if (state.clock.elapsedTime - last.current < STATS_SECONDS) return;
     last.current = state.clock.elapsedTime;
     const { render, memory } = gl.info;
+    let meshes = 0;
+    let casters = 0;
+    scene.traverse((object) => {
+      if (!(object as THREE.Mesh).isMesh || !object.visible) return;
+      meshes += 1;
+      if (object.castShadow) casters += 1;
+    });
     report({
       calls: render.calls,
       triangles: render.triangles,
       geometries: memory.geometries,
       textures: memory.textures,
+      meshes,
+      casters,
     });
   });
   return null;

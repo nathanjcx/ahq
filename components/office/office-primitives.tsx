@@ -89,6 +89,16 @@ export function useSurfaceTextures() {
   return maps;
 }
 
+/**
+ * Below this, an object's shadow is a smudge a few pixels across, and drawing
+ * the object a second time to get it is not worth the draw call. The rooms merge
+ * their small parts into one mesh that does cast, so this only ever applies to
+ * the things that cannot merge: people, and the props they pick up.
+ */
+export const SHADOW_MIN = 0.3;
+
+const casts = (size: Point) => Math.max(size[0], size[1], size[2]) >= SHADOW_MIN;
+
 export function GlowBar({ p, s, color = '#ffe1a0' }: { p: Point; s: Point; color?: string }) {
   return (
     <mesh position={p}>
@@ -124,7 +134,7 @@ export function Box({
         ? surfaces?.plaster
         : undefined;
   return (
-    <mesh position={p} rotation={rotation} castShadow receiveShadow {...rest}>
+    <mesh position={p} rotation={rotation} castShadow={casts(s)} receiveShadow {...rest}>
       <boxGeometry args={s} />
       <meshStandardMaterial color={color} map={surface} roughness={roughness} metalness={metalness} />
     </mesh>
@@ -153,7 +163,7 @@ export function Round({
       radius={radius}
       smoothness={2}
       rotation={rotation}
-      castShadow
+      castShadow={casts(s)}
       receiveShadow
     >
       <meshStandardMaterial
@@ -179,7 +189,12 @@ export function Cylinder({
   rotation?: Point;
 }) {
   return (
-    <mesh position={p} rotation={rotation} castShadow receiveShadow>
+    <mesh
+      position={p}
+      rotation={rotation}
+      castShadow={casts([radius * 2, height, radius * 2])}
+      receiveShadow
+    >
       <cylinderGeometry args={[radius, radius, height, 16]} />
       <meshStandardMaterial color={color} roughness={0.7} />
     </mesh>

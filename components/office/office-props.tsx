@@ -42,6 +42,8 @@ const AMBER = '#e8a54f';
 const RED = '#c2543f';
 const PAPER = '#f1ead6';
 
+const PICKABLE = { interactive: true };
+
 /** A prop the viewer can pick, with the office's pointer cursor while it is under the mouse. */
 export function Pickable({
   kind,
@@ -65,6 +67,8 @@ export function Pickable({
   }, [hovered, onSelectProp]);
   return (
     <group
+      // The merge pass walks around anything a click has to land on.
+      userData={PICKABLE}
       onClick={(event) => {
         if (!onSelectProp) return;
         event.stopPropagation();

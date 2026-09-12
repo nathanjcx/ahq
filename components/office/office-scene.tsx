@@ -16,6 +16,7 @@ import {
   type CalendarEntry,
   type ShelfSpec,
 } from './office-layout';
+import { Static } from './office-merge';
 import { OfficeOverlay } from './office-overlay';
 import { useOfficePan } from './office-pan';
 import { EmployeeAvatar, type EmployeeKind } from './office-people';
@@ -413,11 +414,15 @@ export function OfficeScene({
       <SurfaceContext.Provider value={surfaces}>
         <Lighting light={light} budget={lightBudget} sky={room !== 'records'} />
         {room === 'records' && (
-          <RecordsRoom shelves={shelves} interior={light.interior} onSelectProp={onSelectProp} />
+          <Static revision={`records ${light.interior.toFixed(2)}`}>
+            <RecordsRoom shelves={shelves} interior={light.interior} onSelectProp={onSelectProp} />
+          </Static>
         )}
         {room === 'boardroom' && (
           <>
-            <Boardroom interior={light.interior} onSelectProp={onSelectProp} />
+            <Static revision={`boardroom ${light.interior.toFixed(2)}`}>
+              <Boardroom interior={light.interior} onSelectProp={onSelectProp} />
+            </Static>
             {meeting?.live && (
               <MeetingMurmur
                 seats={people.map((person) => person.station.at)}
@@ -429,9 +434,11 @@ export function OfficeScene({
         )}
         {onFloor && (
           <>
-            <Architecture desks={desks} interior={light.interior} />
-            <FileCabinet />
-            <OfficeSpeakers />
+            <Static revision={desks.length}>
+              <Architecture desks={desks} interior={light.interior} />
+              <FileCabinet />
+              <OfficeSpeakers />
+            </Static>
             <group position={LECTERN} rotation={[0, Math.PI, 0]}>
               <ReviewLectern
                 position={[0, 0, 0]}

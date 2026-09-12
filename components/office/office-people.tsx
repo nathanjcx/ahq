@@ -7,6 +7,7 @@ import type { CSSProperties } from 'react';
 import * as THREE from 'three';
 import type { Activity, EmployeeActivity } from './activity';
 import { labelPriority, type LabelMode } from './office-labels';
+import { Static } from './office-merge';
 import { useOverlayLabel, useOverlayRelayout } from './office-overlay';
 import { Box, C, Cylinder, Round } from './office-primitives';
 import { JanitorCart } from './office-props';
@@ -307,73 +308,56 @@ function Figure({
   // a collar, so a janitor is still recognisably that janitor.
   const suit = kind === 'auditor' ? COAT : color;
   const hat = kind === 'janitor' ? 'cap' : appearance.hat;
+  // A figure is two dozen little boxes hung off eight joints. The boxes inside
+  // any one joint never move relative to each other, so each joint is merged
+  // into as few meshes as it has materials: a head becomes three, not nine.
+  const kit = `${kind} ${suit} ${color} ${trouser} ${appearance.skin} ${appearance.gender} ${seated}`;
+  const face = `${hat} ${appearance.hairstyle} ${appearance.glasses} ${appearance.skin} ${appearance.hair} ${suit}`;
   return (
     <group position={[0, pose.hop, 0]} rotation={[0, pose.spin, pose.lean]}>
-      <Round
-        p={[0, seated ? 0.91 : 1.12, 0]}
-        s={[
-          appearance.gender === 'masculine' ? 0.51 : appearance.gender === 'feminine' ? 0.43 : 0.47,
-          0.57,
-          0.29,
-        ]}
-        color={suit}
-        radius={0.105}
-      />
-      {kind !== 'worker' && <Box p={[0, seated ? 1.13 : 1.34, 0.02]} s={[0.3, 0.07, 0.28]} color={color} />}
-      {kind === 'auditor' && (
-        <group>
-          {/* A long dark coat, and the clipboard the findings are written on. */}
-          <Round p={[0, seated ? 0.72 : 0.84, 0]} s={[0.53, 0.36, 0.33]} color={COAT} radius={0.06} />
-          <group position={[0.2, seated ? 1.0 : 1.28, 0.24]} rotation={[-0.5, 0.2, 0]}>
-            <Round s={[0.3, 0.38, 0.02]} color="#7d6a4c" radius={0.01} />
-            <Box p={[0, -0.02, 0.014]} s={[0.26, 0.3, 0.006]} color="#f1ead6" />
-            <Box p={[0, 0.17, 0.018]} s={[0.12, 0.035, 0.012]} color={C.brass} />
-          </group>
-        </group>
-      )}
-      {kind === 'triage' && (
-        <group>
-          {/* A high-visibility vest over the shirt, with two reflective bands. */}
-          <Round p={[0, seated ? 0.95 : 1.16, 0.01]} s={[0.5, 0.48, 0.33]} color="#e0cc4b" radius={0.08} />
-          {[-0.09, 0.07].map((y) => (
-            <Box key={y} p={[0, (seated ? 0.95 : 1.16) + y, 0.17]} s={[0.46, 0.045, 0.02]} color="#c9ced2" />
-          ))}
-        </group>
-      )}
-      <Cylinder p={[0, headY - 0.23, 0]} radius={0.075} height={0.15} color={appearance.skin} />
-      <group position={[0, headY, 0]} rotation={[pose.headPitch, pose.headYaw, 0]}>
-        {hat !== 'none' && (
+      <Static revision={kit}>
+        <Round
+          p={[0, seated ? 0.91 : 1.12, 0]}
+          s={[
+            appearance.gender === 'masculine' ? 0.51 : appearance.gender === 'feminine' ? 0.43 : 0.47,
+            0.57,
+            0.29,
+          ]}
+          color={suit}
+          radius={0.105}
+        />
+        {kind !== 'worker' && <Box p={[0, seated ? 1.13 : 1.34, 0.02]} s={[0.3, 0.07, 0.28]} color={color} />}
+        {kind === 'auditor' && (
           <group>
-            <Round p={[0, 0.21, 0]} s={[0.4, 0.19, 0.37]} color={suit} radius={0.08} />
-            {hat === 'cap' && <Round p={[0, 0.15, 0.2]} s={[0.39, 0.04, 0.3]} color={suit} radius={0.03} />}
+            {/* A long dark coat, and the clipboard the findings are written on. */}
+            <Round p={[0, seated ? 0.72 : 0.84, 0]} s={[0.53, 0.36, 0.33]} color={COAT} radius={0.06} />
+            <group position={[0.2, seated ? 1.0 : 1.28, 0.24]} rotation={[-0.5, 0.2, 0]}>
+              <Round s={[0.3, 0.38, 0.02]} color="#7d6a4c" radius={0.01} />
+              <Box p={[0, -0.02, 0.014]} s={[0.26, 0.3, 0.006]} color="#f1ead6" />
+              <Box p={[0, 0.17, 0.018]} s={[0.12, 0.035, 0.012]} color={C.brass} />
+            </group>
           </group>
         )}
-        <Round p={[0, 0, 0]} s={[0.35, 0.4, 0.33]} color={appearance.skin} radius={0.11} />
-        {appearance.hairstyle !== 'bald' && (
-          <Round p={[0, 0.135, -0.025]} s={[0.368, 0.175, 0.352]} color={appearance.hair} radius={0.07} />
+        {kind === 'triage' && (
+          <group>
+            {/* A high-visibility vest over the shirt, with two reflective bands. */}
+            <Round p={[0, seated ? 0.95 : 1.16, 0.01]} s={[0.5, 0.48, 0.33]} color="#e0cc4b" radius={0.08} />
+            {[-0.09, 0.07].map((y) => (
+              <Box
+                key={y}
+                p={[0, (seated ? 0.95 : 1.16) + y, 0.17]}
+                s={[0.46, 0.045, 0.02]}
+                color="#c9ced2"
+              />
+            ))}
+          </group>
         )}
-        {appearance.hairstyle !== 'bald' && (
-          <Box p={[0, 0.055, -0.156]} s={[0.35, 0.2, 0.045]} color={appearance.hair} />
-        )}
-        {appearance.hairstyle === 'long' && (
-          <Round p={[0.155, -0.1, -0.1]} s={[0.09, 0.32, 0.16]} color={appearance.hair} radius={0.04} />
-        )}
-        <Round p={[0, -0.035, 0.179]} s={[0.071, 0.09, 0.058]} color={appearance.skin} radius={0.024} />
+        <Cylinder p={[0, headY - 0.23, 0]} radius={0.075} height={0.15} color={appearance.skin} />
+        {/* The legs are part of the kit: they take their pose from `seated` and
+            never move again, so they merge with the body rather than animating. */}
         {[-1, 1].map((side) => (
-          <group key={side}>
-            <mesh position={[side * 0.087, 0.005, 0.167]}>
-              <sphereGeometry args={[0.016, 6, 6]} />
-              <meshStandardMaterial color="#32392e" />
-            </mesh>
-            {appearance.glasses && (
-              <Box p={[side * 0.087, 0.012, 0.175]} s={[0.13, 0.075, 0.018]} color="#454d46" />
-            )}
-          </group>
-        ))}
-      </group>
-      {[-1, 1].map((side, i) => (
-        <group key={side}>
           <group
+            key={side}
             position={[side * 0.14, seated ? 0.56 : 0.85, 0]}
             rotation={[seated ? -Math.PI / 2 : 0, 0, 0]}
           >
@@ -383,11 +367,49 @@ function Figure({
               <Round p={[0, -0.35, 0.06]} s={[0.19, 0.12, 0.31]} color="#e0ddce" radius={0.035} />
             </group>
           </group>
+        ))}
+      </Static>
+      <group position={[0, headY, 0]} rotation={[pose.headPitch, pose.headYaw, 0]}>
+        <Static revision={face}>
+          {hat !== 'none' && (
+            <group>
+              <Round p={[0, 0.21, 0]} s={[0.4, 0.19, 0.37]} color={suit} radius={0.08} />
+              {hat === 'cap' && <Round p={[0, 0.15, 0.2]} s={[0.39, 0.04, 0.3]} color={suit} radius={0.03} />}
+            </group>
+          )}
+          <Round p={[0, 0, 0]} s={[0.35, 0.4, 0.33]} color={appearance.skin} radius={0.11} />
+          {appearance.hairstyle !== 'bald' && (
+            <Round p={[0, 0.135, -0.025]} s={[0.368, 0.175, 0.352]} color={appearance.hair} radius={0.07} />
+          )}
+          {appearance.hairstyle !== 'bald' && (
+            <Box p={[0, 0.055, -0.156]} s={[0.35, 0.2, 0.045]} color={appearance.hair} />
+          )}
+          {appearance.hairstyle === 'long' && (
+            <Round p={[0.155, -0.1, -0.1]} s={[0.09, 0.32, 0.16]} color={appearance.hair} radius={0.04} />
+          )}
+          <Round p={[0, -0.035, 0.179]} s={[0.071, 0.09, 0.058]} color={appearance.skin} radius={0.024} />
+          {[-1, 1].map((side) => (
+            <group key={side}>
+              <mesh position={[side * 0.087, 0.005, 0.167]}>
+                <sphereGeometry args={[0.016, 6, 6]} />
+                <meshStandardMaterial color="#32392e" />
+              </mesh>
+              {appearance.glasses && (
+                <Box p={[side * 0.087, 0.012, 0.175]} s={[0.13, 0.075, 0.018]} color="#454d46" />
+              )}
+            </group>
+          ))}
+        </Static>
+      </group>
+      {[-1, 1].map((side, i) => (
+        <group key={side}>
           <group position={[side * 0.27, shoulderY, 0]} rotation={[pose.shoulder[i], 0, pose.roll[i]]}>
             <Round p={[0, -0.15, 0]} s={[0.16, 0.31, 0.18]} color={suit} radius={0.045} />
             <group position={[0, -0.29, 0]} rotation={[pose.elbow[i], 0, 0]}>
-              <Round p={[0, -0.11, 0]} s={[0.13, 0.25, 0.14]} color={appearance.skin} radius={0.04} />
-              <Round p={[0, -0.245, 0.02]} s={[0.13, 0.12, 0.135]} color={appearance.skin} radius={0.04} />
+              <Static revision={appearance.skin}>
+                <Round p={[0, -0.11, 0]} s={[0.13, 0.25, 0.14]} color={appearance.skin} radius={0.04} />
+                <Round p={[0, -0.245, 0.02]} s={[0.13, 0.12, 0.135]} color={appearance.skin} radius={0.04} />
+              </Static>
             </group>
           </group>
         </group>

@@ -420,6 +420,9 @@ export function OfficeLab({
     [],
   );
   const record = useMemo(() => replayRecord(employees), [employees]);
+  // The lab reports what a click landed on, so a merged room can be shown to be
+  // as clickable as the loose one it replaced.
+  const [picked, setPicked] = useState('');
   return (
     <>
       <main className="office-lab" data-preset={preset} style={{ width: 1280, height: 720, margin: 0 }}>
@@ -431,6 +434,8 @@ export function OfficeLab({
             record={record}
             startAt={at * 3_600_000}
             dressing={{ board: { cards: CARDS } }}
+            onSelect={(id) => setPicked(`employee ${id}`)}
+            onSelectProp={(kind, id) => setPicked(id ? `${kind} ${id}` : kind)}
           />
         ) : (
           <OfficeStage
@@ -440,16 +445,19 @@ export function OfficeLab({
             label={label}
             labels={labels as LabelMode}
             onRenderStats={report}
+            onSelect={(id) => setPicked(`employee ${id}`)}
+            onSelectProp={(kind, id) => setPicked(id ? `${kind} ${id}` : kind)}
           />
         )}
       </main>
       {/* Outside the photographed stage, so the read-out never lands in a baseline. */}
       <p
         data-office-stats={stats ? String(stats.calls) : ''}
+        data-office-picked={picked}
         style={{ font: '12px ui-monospace, monospace', margin: '6px 0 0' }}
       >
         {stats
-          ? `${stats.calls} draw calls · ${stats.triangles.toLocaleString()} triangles · ${stats.geometries} geometries · ${stats.textures} textures`
+          ? `${stats.calls} draw calls · ${stats.meshes} meshes (${stats.casters} casting shadows) · ${stats.triangles.toLocaleString()} triangles · ${stats.geometries} geometries`
           : 'measuring…'}
       </p>
     </>
