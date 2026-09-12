@@ -16,6 +16,10 @@ export type OfficeViewProps = {
   employees: OfficeEmployee[];
   /** Called when a person or their label is clicked. */
   onSelect?: (id: string) => void;
+  /** Visible name of the lobby or project floor. */
+  label?: string;
+  /** Contextual guidance shown when this floor has no employees. */
+  emptyMessage?: string;
 };
 
 const ZOOM_MIN = 0.55;
@@ -35,14 +39,22 @@ function detectWebGL(): boolean {
   }
 }
 
-function Fallback({ employees, onSelect }: { employees: OfficeEmployee[]; onSelect?: (id: string) => void }) {
+function Fallback({
+  employees,
+  onSelect,
+  emptyMessage,
+}: {
+  employees: OfficeEmployee[];
+  onSelect?: (id: string) => void;
+  emptyMessage?: string;
+}) {
   const present = employees.filter(isActiveEmployee);
   return (
     <div className="office-view-fallback">
       <p>
         {present.length
           ? 'Your team is here. Select someone to see what they are working on.'
-          : 'Your office is ready. Add your first employee to get started.'}
+          : emptyMessage || 'Your office is ready. Add your first employee to get started.'}
       </p>
       {present.length > 0 && (
         <ul>
@@ -98,7 +110,7 @@ const safeEvents: NonNullable<CanvasProps['events']> = (store) => {
  * architectural room from the desktop app, dressed only by the people it is
  * given. With no employees it stays a furnished, honest empty office.
  */
-export default function OfficeView({ employees, onSelect }: OfficeViewProps) {
+export default function OfficeView({ employees, onSelect, label, emptyMessage }: OfficeViewProps) {
   const [eventSource, setEventSource] = useState<HTMLDivElement | null>(null);
   const [zoom, setZoom] = useState(1);
   const [angle, setAngle] = useState(0);
@@ -134,21 +146,22 @@ export default function OfficeView({ employees, onSelect }: OfficeViewProps) {
   }, [supported]);
 
   const motion = !reducedMotion;
-  const fallback = <Fallback employees={employees} onSelect={onSelect} />;
+  const fallback = <Fallback employees={employees} onSelect={onSelect} emptyMessage={emptyMessage} />;
 
   return (
     <div
       className="office-view"
       ref={setEventSource}
       role="region"
-      aria-label="Interactive 3D team office"
+      aria-label={`Interactive 3D office${label ? ` · ${label}` : ''}`}
       aria-description="Drag to pan. Use the arrow keys when the office is focused. Hold Ctrl and scroll to zoom."
       data-office-empty={employees.length ? undefined : 'true'}
       tabIndex={0}
     >
+      {label && <p className="office-view-floor">{label}</p>}
       {employees.length === 0 && (
         <p className="office-view-note" role="status">
-          Your office is ready. Add your first employee to get started.
+          {emptyMessage || 'Your office is ready. Add your first employee to get started.'}
         </p>
       )}
       <div className="office-view-controls" role="group" aria-label="Office view controls">

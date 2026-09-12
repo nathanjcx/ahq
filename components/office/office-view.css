@@ -63,6 +63,26 @@
   margin: 0 2px;
 }
 
+.office-view-floor {
+  position: absolute;
+  top: 15px;
+  left: 17px;
+  z-index: 40;
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid #d9e1d3;
+  border-radius: 6px;
+  color: #4f6654;
+  background: #fbfcf6e8;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 3px 8px #4b645509;
+  font-size: 10px;
+  font-weight: 720;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
 /* The honest empty state: furnished, staffed by no one. */
 .office-view-note {
   position: absolute;

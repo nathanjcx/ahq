@@ -11,6 +11,7 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   CircleDollarSign,
   Clock3,
   Cloud,
@@ -30,6 +31,7 @@ import {
   MessageSquareText,
   MoreHorizontal,
   PanelLeftClose,
+  Pencil,
   Play,
   Plus,
   RefreshCw,
@@ -62,6 +64,7 @@ import type {
   Message,
   ModelId,
   ProviderId,
+  Project,
   Task,
 } from '@/lib/contracts';
 import { emptyDashboard } from '@/lib/contracts';
@@ -89,7 +92,10 @@ type Actions = {
   bootstrap: (name: string) => Promise<unknown>;
   setBudget: (monthlyBudget: number) => Promise<unknown>;
   hire: (versionId: string) => Promise<unknown>;
-  createTask: (employeeId: string, prompt: string, title: string) => Promise<unknown>;
+  createTask: (employeeId: string, prompt: string, title: string, projectId?: string) => Promise<unknown>;
+  createProject: (name: string, brief: string, employeeIds: string[]) => Promise<unknown>;
+  updateProject: (projectId: string, name: string, brief: string, employeeIds: string[]) => Promise<unknown>;
+  setProjectArchived: (projectId: string, archived: boolean) => Promise<unknown>;
   sendMessage: (taskId: string, text: string) => Promise<unknown>;
   cancelTask: (taskId: string) => Promise<unknown>;
   decide: (proposalId: string, approved: boolean) => Promise<unknown>;
@@ -101,7 +107,7 @@ type Actions = {
     resourceScope?: string,
   ) => Promise<unknown>;
   markRead: (itemId: string) => Promise<unknown>;
-  assign: (itemId: string, employeeId: string) => Promise<unknown>;
+  assign: (itemId: string, employeeId: string, projectId?: string) => Promise<unknown>;
   saveDraft: (draft: Record<string, unknown>) => Promise<unknown>;
   publish: (draftId: string) => Promise<unknown>;
   retire: (versionId: string) => Promise<unknown>;
@@ -116,6 +122,9 @@ const offlineActions: Actions = {
   setBudget: unavailable,
   hire: unavailable,
   createTask: unavailable,
+  createProject: unavailable,
+  updateProject: unavailable,
+  setProjectArchived: unavailable,
   sendMessage: unavailable,
   cancelTask: unavailable,
   decide: unavailable,
@@ -174,6 +183,9 @@ function ConnectedAstraHq() {
   const setBudget = useMutation(uiApi.setBudget);
   const hire = useMutation(uiApi.hire);
   const createTask = useMutation(uiApi.createTask);
+  const createProject = useMutation(uiApi.createProject);
+  const updateProject = useMutation(uiApi.updateProject);
+  const setProjectArchived = useMutation(uiApi.setProjectArchived);
   const sendMessage = useMutation(uiApi.sendMessage);
   const cancelTask = useMutation(uiApi.cancelTask);
   const decide = useMutation(uiApi.decideAction);
@@ -207,7 +219,12 @@ function ConnectedAstraHq() {
               bootstrap: (name) => bootstrap({ name }),
               setBudget: (monthlyBudget) => setBudget({ monthlyBudget }),
               hire: (versionId) => hire({ versionId }),
-              createTask: (employeeId, prompt, title) => createTask({ employeeId, prompt, title }),
+              createTask: (employeeId, prompt, title, projectId) =>
+                createTask({ employeeId, prompt, title, projectId }),
+              createProject: (name, brief, employeeIds) => createProject({ name, brief, employeeIds }),
+              updateProject: (projectId, name, brief, employeeIds) =>
+                updateProject({ projectId, name, brief, employeeIds }),
+              setProjectArchived: (projectId, archived) => setProjectArchived({ projectId, archived }),
               sendMessage: (taskId, text) => sendMessage({ taskId, text }),
               cancelTask: (taskId) => cancelTask({ taskId }),
               decide: (proposalId, approved) => decide({ proposalId, approved }),
@@ -216,7 +233,7 @@ function ConnectedAstraHq() {
               setConnectionTools: (connectionId, allowedTools, resourceScope) =>
                 setConnectionTools({ connectionId, allowedTools, resourceScope }),
               markRead: (itemId) => markRead({ itemId }),
-              assign: (itemId, employeeId) => assign({ itemId, employeeId }),
+              assign: (itemId, employeeId, projectId) => assign({ itemId, employeeId, projectId }),
               saveDraft: (draft) => saveDraft(draft),
               publish: (draftId) => publish({ draftId }),
               retire: (versionId) => retire({ versionId }),
@@ -256,6 +273,9 @@ function WorkspaceShell({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [projectEditor, setProjectEditor] = useState<Project | 'new' | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [taskProjectId, setTaskProjectId] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -264,6 +284,12 @@ function WorkspaceShell({
   const hasReadyEmployee = dashboard.employees.some((employee) => employee.status === 'ready');
   const pageName =
     page === 'admin' ? 'Marketplace admin' : (nav.find((item) => item.id === page)?.label ?? 'Office');
+
+  useEffect(() => {
+    if (selectedProjectId && !dashboard.projects.some((project) => project.id === selectedProjectId)) {
+      setSelectedProjectId(null);
+    }
+  }, [dashboard.projects, selectedProjectId]);
 
   useEffect(() => {
     if (!notice) return;
@@ -275,6 +301,12 @@ function WorkspaceShell({
     setPage(next);
     window.location.hash = next;
     setSidebarOpen(false);
+  }
+
+  function openNewTask(projectId: string | null = null, employeeId: string | null = null) {
+    setTaskProjectId(projectId);
+    setSelectedEmployee(employeeId);
+    setNewTaskOpen(true);
   }
 
   const run = async (work: () => Promise<unknown>, success: string) => {
@@ -447,7 +479,7 @@ function WorkspaceShell({
             <button
               className="primary-button compact"
               disabled={!workspace || !hasReadyEmployee}
-              onClick={() => setNewTaskOpen(true)}
+              onClick={() => openNewTask()}
             >
               <Plus size={16} />
               New task
@@ -468,7 +500,7 @@ function WorkspaceShell({
         {!configured && <SetupBanner onSetup={() => setSettingsOpen(true)} />}
         <div className="page-wrap">
           {page === 'office' && (
-            <OfficePage
+            <FloorsOfficePage
               dashboard={dashboard}
               configured={configured}
               onPage={go}
@@ -476,17 +508,26 @@ function WorkspaceShell({
                 setSelectedEmployee(id);
                 go('employees');
               }}
-              onNewTask={() => setNewTaskOpen(true)}
+              onTask={(id) => {
+                setSelectedTask(id);
+                go('tasks');
+              }}
+              selectedProjectId={selectedProjectId}
+              onSelectProject={setSelectedProjectId}
+              onNewProject={() => setProjectEditor('new')}
+              onEditProject={setProjectEditor}
+              onNewTask={(projectId) => openNewTask(projectId)}
             />
           )}
           {page === 'inbox' && (
             <InboxPage
               items={dashboard.inbox}
               employees={dashboard.employees}
+              projects={dashboard.projects}
               configured={configured}
               onRead={(id) => run(() => actions.markRead(id), 'Marked as read')}
-              onAssign={(itemId, employeeId) =>
-                run(() => actions.assign(itemId, employeeId), 'Assigned to your employee')
+              onAssign={(itemId, employeeId, projectId) =>
+                run(() => actions.assign(itemId, employeeId, projectId), 'Assigned to your employee')
               }
             />
           )}
@@ -498,19 +539,19 @@ function WorkspaceShell({
               onSelect={setSelectedEmployee}
               onMarketplace={() => go('marketplace')}
               onTask={(id) => {
-                setSelectedEmployee(id);
-                setNewTaskOpen(true);
+                openNewTask(null, id);
               }}
             />
           )}
           {page === 'tasks' && (
             <TasksPage
               tasks={dashboard.tasks}
+              projects={dashboard.projects}
               proposals={dashboard.proposals}
               selectedId={selectedTask}
               configured={configured}
               onSelect={setSelectedTask}
-              onNew={() => setNewTaskOpen(true)}
+              onNew={() => openNewTask()}
               onSend={(taskId, text) => run(() => actions.sendMessage(taskId, text), 'Message sent')}
               onCancel={(taskId) => run(() => actions.cancelTask(taskId), 'Task cancelled')}
               onDecide={(id, approved) =>
@@ -571,13 +612,56 @@ function WorkspaceShell({
       {newTaskOpen && (
         <NewTaskPanel
           employees={dashboard.employees}
+          projects={dashboard.projects}
           defaultEmployee={selectedEmployee}
+          defaultProjectId={taskProjectId}
           configured={configured}
           onClose={() => setNewTaskOpen(false)}
-          onCreate={async (employeeId, title, prompt) => {
-            await run(() => actions.createTask(employeeId, prompt, title), 'Task started');
-            setNewTaskOpen(false);
-            setPage('tasks');
+          onCreate={async (employeeId, title, prompt, projectId) => {
+            const created = await run(
+              () => actions.createTask(employeeId, prompt, title, projectId),
+              'Task started',
+            );
+            if (created) {
+              setNewTaskOpen(false);
+              go('tasks');
+            }
+          }}
+        />
+      )}
+      {projectEditor && (
+        <ProjectPanel
+          project={projectEditor === 'new' ? null : projectEditor}
+          employees={dashboard.employees}
+          configured={configured && Boolean(workspace)}
+          onClose={() => setProjectEditor(null)}
+          onSave={async (name, brief, employeeIds) => {
+            let createdProjectId: string | undefined;
+            const saved = await run(
+              async () => {
+                if (projectEditor === 'new') {
+                  const result = await actions.createProject(name, brief, employeeIds);
+                  createdProjectId = (result as { projectId: string }).projectId;
+                } else {
+                  await actions.updateProject(projectEditor.id, name, brief, employeeIds);
+                }
+              },
+              projectEditor === 'new' ? 'Floor created' : 'Floor updated',
+            );
+            if (saved) {
+              if (createdProjectId) setSelectedProjectId(createdProjectId);
+              setProjectEditor(null);
+            }
+          }}
+          onArchive={async (project, archived) => {
+            const saved = await run(
+              () => actions.setProjectArchived(project.id, archived),
+              archived ? 'Floor archived' : 'Floor restored',
+            );
+            if (saved) {
+              if (archived) setSelectedProjectId(null);
+              setProjectEditor(null);
+            }
           }}
         />
       )}
@@ -634,29 +718,49 @@ function PageIntro({
   );
 }
 
-function OfficePage({
+function FloorsOfficePage({
   dashboard,
   configured,
   onPage,
   onEmployee,
+  onTask,
+  selectedProjectId,
+  onSelectProject,
+  onNewProject,
+  onEditProject,
   onNewTask,
 }: {
   dashboard: Dashboard;
   configured: boolean;
   onPage: (page: Page) => void;
   onEmployee: (id: string) => void;
-  onNewTask: () => void;
+  onTask: (id: string) => void;
+  selectedProjectId: string | null;
+  onSelectProject: (id: string | null) => void;
+  onNewProject: () => void;
+  onEditProject: (project: Project) => void;
+  onNewTask: (projectId: string | null) => void;
 }) {
-  const active = dashboard.tasks.filter((task) =>
+  const orderedProjects = [...dashboard.projects].sort((a, b) => a.createdAt - b.createdAt);
+  const activeProjects = orderedProjects.filter((project) => !project.archivedAt);
+  const archivedProjects = orderedProjects.filter((project) => project.archivedAt);
+  const selectedProject = dashboard.projects.find((project) => project.id === selectedProjectId) ?? null;
+  const assignedEmployeeIds = new Set(activeProjects.flatMap((project) => project.employeeIds));
+  const floorEmployees = selectedProject
+    ? selectedProject.employeeIds
+        .map((id) => dashboard.employees.find((employee) => employee.id === id))
+        .filter((employee): employee is Employee => Boolean(employee))
+    : dashboard.employees.filter((employee) => !assignedEmployeeIds.has(employee.id));
+  const floorTasks = dashboard.tasks.filter((task) =>
+    selectedProject ? task.projectId === selectedProject.id : !task.projectId,
+  );
+  const activeTasks = floorTasks.filter((task) =>
     ['queued', 'running', 'awaiting_approval'].includes(task.status),
   );
-  const officeEmployees = dashboard.employees
+  const officeEmployees = floorEmployees
     .filter((employee) => employee.status === 'ready')
     .map((employee) => {
-      const work = dashboard.tasks.find(
-        (task) =>
-          task.employeeId === employee.id && ['queued', 'running', 'awaiting_approval'].includes(task.status),
-      );
+      const work = activeTasks.find((task) => task.employeeId === employee.id);
       return {
         id: employee.id,
         name: employee.name,
@@ -665,10 +769,14 @@ function OfficePage({
         status: work?.status === 'awaiting_approval' ? 'review' : work ? 'working' : 'ready',
       };
     });
+  const floorIndex = orderedProjects.findIndex((project) => project.id === selectedProject?.id);
+  const floorLabel = selectedProject && floorIndex >= 0 ? `Floor ${floorIndex + 1}` : 'Lobby';
+  const isArchived = Boolean(selectedProject?.archivedAt);
+
   return (
     <div className="office-page">
       <PageIntro
-        eyebrow="HEADQUARTERS"
+        eyebrow="PROJECT FLOORS"
         title={
           dashboard.workspace
             ? `Good ${timeGreeting()}, ${dashboard.workspace.name}`
@@ -676,99 +784,265 @@ function OfficePage({
         }
         description={
           dashboard.workspace
-            ? 'See what your employees are working on and where they need you.'
+            ? 'Move between project floors, see who is staffed, and keep unassigned work in the lobby.'
             : 'Connect your workspace, hire your first employee, and give them a clear assignment.'
         }
         action={
           <button
             className="primary-button"
-            disabled={!dashboard.employees.some((employee) => employee.status === 'ready')}
-            onClick={onNewTask}
+            disabled={!configured || !dashboard.workspace}
+            onClick={onNewProject}
           >
-            <Plus size={17} />
-            Assign work
+            <Plus size={17} /> New project floor
           </button>
         }
       />
-      <div className="office-grid">
-        <section className="office-canvas card">
-          <div className="office-toolbar">
-            <span>
-              <span className="live-dot" /> LIVE OFFICE
+      <div className="building-layout">
+        <aside className="floor-directory card" aria-label="Building directory">
+          <div className="directory-head">
+            <span className="building-mark" aria-hidden="true">
+              <Building2 size={19} />
             </span>
-            <span>
-              {dashboard.employees.length} {dashboard.employees.length === 1 ? 'employee' : 'employees'}{' '}
-              <SlidersHorizontal size={14} />
-            </span>
-          </div>
-          <div className="office-stage">
-            <OfficeView employees={officeEmployees} onSelect={onEmployee} />
-          </div>
-          <div className="office-legend">
-            <span>
-              <i className="status-dot working" />
-              Working
-            </span>
-            <span>
-              <i className="status-dot waiting" />
-              Needs review
-            </span>
-            <span>
-              <i className="status-dot idle" />
-              Available
-            </span>
-          </div>
-        </section>
-        <aside className="today-panel card">
-          <div className="section-title">
             <div>
-              <span className="eyebrow">TODAY</span>
-              <h2>In motion</h2>
+              <span className="eyebrow">BUILDING DIRECTORY</span>
+              <h2>{dashboard.workspace?.name || 'Astra HQ'}</h2>
             </div>
-            <button className="text-button" onClick={() => onPage('activity')}>
-              View all
-            </button>
           </div>
-          {active.length ? (
-            <div className="motion-list">
-              {active.slice(0, 4).map((task) => (
-                <button key={task.id} onClick={() => onPage('tasks')}>
-                  <StatusMark status={task.status} />
+          <div className="directory-list">
+            <button data-active={!selectedProject} onClick={() => onSelectProject(null)}>
+              <span className="floor-number">L</span>
+              <span>
+                <strong>Lobby</strong>
+                <small>{dashboard.tasks.filter((task) => !task.projectId).length} unassigned tasks</small>
+              </span>
+              <ChevronRight size={14} />
+            </button>
+            {activeProjects.map((project) => (
+              <button
+                key={project.id}
+                data-active={selectedProject?.id === project.id}
+                onClick={() => onSelectProject(project.id)}
+              >
+                <span className="floor-number">
+                  {String(orderedProjects.findIndex((entry) => entry.id === project.id) + 1).padStart(2, '0')}
+                </span>
+                <span>
+                  <strong>{project.name}</strong>
+                  <small>
+                    {project.employeeIds.length} {project.employeeIds.length === 1 ? 'employee' : 'employees'}
+                  </small>
+                </span>
+                <ChevronRight size={14} />
+              </button>
+            ))}
+          </div>
+          {!activeProjects.length && (
+            <div className="directory-empty">
+              <p>Create a floor for each project, then staff it with the employees it needs.</p>
+              <button
+                className="text-button"
+                onClick={onNewProject}
+                disabled={!configured || !dashboard.workspace}
+              >
+                Add first floor
+              </button>
+            </div>
+          )}
+          {archivedProjects.length > 0 && (
+            <div className="directory-archive">
+              <span>ARCHIVED</span>
+              {archivedProjects.map((project) => (
+                <button
+                  key={project.id}
+                  data-active={selectedProject?.id === project.id}
+                  onClick={() => onSelectProject(project.id)}
+                >
+                  <Archive size={13} />
                   <span>
-                    <strong>{task.title}</strong>
-                    <small>
-                      {task.employeeName} · {relativeTime(task.updatedAt)}
-                    </small>
+                    {String(orderedProjects.findIndex((entry) => entry.id === project.id) + 1).padStart(
+                      2,
+                      '0',
+                    )}{' '}
+                    · {project.name}
                   </span>
-                  <ArrowRight size={15} />
                 </button>
               ))}
             </div>
-          ) : (
-            <EmptyMini
-              icon={<Clock3 size={20} />}
-              title="A quiet office"
-              text={
-                configured
-                  ? 'New assignments and reviews will appear here.'
-                  : 'Connect the backend to see live work.'
-              }
-            />
           )}
-          <div className="today-divider" />
-          <div className="quick-stats">
-            <button onClick={() => onPage('inbox')}>
-              <span>Inbox</span>
-              <strong>{dashboard.inbox.filter((i) => i.status === 'unread').length}</strong>
-              <small>unread items</small>
-            </button>
-            <button onClick={() => onPage('tasks')}>
-              <span>Reviews</span>
-              <strong>{dashboard.proposals.filter((p) => p.status === 'pending').length}</strong>
-              <small>need you</small>
-            </button>
+          <div className="directory-footer">
+            <span>{activeProjects.length}</span>
+            <p>active project {activeProjects.length === 1 ? 'floor' : 'floors'}</p>
           </div>
         </aside>
+
+        <section className="floor-workspace card" aria-live="polite">
+          <header className="floor-heading">
+            <div>
+              <span className="eyebrow">{isArchived ? 'ARCHIVED FLOOR' : floorLabel.toUpperCase()}</span>
+              <h2>{selectedProject?.name || 'Lobby'}</h2>
+              <p>{selectedProject?.brief || 'Tasks created without a project stay here.'}</p>
+            </div>
+            <div className="floor-heading-actions">
+              {selectedProject && (
+                <button className="secondary-button compact" onClick={() => onEditProject(selectedProject)}>
+                  <Pencil size={14} /> {isArchived ? 'Manage' : 'Edit floor'}
+                </button>
+              )}
+              {!isArchived && (
+                <button
+                  className="primary-button compact"
+                  disabled={!officeEmployees.length}
+                  onClick={() => onNewTask(selectedProject?.id ?? null)}
+                >
+                  <Plus size={15} /> Assign work
+                </button>
+              )}
+            </div>
+          </header>
+
+          <div className="floor-overview">
+            <div className="office-canvas floor-canvas">
+              <div className="office-toolbar">
+                <span>
+                  <span className="live-dot" /> {isArchived ? 'ARCHIVED OFFICE' : 'LIVE OFFICE'}
+                </span>
+                <span>
+                  {floorEmployees.length} {floorEmployees.length === 1 ? 'employee' : 'employees'}
+                </span>
+              </div>
+              <div className="office-stage floor-stage">
+                <OfficeView
+                  employees={officeEmployees}
+                  onSelect={onEmployee}
+                  label={selectedProject ? `${floorLabel} · ${selectedProject.name}` : 'Lobby'}
+                  emptyMessage={
+                    selectedProject
+                      ? 'This floor is ready. Edit the floor to add its project team.'
+                      : 'The lobby is clear. Employees staffed on project floors appear there.'
+                  }
+                />
+              </div>
+              <div className="office-legend">
+                <span>
+                  <i className="status-dot working" /> Working
+                </span>
+                <span>
+                  <i className="status-dot waiting" /> Needs review
+                </span>
+                <span>
+                  <i className="status-dot idle" /> Available
+                </span>
+              </div>
+            </div>
+
+            <aside className="floor-team">
+              <div className="section-title">
+                <div>
+                  <span className="eyebrow">STAFFING</span>
+                  <h3>{selectedProject ? 'Project team' : 'Unassigned team'}</h3>
+                </div>
+                <span className="staff-count">{floorEmployees.length}</span>
+              </div>
+              {floorEmployees.length ? (
+                <div className="floor-team-list">
+                  {floorEmployees.map((employee) => (
+                    <button key={employee.id} onClick={() => onEmployee(employee.id)}>
+                      <Avatar employee={employee} />
+                      <span>
+                        <strong>{employee.name}</strong>
+                        <small>{employee.role}</small>
+                      </span>
+                      <span
+                        className={`availability ${employee.status.toLowerCase().includes('work') ? 'busy' : ''}`}
+                      >
+                        {employee.status}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <EmptyMini
+                  icon={<Users size={19} />}
+                  title={selectedProject ? 'No one staffed yet' : 'No one waiting in the lobby'}
+                  text={
+                    selectedProject
+                      ? 'Edit this floor to add one or more employees.'
+                      : 'Employees without an active project appear here.'
+                  }
+                />
+              )}
+              {selectedProject && !isArchived && (
+                <button className="floor-team-edit" onClick={() => onEditProject(selectedProject)}>
+                  <UserPlus size={14} /> Manage staffing
+                </button>
+              )}
+            </aside>
+          </div>
+
+          <div className="floor-queue">
+            <div className="section-title">
+              <div>
+                <span className="eyebrow">YOUR WORK QUEUE</span>
+                <h3>
+                  {activeTasks.length
+                    ? `${activeTasks.length} active ${activeTasks.length === 1 ? 'task' : 'tasks'}`
+                    : 'Nothing in motion'}
+                </h3>
+              </div>
+              <button className="text-button" onClick={() => onPage('tasks')}>
+                All tasks <ArrowRight size={14} />
+              </button>
+            </div>
+            {activeTasks.length ? (
+              <div className="floor-task-list">
+                {activeTasks.slice(0, 5).map((task) => (
+                  <button key={task.id} onClick={() => onTask(task.id)}>
+                    <StatusMark status={task.status} />
+                    <span>
+                      <strong>{task.title}</strong>
+                      <small>{task.employeeName}</small>
+                    </span>
+                    <span className="queue-meta">
+                      {statusLabel(task.status)}
+                      <small>{relativeTime(task.updatedAt)}</small>
+                    </span>
+                    <ChevronRight size={14} />
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="floor-queue-empty">
+                <Clock3 size={18} />
+                <p>
+                  {configured
+                    ? selectedProject
+                      ? 'Your assignments for this project will collect here.'
+                      : 'Your unassigned tasks and older work will collect here.'
+                    : 'Connect the backend to see live work.'}
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+      <div className="office-summary" aria-label="Workspace summary">
+        <button onClick={() => onPage('inbox')}>
+          <span>Inbox</span>
+          <strong>{dashboard.inbox.filter((item) => item.status === 'unread').length}</strong>
+          <small>unread items</small>
+        </button>
+        <button onClick={() => onPage('tasks')}>
+          <span>Reviews</span>
+          <strong>{dashboard.proposals.filter((proposal) => proposal.status === 'pending').length}</strong>
+          <small>need you</small>
+        </button>
+        <button onClick={() => onPage('activity')}>
+          <span>Your active work</span>
+          <strong>
+            {dashboard.tasks.filter((task) => ['queued', 'running'].includes(task.status)).length}
+          </strong>
+          <small>across all floors</small>
+        </button>
       </div>
     </div>
   );
@@ -777,20 +1051,36 @@ function OfficePage({
 function InboxPage({
   items,
   employees,
+  projects,
   configured,
   onRead,
   onAssign,
 }: {
   items: InboxItem[];
   employees: Employee[];
+  projects: Project[];
   configured: boolean;
   onRead: (id: string) => void;
-  onAssign: (itemId: string, employeeId: string) => void;
+  onAssign: (itemId: string, employeeId: string, projectId?: string) => void;
 }) {
   const [selected, setSelected] = useState(items[0]?.id ?? null);
   const item = items.find((entry) => entry.id === selected);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [projectId, setProjectId] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
   const shown = filter === 'unread' ? items.filter((entry) => entry.status === 'unread') : items;
+  const activeProjects = projects.filter((project) => !project.archivedAt);
+  const selectedProject = activeProjects.find((project) => project.id === projectId);
+  const eligibleEmployees = selectedProject
+    ? employees.filter((employee) => selectedProject.employeeIds.includes(employee.id))
+    : employees;
+  useEffect(() => {
+    if (employeeId && !eligibleEmployees.some((employee) => employee.id === employeeId)) setEmployeeId('');
+  }, [eligibleEmployees, employeeId]);
+  useEffect(() => {
+    setProjectId('');
+    setEmployeeId('');
+  }, [selected]);
   return (
     <div>
       <PageIntro
@@ -860,21 +1150,34 @@ function InboxPage({
               <div className="inbox-preview">{item.preview}</div>
               <div className="detail-actions">
                 <label>
-                  Assign to
-                  <select
-                    defaultValue=""
-                    onChange={(event) => event.target.value && onAssign(item.id, event.target.value)}
-                  >
-                    <option value="" disabled>
-                      Choose an employee
-                    </option>
-                    {employees.map((employee) => (
+                  Project floor
+                  <select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
+                    <option value="">Lobby · Unassigned</option>
+                    {activeProjects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Employee
+                  <select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>
+                    <option value="">Choose an employee</option>
+                    {eligibleEmployees.map((employee) => (
                       <option key={employee.id} value={employee.id}>
                         {employee.name}
                       </option>
                     ))}
                   </select>
                 </label>
+                <button
+                  className="primary-button compact"
+                  disabled={!employeeId || !configured}
+                  onClick={() => onAssign(item.id, employeeId, projectId || undefined)}
+                >
+                  Assign
+                </button>
                 {item.sourceUrl && (
                   <a className="secondary-button" href={item.sourceUrl} target="_blank" rel="noreferrer">
                     Open source <ExternalLink size={15} />
@@ -1034,8 +1337,15 @@ function EmployeesPage({
   );
 }
 
+function taskFloorName(task: Task, projects: Project[]) {
+  return (
+    task.projectContext?.name ?? projects.find((project) => project.id === task.projectId)?.name ?? 'Lobby'
+  );
+}
+
 function TasksPage({
   tasks,
+  projects,
   proposals,
   selectedId,
   configured,
@@ -1047,6 +1357,7 @@ function TasksPage({
   onCorrect,
 }: {
   tasks: Task[];
+  projects: Project[];
   proposals: ActionProposal[];
   selectedId: string | null;
   configured: boolean;
@@ -1057,7 +1368,15 @@ function TasksPage({
   onDecide: (id: string, approved: boolean) => void;
   onCorrect: (id: string) => void;
 }) {
-  const selected = tasks.find((task) => task.id === selectedId) ?? tasks[0];
+  const [projectFilter, setProjectFilter] = useState('all');
+  const shownTasks = tasks.filter((task) =>
+    projectFilter === 'all'
+      ? true
+      : projectFilter === 'lobby'
+        ? !task.projectId
+        : task.projectId === projectFilter,
+  );
+  const selected = shownTasks.find((task) => task.id === selectedId) ?? shownTasks[0];
   return (
     <div>
       <PageIntro
@@ -1075,12 +1394,25 @@ function TasksPage({
         <div className="task-layout card">
           <div className="task-list">
             <div className="pane-toolbar">
-              <strong>{tasks.length} tasks</strong>
-              <button className="icon-button">
-                <SlidersHorizontal size={15} />
-              </button>
+              <strong>
+                {shownTasks.length} {shownTasks.length === 1 ? 'task' : 'tasks'}
+              </strong>
+              <label className="task-floor-filter">
+                <span className="sr-only">Filter by project floor</span>
+                <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
+                  <option value="all">All floors</option>
+                  <option value="lobby">Lobby</option>
+                  {projects
+                    .filter((project) => !project.archivedAt)
+                    .map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
             </div>
-            {tasks.map((task) => (
+            {shownTasks.map((task) => (
               <button key={task.id} data-active={selected?.id === task.id} onClick={() => onSelect(task.id)}>
                 <StatusMark status={task.status} />
                 <span>
@@ -1088,13 +1420,22 @@ function TasksPage({
                   <small>
                     {task.employeeName} · {relativeTime(task.updatedAt)}
                   </small>
+                  <span className="task-floor-label">{taskFloorName(task, projects)}</span>
                 </span>
               </button>
             ))}
+            {!shownTasks.length && (
+              <EmptyPane
+                icon={<ListTodo size={22} />}
+                title="No tasks on this floor"
+                text="Choose another floor or create a task."
+              />
+            )}
           </div>
           {selected && (
             <TaskConversation
               task={selected}
+              floorName={taskFloorName(selected, projects)}
               proposals={proposals.filter((proposal) => proposal.taskId === selected.id)}
               onSend={onSend}
               onCancel={onCancel}
@@ -1122,6 +1463,7 @@ function TasksPage({
 
 function TaskConversation({
   task,
+  floorName,
   proposals,
   onSend,
   onCancel,
@@ -1129,6 +1471,7 @@ function TaskConversation({
   onCorrect,
 }: {
   task: Task;
+  floorName: string;
   proposals: ActionProposal[];
   onSend: (taskId: string, text: string) => void;
   onCancel: (taskId: string) => void;
@@ -1148,7 +1491,9 @@ function TaskConversation({
     <div className="conversation">
       <div className="conversation-head">
         <div>
-          <span className="eyebrow">{task.employeeName}</span>
+          <span className="eyebrow">
+            {floorName} · {task.employeeName}
+          </span>
           <h2>{task.title}</h2>
         </div>
         <div>
@@ -1164,6 +1509,12 @@ function TaskConversation({
         </div>
       </div>
       <div className="message-stream">
+        {task.projectContext && (
+          <details className="task-project-context">
+            <summary>Project brief at task start</summary>
+            <p>{task.projectContext.brief}</p>
+          </details>
+        )}
         {task.prompt &&
           !messages?.some((message) => message.role === 'user' && message.text === task.prompt) && (
             <MessageBubble
@@ -2907,25 +3258,170 @@ function SettingsPanel({
   );
 }
 
+function ProjectPanel({
+  project,
+  employees,
+  configured,
+  onClose,
+  onSave,
+  onArchive,
+}: {
+  project: Project | null;
+  employees: Employee[];
+  configured: boolean;
+  onClose: () => void;
+  onSave: (name: string, brief: string, employeeIds: string[]) => Promise<void>;
+  onArchive: (project: Project, archived: boolean) => Promise<void>;
+}) {
+  const [name, setName] = useState(project?.name ?? '');
+  const [brief, setBrief] = useState(project?.brief ?? '');
+  const [employeeIds, setEmployeeIds] = useState<string[]>(project?.employeeIds ?? []);
+  const [busy, setBusy] = useState(false);
+  const archived = Boolean(project?.archivedAt);
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    if (!name.trim() || !brief.trim() || busy) return;
+    setBusy(true);
+    await onSave(name.trim(), brief.trim(), employeeIds);
+    setBusy(false);
+  }
+
+  return (
+    <Sheet
+      title={project ? `Edit ${project.name}` : 'Create project floor'}
+      subtitle="A project floor groups its shared brief, staffing, and your private task queue."
+      onClose={onClose}
+    >
+      <form className="form-stack project-form" onSubmit={save}>
+        <label>
+          Project name
+          <input
+            value={name}
+            maxLength={120}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Client research"
+            required
+          />
+        </label>
+        <label>
+          Project brief
+          <textarea
+            className="large-textarea"
+            value={brief}
+            maxLength={5000}
+            onChange={(event) => setBrief(event.target.value)}
+            placeholder="Describe the mandate, priorities, and standing constraints for this project."
+            required
+          />
+          <small>Shared with your workspace. New tasks receive a copy of this brief.</small>
+        </label>
+        <fieldset className="staffing-picker">
+          <legend>Staff this floor</legend>
+          <p>Employees can work on more than one project.</p>
+          {employees.length ? (
+            <div>
+              {employees.map((employee) => {
+                const checked = employeeIds.includes(employee.id);
+                return (
+                  <label key={employee.id} data-checked={checked}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() =>
+                        setEmployeeIds((current) =>
+                          checked ? current.filter((id) => id !== employee.id) : [...current, employee.id],
+                        )
+                      }
+                    />
+                    <Avatar employee={employee} />
+                    <span>
+                      <strong>{employee.name}</strong>
+                      <small>{employee.role}</small>
+                    </span>
+                    <Check size={15} />
+                  </label>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="staffing-picker-empty">
+              <Users size={18} /> Hire an employee before staffing this floor.
+            </div>
+          )}
+        </fieldset>
+        <button
+          className="primary-button full"
+          disabled={!configured || busy || !name.trim() || !brief.trim()}
+        >
+          {busy ? <LoaderCircle size={16} className="spin" /> : <Check size={16} />}
+          {project ? 'Save floor' : 'Create floor'}
+        </button>
+      </form>
+      {project && (
+        <div className="project-archive-control">
+          <div>
+            <strong>{archived ? 'Restore this floor' : 'Archive this floor'}</strong>
+            <p>
+              {archived
+                ? 'Restoring returns it to the building directory and task forms.'
+                : 'Archived floors stay available for history and can be restored.'}
+            </p>
+          </div>
+          <button
+            className="secondary-button"
+            disabled={busy || !configured}
+            onClick={async () => {
+              setBusy(true);
+              await onArchive(project, !archived);
+              setBusy(false);
+            }}
+          >
+            {archived ? <RotateCcw size={15} /> : <Archive size={15} />}
+            {archived ? 'Restore' : 'Archive'}
+          </button>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
 function NewTaskPanel({
   employees,
+  projects,
   defaultEmployee,
+  defaultProjectId,
   configured,
   onClose,
   onCreate,
 }: {
   employees: Employee[];
+  projects: Project[];
   defaultEmployee: string | null;
+  defaultProjectId: string | null;
   configured: boolean;
   onClose: () => void;
-  onCreate: (employeeId: string, title: string, prompt: string) => void;
+  onCreate: (employeeId: string, title: string, prompt: string, projectId?: string) => void;
 }) {
-  const ready = employees.filter((employee) => employee.status === 'ready');
+  const activeProjects = projects.filter((project) => !project.archivedAt);
+  const [projectId, setProjectId] = useState(
+    defaultProjectId && activeProjects.some((project) => project.id === defaultProjectId)
+      ? defaultProjectId
+      : '',
+  );
+  const selectedProject = activeProjects.find((project) => project.id === projectId);
+  const ready = employees.filter(
+    (employee) =>
+      employee.status === 'ready' && (!selectedProject || selectedProject.employeeIds.includes(employee.id)),
+  );
   const [employeeId, setEmployeeId] = useState(
     defaultEmployee && ready.some((e) => e.id === defaultEmployee) ? defaultEmployee : (ready[0]?.id ?? ''),
   );
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState('');
+  useEffect(() => {
+    if (!ready.some((employee) => employee.id === employeeId)) setEmployeeId(ready[0]?.id ?? '');
+  }, [employeeId, ready]);
   return (
     <Sheet
       title="Assign new work"
@@ -2936,9 +3432,21 @@ function NewTaskPanel({
         className="form-stack task-form"
         onSubmit={(event) => {
           event.preventDefault();
-          onCreate(employeeId, title.trim(), prompt.trim());
+          onCreate(employeeId, title.trim(), prompt.trim(), projectId || undefined);
         }}
       >
+        <label>
+          Project floor
+          <select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
+            <option value="">Lobby · Unassigned</option>
+            {activeProjects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+          <small>{selectedProject ? selectedProject.brief : 'This task will stay in the lobby.'}</small>
+        </label>
         <label>
           Employee
           <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} required>
@@ -2951,6 +3459,9 @@ function NewTaskPanel({
               </option>
             ))}
           </select>
+          {selectedProject && !ready.length && (
+            <small>Add a ready employee to this floor before assigning work.</small>
+          )}
         </label>
         <label>
           Task title
@@ -2975,7 +3486,7 @@ function NewTaskPanel({
           <ShieldCheck size={16} />
           <span>External writes still follow workspace permissions and action review rules.</span>
         </div>
-        <button className="primary-button full" disabled={!configured || !employeeId}>
+        <button className="primary-button full" disabled={!configured || !employeeId || !ready.length}>
           {employees.length ? 'Start task' : 'Hire an employee first'}
           <ArrowRight size={16} />
         </button>
