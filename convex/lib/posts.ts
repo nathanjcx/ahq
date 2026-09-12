@@ -219,6 +219,7 @@ export function publicPost(post: Doc<'posts'>) {
     text: post.text,
     taskId: post.taskId,
     toEmployeeId: post.toEmployeeId,
+    acceptedTaskId: post.acceptedTaskId,
     handoff: post.handoff,
     createdAt: post._creationTime,
   };

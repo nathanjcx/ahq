@@ -21,12 +21,23 @@ export function EmptySection({
   );
 }
 
-export function EmptyPane({ icon, title, text }: { icon: ReactNode; title: string; text: string }) {
+export function EmptyPane({
+  icon,
+  title,
+  text,
+  action,
+}: {
+  icon: ReactNode;
+  title: string;
+  text: string;
+  action?: ReactNode;
+}) {
   return (
     <div className="empty-pane">
       <span>{icon}</span>
       <h3>{title}</h3>
       <p>{text}</p>
+      {action}
     </div>
   );
 }

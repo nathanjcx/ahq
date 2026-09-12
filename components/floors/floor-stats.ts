@@ -3,11 +3,11 @@ import type { Floor, Task } from '@/lib/contracts';
 /** Statuses that keep an employee on the floor: work the workspace is still waiting on. */
 export const ACTIVE_TASK_STATUSES: Task['status'][] = ['queued', 'running', 'awaiting_approval'];
 
-export type TaskGroup = 'active' | 'awaiting' | 'done';
+type TaskGroup = 'active' | 'awaiting' | 'done';
 export type FloorSummary = { active: number; awaiting: number; done: number; lastActivity: number };
 export type FloorEntry = { floor: Floor; number: string; summary: FloorSummary };
 
-export function taskGroup(status: Task['status']): TaskGroup {
+function taskGroup(status: Task['status']): TaskGroup {
   if (status === 'awaiting_approval') return 'awaiting';
   return status === 'queued' || status === 'running' ? 'active' : 'done';
 }

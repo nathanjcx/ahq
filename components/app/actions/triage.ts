@@ -9,7 +9,6 @@ export type TriageActions = {
   assignAlertFloors: (alertId: string, floorIds: string[]) => Promise<unknown>;
   dismissAlert: (alertId: string) => Promise<unknown>;
   closeAlert: (alertId: string) => Promise<unknown>;
-  setTriageRules: (rules: string[]) => Promise<unknown>;
   ensureTriageFloor: () => Promise<{ floorId: string } | undefined>;
   acknowledgeNotification: (id: string) => Promise<unknown>;
   acknowledgeNotifications: () => Promise<unknown>;
@@ -22,7 +21,6 @@ export const offlineTriageActions: TriageActions = {
   assignAlertFloors: unavailable,
   dismissAlert: unavailable,
   closeAlert: unavailable,
-  setTriageRules: unavailable,
   ensureTriageFloor: unavailable,
   acknowledgeNotification: unavailable,
   acknowledgeNotifications: unavailable,
@@ -33,7 +31,6 @@ export function useTriageActions(): TriageActions {
   const assignAlertFloors = useMutation(uiApi.assignAlertFloors);
   const dismissAlert = useMutation(uiApi.dismissAlert);
   const closeAlert = useMutation(uiApi.closeAlert);
-  const setTriageRules = useMutation(uiApi.setTriageRules);
   const ensureTriageFloor = useMutation(uiApi.ensureTriageFloor);
   const acknowledgeNotification = useMutation(uiApi.acknowledgeNotification);
   const acknowledgeNotifications = useMutation(uiApi.acknowledgeNotifications);
@@ -44,7 +41,6 @@ export function useTriageActions(): TriageActions {
       assignAlertFloors({ alertId: asId(alertId), floorIds: floorIds.map((id) => asId<'floors'>(id)) }),
     dismissAlert: (alertId) => dismissAlert({ alertId: asId(alertId) }),
     closeAlert: (alertId) => closeAlert({ alertId: asId(alertId) }),
-    setTriageRules: (rules) => setTriageRules({ rules }),
     ensureTriageFloor: () => ensureTriageFloor({}),
     acknowledgeNotification: (id) => acknowledgeNotification({ id: asId(id) }),
     acknowledgeNotifications: () => acknowledgeNotifications({}),

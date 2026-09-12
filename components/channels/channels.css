@@ -227,6 +227,31 @@
   font-size: var(--text-md);
   line-height: 1.55;
 }
+.handoff-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--text-sm);
+  font-weight: 720;
+  text-transform: capitalize;
+}
+.handoff-pill[data-status='pending'] {
+  color: #8c6632;
+  background: #f7efdf;
+}
+.handoff-pill[data-status='accepted'] {
+  color: #476e47;
+  background: #e6f0e2;
+}
+.handoff-pill[data-status='declined'] {
+  color: #8d5049;
+  background: #f6e6e3;
+}
+.handoff-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 11px;
+}
 
 /* Composer */
 .channel-composer {
@@ -246,7 +271,8 @@
   color: var(--terra-dark);
   font-weight: 680;
 }
-.channel-mentions {
+/* Outranks the composer's own row layout in globals, which would lay the list out sideways. */
+.composer .channel-mentions {
   position: absolute;
   bottom: calc(100% - 6px);
   left: 16px;
@@ -260,7 +286,7 @@
   background: var(--paper);
   box-shadow: var(--shadow-sm);
 }
-.channel-mentions button {
+.composer .channel-mentions button {
   display: grid;
   padding: 8px 12px;
   text-align: left;

@@ -42,6 +42,15 @@ export function FloorChannel({
         icon={<MessagesSquare size={19} />}
         title="This floor has no channel yet"
         text="Open it and everything this floor does — shift reports, findings, incidents, handoffs — starts collecting in one place."
+        action={
+          <button
+            className="primary-button compact"
+            disabled={!canPost}
+            onClick={() => void run(() => actions.openChannel('floor', floorId), 'Channel opened')}
+          >
+            Open the channel
+          </button>
+        }
       />
     );
 

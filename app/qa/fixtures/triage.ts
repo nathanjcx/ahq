@@ -303,6 +303,5 @@ export const triageQueries: FixtureQueries = {
   'triage:timeline': (args: unknown) => timelines[(args as { alertId?: string }).alertId ?? ''] ?? [],
   'triage:incidentReports': reports,
   'triage:intake': intake,
-  'triage:rules': intake.rules,
   'notifications:list': notifications,
 };

@@ -136,6 +136,17 @@ export function ChannelFeed({
       .catch((failure: unknown) => setError(message(failure)));
   };
 
+  // A note addressed to an instance is work waiting to start; a person is the one who starts it.
+  const accept = (postId: string) => {
+    actions
+      .acceptAddressedNote(postId)
+      .then((result) => {
+        setError(null);
+        if (result?.taskId) onTask?.(result.taskId);
+      })
+      .catch((failure: unknown) => setError(message(failure)));
+  };
+
   return (
     <div className="channel-feed" data-compact={compact}>
       <div className="channel-stream" ref={streamRef}>
@@ -169,6 +180,7 @@ export function ChannelFeed({
                   canDecide={canPost}
                   onTask={onTask}
                   onDecideHandoff={decideHandoff}
+                  onAccept={accept}
                 />
               </div>
             ))}
@@ -203,12 +215,15 @@ export function PostView({
   canDecide = false,
   onTask,
   onDecideHandoff,
+  onAccept,
 }: {
   post: Post;
   compact?: boolean;
   canDecide?: boolean;
   onTask?: (taskId: string) => void;
   onDecideHandoff?: (postId: string, accepted: boolean) => void;
+  /** Turns a note addressed to an instance into work for it. */
+  onAccept?: (postId: string) => void;
 }) {
   const taskId = post.taskId;
   if (post.kind === 'system')
@@ -245,8 +260,13 @@ export function PostView({
         <small>{shortTime(post.createdAt)}</small>
       </header>
       <PostText text={post.text} clamp={compact} />
-      {taskId && onTask && (
-        <button className="text-button" onClick={() => onTask(taskId)}>
+      {post.toEmployeeId && onAccept && !post.acceptedTaskId && (
+        <button className="secondary-button compact" disabled={!canDecide} onClick={() => onAccept(post.id)}>
+          Start the work
+        </button>
+      )}
+      {(post.acceptedTaskId ?? taskId) && onTask && (
+        <button className="text-button" onClick={() => onTask(post.acceptedTaskId ?? taskId ?? '')}>
           Open the task <ArrowUpRight size={13} />
         </button>
       )}

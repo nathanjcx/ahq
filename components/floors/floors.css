@@ -693,7 +693,7 @@
 }
 .floor-regions {
   display: grid;
-  min-height: 585px;
+  height: 620px;
 }
 .floor-region {
   display: none;
@@ -714,10 +714,8 @@
 .region-work,
 .region-binder {
   padding: 17px 21px 20px;
-  background: #fbfaf4;
-}
-.region-binder {
   overflow-y: auto;
+  background: #fbfaf4;
 }
 .floor-channel-bar {
   display: flex;
@@ -944,9 +942,7 @@
   flex-direction: column;
 }
 .region-team .floor-team-list {
-  flex: 1;
   max-height: none;
-  overflow-y: auto;
 }
 .team-row {
   display: grid;
@@ -972,8 +968,7 @@
 /* Work */
 .work-groups {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 13px;
+  gap: 18px;
   margin-top: 13px;
 }
 .work-group h4 {
@@ -1003,7 +998,7 @@
 .work-list > button {
   min-width: 0;
   display: grid;
-  grid-template-columns: 25px minmax(0, 1fr) auto 13px;
+  grid-template-columns: 25px minmax(0, 1fr) repeat(3, auto) 13px;
   align-items: center;
   gap: 8px;
   padding: 9px 10px;
@@ -1067,22 +1062,10 @@
   color: #a3ada2;
 }
 
-@media (max-width: 1120px) {
-  .region-work .work-groups {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 900px) {
-  .region-work .work-groups {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 @media (max-width: 640px) {
   /* A phone gives the channel and the feeds the whole screen; the composer stays in reach. */
   .floor-regions {
-    min-height: calc(100dvh - 220px);
+    height: calc(100dvh - 190px);
   }
   .handoff-form select,
   .handoff-form textarea {
