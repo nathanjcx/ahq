@@ -382,6 +382,7 @@ function replayRecord(employees: OfficeEmployee[]): DayRecord {
         triageTaskId: 'tsk_triage',
         affectedFloorIds: [],
         occurrences: 5,
+        paging: { attempts: 0, required: 3, acknowledged: true },
         createdAt: hours(14.3),
         updatedAt: hours(16.1),
       },

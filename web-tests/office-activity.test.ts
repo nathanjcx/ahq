@@ -328,6 +328,7 @@ function alert(overrides: Partial<Alert> = {}): Alert {
     status: 'triaging',
     affectedFloorIds: ['prj_1'],
     occurrences: 5,
+    paging: { attempts: 0, required: 3, acknowledged: false },
     createdAt: NOW - 120_000,
     updatedAt: NOW - 60_000,
     ...overrides,
