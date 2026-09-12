@@ -2,12 +2,13 @@
 
 import { ListTodo, Plus } from 'lucide-react';
 import { useState } from 'react';
-import type { ActionProposal, Project, Task } from '@/lib/contracts';
+import type { ActionProposal, Employee, Project, Task, TaskVisibility } from '@/lib/contracts';
 import { EmptyPane, EmptySection } from '../shared/empty';
 import { relativeTime } from '../shared/format';
 import { StatusMark } from '../shared/marks';
 import { PageIntro } from '../shared/page-intro';
 import { TaskDetail } from './task-detail';
+import './tasks.css';
 
 export function taskFloorName(task: Task, projects: Project[]) {
   return (
@@ -19,6 +20,7 @@ export function TasksPage({
   tasks,
   projects,
   proposals,
+  employees = [],
   selectedId,
   configured,
   onSelect,
@@ -27,10 +29,14 @@ export function TasksPage({
   onCancel,
   onDecide,
   onCorrect,
+  onSetVisibility,
+  onRequestHandoff,
 }: {
   tasks: Task[];
   projects: Project[];
   proposals: ActionProposal[];
+  /** Workspace employees, used to offer a handoff to someone else on the task's floor. */
+  employees?: Employee[];
   selectedId: string | null;
   configured: boolean;
   onSelect: (id: string) => void;
@@ -39,6 +45,8 @@ export function TasksPage({
   onCancel: (taskId: string) => void;
   onDecide: (id: string, approved: boolean) => void;
   onCorrect: (id: string) => void;
+  onSetVisibility?: (taskId: string, visibility: TaskVisibility) => void;
+  onRequestHandoff?: (projectId: string, toEmployeeId: string, brief: string, taskId: string) => void;
 }) {
   const [projectFilter, setProjectFilter] = useState('all');
   const shownTasks = tasks.filter((task) =>
@@ -49,6 +57,8 @@ export function TasksPage({
         : task.projectId === projectFilter,
   );
   const selected = shownTasks.find((task) => task.id === selectedId) ?? shownTasks[0];
+  const floor = projects.find((project) => project.id === selected?.projectId);
+  const floorEmployees = employees.filter((employee) => floor?.employeeIds.includes(employee.id));
   return (
     <div>
       <PageIntro
@@ -110,13 +120,17 @@ export function TasksPage({
           </div>
           {selected && (
             <TaskDetail
+              key={selected.id}
               task={selected}
               floorName={taskFloorName(selected, projects)}
               proposals={proposals.filter((proposal) => proposal.taskId === selected.id)}
+              floorEmployees={floorEmployees}
               onSend={onSend}
               onCancel={onCancel}
               onDecide={onDecide}
               onCorrect={onCorrect}
+              onSetVisibility={onSetVisibility}
+              onRequestHandoff={onRequestHandoff}
             />
           )}
         </div>
