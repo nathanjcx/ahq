@@ -1,7 +1,7 @@
 import { v } from 'convex/values';
 import { mutation, query } from '../_generated/server';
 import { correctionKind } from '../schema';
-import { canSeeTask, requireService, sha256, stableJson } from '../shared';
+import { canSeeTask, requireService, sha256, stableJson, untrustedBlock } from '../shared';
 import { registryToolsFor } from '../registry';
 import { taskTimeline } from '../work';
 import {
@@ -268,10 +268,13 @@ export const recordActionResult = mutation({
           .withIndex('by_unique_key', (q) => q.eq('uniqueKey', uniqueKey))
           .unique();
         if (!existing) {
+          // The result is the provider's own words coming back into the agent's prompt, so it is
+          // delimited: the agent may read it, never take instructions from it.
+          const detail = args.result ? `\n${untrustedBlock(args.result)}` : '';
           const text =
             args.status === 'succeeded'
-              ? `The approved action succeeded: ${proposal.summary}.${args.result ? ` Result: ${args.result}` : ''}`
-              : `The approved action failed: ${proposal.summary}.${args.result ? ` Error: ${args.result}` : ''}`;
+              ? `The approved action succeeded: ${proposal.summary}.${detail}`
+              : `The approved action failed: ${proposal.summary}.${detail}`;
           await ctx.db.insert('jobs', {
             workspaceId: proposal.workspaceId,
             taskId: task._id,

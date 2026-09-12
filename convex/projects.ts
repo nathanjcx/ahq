@@ -179,7 +179,9 @@ export const decideHandoff = mutation({
       throw new Error('Employee is not assigned to this project');
     await assertTokenCap(ctx, workspace);
     const { version } = await assertEmployeeReady(ctx, workspace, actor.subject, post.handoff.toEmployeeId);
-    let prompt = post.handoff.brief;
+    // A handoff a person wrote is an instruction. One an agent requested through the floor tools has
+    // no author subject, and it is the previous employee's words, so it is delimited as material.
+    let prompt = post.authorSubject ? post.handoff.brief : untrustedBlock(post.handoff.brief);
     // The carried context is another employee's output. It travels only to someone who could already
     // read the source task, and it is delimited so this employee treats it as material, not orders.
     const source = post.taskId ? await ctx.db.get(post.taskId) : null;
