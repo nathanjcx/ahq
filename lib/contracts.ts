@@ -3,6 +3,10 @@ export type ProviderId = 'linear' | 'slack' | 'github' | 'google-workspace' | 'c
 export type TaskStatus =
   'queued' | 'running' | 'awaiting_approval' | 'completed' | 'failed' | 'cancelled' | 'uncertain';
 export type CorrectionKind = 'supported' | 'partial' | 'manual' | 'irreversible' | 'unknown';
+export type ToolMode = 'read' | 'write' | 'blocked';
+export type ConnectionVisibility = 'private' | 'members' | 'workspace';
+export type TaskVisibility = 'private' | 'workspace';
+
 export interface Capability {
   provider: ProviderId;
   tools: string[];
@@ -33,14 +37,12 @@ export interface Employee {
   status: string;
   missingCapabilities: string[];
 }
-export interface Project {
-  id: string;
+export interface Member {
+  subject: string;
   name: string;
-  brief: string;
-  employeeIds: string[];
-  archivedAt?: number;
-  createdAt: number;
-  updatedAt: number;
+  email?: string;
+  imageUrl?: string;
+  role: 'owner' | 'admin' | 'member';
 }
 export interface Connection {
   id: string;
@@ -49,6 +51,12 @@ export interface Connection {
   account: string;
   serverUrl: string;
   status: 'connected' | 'disconnected' | 'degraded' | 'revoked';
+  ownerSubject: string;
+  ownerName: string;
+  isOwner: boolean;
+  visibility: ConnectionVisibility;
+  visibleToSubjects: string[];
+  /** Reviewed tools available on this connection. */
   tools: string[];
   allowedTools: string[];
   resourceScope: string;
@@ -57,12 +65,55 @@ export interface Connection {
   inboxMode: 'push' | 'on-demand' | 'unsupported';
   error?: string;
 }
+export interface TokenUsage {
+  input: number;
+  cached: number;
+  output: number;
+}
+export interface ModelUsage extends TokenUsage {
+  model: ModelId;
+  tasks: number;
+}
+export interface Project {
+  id: string;
+  name: string;
+  brief: string;
+  employeeIds: string[];
+  archivedAt?: number;
+  createdAt: number;
+  updatedAt: number;
+  openHandoffs: number;
+}
+export interface ProjectPost {
+  id: string;
+  projectId: string;
+  kind: 'note' | 'system' | 'handoff';
+  authorSubject?: string;
+  authorName: string;
+  text: string;
+  taskId?: string;
+  createdAt: number;
+  handoff?: {
+    toEmployeeId: string;
+    toEmployeeName: string;
+    brief: string;
+    status: 'pending' | 'accepted' | 'declined';
+    taskId?: string;
+    decidedBy?: string;
+    decidedAt?: number;
+  };
+}
 export interface Task {
   id: string;
   projectId?: string;
   projectContext?: { name: string; brief: string };
+  sourceTaskId?: string;
   employeeId: string;
   employeeName: string;
+  createdBy: string;
+  createdByName: string;
+  isOwner: boolean;
+  visibility: TaskVisibility;
   title: string;
   prompt: string;
   status: TaskStatus;
@@ -71,7 +122,7 @@ export interface Task {
   sessionId?: string;
   error?: string;
   model: ModelId;
-  usage?: { input: number; output: number; cached: number; estimatedCost: number };
+  usage?: TokenUsage;
 }
 export interface ActivityEvent {
   id: string;
@@ -94,6 +145,7 @@ export interface Message {
 export interface ActionProposal {
   id: string;
   taskId: string;
+  connectionId: string;
   employeeName: string;
   provider: ProviderId;
   tool: string;
@@ -103,9 +155,16 @@ export interface ActionProposal {
     'pending' | 'approved' | 'rejected' | 'executing' | 'succeeded' | 'failed' | 'uncertain' | 'corrected';
   correction: CorrectionKind;
   correctionReason: string;
+  beforeState?: string;
+  afterState?: string;
   createdAt: number;
+  approvedBy?: string;
+  approvedByName?: string;
+  approvedAt?: number;
   result?: string;
   originalActionId?: string;
+  /** Whether the current viewer may approve, reject, or correct this proposal. */
+  canDecide: boolean;
 }
 export interface InboxItem {
   id: string;
@@ -125,17 +184,15 @@ export interface Artifact {
   size: number;
   createdAt: number;
 }
-export interface WebSetup {
-  oauthServers: string[];
-  inboxProviders: string[];
-}
-export interface ProviderReadiness {
-  provider: ProviderId;
-  enabledUrls: string[];
-  reviewedTools: number;
-}
 export interface Dashboard {
-  workspace: { id: string; name: string; role: string; monthlyBudget: number; spent: number } | null;
+  workspace: {
+    id: string;
+    name: string;
+    role: 'owner' | 'admin' | 'member';
+    monthlyTokenCap: number;
+    usage: { period: string; byModel: ModelUsage[] };
+  } | null;
+  viewer: { subject: string; name: string };
   isPlatformAdmin: boolean;
   employees: Employee[];
   connections: Connection[];
@@ -148,6 +205,7 @@ export interface Dashboard {
 }
 export const emptyDashboard: Dashboard = {
   workspace: null,
+  viewer: { subject: '', name: '' },
   isPlatformAdmin: false,
   employees: [],
   connections: [],
@@ -158,3 +216,88 @@ export const emptyDashboard: Dashboard = {
   inbox: [],
   artifacts: [],
 };
+
+/** Audit timeline entry, unsealed by the web service for authorized viewers. */
+export type AuditEntry =
+  | { kind: 'event'; id: string; at: number; type: string; text: string; gap?: boolean }
+  | { kind: 'message'; id: string; at: number; role: Message['role']; text: string; phase?: string }
+  | {
+      kind: 'tool_call';
+      id: string;
+      at: number;
+      operationId: string;
+      connectionId: string;
+      provider: ProviderId;
+      tool: string;
+      outcome: 'started' | 'succeeded' | 'failed' | 'denied';
+      reason?: string;
+      durationMs?: number;
+      arguments?: unknown;
+      result?: unknown;
+      resultSha256?: string;
+      proposalId?: string;
+    }
+  | {
+      kind: 'proposal';
+      id: string;
+      at: number;
+      tool: string;
+      provider: ProviderId;
+      summary: string;
+      status: ActionProposal['status'];
+      correction: CorrectionKind;
+      arguments: unknown;
+      beforeState?: unknown;
+      afterState?: unknown;
+      transitions: { from?: string; to: string; actor: string; at: number; detail?: string }[];
+    };
+export interface AuditTimeline {
+  task: Pick<Task, 'id' | 'title' | 'employeeName' | 'status' | 'createdAt' | 'createdByName'>;
+  entries: AuditEntry[];
+}
+
+/** Operational configuration, platform administrators only. Secrets are never returned. */
+export interface OAuthClientConfig {
+  serverUrl?: string;
+  clientId: string;
+  hasClientSecret: boolean;
+  scopes?: string;
+  authorizationUrl?: string;
+  tokenUrl?: string;
+  tokenAuthMethod?: 'client_secret_basic' | 'client_secret_post' | 'none';
+}
+export interface ProviderConfig {
+  provider: ProviderId;
+  enabledUrls: string[];
+  oauthClients: OAuthClientConfig[];
+  hasInboxSecret: boolean;
+  updatedAt?: number;
+  updatedBy?: string;
+}
+export interface CorrectionDescriptor {
+  readTool: string;
+  idArgument: string;
+  versionField: string;
+  expectedVersionArgument: string;
+  fields: string[];
+}
+export interface RegistryTool {
+  provider: ProviderId;
+  name: string;
+  description: string;
+  mode: ToolMode;
+  resourceArgument?: string;
+  correction?: CorrectionDescriptor;
+  annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean };
+  updatedAt: number;
+  updatedBy: string;
+}
+/** What the Integrations page needs to explain readiness per provider. */
+export interface ProviderReadiness {
+  provider: ProviderId;
+  enabledUrls: string[];
+  /** Enabled URLs that also have an OAuth client. */
+  oauthUrls: string[];
+  reviewedTools: number;
+  inboxConfigured: boolean;
+}
