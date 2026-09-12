@@ -1,6 +1,6 @@
 import { ConvexHttpClient } from 'convex/browser';
 import { makeFunctionReference } from 'convex/server';
-import { requiredEnv } from './secrets';
+import { requiredEnv, serviceSecret } from './secrets';
 
 /** Every Convex call a service makes. Production talks to Convex; tests inject convex-test. */
 export interface Backend {
@@ -16,7 +16,7 @@ export function convexBackend(): Backend {
     (client ??= new ConvexHttpClient(process.env.CONVEX_URL || requiredEnv('NEXT_PUBLIC_CONVEX_URL')));
   const withSecret = (args: Record<string, unknown> = {}) => ({
     ...args,
-    secret: requiredEnv('AHQ_SERVICE_SECRET'),
+    secret: serviceSecret(),
   });
   const backend: Backend = {
     query: <T>(name: string, args?: Record<string, unknown>) =>

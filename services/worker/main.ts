@@ -2,7 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { ConvexClient } from 'convex/browser';
 import { makeFunctionReference } from 'convex/server';
 import { agentsClient } from '../../lib/server/agents';
-import { requiredEnv, safeError } from '../../lib/server/secrets';
+import { credentialKey, requiredEnv, safeError, serviceSecret } from '../../lib/server/secrets';
 import { healthServer } from './health';
 import { releaseMonitors } from './monitor';
 import { pull, pullIntervalMs } from './queue';
@@ -11,8 +11,9 @@ import { createRuntime } from './state';
 const drainDeadlineMs = 30_000;
 const drainPollMs = 200;
 
-const secret = requiredEnv('AHQ_SERVICE_SECRET');
-requiredEnv('CREDENTIAL_ENCRYPTION_KEY');
+// Refuse to start with a weak or missing secret rather than failing on the first claim.
+const secret = serviceSecret();
+credentialKey();
 const database = new ConvexClient(process.env.CONVEX_URL || requiredEnv('NEXT_PUBLIC_CONVEX_URL'));
 const runtime = createRuntime(
   agentsClient(),
