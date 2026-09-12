@@ -400,11 +400,14 @@
 .audit-outcome {
   padding: 3px 8px;
   border-radius: 999px;
-  color: #6d7a6b;
-  background: var(--sage-100);
   font-size: 9px;
   font-weight: 720;
   text-transform: uppercase;
+}
+/* Neutral only when no status colour applies; the proposal-* and outcome-* pills keep their colours. */
+.audit-outcome:not([class*='proposal-']):not([class*='outcome-']) {
+  color: #6d7a6b;
+  background: var(--sage-100);
 }
 .outcome-succeeded {
   color: #4c7549;
