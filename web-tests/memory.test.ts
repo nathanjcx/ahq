@@ -194,6 +194,42 @@ describe('workspace memory', () => {
     expect(await t.run(async (ctx) => (await ctx.db.get(promoted.memoryId))!.status)).toBe('active');
   });
 
+  it('keeps a merge of proposals a proposal, and refuses to retire a claim for one', async () => {
+    const t = harness();
+    const context = await tower(t);
+    const { runToken, taskId } = context;
+    const { runToken: janitorToken } = await janitor(context);
+    const floorClaim = (text: string) =>
+      t.mutation(api.services.memory.remember, claim(runToken, text, { scope: 'floor', kind: 'decision' }));
+    const first = await floorClaim('The launch moved to March 12.');
+    const second = await floorClaim('The launch is on March 12.');
+
+    // Two claims nobody approved cannot become one claim nobody approved but every shift reads.
+    const merged = await t.mutation(api.services.memory.merge, {
+      secret,
+      runToken: janitorToken,
+      ids: [first.memoryId, second.memoryId],
+      text: 'The launch is on March 12.',
+      kind: 'decision',
+      tags: [],
+    });
+    expect(await t.run(async (ctx) => (await ctx.db.get(merged.memoryId))!.status)).toBe('proposed');
+    expect((await t.query(api.services.memory.compileInputs, { secret, taskId })).entries.floor).toEqual([]);
+
+    // Nor may a proposal archive what stands today, which approval would never bring back.
+    await expect(
+      t.mutation(
+        api.services.memory.remember,
+        claim(runToken, 'The launch slipped to April.', {
+          scope: 'floor',
+          kind: 'decision',
+          supersedesId: merged.memoryId,
+        }),
+      ),
+    ).rejects.toThrow('A proposed claim cannot supersede');
+    expect(await t.run(async (ctx) => (await ctx.db.get(merged.memoryId))!.status)).toBe('proposed');
+  });
+
   it('contests both sides of a conflict and keeps them out of working memory until a person decides', async () => {
     const t = harness();
     const context = await tower(t);
