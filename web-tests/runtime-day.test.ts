@@ -554,6 +554,18 @@ it('prepares, answers, and wraps up a meeting with a confirmable outcome', async
 
   scripts.set('meeting_prep', async ({ context }) => `${context.employee.name}: the gateway is serving.`);
   await runQueue(['meeting_prep']);
+
+  // An agenda is written by whoever edited it, and an escalated audit finding lands on it verbatim, so
+  // every place it reaches a turn — the Schedule section and the meeting's own section — carries it as
+  // material inside a fence rather than as part of the brief.
+  const prepInput = inputs.filter((entry) => entry.kind === 'meeting_prep').at(-1)!.text;
+  const places = [...prepInput.matchAll(/Where the gateway stands/g)].map((match) => match.index);
+  expect(places.length).toBeGreaterThanOrEqual(2);
+  for (const place of places) {
+    const opensAt = prepInput.lastIndexOf('--- Untrusted context', place);
+    expect(opensAt).toBeGreaterThan(-1);
+    expect(prepInput.indexOf('--- End', opensAt)).toBeGreaterThan(place);
+  }
   const meeting = await t.run(async (ctx) =>
     ctx.db
       .query('meetings')
