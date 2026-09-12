@@ -11,9 +11,8 @@ import { useIsNarrow } from './use-media';
  */
 export function useMasterDetail() {
   const narrow = useIsNarrow();
-  const [wantOpen, setWantOpen] = useState(false);
-  const open = narrow && wantOpen;
-  const setOpen = setWantOpen;
+  const [wanted, setOpen] = useState(false);
+  const open = narrow && wanted;
 
   useEffect(() => {
     if (!open) return;

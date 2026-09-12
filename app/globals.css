@@ -3804,6 +3804,10 @@ p {
     font-size: var(--text-md);
     font-weight: 680;
   }
+  /* A phone's detail pane grows with its content; only a desktop row has a height to fill. */
+  .md-detail > :not(.md-back) {
+    flex: none;
+  }
   .employee-layout {
     gap: 0;
   }
