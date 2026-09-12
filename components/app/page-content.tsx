@@ -78,17 +78,7 @@ export function PageContent(props: PageContentProps) {
       />
     );
 
-  if (page === 'employees')
-    return (
-      <EmployeesPage
-        employees={dashboard.employees}
-        connections={dashboard.connections}
-        selectedId={props.selectedEmployee}
-        onSelect={props.onSelectEmployee}
-        onMarketplace={() => go('marketplace')}
-        onTask={(id) => props.onNewTask(null, id)}
-      />
-    );
+  if (page === 'employees') return <EmployeesPage {...props} />;
 
   if (page === 'tasks')
     return (
@@ -120,18 +110,7 @@ export function PageContent(props: PageContentProps) {
 
   if (page === 'activity') return <ActivityPage events={dashboard.events} />;
 
-  if (page === 'marketplace')
-    return (
-      <MarketplacePage
-        listings={props.listings}
-        employees={dashboard.employees}
-        connections={dashboard.connections}
-        configured={props.configured}
-        isAdmin={dashboard.isPlatformAdmin}
-        onHire={(id) => run(() => actions.hire(id), 'Employee added to your workspace')}
-        onAdmin={() => go('admin')}
-      />
-    );
+  if (page === 'marketplace') return <MarketplacePage {...props} />;
 
   if (page === 'integrations')
     return (

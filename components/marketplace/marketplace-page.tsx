@@ -1,43 +1,64 @@
 'use client';
 
-import { ArrowRight, Bot, LockKeyhole, Search, ShieldCheck, SlidersHorizontal } from 'lucide-react';
+import { ArrowRight, Bot, LockKeyhole, Search, ShieldCheck, SlidersHorizontal, Users } from 'lucide-react';
 import { useState, type CSSProperties } from 'react';
+import type { PageProps } from '../app/page-props';
 import { providerName } from '../shared/format';
+import { HireSheet } from '../shared/hire-sheet';
 import { ProviderMark } from '../shared/marks';
 import { PageIntro } from '../shared/page-intro';
 import { missingRequiredCapabilities } from './capabilities';
 import { MarketplaceDetail } from './marketplace-detail';
-import type { Connection, Employee, Listing } from '@/lib/contracts';
+import type { Employee, Listing } from '@/lib/contracts';
+import { defaultWorkspaceSettings } from '@/lib/contracts';
+import { pluralize } from '@/lib/text';
 import './marketplace.css';
 
-export function MarketplacePage({
-  listings,
-  employees,
-  connections,
-  configured,
-  isAdmin,
-  onHire,
-  onAdmin,
-}: {
-  listings: Listing[];
-  employees: Employee[];
-  connections: Connection[];
-  configured: boolean;
-  isAdmin: boolean;
-  onHire: (id: string) => void;
-  onAdmin: () => void;
-}) {
+type Props = PageProps & { listings: Listing[] };
+type Shelf = 'all' | 'installed' | 'updates';
+const SHELVES: { id: Shelf; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'installed', label: 'Installed' },
+  { id: 'updates', label: 'Updates' },
+];
+
+/** Live instances hired from one listing, and whether any of them is behind its current version. */
+function installedFrom(listing: Listing, employees: Employee[]) {
+  const instances = employees.filter(
+    (employee) => employee.listingId === listing.listingId && employee.status !== 'retired',
+  );
+  return { instances, behind: instances.filter((employee) => employee.updateAvailable) };
+}
+
+export function MarketplacePage({ listings, ...props }: Props) {
+  const { dashboard, actions, run, go } = props;
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
+  const [shelf, setShelf] = useState<Shelf>('all');
   const [selected, setSelected] = useState<Listing | null>(null);
+  const [hiring, setHiring] = useState<Listing | null>(null);
+
+  const settings = dashboard.settings ?? { ...defaultWorkspaceSettings, timezone: 'UTC', updatedAt: 0 };
+  const role = dashboard.workspace?.role ?? 'member';
+  const needsApproval = settings.hiringPolicy === 'approval' && role === 'member';
+  const usedTokens = (dashboard.workspace?.usage.byModel ?? []).reduce(
+    (total, row) => total + row.input + row.output,
+    0,
+  );
   const categories = [...new Set(listings.map((listing) => listing.category))].sort();
   const shown = listings.filter((listing) => {
     const haystack = `${listing.name} ${listing.role} ${listing.category} ${listing.description} ${listing.strengths.join(' ')} ${listing.capabilities.map((capability) => providerName(capability.provider)).join(' ')}`;
+    const { instances, behind } = installedFrom(listing, dashboard.employees);
     return (
       haystack.toLowerCase().includes(query.toLowerCase()) &&
-      (category === 'all' || listing.category === category)
+      (category === 'all' || listing.category === category) &&
+      (shelf === 'all' ||
+        (shelf === 'installed' && instances.length > 0) ||
+        (shelf === 'updates' && behind.length > 0))
     );
   });
+  const filtered = Boolean(query) || category !== 'all' || shelf !== 'all';
+
   return (
     <div>
       <PageIntro
@@ -45,8 +66,8 @@ export function MarketplacePage({
         title="Meet your next hire"
         description="Published employees with versioned skills, clear limits, and no marketplace fee."
         action={
-          isAdmin ? (
-            <button className="secondary-button" onClick={onAdmin}>
+          dashboard.isPlatformAdmin ? (
+            <button className="secondary-button" onClick={() => go('admin')}>
               <ShieldCheck size={16} />
               Manage listings
             </button>
@@ -77,12 +98,23 @@ export function MarketplacePage({
             ))}
           </select>
         </label>
+        <div className="segmented" role="group" aria-label="Filter by what you have hired">
+          {SHELVES.map((entry) => (
+            <button
+              key={entry.id}
+              data-active={shelf === entry.id}
+              onClick={() => setShelf(entry.id)}
+            >
+              {entry.label}
+            </button>
+          ))}
+        </div>
       </div>
       {shown.length ? (
         <div className="market-grid">
           {shown.map((listing) => {
-            const hired = employees.some((employee) => employee.versionId === listing.versionId);
-            const missing = missingRequiredCapabilities(listing, connections);
+            const { instances, behind } = installedFrom(listing, dashboard.employees);
+            const missing = missingRequiredCapabilities(listing, dashboard.connections);
             return (
               <article className="listing-card card" key={listing.versionId}>
                 <button
@@ -124,16 +156,28 @@ export function MarketplacePage({
                       </span>
                     ))}
                   </div>
+                  <p className="listing-counters">
+                    <Users size={12} />
+                    {pluralize(listing.hires, 'hire')} · {listing.completedTasks.toLocaleString()} tasks
+                    completed · version {listing.currentVersion}
+                  </p>
                   <div className="listing-footer">
-                    <span>
-                      <strong>Free to hire</strong>
-                      <small>Usage billed separately</small>
-                    </span>
+                    {instances.length ? (
+                      <span className="listing-installed">
+                        {pluralize(instances.length, 'instance')} here
+                        {behind.length ? ` · ${behind.length} behind` : ''}
+                      </span>
+                    ) : (
+                      <span>
+                        <strong>Free to hire</strong>
+                        <small>Usage billed separately</small>
+                      </span>
+                    )}
                     <button className="primary-button" onClick={() => setSelected(listing)}>
                       View details <ArrowRight size={15} />
                     </button>
                   </div>
-                  {missing.length > 0 && !hired && (
+                  {missing.length > 0 && !instances.length && (
                     <p className="listing-requirement">
                       <LockKeyhole size={13} /> Connect {missing.map(providerName).join(', ')} to hire
                     </p>
@@ -158,17 +202,17 @@ export function MarketplacePage({
           </div>
           <span className="eyebrow">CURATED BY YOUR PLATFORM TEAM</span>
           <h2>
-            {query || category !== 'all'
+            {filtered
               ? 'No employees match these filters'
               : 'The marketplace is ready for its first employee'}
           </h2>
           <p>
-            {query || category !== 'all'
+            {filtered
               ? 'Try another role, capability, or category.'
               : 'Only reviewed, published employees appear here. Platform admins can author private instructions and publish a version when it is ready.'}
           </p>
-          {isAdmin && !query && category === 'all' && (
-            <button className="primary-button" onClick={onAdmin}>
+          {dashboard.isPlatformAdmin && !filtered && (
+            <button className="primary-button" onClick={() => go('admin')}>
               Create the first listing <ArrowRight size={16} />
             </button>
           )}
@@ -177,11 +221,37 @@ export function MarketplacePage({
       {selected && (
         <MarketplaceDetail
           listing={selected}
-          hired={employees.some((employee) => employee.versionId === selected.versionId)}
-          configured={configured}
-          missing={missingRequiredCapabilities(selected, connections)}
+          instances={installedFrom(selected, dashboard.employees).instances}
+          configured={props.configured}
+          missing={missingRequiredCapabilities(selected, dashboard.connections)}
           onClose={() => setSelected(null)}
-          onHire={() => onHire(selected.listingId)}
+          onHire={() => {
+            setHiring(selected);
+            setSelected(null);
+          }}
+          onUpgrade={(employeeId) =>
+            run(() => actions.upgradeEmployee(employeeId), 'Upgraded to the current version')
+          }
+        />
+      )}
+      {hiring && (
+        <HireSheet
+          listing={hiring}
+          employees={dashboard.employees}
+          floors={dashboard.floors}
+          hiringPolicy={settings.hiringPolicy}
+          role={role}
+          usedTokens={usedTokens}
+          maxConcurrentInstances={settings.maxConcurrentInstances}
+          onClose={() => setHiring(null)}
+          onHire={(options) =>
+            run(
+              () => actions.hire(hiring.listingId, options),
+              needsApproval
+                ? 'Requested. An owner or an administrator decides it.'
+                : `Hired ${pluralize(options.count ?? 1, 'instance')} of ${hiring.name}`,
+            )
+          }
         />
       )}
     </div>

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { api } from '../convex/_generated/api';
 import type { Id } from '../convex/_generated/dataModel';
+import { ensureReservedInstance } from '../convex/lib/reserved';
 import { defaultWorkspaceSettings, type Capability, type WorkspaceSettings } from '../lib/contracts';
 import { FLOOR_RULES, MEMORY_PLACEHOLDER, OPERATING_RULES, composeInstructions } from '../lib/instructions';
-import { ensureReservedInstance } from '../convex/lib/reserved';
 import {
   adminIdentity,
   connectLinear,

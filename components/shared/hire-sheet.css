@@ -1,0 +1,105 @@
+/* The hire sheet, opened from the marketplace and from the employees page. */
+.hire-form {
+  gap: 18px;
+}
+.hire-count {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.hire-count > span {
+  display: grid;
+  gap: 3px;
+}
+.hire-count strong {
+  font-size: var(--text-sm);
+}
+.hire-count small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.hire-stepper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.hire-stepper > strong {
+  min-width: 24px;
+  text-align: center;
+  font-size: var(--text-lg);
+}
+.hire-names {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0;
+  border: 0;
+}
+.hire-names legend {
+  margin-bottom: 8px;
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+.hire-names label {
+  display: block;
+}
+.hire-note {
+  padding: 11px 12px;
+  color: var(--muted);
+  border-radius: 7px;
+  background: var(--sage-50);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+}
+.hire-effect {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.hire-effect h3 {
+  font-size: var(--text-sm);
+}
+.hire-effect dl {
+  margin: 10px 0 0;
+}
+.hire-effect dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+}
+.hire-effect dt {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.hire-effect dd {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 640;
+}
+.hire-effect > p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  line-height: 1.55;
+}
+.hire-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 11px 12px;
+  color: #85622f;
+  border-radius: 7px;
+  background: #f6eedc;
+  font-size: var(--text-xs);
+  line-height: 1.55;
+}
+@media (max-width: 640px) {
+  .hire-names {
+    grid-template-columns: 1fr;
+  }
+}

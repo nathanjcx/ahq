@@ -1,161 +1,265 @@
 'use client';
 
-import { Archive, ArrowRight, BadgeCheck, Link2, Play, UserPlus, Users } from 'lucide-react';
+import { ArrowRight, Check, Store, UserPlus, Users, X } from 'lucide-react';
+import { useState } from 'react';
+import type { PageProps } from '../app/page-props';
 import { EmptySection } from '../shared/empty';
-import { modelName, providerName } from '../shared/format';
-import { Avatar, ProviderMark } from '../shared/marks';
+import { modelName } from '../shared/format';
+import { HireSheet } from '../shared/hire-sheet';
+import { Avatar } from '../shared/marks';
 import { MasterDetail, useMasterDetail } from '../shared/master-detail';
 import { PageIntro } from '../shared/page-intro';
-import type { Connection, Employee, ProviderId } from '@/lib/contracts';
+import { relativeTime } from '../shared/time';
+import { useUiQuery } from '../shared/use-ui-query';
+import { EmployeeDetail } from './employee-detail';
+import { groupInstances, isReserved, reservedStaff, shiftLabel } from './instances';
+import type { Employee, InstanceStatus, Listing } from '@/lib/contracts';
+import { defaultWorkspaceSettings } from '@/lib/contracts';
+import { pluralize } from '@/lib/text';
+import { uiApi } from '@/lib/ui-api';
 import './employees.css';
 
-/**
- * Why a capability is missing, in terms of the connections this viewer can see.
- * Connections another member has not shared are invisible here, so the advice stays about what to ask for.
- */
-function missingNote(provider: string, connections: Connection[]) {
-  const label = providerName(provider as ProviderId);
-  const usable = connections.filter((item) => item.provider === provider && item.status === 'connected');
-  const shared = usable.find((item) => !item.isOwner);
-  if (usable.some((item) => item.isOwner))
-    return `Your ${label} account does not allow every tool this employee needs. Update it on the Integrations page.`;
-  if (shared)
-    return `${shared.ownerName} shared a ${label} account, but it does not allow every tool this employee needs. Ask ${shared.ownerName} to allow the rest, or connect your own.`;
-  return `Missing ${label}. Connect ${label} or ask a teammate to share theirs.`;
+type Props = PageProps & { listings: Listing[] };
+
+function InstanceCard({
+  employee,
+  status,
+  active,
+  onOpen,
+}: {
+  employee: Employee;
+  status?: InstanceStatus;
+  active: boolean;
+  onOpen: () => void;
+}) {
+  return (
+    <button className="employee-card card" data-active={active} onClick={onOpen}>
+      <Avatar employee={employee} large />
+      <span className={`availability ${status?.shift.state === 'running' ? 'busy' : ''}`} />
+      <div>
+        <h3>{employee.name}</h3>
+        <p>{shiftLabel(status)}</p>
+      </div>
+      <span className="model-pill">{modelName(employee.model)}</span>
+      <span className="card-meta">
+        {employee.status === 'retired'
+          ? 'Retired'
+          : `${(status?.tokensToday ?? 0).toLocaleString()} tokens today`}
+      </span>
+    </button>
+  );
 }
 
-export function EmployeesPage({
-  employees,
-  connections,
-  selectedId,
-  onSelect,
-  onMarketplace,
-  onTask,
-}: {
-  employees: Employee[];
-  connections: Connection[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  onMarketplace: () => void;
-  onTask: (id: string) => void;
-}) {
-  const selected = employees.find((employee) => employee.id === selectedId) ?? employees[0];
+/** Requests waiting on an owner or an administrator under the `approval` hiring policy. */
+function HireRequests({ canDecide, run, actions }: Pick<Props, 'run' | 'actions'> & { canDecide: boolean }) {
+  const requests = useUiQuery(uiApi.hireRequests, {});
+  const pending = requests?.filter((request) => request.status === 'pending') ?? [];
+  if (!pending.length) return null;
+  return (
+    <section className="hire-requests">
+      <div className="section-title">
+        <div>
+          <span className="eyebrow">WAITING ON A DECISION</span>
+          <h2>Hire requests</h2>
+        </div>
+      </div>
+      <div className="request-list">
+        {pending.map((request) => (
+          <article className="card" key={request.id}>
+            <div>
+              <h3>
+                {request.count} × {request.listingName}
+              </h3>
+              <p>
+                {request.requestedByName} asked {relativeTime(request.createdAt)}
+              </p>
+            </div>
+            {canDecide ? (
+              <>
+                <button
+                  className="secondary-button compact"
+                  onClick={() => run(() => actions.decideHire(request.id, false), 'Request declined')}
+                >
+                  <X size={14} />
+                  Decline
+                </button>
+                <button
+                  className="primary-button compact"
+                  onClick={() => run(() => actions.decideHire(request.id, true), 'Instances hired')}
+                >
+                  <Check size={14} />
+                  Approve
+                </button>
+              </>
+            ) : (
+              <span className="request-state">Requested</span>
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export function EmployeesPage({ listings, ...props }: Props) {
+  const { dashboard, actions, run, go, onSelectEmployee, onNewTask } = props;
+  const [showRetired, setShowRetired] = useState(false);
+  const [hiring, setHiring] = useState<{ listing: Listing; floorId?: string } | null>(null);
   const { open, openDetail, closeDetail } = useMasterDetail();
+  const statuses = useUiQuery(uiApi.instanceStatus, {});
+  const settings = dashboard.settings ?? {
+    ...defaultWorkspaceSettings,
+    timezone: 'UTC',
+    updatedAt: 0,
+  };
+
+  const visible = dashboard.employees.filter(
+    (employee) => showRetired || employee.status !== 'retired',
+  );
+  const groups = groupInstances(
+    visible.filter((employee) => !isReserved(employee)),
+    dashboard.floors,
+  );
+  const reserved = reservedStaff(visible);
+  const retiredCount = dashboard.employees.filter((employee) => employee.status === 'retired').length;
+  const selected =
+    visible.find((employee) => employee.id === props.selectedEmployee) ?? visible[0] ?? null;
+  const statusFor = (id: string) => statuses?.find((entry) => entry.employeeId === id);
+  const role = dashboard.workspace?.role ?? 'member';
+  const needsApproval = settings.hiringPolicy === 'approval' && role === 'member';
+  const usedTokens = (dashboard.workspace?.usage.byModel ?? []).reduce(
+    (total, row) => total + row.input + row.output,
+    0,
+  );
+  const openCard = (employee: Employee) => {
+    onSelectEmployee(employee.id);
+    openDetail();
+  };
+
   return (
     <div>
       <PageIntro
         eyebrow="YOUR TEAM"
         title="Employees"
-        description="Every employee is pinned to a reviewed version with clear access and limits."
+        description="Every instance is pinned to a reviewed version, stands on one floor, and runs one shift at a time."
         action={
-          <button className="primary-button" onClick={onMarketplace}>
+          <button className="primary-button" onClick={() => go('marketplace')}>
             <UserPlus size={17} />
             Hire employee
           </button>
         }
       />
-      {employees.length ? (
+      <HireRequests canDecide={props.canManageWorkspace} run={run} actions={actions} />
+      {dashboard.employees.length ? (
         <MasterDetail
           className="employee-layout"
           open={open}
           backLabel="Employees"
           onBack={closeDetail}
           list={
-            <div className="employee-grid">
-              {employees.map((employee) => (
-                <button
-                  className="employee-card card"
-                  key={employee.id}
-                  data-active={selected?.id === employee.id}
-                  onClick={() => {
-                    onSelect(employee.id);
-                    openDetail();
-                  }}
-                >
-                  <Avatar employee={employee} large />
-                  <span
-                    className={`availability ${employee.status.toLowerCase().includes('work') ? 'busy' : ''}`}
+            <div className="instance-groups">
+              {retiredCount > 0 && (
+                <label className="retired-toggle">
+                  <input
+                    type="checkbox"
+                    checked={showRetired}
+                    onChange={(event) => setShowRetired(event.target.checked)}
                   />
-                  <div>
-                    <h3>{employee.name}</h3>
-                    <p>{employee.role}</p>
+                  Show {pluralize(retiredCount, 'retired instance')}
+                </label>
+              )}
+              {groups.map((group) => {
+                const listing = listings.find((entry) => entry.listingId === group.listingId);
+                return (
+                  <section className="instance-group" key={group.key}>
+                    <header>
+                      <div>
+                        <h2>{group.name}</h2>
+                        <p>
+                          {group.role} · version {group.version}
+                          {group.updateAvailable ? ' · update available' : ''}
+                        </p>
+                      </div>
+                      {listing && (
+                        <button
+                          className="secondary-button compact"
+                          onClick={() => setHiring({ listing })}
+                        >
+                          <UserPlus size={14} />
+                          Hire more
+                        </button>
+                      )}
+                    </header>
+                    {group.floors.map((floor) => (
+                      <div className="floor-group" key={floor.floorId ?? 'lobby'}>
+                        <h3>
+                          {floor.floorName}
+                          <span>{pluralize(floor.employees.length, 'instance')}</span>
+                        </h3>
+                        <div className="employee-grid">
+                          {floor.employees.map((employee) => (
+                            <InstanceCard
+                              key={employee.id}
+                              employee={employee}
+                              status={statusFor(employee.id)}
+                              active={selected?.id === employee.id}
+                              onOpen={() => openCard(employee)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </section>
+                );
+              })}
+              {reserved.length > 0 && (
+                <section className="instance-group" key="reserved">
+                  <header>
+                    <div>
+                      <h2>Reserved staff</h2>
+                      <p>Made by the workspace, not hired, and outside the concurrency cap</p>
+                    </div>
+                  </header>
+                  <div className="employee-grid">
+                    {reserved.map((employee) => (
+                      <InstanceCard
+                        key={employee.id}
+                        employee={employee}
+                        status={statusFor(employee.id)}
+                        active={selected?.id === employee.id}
+                        onOpen={() => openCard(employee)}
+                      />
+                    ))}
                   </div>
-                  <span className="model-pill">{modelName(employee.model)}</span>
-                </button>
-              ))}
+                </section>
+              )}
+              {!groups.length && !reserved.length && (
+                <EmptySection
+                  icon={<Store size={28} />}
+                  title="Every instance here is retired"
+                  text="Hire again from the marketplace, or show the retired instances to read what they did."
+                  action={
+                    <button className="primary-button" onClick={() => go('marketplace')}>
+                      Browse marketplace <ArrowRight size={16} />
+                    </button>
+                  }
+                />
+              )}
             </div>
           }
           detail={
             selected && (
-              <aside className="employee-profile card">
-                <div className="profile-top">
-                  <Avatar employee={selected} large />
-                  <div>
-                    <span className="eyebrow">EMPLOYEE PROFILE</span>
-                    <h2>{selected.name}</h2>
-                    <p>{selected.role}</p>
-                  </div>
-                </div>
-                <dl className="profile-facts">
-                  <div>
-                    <dt>Status</dt>
-                    <dd>
-                      <i className="status-dot working" />
-                      {selected.status}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Model</dt>
-                    <dd>{modelName(selected.model)}</dd>
-                  </div>
-                  <div>
-                    <dt>Version</dt>
-                    <dd>{selected.versionId.slice(0, 8)}</dd>
-                  </div>
-                </dl>
-                <div className="profile-section">
-                  <h3>Readiness</h3>
-                  {selected.status === 'retired' ? (
-                    <p className="readiness-warn">
-                      <Archive size={14} />
-                      This employee version is retired
-                    </p>
-                  ) : selected.missingCapabilities.length ? (
-                    selected.missingCapabilities.map((capability) => (
-                      <p className="readiness-warn" key={capability}>
-                        <Link2 size={14} />
-                        {missingNote(capability, connections)}
-                      </p>
-                    ))
-                  ) : (
-                    <p className="readiness-ok">
-                      <BadgeCheck size={15} />
-                      All required connections are ready
-                    </p>
-                  )}
-                </div>
-                <div className="profile-connections">
-                  <h3>Available connections</h3>
-                  <div>
-                    {connections
-                      .filter((connection) => connection.status === 'connected')
-                      .map((connection) => (
-                        <span key={connection.id}>
-                          <ProviderMark provider={connection.provider} small />
-                          {connection.name}
-                        </span>
-                      ))}
-                  </div>
-                </div>
-                <button
-                  className="primary-button full"
-                  disabled={selected.status !== 'ready'}
-                  onClick={() => onTask(selected.id)}
-                >
-                  <Play size={15} />
-                  Assign new task
-                </button>
-              </aside>
+              <EmployeeDetail
+                key={selected.id}
+                employee={selected}
+                status={statusFor(selected.id)}
+                floors={dashboard.floors}
+                connections={dashboard.connections}
+                actions={actions}
+                run={run}
+                onNewTask={(id) => onNewTask(selected.floorId ?? null, id)}
+                onPage={go}
+              />
             )
           }
         />
@@ -165,9 +269,30 @@ export function EmployeesPage({
           title="Build your first team"
           text="The marketplace contains published employees with clear skills, limits, and integration requirements."
           action={
-            <button className="primary-button" onClick={onMarketplace}>
+            <button className="primary-button" onClick={() => go('marketplace')}>
               Browse marketplace <ArrowRight size={16} />
             </button>
+          }
+        />
+      )}
+      {hiring && (
+        <HireSheet
+          listing={hiring.listing}
+          employees={dashboard.employees}
+          floors={dashboard.floors}
+          floorId={hiring.floorId}
+          hiringPolicy={settings.hiringPolicy}
+          role={role}
+          usedTokens={usedTokens}
+          maxConcurrentInstances={settings.maxConcurrentInstances}
+          onClose={() => setHiring(null)}
+          onHire={(options) =>
+            run(
+              () => actions.hire(hiring.listing.listingId, options),
+              needsApproval
+                ? 'Requested. An owner or an administrator decides it.'
+                : `Hired ${pluralize(options.count ?? 1, 'instance')} of ${hiring.listing.name}`,
+            )
           }
         />
       )}

@@ -2,6 +2,8 @@ import type { WorkspaceSettings } from './plan';
 import type { ScheduleSummary, ShiftKind } from './schedule';
 
 export type ModelId = 'gpt-5.6-luna' | 'gpt-5.6-terra' | 'gpt-5.6-sol' | 'gpt-6-astra';
+/** Every model the platform runs, in the order an interface offers them. */
+export const MODEL_IDS: ModelId[] = ['gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol', 'gpt-6-astra'];
 export type ProviderId = 'linear' | 'slack' | 'github' | 'google-workspace' | 'canva';
 export type TaskStatus =
   | 'queued'
