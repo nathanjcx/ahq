@@ -19,7 +19,8 @@ export function nativeSecret(
   } catch {
     throw new Error('NATIVE_INBOX_SECRETS_JSON is invalid');
   }
-  const secret = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>)[provider] : undefined;
+  const secret =
+    parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>)[provider] : undefined;
   return typeof secret === 'string' && secret.length > 0 ? secret : undefined;
 }
 

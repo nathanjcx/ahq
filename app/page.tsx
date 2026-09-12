@@ -1,8 +1,11 @@
+import { connection } from 'next/server';
 import { ClientProviders, type PublicConfig } from '@/lib/client';
 import { AstraHq } from '@/components/astra-hq';
 import { webSetup } from '@/lib/server/setup';
 
-export default function Home() {
+export default async function Home() {
+  // OAuth clients and webhook secrets are runtime variables, so read them per request, not at build.
+  await connection();
   const config: PublicConfig = {
     clerkPublishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
     convexUrl: process.env.NEXT_PUBLIC_CONVEX_URL,

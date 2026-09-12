@@ -111,7 +111,7 @@ type Actions = {
     connectionId: string,
     allowedTools: string[],
     resourceScope: string,
-    inboxResources: string[],
+    inboxResources: string,
   ) => Promise<unknown>;
   markRead: (itemId: string) => Promise<unknown>;
   assign: (itemId: string, employeeId: string, projectId?: string) => Promise<unknown>;
@@ -2199,7 +2199,7 @@ function IntegrationsPage({
   readiness: ProviderReadiness[];
   canManage: boolean;
   onDisconnect: (id: string) => void;
-  onUpdateAccess: (id: string, tools: string[], scope: string, inboxResources: string[]) => void;
+  onUpdateAccess: (id: string, tools: string[], scope: string, inboxResources: string) => void;
   onNotice: (text: string) => void;
 }) {
   const [choosingProducts, setChoosingProducts] = useState<ProviderId | null>(null);
@@ -2231,6 +2231,7 @@ function IntegrationsPage({
           );
           const connected = active.filter((item) => item.status === 'connected');
           const attention = active.some((item) => item.status !== 'connected');
+          const checking = configured && readiness.length === 0;
           const ready = configured && state.connectable.length > 0;
           const pill = attention
             ? { className: 'degraded', text: 'Needs attention' }
@@ -2238,7 +2239,7 @@ function IntegrationsPage({
               ? { className: 'connected', text: 'Connected' }
               : ready
                 ? { className: 'available', text: 'Ready to connect' }
-                : { className: 'setup', text: 'Setup needed' };
+                : { className: 'setup', text: checking ? 'Checking setup' : 'Setup needed' };
           const remainingProducts = provider.products?.filter(
             (product) =>
               state.connectable.includes(product.url) &&
@@ -2317,6 +2318,8 @@ function IntegrationsPage({
                 <div className="setup-note">
                   {!configured ? (
                     <p>Connect the backend to enable integrations.</p>
+                  ) : checking ? (
+                    <p>Checking what your administrator has set up.</p>
                   ) : canManage ? (
                     <>
                       <strong>Before anyone can connect {provider.name}</strong>
@@ -2446,7 +2449,7 @@ function ManageAccessPanel({
   connection: Connection;
   inboxConfigured: boolean;
   onClose: () => void;
-  onSave: (tools: string[], scope: string, inboxResources: string[]) => void;
+  onSave: (tools: string[], scope: string, inboxResources: string) => void;
 }) {
   const provider = getProvider(connection.provider);
   const [selected, setSelected] = useState(connection.allowedTools);
@@ -2499,19 +2502,7 @@ function ManageAccessPanel({
             </small>
           </label>
         )}
-        <button
-          className="primary-button full"
-          onClick={() =>
-            onSave(
-              selected,
-              scope.trim(),
-              inboxResources
-                .split(',')
-                .map((id) => id.trim())
-                .filter(Boolean),
-            )
-          }
-        >
+        <button className="primary-button full" onClick={() => onSave(selected, scope, inboxResources)}>
           Save access
         </button>
       </div>

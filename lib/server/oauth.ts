@@ -31,8 +31,7 @@ export interface OAuthState {
   tokenExpiresAt?: number;
 }
 export interface StoredCredential {
-  accessToken?: string;
-  oauth?: OAuthState;
+  oauth: OAuthState;
 }
 function configured(provider: string, serverUrl?: string): OAuthConfig | undefined {
   const configs = JSON.parse(process.env.MCP_OAUTH_CONFIG_JSON || '{}') as Record<string, OAuthConfig>;
@@ -132,6 +131,8 @@ export async function finishOAuth(state: OAuthState, code: string) {
   });
   if (result !== 'AUTHORIZED' || !state.tokens)
     throw new Error('Authorization did not finish. Try connecting again.');
+  // The stored grant is bound to this server; the pending product queue belongs to the callback only.
+  delete state.queue;
   return { oauth: state } satisfies StoredCredential;
 }
 export function oauthProvider(state: OAuthState, save: (state: OAuthState) => Promise<void>) {

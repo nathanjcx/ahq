@@ -31,14 +31,25 @@ The reduction pass removed the replaced office layout and unused CSS. The qualit
 
 See [project floors](project-floors.md) for behavior and deployment order.
 
+## Integration onboarding
+
+Verified locally on September 12, 2026 after the onboarding rework. `npm run typecheck`, all 37 tests, and `npm run build` pass. New unit checks cover reviewed-tool grants at connection time, refusal of a server with no reviewed tools, the readiness query, and resource-routed inbox delivery with deduplication and tenant isolation. Native webhook parsing tests were updated for the per-provider endpoint.
+
+Both Playwright navigation tests passed against `npm run dev` with no backend. A temporary fixture route rendered the Integrations page with fake readiness and connection data to inspect the setup-needed, ready-to-connect, connected, and needs-attention states, the Google product picker, the access panel, and the member view. The fixture was removed before the production build; the route list contains no QA route.
+
+- [Integrations, desktop](screenshots/integrations-desktop.png)
+- [Integrations, mobile](screenshots/integrations-mobile.png)
+- [Manage access, desktop](screenshots/integration-access-desktop.png)
+- [Google product picker, desktop](screenshots/google-products-desktop.png)
+
+Live OAuth sign-in, token reuse across Google product servers, the re-consent fallback, credential expiry marking, and real webhook deliveries remain unverified until provider accounts exist.
+
 ## Visual review
 
 These screenshots show the production build with no connected account or seeded records:
 
 - [Office, desktop](screenshots/office-desktop.png)
 - [Office, mobile](screenshots/office-mobile.png)
-- [Integrations, desktop](screenshots/integrations-desktop.png)
-- [Integrations, mobile](screenshots/integrations-mobile.png)
 
 Marketplace media and admin editing were also reviewed at desktop and mobile sizes using a temporary local fixture. That fixture was removed and is not shipped.
 

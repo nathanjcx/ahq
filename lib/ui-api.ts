@@ -59,7 +59,7 @@ export const uiApi = {
     connectionId: string;
     allowedTools: string[];
     resourceScope: string;
-    inboxResources: string[];
+    inboxResources: string;
   }>('integrations:updateAccess'),
   readiness: query<Record<string, never>, ProviderReadiness[]>('integrations:readiness'),
   markInboxRead: mutation<{ itemId: string }>('inbox:markRead'),

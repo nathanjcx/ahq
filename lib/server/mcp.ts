@@ -26,14 +26,9 @@ export async function withMcp<T>(
   const client = new Client({ name: 'astra-hq', version: '1.0.0' });
   const transport = new StreamableHTTPClientTransport(url, {
     fetch: safeFetch,
-    requestInit: credential.accessToken
-      ? { headers: { Authorization: `Bearer ${credential.accessToken}` } }
-      : undefined,
-    authProvider: credential.oauth
-      ? oauthProvider(credential.oauth, async (state) => {
-          await onRefresh?.({ oauth: state });
-        })
-      : undefined,
+    authProvider: oauthProvider(credential.oauth, async (state) => {
+      await onRefresh?.({ oauth: state });
+    }),
   });
   try {
     await client.connect(transport);

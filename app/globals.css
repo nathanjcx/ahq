@@ -2500,9 +2500,19 @@ p {
   background: #edf3e9;
   box-shadow: inset 3px 0 #78906f;
 }
+.form-stack .tool-checklist label {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  flex-direction: row;
+  gap: 9px;
+  color: inherit;
+  font-weight: 450;
+}
 .tool-checklist input {
   width: 15px;
   height: 15px;
+  min-height: 0;
+  padding: 0;
   accent-color: var(--sage-800);
 }
 .tool-checklist strong,

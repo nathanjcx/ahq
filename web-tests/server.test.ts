@@ -10,7 +10,6 @@ import type { TaskContext } from '../services/types';
 import { initialTaskInput } from '../services/task-input';
 afterEach(() => {
   delete process.env.MCP_TOOL_POLICIES_JSON;
-  delete process.env.MCP_APPROVED_HOSTS;
 });
 describe('credential and integration boundaries', () => {
   it('encrypts secrets with authenticated randomized encryption', () => {

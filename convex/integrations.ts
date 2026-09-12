@@ -36,12 +36,26 @@ export const readiness = query({
 
 const resourceId = /^[-A-Za-z0-9_:/@.]{1,200}$/;
 
+function resourceIds(value: string, field: string) {
+  const ids = [
+    ...new Set(
+      value
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean),
+    ),
+  ];
+  if (ids.length > 100 || ids.some((id) => !resourceId.test(id)))
+    throw new Error(`${field} must be comma-separated exact provider IDs`);
+  return ids;
+}
+
 export const updateAccess = mutation({
   args: {
     connectionId: v.id('connections'),
     allowedTools: v.array(v.string()),
     resourceScope: v.string(),
-    inboxResources: v.array(v.string()),
+    inboxResources: v.string(),
   },
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
@@ -53,13 +67,10 @@ export const updateAccess = mutation({
     const grantable = grantableTools(connection.provider, connection.tools);
     if (allowedTools.some((tool) => !grantable.includes(tool)))
       throw new Error('An allowed tool is not available on this connection');
-    const inboxResources = [...new Set(args.inboxResources.map((id) => id.trim()).filter(Boolean))];
-    if (inboxResources.length > 100 || inboxResources.some((id) => !resourceId.test(id)))
-      throw new Error('Inbox resources must be exact provider IDs');
     await ctx.db.patch(connection._id, {
       allowedTools,
-      resourceScope: args.resourceScope.trim(),
-      inboxResources,
+      resourceScope: resourceIds(args.resourceScope, 'Resource restrictions').join(','),
+      inboxResources: resourceIds(args.inboxResources, 'Inbox resources'),
     });
     return null;
   },
