@@ -180,8 +180,12 @@ export function projectTimeline(
   return build(bars, markers, now);
 }
 
-/** The next milestone deadline still ahead of the project, if it has one. */
+/**
+ * The next date the project is answerable for: its own deadline if it has one, and otherwise the
+ * next milestone deadline still ahead of it.
+ */
 export function nextDeadline(project: Project) {
+  if (project.deadlineAt !== undefined) return project.deadlineAt;
   const now = Date.now();
   return project.milestones
     .filter((milestone) => milestone.status !== 'done' && milestone.deadlineAt !== undefined)
@@ -190,10 +194,3 @@ export function nextDeadline(project: Project) {
     .find((at) => at >= now);
 }
 
-/** The last milestone deadline: the day the project as a whole is due. */
-export function finalDeadline(project: Project) {
-  const deadlines = project.milestones
-    .map((milestone) => milestone.deadlineAt)
-    .filter((at): at is number => at !== undefined);
-  return deadlines.length ? Math.max(...deadlines) : undefined;
-}

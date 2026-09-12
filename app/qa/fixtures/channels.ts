@@ -80,6 +80,7 @@ const launchPosts: Post[] = [
     id: 'post_7',
     channelId: 'chan_launch',
     kind: 'decision',
+    flag: 'contested',
     authorEmployeeId: 'emp_hana',
     authorName: 'Hana',
     text: 'Contested: The launch deadline is March 24.\nAgainst: The launch deadline is March 26.\nReason: two shift reports on the same day cite different dates, and neither names a source.\nA person decides which claim stands; neither reaches a model until then.',
@@ -110,6 +111,16 @@ const launchPosts: Post[] = [
     toEmployeeId: 'emp_ada',
     createdAt: ago(0.6),
   },
+  {
+    id: 'post_10',
+    channelId: 'chan_launch',
+    kind: 'report',
+    authorEmployeeId: 'emp_bruno_2',
+    authorName: 'Bruno 2',
+    text: 'Bruno 2 — Write the customer announcement\nDone: 200 words, no marketing language, saved to outputs/announcement.md\nIn progress: nothing\nBlocked on: nothing\nNext: the status page copy once the migration notes settle\nRisks: the announcement names a date the roadmap may still move',
+    taskId: 'task_completed',
+    createdAt: ago(0.4),
+  },
 ];
 
 const triagePosts: Post[] = [
@@ -138,10 +149,9 @@ const triagePosts: Post[] = [
 const employeeFeeds: Record<string, Post[]> = {
   emp_ada: [launchPosts[0], launchPosts[2]],
   emp_bruno: [launchPosts[3]],
+  emp_bruno_2: [launchPosts[9]],
   emp_mina: [],
 };
-
-/** The Spring launch floor's binder, in all three states a person acts on. */
 
 /** Query answers for the channels pages under the fixture route. */
 export const channelsQueries: FixtureQueries = {

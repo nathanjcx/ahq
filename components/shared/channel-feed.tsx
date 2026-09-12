@@ -168,22 +168,15 @@ export function ChannelFeed({
                 Load earlier posts
               </button>
             )}
-            {posts.map((post, index) => (
-              <div key={post.id} className="channel-slot">
-                {(index === 0 || dayKey(posts[index - 1].createdAt) !== dayKey(post.createdAt)) && (
-                  <DaySeparator at={post.createdAt} />
-                )}
-                {index === unreadFrom && <p className="channel-unread-line">New</p>}
-                <PostView
-                  post={post}
-                  compact={compact}
-                  canDecide={canPost}
-                  onTask={onTask}
-                  onDecideHandoff={decideHandoff}
-                  onAccept={accept}
-                />
-              </div>
-            ))}
+            <PostStream
+              posts={posts}
+              compact={compact}
+              unreadFrom={unreadFrom}
+              canDecide={canPost}
+              onTask={onTask}
+              onDecideHandoff={decideHandoff}
+              onAccept={accept}
+            />
           </>
         )}
       </div>
@@ -197,6 +190,50 @@ export function ChannelFeed({
         onFailure={setError}
       />
     </div>
+  );
+}
+
+/**
+ * Posts oldest first, with the day they were written separating them and, when the viewer left one,
+ * the line where their reading stopped. Shared by a channel and by one instance's own feed.
+ */
+export function PostStream({
+  posts,
+  compact = false,
+  unreadFrom = -1,
+  canDecide = false,
+  onTask,
+  onDecideHandoff,
+  onAccept,
+}: {
+  posts: Post[];
+  compact?: boolean;
+  /** Index the unread line sits above, or -1 for none. */
+  unreadFrom?: number;
+  canDecide?: boolean;
+  onTask?: (taskId: string) => void;
+  onDecideHandoff?: (postId: string, accepted: boolean) => void;
+  onAccept?: (postId: string) => void;
+}) {
+  return (
+    <>
+      {posts.map((post, index) => (
+        <div key={post.id} className="channel-slot">
+          {(index === 0 || dayKey(posts[index - 1].createdAt) !== dayKey(post.createdAt)) && (
+            <DaySeparator at={post.createdAt} />
+          )}
+          {index === unreadFrom && <p className="channel-unread-line">New</p>}
+          <PostView
+            post={post}
+            compact={compact}
+            canDecide={canDecide}
+            onTask={onTask}
+            onDecideHandoff={onDecideHandoff}
+            onAccept={onAccept}
+          />
+        </div>
+      ))}
+    </>
   );
 }
 

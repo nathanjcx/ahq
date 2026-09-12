@@ -1,11 +1,14 @@
 'use client';
 
-import { Pencil, Plus, Users } from 'lucide-react';
+import { CalendarClock, Pencil, Plus, Users } from 'lucide-react';
 import { useState } from 'react';
+import { OfficeDay } from '../office/office-day';
 import type { OfficeSceneData } from '../office/office-stage';
 import type { OfficeEmployee } from '../office/office-view';
+import { useLabelMode } from '../office/use-labels';
 import { EmptyMini } from '../shared/empty';
 import { Avatar } from '../shared/marks';
+import { boardCards } from './floor-board';
 import { FloorReplay } from './floor-replay';
 import { FloorScene } from './floor-scene';
 import type { Employee, ScheduleSummary, Task } from '@/lib/contracts';
@@ -63,6 +66,8 @@ export function FloorTeam({
   onEditFloor: () => void;
 }) {
   const [replay, setReplay] = useState<OfficeSceneData | undefined>(undefined);
+  const [dayOpen, setDayOpen] = useState(false);
+  const labels = useLabelMode();
   // Hiring the same employee again makes another instance, so the team reads by version first.
   const versions = new Map<string, Employee[]>();
   for (const employee of staff)
@@ -77,13 +82,37 @@ export function FloorTeam({
         floorId={floorId}
         live={configured}
         scene={replay}
+        stage={
+          dayOpen ? (
+            <OfficeDay
+              employees={officeEmployees}
+              floorId={floorId}
+              label={floorName}
+              labels={labels.mode}
+              dressing={{ board: { cards: boardCards(tasks) } }}
+              onSelect={onEmployee}
+            />
+          ) : undefined
+        }
         controls={
-          <FloorReplay
-            floorId={floorId}
-            live={configured && !archived}
-            defaultEmployeeId={staff[0]?.id}
-            onScene={setReplay}
-          />
+          <>
+            <FloorReplay
+              floorId={floorId}
+              live={configured && !archived && !dayOpen}
+              defaultEmployeeId={staff[0]?.id}
+              onScene={setReplay}
+            />
+            <button
+              type="button"
+              className="floor-replay-toggle"
+              aria-pressed={dayOpen}
+              disabled={!configured || archived || replay !== undefined}
+              onClick={() => setDayOpen((open) => !open)}
+            >
+              <CalendarClock size={12} />
+              Replay the day
+            </button>
+          </>
         }
         employeeCount={staff.length}
         officeEmployees={officeEmployees}

@@ -927,6 +927,12 @@
   height: 280px;
   min-height: 280px;
 }
+/* A replayed day puts its date, scrubber, and caption under the room, so the block needs the
+   height the room had plus the height they take. */
+.floor-canvas-compact .floor-stage-day {
+  height: 390px;
+  min-height: 390px;
+}
 .floor-canvas-compact .office-legend {
   /* The compact chrome keeps only the sound toggle; the legend belongs to the lobby. */
   min-height: 33px;
@@ -1271,6 +1277,12 @@
     position: absolute;
     inset: 0;
     min-height: 0;
+  }
+  /* The day replay is a room plus its scrubber, so it takes a fixed block rather than a 4:3 one. */
+  .floor-canvas .floor-stage-day {
+    position: static;
+    height: 380px;
+    aspect-ratio: auto;
   }
   .office-toolbar {
     height: auto;

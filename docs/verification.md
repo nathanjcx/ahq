@@ -140,18 +140,35 @@ error was thrown, and walks the phone paths with no desktop equivalent: opening 
 and employee detail and coming back with the browser's back button and the back header, the review
 bar's sheet, and the floor switcher. Shots land in `test-results/visual/`.
 
-**Office baselines**, `npm run test:lab` (`web-tests/lab/office.spec.ts`). Eleven deterministic
+**Per-page visual suites**, one file per workstream, run the same way as the visual suite and against
+the same fixture route. Each walks its pages at 1280×1000 and 390×844, asserts no page error and no
+horizontal overflow, and writes its shots under `test-results/visual-<domain>/`:
+
+| Spec | What it photographs |
+| --- | --- |
+| `web-tests/visual-projects.spec.ts` | The projects list, a running project, a roadmap awaiting review with its bottleneck questions, the planner working, the new-project sheet |
+| `web-tests/visual-calendar.spec.ts` | The calendar week, the day, the agenda list on a phone, the scheduling sheet, the boardroom |
+| `web-tests/visual-records.spec.ts` | The records basement, the audit room, every section of the settings panel |
+| `web-tests/visual-floors.spec.ts` | A floor's channel, feeds, work, team, and binder; the Triage floor; the notifications ledger |
+| `web-tests/visual-employees.spec.ts` | The employees page, the marketplace, the marketplace studio |
+
+**Office baselines**, `npm run test:lab` (`web-tests/lab/office.spec.ts`). Fifteen deterministic
 scenes from `/office-lab` at 1280×720, reduced motion, a fixed seed, and 1.5 seconds to settle the
 first frames, the label pass, and the lighting blend: `lobby-day`, `floor-day`, `floor-night`,
 `floor-dots`, `floor-celebrate`, `floor-props`, `after-hours`, `lobby-calendar`, `records`,
-`boardroom`, `triage`. Images live in `web-tests/lab/baselines/`; the tolerance is
-`maxDiffPixelRatio: 0.01`, one percent, set in `playwright.config.ts`.
+`boardroom`, `triage`, and the four the activity model added — `meeting-live` (the boardroom with a
+speaker holding the floor), `audit-night` (the auditor working an empty floor after hours),
+`incident` (triage on an open incident, with the notice the emergency allow-list leaves by the door),
+and `day-replay` (a whole day replayed and stopped at three in the afternoon). Images live in
+`web-tests/lab/baselines/`; the tolerance is `maxDiffPixelRatio: 0.01`, one percent, set in
+`playwright.config.ts`.
 
 The same file holds the performance probe: `/office-lab?preset=floor-day` at 1440×900, twenty frames
 sampled through `requestAnimationFrame`, asserting the median frame time. The plan's budget is 16 ms,
 and `LAB_FRAME_BUDGET_MS` sets it; the default is 700 ms, because this machine renders through
-SwiftShader with no GPU. Set the real budget on a machine with one. The probe measures frame time
-only — nothing asserts a draw-call count, and a floor at 1440 currently issues roughly 2,000.
+SwiftShader with no GPU. Set the real budget on a machine with one. The probe also asserts the plan's
+draw-call budget: under 400 calls on a floor at 1440, read from `data-office-stats`. Static geometry
+is merged per material family, which brought a floor from roughly 2,100 calls to roughly 300.
 
 **Accepting a changed baseline.** Look at the image first. Playwright writes the actual, expected,
 and diff images under `test-results/`; open the diff and satisfy yourself that the change is the one
@@ -174,12 +191,10 @@ lucky frame. A baseline is never accepted without a person having looked at it.
 that ship with `eslint-plugin-react-hooks` v7. Tests relax `no-explicit-any` and
 `no-non-null-assertion`.
 
-It fails today: 19 errors and 6 warnings, every one in `components/office` —
-`office-signals.tsx` (7), `office-scene.tsx` (6), `office-people.tsx` (6), `office-view.tsx`,
-`use-labels.ts`, `sound.ts`, and `office-pan.ts` (2 each). They are React compiler findings,
-predominantly `react-hooks/set-state-in-effect`. Because `npm run check` runs lint, `npm run check`
-fails too; run `npm run typecheck && npm test && npm run build` until the office workstream clears
-them.
+It passes over the whole tree, `components/office` included. The React compiler findings that used to
+sit there were fixed at source rather than suppressed; two of them were real bugs, a replay rerender
+loop and a `[object Object]` in the JSON view. `npm run check` runs lint, typecheck, and the unit
+tests together.
 
 ## Not verified
 
@@ -209,11 +224,9 @@ in [deployment](deployment.md) are run with real accounts and the results record
 - **The office under live data.** `/qa` points a Convex client at an unreachable deployment, so the
   dashboard subscription never resolves and the office there is furnished but empty. The pure modules
   cover the rules behind it; nothing covers the office rendering real journal data in a browser.
-- **Draw calls.** The plan's 400-call budget at 1440 is not asserted anywhere, and the scene is far
-  above it.
-- **The v4 pages.** Projects, Calendar, Records, Audit, and Triage are placeholders, so no browser
-  suite covers a roadmap, a calendar week, the records room, an audit document, or an incident
-  timeline (page lands with phase four). The visual suite walks the pages that exist.
+- **Every page against live data.** The per-page visual suites walk the roadmap, the calendar week,
+  the records room, the audit documents, and the incident timeline, but they walk them against the
+  `/qa` fixture. No browser suite has rendered one of those pages from a Convex subscription.
 
 The audit tab displays the recorded journal. It does not rerun provider actions, and it cannot
 recover intermediate events the provider did not persist.

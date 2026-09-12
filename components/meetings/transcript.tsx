@@ -2,8 +2,9 @@
 
 import { MessageSquareText } from 'lucide-react';
 import { EmptyMini } from '../shared/empty';
+import { usageLine } from '../shared/format';
 import { shortTime } from '../shared/time';
-import { totalUsage, usageLine } from './usage';
+import { totalUsage } from './usage';
 import type { Attendee, MeetingTurn } from '@/lib/contracts';
 
 /** Who a question was put to. A question with nobody named is put to the room. */

@@ -14,6 +14,20 @@ export function shortDate(at: number) {
   return new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+/** What a `<input type="date">` shows for a moment, in the viewer's own zone; empty for none. */
+export function dateInputValue(at?: number) {
+  if (at === undefined) return '';
+  const local = new Date(at);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}`;
+}
+
+/** A date input's value as a moment: midday, so a timezone cannot move it to the day before. */
+export function dateInputTime(value: string) {
+  const at = new Date(`${value}T12:00:00`).getTime();
+  return Number.isNaN(at) ? undefined : at;
+}
+
 /** "2:32 PM", or "14:32" where the viewer's locale uses a 24-hour clock. */
 export function shortTime(at: number) {
   return new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });

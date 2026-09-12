@@ -1,5 +1,5 @@
-/** Domain labels: what a provider, a model, a status, or a file is called on screen. */
-import type { ActionProposal, ModelId, ProviderId, Task } from '@/lib/contracts';
+/** Domain labels: what a provider, a model, a status, a file, or a bill is called on screen. */
+import type { ActionProposal, ModelId, ProviderId, Task, TokenUsage } from '@/lib/contracts';
 import { providers } from '@/lib/providers';
 
 export function providerName(provider: ProviderId) {
@@ -26,6 +26,14 @@ export function correctionLabel(kind: ActionProposal['correction']) {
     irreversible: 'Cannot be reversed.',
     unknown: 'Correction is unverified.',
   }[kind];
+}
+/** Tokens the way every page says them: input, cached, output, in the viewer's number format. */
+export function usageLine(usage: TokenUsage) {
+  return `${usage.input.toLocaleString()} input · ${usage.cached.toLocaleString()} cached · ${usage.output.toLocaleString()} output tokens`;
+}
+/** What something costs, in the currency the workspace's rates are written in. */
+export function money(amount: number) {
+  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(amount);
 }
 export function fileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;

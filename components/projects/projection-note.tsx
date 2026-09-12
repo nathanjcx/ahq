@@ -1,6 +1,7 @@
 'use client';
 
 import { AlertTriangle } from 'lucide-react';
+import { money } from '../shared/format';
 import type { PlanProjection } from '@/lib/contracts';
 
 const compact = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
@@ -8,10 +9,6 @@ const compact = new Intl.NumberFormat(undefined, { notation: 'compact', maximumF
 /** "1.2M tokens", in the shortest form that still says it. */
 export function tokenCount(tokens: number) {
   return `${compact.format(tokens)} tokens`;
-}
-
-function money(amount: number) {
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(amount);
 }
 
 /**

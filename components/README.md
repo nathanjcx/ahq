@@ -3,10 +3,15 @@
 ## One directory per page
 
 `inbox/`, `employees/`, `tasks/`, `files/`, `activity/`, `marketplace/`, `integrations/`, `floors/`,
-`admin/`. A directory holds its page component and every part only that page uses. A page directory
-never imports from another page directory — if two pages need the same thing, it belongs in
-`shared/`. The exceptions are `floors/`, which renders `office/` because the floor page is the
-office, and `calendar/`, which renders `meetings/` because a meeting is the calendar's detail.
+`projects/`, `calendar/`, `meetings/`, `records/`, `audit/`, `triage/`, `channels/`, `admin/`. A
+directory holds its page component and every part only that page uses. A page directory never imports
+from another page directory — if two pages need the same thing, it belongs in `shared/`. The
+exceptions are `floors/`, which renders `office/` because the floor page is the office, and
+`calendar/`, which renders `meetings/` because a meeting is the calendar's detail.
+
+`office/` is not a page: it is the 3D office the floor page and the lobby mount, with its own pure
+layout, activity, and replay modules. `app/settings/` is the settings panel's five sections; the
+panel opens over any page, so it belongs to the shell rather than to a page of its own.
 
 `app/` is the shell, not a page: the sidebar, the top bar, the panels that open over any page, the
 review bar, and `page-content.tsx`, which picks the page to render. The shell imports pages; pages
@@ -16,13 +21,25 @@ do not import the shell, except for the `Actions` and `Page` types it passes dow
 
 `shared/` holds what more than one page uses: `sheet`, `empty`, `marks`, `skeleton`,
 `master-detail`, `overflow-menu`, `page-intro`, `json-view`, `state-diff`, `tool-checklist`,
-`use-copy`, `use-media`. Two things live there as well:
+`use-copy`, `use-media`, `members`, and the composites several pages mount — `channel-feed`
+(a channel's posts and its composer), `employee-feed` (one instance's posts, wherever it wrote them),
+and `hire-sheet` (hiring a count of one listing, and `hireContext` for who the viewer is where hiring
+is concerned). Two things live there as well:
 
 - `shared/format.ts`: domain labels — what a provider, a model, a status, or a file is called.
 - `shared/time.ts`: clock and calendar text for the viewer's locale. Timezone and working-hours
   arithmetic is `lib/time.ts`, which takes its zone explicitly and is pure.
 
 Text shortening, counting, and slugs are `lib/text.ts`, which the routes and the tests share.
+
+## Queries the fixture can answer
+
+Most pages read from the dashboard subscription the shell passes down. A page that owns a query calls
+`useUiQuery(uiApi.xxx, args)` from `shared/use-ui-query.ts`, never `useQuery` directly. It is
+`useQuery` against a live deployment, and under the fixture route `/qa` it answers from
+`app/qa/fixtures/<domain>.ts` keyed by Convex function name — `'projects:list'`, `'channels:posts'` —
+with a value or a function of the args. A new query needs its fixture answer in the same change, or
+the page cannot be photographed.
 
 ## Actions per domain
 

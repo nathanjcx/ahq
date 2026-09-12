@@ -3,10 +3,10 @@
 import { AlertTriangle, Minus, Plus, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import type { HireOptions } from '../app/actions/core';
-import { modelName } from './format';
+import { modelName, money } from './format';
 import { Sheet } from './sheet';
 import { useUiQuery } from './use-ui-query';
-import type { Employee, Floor, HiringPolicy, Listing, ModelId } from '@/lib/contracts';
+import type { Dashboard, Employee, Listing, ModelId } from '@/lib/contracts';
 import { MODEL_IDS } from '@/lib/contracts';
 import { pluralize } from '@/lib/text';
 import { uiApi } from '@/lib/ui-api';
@@ -32,35 +32,48 @@ function suggestNames(stem: string, employees: Employee[], floorId: string | und
   return names;
 }
 
+/** Who the viewer is where hiring is concerned, and what the period has already cost. */
+export function hireContext(dashboard: Dashboard) {
+  const role = dashboard.workspace?.role ?? 'member';
+  const hiringPolicy = dashboard.settings?.hiringPolicy ?? 'anyone';
+  return {
+    role,
+    hiringPolicy,
+    /** A member under the approval policy files a request rather than hiring. */
+    needsApproval: hiringPolicy === 'approval' && role === 'member',
+    /** Tokens the workspace has recorded this period, which the projection is measured from. */
+    usedTokens: (dashboard.workspace?.usage.byModel ?? []).reduce(
+      (total, row) => total + row.input + row.output,
+      0,
+    ),
+  };
+}
+
 /**
  * Hiring a count of one listing: how many, what to call them, where they sit, and what they run on
  * after hours, with the capacity and the spend the hire would add. Under a policy that needs an
- * approval the same sheet files a request instead, and names are given when it is approved.
+ * approval the same sheet files a request instead, carrying the names and the model with it.
  */
 export function HireSheet({
   listing,
-  employees,
-  floors,
+  dashboard,
   floorId: initialFloorId,
-  hiringPolicy,
-  role,
-  usedTokens,
+  count: initialCount = 1,
   onClose,
   onHire,
 }: {
   listing: Listing;
-  employees: Employee[];
-  floors: Floor[];
+  dashboard: Dashboard;
   /** The floor the sheet opens on; the lobby when absent. */
   floorId?: string;
-  hiringPolicy: HiringPolicy;
-  role: 'owner' | 'admin' | 'member';
-  /** Tokens the workspace has recorded this period, which the projection is measured from. */
-  usedTokens: number;
+  /** How many the sheet opens on, when something else has already proposed a number. */
+  count?: number;
   onClose: () => void;
   onHire: (options: HireOptions) => Promise<boolean>;
 }) {
-  const [count, setCount] = useState(1);
+  const { employees, floors } = dashboard;
+  const { role, hiringPolicy, needsApproval, usedTokens } = hireContext(dashboard);
+  const [count, setCount] = useState(initialCount);
   const [floorId, setFloorId] = useState(initialFloorId ?? '');
   const [overnightModel, setOvernightModel] = useState<ModelId | ''>('');
   // Suggestions follow the count and the floor, because both decide which names are free; an
@@ -77,7 +90,6 @@ export function HireSheet({
   const perInstance = capacityNow?.instances ? Math.round(usedTokens / capacityNow.instances) : 0;
   const projection = useUiQuery(uiApi.planProjection, { projectedTokens: perInstance * count });
   const openFloors = floors.filter((floor) => floor.archivedAt === undefined);
-  const needsApproval = hiringPolicy === 'approval' && role === 'member';
   const blocked = hiringPolicy === 'admins' && role === 'member';
   const overCap = capacityNow ? capacityNow.instances + count > capacityNow.maxConcurrentInstances : false;
   const verb = needsApproval ? 'Request' : 'Hire';
@@ -96,7 +108,7 @@ export function HireSheet({
             const done = await onHire({
               count,
               floorId: floorId || undefined,
-              names: needsApproval ? undefined : names,
+              names,
               overnightModel: overnightModel || undefined,
             });
             setBusy(false);
@@ -172,28 +184,25 @@ export function HireSheet({
             ))}
           </select>
         </label>
-        {needsApproval ? (
+        {needsApproval && (
           <p className="hire-note">
-            This workspace asks an owner or an administrator to approve a hire. They are named when the
-            request is approved.
+            This workspace asks an owner or an administrator to approve a hire. The names and the
+            overnight model you choose here ride with the request.
           </p>
-        ) : (
-          <fieldset className="hire-names">
-            <legend>Names</legend>
-            {names.map((name, index) => (
-              <label key={index}>
-                <span className="sr-only">Instance {index + 1}</span>
-                <input
-                  value={name}
-                  maxLength={120}
-                  onChange={(event) =>
-                    setEdits((current) => ({ ...current, [index]: event.target.value }))
-                  }
-                />
-              </label>
-            ))}
-          </fieldset>
         )}
+        <fieldset className="hire-names">
+          <legend>Names</legend>
+          {names.map((name, index) => (
+            <label key={index}>
+              <span className="sr-only">Instance {index + 1}</span>
+              <input
+                value={name}
+                maxLength={120}
+                onChange={(event) => setEdits((current) => ({ ...current, [index]: event.target.value }))}
+              />
+            </label>
+          ))}
+        </fieldset>
         <section className="hire-effect">
           <h3>What this adds</h3>
           <dl>
@@ -218,7 +227,7 @@ export function HireSheet({
                 <dd>
                   {projection.estimatedCost === undefined
                     ? 'No rates set'
-                    : `$${projection.estimatedCost.toFixed(2)} this period`}
+                    : `${money(projection.estimatedCost)} this period`}
                 </dd>
               </div>
             )}

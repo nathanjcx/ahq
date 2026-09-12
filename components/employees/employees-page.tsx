@@ -5,7 +5,7 @@ import { useState } from 'react';
 import type { PageProps } from '../app/page-props';
 import { EmptySection } from '../shared/empty';
 import { modelName } from '../shared/format';
-import { HireSheet } from '../shared/hire-sheet';
+import { HireSheet, hireContext } from '../shared/hire-sheet';
 import { Avatar } from '../shared/marks';
 import { MasterDetail, useMasterDetail } from '../shared/master-detail';
 import { PageIntro } from '../shared/page-intro';
@@ -13,7 +13,7 @@ import { relativeTime } from '../shared/time';
 import { useUiQuery } from '../shared/use-ui-query';
 import { EmployeeDetail } from './employee-detail';
 import { groupInstances, isReserved, readinessLabel, reservedStaff, shiftLabel } from './instances';
-import type { Employee, InstanceStatus, Listing } from '@/lib/contracts';
+import type { Employee, Floor, InstanceStatus, Listing } from '@/lib/contracts';
 import { pluralize } from '@/lib/text';
 import { uiApi } from '@/lib/ui-api';
 import './employees.css';
@@ -48,8 +48,14 @@ function InstanceCard({
 }
 
 /** Requests waiting on an owner or an administrator under the `approval` hiring policy. */
-function HireRequests({ canDecide, run, actions }: Pick<Props, 'run' | 'actions'> & { canDecide: boolean }) {
+function HireRequests({
+  canDecide,
+  floors,
+  run,
+  actions,
+}: Pick<Props, 'run' | 'actions'> & { canDecide: boolean; floors: Floor[] }) {
   const requests = useUiQuery(uiApi.hireRequests, {});
+  const floorName = (id?: string) => floors.find((floor) => floor.id === id)?.name ?? 'Lobby';
   const pending = requests?.filter((request) => request.status === 'pending') ?? [];
   if (!pending.length) return null;
   return (
@@ -68,7 +74,12 @@ function HireRequests({ canDecide, run, actions }: Pick<Props, 'run' | 'actions'
                 {request.count} × {request.listingName}
               </h3>
               <p>
-                {request.requestedByName} asked {relativeTime(request.createdAt)}
+                {request.requestedByName} asked {relativeTime(request.createdAt)} ·{' '}
+                {floorName(request.floorId)}
+              </p>
+              <p className="request-detail">
+                {request.names?.length ? request.names.join(', ') : 'Names chosen on approval'}
+                {request.overnightModel ? ` · overnight on ${modelName(request.overnightModel)}` : ''}
               </p>
             </div>
             {canDecide ? (
@@ -116,13 +127,7 @@ export function EmployeesPage({ listings, ...props }: Props) {
   const selected =
     visible.find((employee) => employee.id === props.selectedEmployee) ?? visible[0] ?? null;
   const statusFor = (id: string) => statuses?.find((entry) => entry.employeeId === id);
-  const role = dashboard.workspace?.role ?? 'member';
-  const hiringPolicy = dashboard.settings?.hiringPolicy ?? 'anyone';
-  const needsApproval = hiringPolicy === 'approval' && role === 'member';
-  const usedTokens = (dashboard.workspace?.usage.byModel ?? []).reduce(
-    (total, row) => total + row.input + row.output,
-    0,
-  );
+  const { needsApproval } = hireContext(dashboard);
   const openCard = (employee: Employee) => {
     onSelectEmployee(employee.id);
     openDetail();
@@ -141,7 +146,12 @@ export function EmployeesPage({ listings, ...props }: Props) {
           </button>
         }
       />
-      <HireRequests canDecide={props.canManageWorkspace} run={run} actions={actions} />
+      <HireRequests
+        canDecide={props.canManageWorkspace}
+        floors={dashboard.floors}
+        run={run}
+        actions={actions}
+      />
       {dashboard.employees.length ? (
         <MasterDetail
           className="employee-layout"
@@ -270,12 +280,8 @@ export function EmployeesPage({ listings, ...props }: Props) {
       {hiring && (
         <HireSheet
           listing={hiring.listing}
-          employees={dashboard.employees}
-          floors={dashboard.floors}
+          dashboard={dashboard}
           floorId={hiring.floorId}
-          hiringPolicy={hiringPolicy}
-          role={role}
-          usedTokens={usedTokens}
           onClose={() => setHiring(null)}
           onHire={(options) =>
             run(

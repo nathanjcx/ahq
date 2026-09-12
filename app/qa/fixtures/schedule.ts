@@ -27,7 +27,8 @@ const settings: WorkspaceSettings = {
   updatedAt: Date.UTC(2026, 2, 16, 17, 5),
 };
 
-const summary: ScheduleSummary = {
+/** The dashboard carries this too, so the office and the calendar know what hour it is. */
+export const scheduleSummary: ScheduleSummary = {
   timezone: settings.timezone,
   workingDays: settings.workingDays,
   startHour: settings.startHour,
@@ -42,5 +43,5 @@ const summary: ScheduleSummary = {
 
 export const scheduleQueries: FixtureQueries = {
   'schedule:settings': settings,
-  'schedule:summary': summary,
+  'schedule:summary': scheduleSummary,
 };

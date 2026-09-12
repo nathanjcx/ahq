@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { boardCards } from '@/components/floors/floor-board';
 import { afterHours, daylight, windowless } from '@/components/office/daylight';
 import {
   BOARD_CARDS,
@@ -15,6 +16,7 @@ import {
 } from '@/components/office/office-layout';
 import { sheetCount } from '@/components/office/office-props';
 import { shelfBinders } from '@/components/office/office-rooms';
+import type { Task, TaskStatus } from '@/lib/contracts';
 
 const card = (id: string, dependsOn: string[] = []): BoardCard => ({
   id,
@@ -49,6 +51,39 @@ describe('boardLayout', () => {
   it('draws one string per pair however often the dependency is repeated', () => {
     const { strings } = boardLayout([card('a'), card('b', ['a', 'a'])]);
     expect(strings).toHaveLength(1);
+  });
+});
+
+describe('boardCards', () => {
+  const task = (id: string, status: TaskStatus, dependsOn?: string[]): Task => ({
+    id,
+    employeeId: 'emp_1',
+    employeeName: 'Ada',
+    createdBy: 'user_1',
+    createdByName: 'Dana',
+    isOwner: true,
+    visibility: 'workspace',
+    title: `Task ${id}`,
+    prompt: 'Do the thing',
+    status,
+    createdAt: 0,
+    updatedAt: 0,
+    model: 'gpt-6-astra',
+    ...(dependsOn ? { dependsOn } : {}),
+  });
+
+  it('gives every card its task id, so a waiting string can find it', () => {
+    const cards = boardCards([task('tsk_a', 'running'), task('tsk_b', 'waiting', ['tsk_a'])]);
+    expect(cards).toEqual([
+      { id: 'tsk_a', title: 'Task tsk_a', status: 'active', dependsOn: [] },
+      { id: 'tsk_b', title: 'Task tsk_b', status: 'waiting', dependsOn: ['tsk_a'] },
+    ]);
+    expect(boardLayout(cards).strings).toEqual([{ from: 'tsk_a', to: 'tsk_b' }]);
+  });
+
+  it('leaves work the floor is no longer carrying off the board', () => {
+    const cards = boardCards([task('tsk_a', 'failed'), task('tsk_b', 'cancelled'), task('tsk_c', 'completed')]);
+    expect(cards.map((entry) => [entry.id, entry.status])).toEqual([['tsk_c', 'done']]);
   });
 });
 

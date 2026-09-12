@@ -3,7 +3,7 @@
 import { ShieldCheck, Square, UserRoundPlus } from 'lucide-react';
 import { useState } from 'react';
 import { EmptyPane } from '../shared/empty';
-import { statusLabel } from '../shared/format';
+import { statusLabel, usageLine } from '../shared/format';
 import { StatusMark } from '../shared/marks';
 import { AuditTab } from './audit-tab';
 import { HandoffSheet } from './handoff-sheet';
@@ -96,10 +96,7 @@ export function TaskDetail({
         </p>
       )}
       {usage && (
-        <p className="task-usage">
-          {usage.input.toLocaleString()} input · {usage.cached.toLocaleString()} cached ·{' '}
-          {usage.output.toLocaleString()} output tokens
-        </p>
+        <p className="task-usage">{usageLine(usage)}</p>
       )}
       <div className="task-tabs" role="tablist" aria-label="Task detail">
         {TABS.map((entry) => (

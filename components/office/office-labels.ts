@@ -4,6 +4,23 @@ import type { Activity, Attention } from './activity';
 export type LabelMode = 'names' | 'dots' | 'off';
 export const LABEL_MODES: LabelMode[] = ['names', 'dots', 'off'];
 
+/** A name a pill shows whole rather than shortening to one word. */
+const SHORT_ENOUGH = 12;
+
+/**
+ * What a figure is called on a pill, where there is room for about one word. The reserved staff are
+ * "The auditor", "The janitor", "The triage lead", and a floor of figures all labelled "The" says
+ * nothing, so a leading article gives way to the word that follows it. Anything else short enough to
+ * fit stays whole — "Ada 2" is not Ada — and a long name keeps its first word.
+ */
+export function shortName(name: string): string {
+  const trimmed = name.trim();
+  const words = trimmed.split(/\s+/);
+  const lead = words[0].toLowerCase() === 'the' && words.length > 1 ? words[1] : undefined;
+  if (lead) return lead.charAt(0).toUpperCase() + lead.slice(1);
+  return trimmed.length <= SHORT_ENOUGH ? trimmed : words[0];
+}
+
 /** How far up a pill moves to clear the one below it, and how many steps it may take. */
 export const LABEL_STEP = 20;
 export const LABEL_STEPS = 4;

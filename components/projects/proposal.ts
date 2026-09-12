@@ -10,19 +10,6 @@ const DAY = 86_400_000;
 type Milestone = RoadmapProposal['milestones'][number];
 type Task = Milestone['tasks'][number];
 
-/** A date input's value for a deadline, in the viewer's own zone, or empty when there is none. */
-export function dateValue(at?: number) {
-  if (at === undefined) return '';
-  const local = new Date(at);
-  return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(local.getDate()).padStart(2, '0')}`;
-}
-
-/** A date input's value as a moment: midday, so a timezone cannot move it to the day before. */
-export function dateTime(value: string) {
-  const at = new Date(`${value}T12:00:00`).getTime();
-  return Number.isNaN(at) ? undefined : at;
-}
-
 export function editMilestone(
   proposal: RoadmapProposal,
   key: string,

@@ -357,7 +357,7 @@ functions first, then the three services on the same commit.
 ## Known gaps
 
 - Slack and email notification channels deliver nothing; see [Notifications](#notifications).
-- There is no interface yet for the schedule, the policies, the allow-lists, the standards text, or
-  memory administration: `schedule:updateSettings`, `memory:*`, `triage:setRules`, and the rest exist
-  as Convex functions with no page behind them (page lands with phase four). Until then they are set
-  through the Convex dashboard or a script.
+- The schedule, the plan and its budgets, the policies, the allow-lists, and the standards text are
+  all edited in the Settings panel, which saves through one `schedule:updateSettings` call; memory
+  administration is the Records page and the triage rules are the Triage floor's Intake tab. Nothing
+  here needs the Convex dashboard any more.

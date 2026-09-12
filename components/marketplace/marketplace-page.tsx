@@ -4,7 +4,7 @@ import { ArrowRight, Bot, LockKeyhole, Search, ShieldCheck, SlidersHorizontal, U
 import { useState, type CSSProperties } from 'react';
 import type { PageProps } from '../app/page-props';
 import { providerName } from '../shared/format';
-import { HireSheet } from '../shared/hire-sheet';
+import { HireSheet, hireContext } from '../shared/hire-sheet';
 import { ProviderMark } from '../shared/marks';
 import { PageIntro } from '../shared/page-intro';
 import { missingRequiredCapabilities } from './capabilities';
@@ -37,13 +37,7 @@ export function MarketplacePage({ listings, ...props }: Props) {
   const [selected, setSelected] = useState<Listing | null>(null);
   const [hiring, setHiring] = useState<Listing | null>(null);
 
-  const role = dashboard.workspace?.role ?? 'member';
-  const hiringPolicy = dashboard.settings?.hiringPolicy ?? 'anyone';
-  const needsApproval = hiringPolicy === 'approval' && role === 'member';
-  const usedTokens = (dashboard.workspace?.usage.byModel ?? []).reduce(
-    (total, row) => total + row.input + row.output,
-    0,
-  );
+  const { needsApproval } = hireContext(dashboard);
   const categories = [...new Set(listings.map((listing) => listing.category))].sort();
   const shown = listings.filter((listing) => {
     const haystack = `${listing.name} ${listing.role} ${listing.category} ${listing.description} ${listing.strengths.join(' ')} ${listing.capabilities.map((capability) => providerName(capability.provider)).join(' ')}`;
@@ -236,11 +230,7 @@ export function MarketplacePage({ listings, ...props }: Props) {
       {hiring && (
         <HireSheet
           listing={hiring}
-          employees={dashboard.employees}
-          floors={dashboard.floors}
-          hiringPolicy={hiringPolicy}
-          role={role}
-          usedTokens={usedTokens}
+          dashboard={dashboard}
           onClose={() => setHiring(null)}
           onHire={(options) =>
             run(

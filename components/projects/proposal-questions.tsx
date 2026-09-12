@@ -2,7 +2,7 @@
 
 import { CircleHelp, UserPlus } from 'lucide-react';
 import { useState } from 'react';
-import type { Floor, RoadmapProposal } from '@/lib/contracts';
+import type { RoadmapProposal } from '@/lib/contracts';
 
 /** What a bottleneck question is about, in the words the panel uses. */
 const KIND_LABEL: Record<RoadmapProposal['prompts'][number]['kind'], string> = {
@@ -17,57 +17,9 @@ export interface HireSuggestion {
   listingId: string;
   name: string;
   floorId: string;
+  floorName: string;
   count: number;
   reason: string;
-}
-
-function HireAnswer({
-  suggestion,
-  floors,
-  busy,
-  onHire,
-}: {
-  suggestion: HireSuggestion;
-  floors: Floor[];
-  busy: boolean;
-  onHire: (listingId: string, floorId: string, count: number) => void;
-}) {
-  const [floorId, setFloorId] = useState(suggestion.floorId);
-  const [count, setCount] = useState(suggestion.count);
-  return (
-    <div className="question-answer">
-      <label>
-        <span className="sr-only">How many to hire</span>
-        <input
-          type="number"
-          min={1}
-          max={20}
-          value={count}
-          onChange={(event) => setCount(Math.min(20, Math.max(1, Number(event.target.value) || 1)))}
-        />
-      </label>
-      <strong>× {suggestion.name}</strong>
-      <label>
-        <span className="sr-only">Floor to hire onto</span>
-        <select value={floorId} onChange={(event) => setFloorId(event.target.value)}>
-          {floors.map((floor) => (
-            <option key={floor.id} value={floor.id}>
-              {floor.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button
-        className="secondary-button compact"
-        disabled={busy || !floorId}
-        onClick={() => onHire(suggestion.listingId, floorId, count)}
-      >
-        <UserPlus size={15} />
-        Hire
-      </button>
-      <small>{suggestion.reason}</small>
-    </div>
-  );
 }
 
 function ShiftAnswer({ busy, onShift }: { busy: boolean; onShift: (days: number) => void }) {
@@ -95,11 +47,11 @@ function ShiftAnswer({ busy, onShift }: { busy: boolean; onShift: (days: number)
 
 /**
  * The planner's bottleneck questions, each with the control that answers it: hire onto the floor
- * that is short, move the deadlines, or accept the plan as it stands.
+ * that is short, move the deadlines, or accept the plan as it stands. Hiring opens the workspace's
+ * own hire sheet, so a roadmap hire asks the same questions and obeys the same policy as any other.
  */
 export function ProposalQuestions({
   prompts,
-  floors,
   suggestions,
   busy,
   onHire,
@@ -107,11 +59,10 @@ export function ProposalQuestions({
   onAccept,
 }: {
   prompts: RoadmapProposal['prompts'];
-  /** The floors this project runs on. */
-  floors: Floor[];
   suggestions: HireSuggestion[];
   busy: boolean;
-  onHire: (listingId: string, floorId: string, count: number) => void;
+  /** Opens the hire sheet on this suggestion, which is where the hire is settled. */
+  onHire: (suggestion: HireSuggestion) => void;
   onShift: (days: number) => void;
   onAccept: (index: number) => void;
 }) {
@@ -132,13 +83,17 @@ export function ProposalQuestions({
           </header>
           {prompt.kind === 'capacity' &&
             suggestions.map((suggestion) => (
-              <HireAnswer
-                key={`${suggestion.listingId}-${suggestion.floorId}`}
-                suggestion={suggestion}
-                floors={floors}
-                busy={busy}
-                onHire={onHire}
-              />
+              <div className="question-answer" key={`${suggestion.listingId}-${suggestion.floorId}`}>
+                <button
+                  className="secondary-button compact"
+                  disabled={busy}
+                  onClick={() => onHire(suggestion)}
+                >
+                  <UserPlus size={15} />
+                  Hire {suggestion.count} × {suggestion.name} onto {suggestion.floorName}
+                </button>
+                <small>{suggestion.reason}</small>
+              </div>
             ))}
           {(prompt.kind === 'capacity' || prompt.kind === 'deadline') && (
             <ShiftAnswer busy={busy} onShift={onShift} />

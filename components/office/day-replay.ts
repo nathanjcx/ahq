@@ -55,13 +55,6 @@ export function dayOf(date: string): { from: number; to: number } | undefined {
   return Number.isNaN(from) ? undefined : { from, to: from + DAY_MS };
 }
 
-/** `yyyy-mm-dd` for a day that starts at `from`, in the viewer's own clock. */
-export function dateOf(from: number): string {
-  const day = new Date(from);
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`;
-}
-
 /** The record as it stood at one instant: everything recorded later is cut away. */
 export function dayInputAt(record: DayRecord, at: number): DayInput {
   const shifts: ShiftBlock[] = record.shifts

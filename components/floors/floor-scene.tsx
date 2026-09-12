@@ -25,6 +25,7 @@ export function FloorScene({
   floorId,
   live = false,
   scene,
+  stage,
   controls,
   onEmployee,
 }: {
@@ -40,6 +41,8 @@ export function FloorScene({
   live?: boolean;
   /** Replaces live work, so replay never touches the subscription. */
   scene?: OfficeSceneData;
+  /** Replaces the stage entirely, for a view that brings its own timeline, such as the day replay. */
+  stage?: ReactNode;
   /** A control for this scene, such as replay. Sits in its own dock under the canvas. */
   controls?: ReactNode;
   onEmployee: (id: string) => void;
@@ -51,22 +54,24 @@ export function FloorScene({
       <div className="office-toolbar">
         <span>
           <span className="live-dot" />{' '}
-          {archived ? 'ARCHIVED OFFICE' : !live ? 'OFFICE' : scene ? 'REPLAY' : 'LIVE OFFICE'}
+          {archived ? 'ARCHIVED OFFICE' : !live ? 'OFFICE' : (scene ?? stage) ? 'REPLAY' : 'LIVE OFFICE'}
         </span>
         <span>{pluralize(employeeCount, 'employee')}</span>
       </div>
-      <div className="office-stage floor-stage">
-        <OfficeStage
-          employees={officeEmployees}
-          onSelect={onEmployee}
-          label={label}
-          emptyMessage={emptyMessage}
-          archived={archived}
-          floorId={floorId}
-          live={live && !archived}
-          scene={scene}
-          labels={labels.mode}
-        />
+      <div className={`office-stage floor-stage ${stage ? 'floor-stage-day' : ''}`}>
+        {stage ?? (
+          <OfficeStage
+            employees={officeEmployees}
+            onSelect={onEmployee}
+            label={label}
+            emptyMessage={emptyMessage}
+            archived={archived}
+            floorId={floorId}
+            live={live && !archived}
+            scene={scene}
+            labels={labels.mode}
+          />
+        )}
       </div>
       {controls && <div className="office-dock">{controls}</div>}
       <div className="office-legend">

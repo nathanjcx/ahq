@@ -5,10 +5,10 @@ import type { ChannelFeedActions } from '../shared/channel-feed';
 import { ChannelFeed } from '../shared/channel-feed';
 import { EmptyMini } from '../shared/empty';
 import { OverflowMenu } from '../shared/overflow-menu';
-import { shortDate } from '../shared/time';
+import { dateInputTime, dateInputValue, shortDate } from '../shared/time';
 import { ProjectStatusPill } from './project-card';
 import { ProjectTaskRow } from './project-task-row';
-import { finalDeadline, projectTimeline } from './roadmap';
+import { projectTimeline } from './roadmap';
 import { RoadmapTimeline } from './roadmap-timeline';
 import type { Floor, Project, ProjectTask } from '@/lib/contracts';
 import { pluralize } from '@/lib/text';
@@ -30,6 +30,7 @@ export function ProjectDetail({
   onReplan,
   onArchive,
   onFinish,
+  onProjectDeadline,
   onDeadline,
   onCadence,
   onUnblock,
@@ -44,6 +45,8 @@ export function ProjectDetail({
   onReplan: () => void;
   onArchive: () => void;
   onFinish: () => void;
+  /** The project's own due date, which the planner works back from. */
+  onProjectDeadline: (deadlineAt?: number) => void;
   onDeadline: (taskId: string, deadlineAt?: number) => void;
   onCadence: (taskId: string, cadence: 'once' | 'daily') => void;
   onUnblock: (taskId: string) => void;
@@ -51,7 +54,6 @@ export function ProjectDetail({
   const floorName = (id?: string) => floors.find((floor) => floor.id === id)?.name ?? 'Lobby';
   const timeline = projectTimeline(project, tasks, { floor: floorName });
   const done = project.milestones.filter((milestone) => milestone.status === 'done').length;
-  const deadline = finalDeadline(project);
   const titles = new Map(tasks.map((task) => [task.id, task.title]));
   const held = tasks.filter((task) => HELD.includes(task.status));
   const unplanned = tasks.filter((task) => !task.milestoneId);
@@ -88,8 +90,16 @@ export function ProjectDetail({
               <strong>{project.openTasks}</strong>
             </li>
             <li>
-              <small>Deadline</small>
-              <strong>{deadline ? shortDate(deadline) : 'Not set'}</strong>
+              <label>
+                <small>Deadline</small>
+                <input
+                  type="date"
+                  className="project-deadline"
+                  value={dateInputValue(project.deadlineAt)}
+                  disabled={busy}
+                  onChange={(event) => onProjectDeadline(dateInputTime(event.target.value))}
+                />
+              </label>
             </li>
             <li>
               <small>Floors</small>
