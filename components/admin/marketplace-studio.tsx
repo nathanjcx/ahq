@@ -1,6 +1,6 @@
 'use client';
 
-import { BadgeCheck, Bot, FileText, LockKeyhole, Plus, Store } from 'lucide-react';
+import { BadgeCheck, Bot, Eye, FileText, LockKeyhole, Plus, Store } from 'lucide-react';
 import { useState } from 'react';
 import { EmptyMini } from '../shared/empty';
 import { modelName } from '../shared/format';
@@ -9,6 +9,7 @@ import { relativeTime } from '../shared/time';
 import type { DraftInput } from './draft-input';
 import { draftPublishIssues, type EditorDraft } from './draft-issues';
 import { EmployeeEditor } from './employee-editor';
+import { MarketplaceStudioPreview } from './marketplace-studio-preview';
 import { groupRegistryTools } from './registry';
 import type { Listing, RegistryTool } from '@/lib/contracts';
 import './admin.css';
@@ -29,6 +30,7 @@ export function MarketplaceStudioPage({
   onRetire: (id: string) => void;
 }) {
   const [editing, setEditing] = useState<EditorDraft | 'new' | null>(null);
+  const [previewing, setPreviewing] = useState<EditorDraft | null>(null);
   const registry = groupRegistryTools(registryTools);
   return (
     <div>
@@ -83,6 +85,10 @@ export function MarketplaceStudioPage({
                     </p>
                   </div>
                   <span className="model-pill">{modelName(draft.model)}</span>
+                  <button className="secondary-button" onClick={() => setPreviewing(draft)}>
+                    <Eye size={15} />
+                    Preview
+                  </button>
                   <button className="secondary-button" onClick={() => setEditing(draft)}>
                     Edit
                   </button>
@@ -142,6 +148,9 @@ export function MarketplaceStudioPage({
           />
         )}
       </section>
+      {previewing && (
+        <MarketplaceStudioPreview draft={previewing} onClose={() => setPreviewing(null)} />
+      )}
       {editing && (
         <EmployeeEditor
           draft={editing === 'new' ? undefined : editing}
