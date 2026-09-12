@@ -20,8 +20,10 @@ Five Opus agents in isolated worktrees: memory and janitor; schedule, calendar, 
 
 ### Merged so far
 
-- `agent/memory` (commit `6fc05cd`): memory tables, people and janitor operations, the working memory compiler, 11 new tests. Follow-up in flight: `contest` names the competing entry.
-- `agent/meetings` (commit `ee8e5b3`): meetings engine on hidden per-attendee session tasks, audit findings lifecycle, `ensureReservedInstance`. Job kinds for the worker: `meeting_prep`, `meeting_answer`, `meeting_wrapup`, `audit_run`.
+- `agent/memory` (commit `6fc05cd`): memory tables, people and janitor operations, the working memory compiler, 11 new tests. Follow-up merged (`fcb0b4d`): `contest` names the competing entry and `resolveContest` acts on both sides.
+- `agent/meetings` (commits through `170bb56`): meetings engine on hidden per-attendee session tasks, audit findings lifecycle, `ensureReservedInstance`. Job kinds for the worker: `meeting_prep`, `meeting_answer`, `meeting_wrapup`, `audit_run`.
+
+- `agent/projects` (commit `54b3c95`): projects, milestones, roadmap proposal validation, task dependencies with waiting and blocked states released from `recordEvents` and `tasks:cancel`, 20 new tests.
 
 ### Reconciliation list for the end of phase 2
 
@@ -29,4 +31,5 @@ Five Opus agents in isolated worktrees: memory and janitor; schedule, calendar, 
 - Janitor creation onto `ensureReservedInstance` (convex/lib/audit.ts); triage's private copy too.
 - Marketplace list must exclude reserved versions (`category: 'Reserved'`).
 - Findings and escalations posted to channels once the channels module lands; the calendar must consume `confirmOutcome`'s `meetingRequest`.
+- The dashboard task projection must carry `projectId`, `cadence`, `deadlineAt`, `dependsOn`; `releaseDependents` scans `by_status` for waiting tasks, so an index on dependencies is worth adding when that table grows.
 - The scheduler must call `ensureMeeting` at the prep lead, `ensureAuditRun` after hours, `ensureJanitor` per workspace, and order shifts with `openFindingsFor`.
