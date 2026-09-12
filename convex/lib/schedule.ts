@@ -10,6 +10,7 @@ import {
 } from '../../lib/contracts';
 import type { AlertPaging } from '../../lib/contracts/triage';
 import type { JobKind } from '../../lib/jobs';
+import { PAGING_SEVERITIES } from '../../lib/paging';
 import type { Id } from '../_generated/dataModel';
 import type { MutationCtx } from '../_generated/server';
 import type { Ctx } from '../shared';
@@ -322,23 +323,24 @@ export function planTick(input: PlannerInput): PlannedJob[] {
   // expected to be watching, and re-sent on the re-page interval until three of them stand
   // unanswered. A page costs no model tokens and no slot, so neither the cap nor the concurrency
   // limit holds it back; only an acknowledgement stops it.
-  if (!attended)
+  // A page rides the triage instance's standing session by preference: it runs no turn, and the
+  // incident's own task is busy with one exactly when the page matters most.
+  const pager = input.instances.find((instance) => instance.kind === 'triage');
+  if (!attended && pager)
     for (const alert of input.alerts) {
       const { paging } = alert;
+      if (!PAGING_SEVERITIES.includes(alert.severity)) continue;
       if (paging.acknowledged || paging.attempts >= paging.required) continue;
       if ((paging.nextAttemptAt ?? now) > now) continue;
-      const responder = input.instances.find((instance) => instance.kind === 'triage');
-      // A page rides the responder's standing session by preference: it runs no turn, and the
-      // incident's own task is busy with one exactly when the page matters most.
-      const taskId = responder?.standingTaskId ?? alert.triageTaskId;
-      if (!responder || !taskId) continue;
+      const taskId = pager.standingTaskId ?? alert.triageTaskId;
+      if (!taskId) continue;
       planned.push({
         kind: 'page',
         taskId,
-        employeeId: responder.employeeId,
+        employeeId: pager.employeeId,
         uniqueKey: `page:${alert.alertId}:${alert.pagesSent + 1}`,
         date,
-        model: responder.model,
+        model: pager.model,
         findingIds: [],
         alertId: alert.alertId,
         reason: `page ${paging.attempts + 1} of ${paging.required}: nobody has answered`,
@@ -348,7 +350,8 @@ export function planTick(input: PlannerInput): PlannedJob[] {
   if (settings.dailyTokenCap > 0 && input.usageToday >= settings.dailyTokenCap) return planned;
 
   const candidates: PlannedJob[] = [];
-  for (const meeting of runsWork ? [...input.meetings].sort((a, b) => a.startsAt - b.startsAt) : []) {
+  const meetings = runsWork ? [...input.meetings].sort((a, b) => a.startsAt - b.startsAt) : [];
+  for (const meeting of meetings) {
     if (meeting.startsAt <= now) continue;
     if (workingHoursBetween(now, meeting.startsAt, settings) > PREP_LEAD_HOURS) continue;
     for (const attendee of meeting.attendees) {

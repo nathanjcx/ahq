@@ -1,4 +1,3 @@
-import { pagingState } from '../../lib/paging';
 import type { Doc } from '../_generated/dataModel';
 import type { MutationCtx } from '../_generated/server';
 import { ensureReservedInstance } from './reserved';
@@ -57,9 +56,12 @@ export function isOpenAlert(alert: Doc<'alerts'>) {
 }
 
 /**
- * How far the emergency rule has run for one alert, from the ledger this workspace wrote. The rule
- * itself lives in `lib/paging.ts`, which the planner, the gateway, and the interface read too.
+ * The tools only the emergency allow-list admits: the ones whose use means triage acted without
+ * permission, and so owes an incident report. A tool on both lists was authorized either way.
  */
-export function alertPaging(notifications: Doc<'notifications'>[], now: number) {
-  return pagingState(notifications, now);
+export function emergencyOnlyTools(settings: {
+  triageAllowList: string[];
+  emergencyAllowList: string[];
+}) {
+  return new Set(settings.emergencyAllowList.filter((tool) => !settings.triageAllowList.includes(tool)));
 }

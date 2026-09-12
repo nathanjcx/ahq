@@ -215,12 +215,16 @@ describe('triage and preparation', () => {
     expect(planTick(plan).map((job) => [job.kind, job.alertId, job.uniqueKey])).toEqual([
       ['triage', 'bad', 'triage:bad'],
     ]);
-    // At night nobody is watching, so each open incident is also paged.
+    // At night nobody is watching, so the incident worth waking someone for is also paged. The low
+    // one is not: it waits for the morning.
     expect(
       planTick({ ...plan, now: mondayNight })
-        .map((job) => job.kind)
+        .map((job) => [job.kind, job.alertId])
         .sort(),
-    ).toEqual(['page', 'page', 'triage']);
+    ).toEqual([
+      ['page', 'bad'],
+      ['triage', 'bad'],
+    ]);
     expect(
       planTick({ ...plan, instances: [responder, worker('two', { kind: 'triage', standingTaskId: 't2' })] }),
     ).toHaveLength(2);

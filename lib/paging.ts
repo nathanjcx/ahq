@@ -12,6 +12,8 @@ import type { AlertPaging } from './contracts/triage';
 export const EMERGENCY_ATTEMPTS = 3;
 export const REPAGE_INTERVAL_MS = 7 * 60_000;
 export const EMERGENCY_DELAY_MS = 20 * 60_000;
+/** Severities worth waking a person for. A low or medium incident waits for the morning. */
+export const PAGING_SEVERITIES = ['high', 'critical'];
 
 /** One recorded page, as both Convex and the planner see it. */
 export interface PageAttempt {
@@ -28,12 +30,7 @@ export interface PageAttempt {
  * it are spent, and the count starts again from the next one, which is what makes answering a page
  * mid-incident close the emergency allow-list.
  */
-export interface PagingState extends AlertPaging {
-  /** Whether the ledger alone has opened the emergency allow-list. Attended hours still shut it. */
-  open: boolean;
-}
-
-export function pagingState(attempts: PageAttempt[], now: number): PagingState {
+export function pagingState(attempts: PageAttempt[], now: number): AlertPaging {
   const answeredAt = attempts
     .map((row) => row.acknowledgedAt)
     .filter((at): at is number => at !== undefined)
@@ -62,6 +59,15 @@ export function pagingState(attempts: PageAttempt[], now: number): PagingState {
       : lastAttemptAt === undefined
         ? now
         : lastAttemptAt + REPAGE_INTERVAL_MS,
-    open: enough && opensAt !== undefined && opensAt <= now,
   };
+}
+
+/**
+ * Whether the ledger alone has opened the emergency allow-list: enough pages stand unanswered and the
+ * first of them is old enough. Attended hours are the other half of the gate and are checked where the
+ * workspace's schedule is known.
+ */
+export function emergencyOpen(paging: AlertPaging, now: number) {
+  // An answer spends every page before it, so an acknowledged ledger counts no attempts at all.
+  return paging.attempts >= paging.required && paging.opensAt !== undefined && paging.opensAt <= now;
 }

@@ -1,9 +1,10 @@
 import { v } from 'convex/values';
+import { pagingState } from '../lib/paging';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import { findChannel, recentPosts } from './lib/posts';
 import { ensureSettings, settingsFor } from './lib/schedule';
-import { alertPaging, ensureTriageStaff, isOpenAlert } from './lib/triage';
+import { emergencyOnlyTools, ensureTriageStaff, isOpenAlert } from './lib/triage';
 import { cleanText, requireWorkspace, type Ctx } from './shared';
 
 const MAX_RULES = 50;
@@ -42,7 +43,7 @@ function alertNotifications(ctx: Ctx, alertId: Id<'alerts'>) {
 async function alertView(ctx: Ctx, alert: Doc<'alerts'>, now: number) {
   return {
     ...publicAlert(alert),
-    paging: alertPaging(isOpenAlert(alert) ? await alertNotifications(ctx, alert._id) : [], now),
+    paging: pagingState(isOpenAlert(alert) ? await alertNotifications(ctx, alert._id) : [], now),
   };
 }
 
@@ -196,9 +197,7 @@ export const timeline = query({
     const { workspace } = await requireWorkspace(ctx);
     const alert = await requireAlert(ctx, workspace._id, args.alertId);
     const settings = await settingsFor(ctx, workspace._id);
-    const emergencyOnly = new Set(
-      settings.emergencyAllowList.filter((tool) => !settings.triageAllowList.includes(tool)),
-    );
+    const emergencyOnly = emergencyOnlyTools(settings);
     const entries: {
       id: string;
       at: number;
@@ -292,9 +291,7 @@ export const incidentReports = query({
   handler: async (ctx) => {
     const { workspace } = await requireWorkspace(ctx);
     const settings = await settingsFor(ctx, workspace._id);
-    const emergencyOnly = new Set(
-      settings.emergencyAllowList.filter((tool) => !settings.triageAllowList.includes(tool)),
-    );
+    const emergencyOnly = emergencyOnlyTools(settings);
     const channel = await findChannel(ctx, workspace._id, 'triage', '');
     if (!channel) return [];
     const posts = await ctx.db

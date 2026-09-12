@@ -1,5 +1,6 @@
 import { v, type Infer } from 'convex/values';
 import type { WorkspaceSettings } from '../../lib/contracts';
+import { pagingState } from '../../lib/paging';
 import type { Doc, Id } from '../_generated/dataModel';
 import { internalMutation, mutation, query, type MutationCtx } from '../_generated/server';
 import { ensureAuditRun, ensureAuditor, openFindings } from '../lib/audit';
@@ -22,7 +23,7 @@ import {
 } from '../lib/schedule';
 import { finalAssistantMessage, insertJob, openSessionTask } from '../lib/tasks';
 import { isWorkingTime, workingHoursBetween } from '../lib/time';
-import { alertPaging, ensureTriageStaff } from '../lib/triage';
+import { ensureTriageStaff } from '../lib/triage';
 import { model } from '../schema';
 import { requireService } from '../shared';
 import { taskForRunToken } from './context';
@@ -220,7 +221,7 @@ async function tickWorkspace(ctx: MutationCtx, workspace: Doc<'workspaces'>, now
         severity: alert.severity,
         createdAt: alert.createdAt,
         triageTaskId: alert.triageTaskId,
-        paging: alertPaging(pages, now),
+        paging: pagingState(pages, now),
         pagesSent: pages.length,
       };
     }),

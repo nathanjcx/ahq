@@ -1,4 +1,5 @@
 import { v } from 'convex/values';
+import { emergencyOpen, pagingState } from '../../lib/paging';
 import type { Doc, Id } from '../_generated/dataModel';
 import { mutation, query } from '../_generated/server';
 import type { MutationCtx } from '../_generated/server';
@@ -7,7 +8,7 @@ import { channelFor, findChannel, insertPost } from '../lib/posts';
 import { ensureSettings, settingsFor } from '../lib/schedule';
 import { assignmentForFloor, insertJob, openSessionTask, startTask } from '../lib/tasks';
 import { isAttendedTime } from '../lib/time';
-import { alertPaging, ensureTriageStaff, isOpenAlert, matchesTriageRules } from '../lib/triage';
+import { emergencyOnlyTools, ensureTriageStaff, isOpenAlert, matchesTriageRules } from '../lib/triage';
 import { policiesFor } from '../registry';
 import { severity as severityValidator } from '../schema';
 import { cleanText, clerkRole, requireService, untrustedBlock, type Ctx } from '../shared';
@@ -336,11 +337,6 @@ export const resolve = mutation({
   },
 });
 
-/** The tools only the emergency allow-list admits, which are the ones a report is owed for. */
-function emergencyOnlyTools(settings: { triageAllowList: string[]; emergencyAllowList: string[] }) {
-  return new Set(settings.emergencyAllowList.filter((tool) => !settings.triageAllowList.includes(tool)));
-}
-
 /** Whether this run reached a tool nothing but the emergency rule would have admitted. */
 async function usedEmergencyAuthority(ctx: Ctx, task: Doc<'tasks'>) {
   const settings = await settingsFor(ctx, task.workspaceId);
@@ -353,16 +349,16 @@ async function usedEmergencyAuthority(ctx: Ctx, task: Doc<'tasks'>) {
   return calls.some((call) => call.outcome === 'succeeded' && emergencyOnly.has(call.tool));
 }
 
-/** The incident reports this run has already filed, including a placeholder filed for it. */
-async function incidentReportsFor(ctx: Ctx, task: Doc<'tasks'>) {
+/** Whether this run already has an incident report, its own or the placeholder filed for it. */
+async function hasIncidentReport(ctx: Ctx, task: Doc<'tasks'>) {
   const channel = await findChannel(ctx, task.workspaceId, 'triage', '');
-  if (!channel) return [];
+  if (!channel) return false;
   const posts = await ctx.db
     .query('posts')
     .withIndex('by_channel_kind', (q) => q.eq('channelId', channel._id).eq('kind', 'finding'))
     .order('desc')
     .take(100);
-  return posts.filter(
+  return posts.some(
     (post) => post.taskId === task._id && (post.flag === 'incident' || post.flag === 'missing'),
   );
 }
@@ -437,7 +433,7 @@ export const closeRun = mutation({
     const workspace = await ctx.db.get(task.workspaceId);
     if (!workspace) throw new Error('Workspace not found');
     if (!(await usedEmergencyAuthority(ctx, task))) return { emergency: false, reportMissing: false };
-    if ((await incidentReportsFor(ctx, task)).length) return { emergency: true, reportMissing: false };
+    if (await hasIncidentReport(ctx, task)) return { emergency: true, reportMissing: false };
     const alert = await alertForTask(ctx, task._id);
     const title = alert?.title ?? task.title;
     await postToChannels(ctx, workspace, alert?.affectedFloorIds ?? [], {
@@ -478,7 +474,7 @@ export const pageAlert = mutation({
     const workspace = await ctx.db.get(alert.workspaceId);
     if (!workspace) throw new Error('Workspace not found');
     const now = Date.now();
-    const paging = alertPaging(
+    const paging = pagingState(
       await ctx.db
         .query('notifications')
         .withIndex('by_alert', (q) => q.eq('alertId', alert._id))
@@ -525,7 +521,7 @@ export const authority = query({
     const settings = await settingsFor(ctx, task.workspaceId);
     const alert = await alertForTask(ctx, task._id);
     const now = Date.now();
-    const paging = alertPaging(
+    const paging = pagingState(
       alert && isOpenAlert(alert)
         ? await ctx.db
             .query('notifications')
@@ -540,7 +536,7 @@ export const authority = query({
       allowList: settings.triageAllowList,
       emergencyAllowList: settings.emergencyAllowList,
       unattendedAttempts: paging.attempts,
-      emergency: !attended && paging.open,
+      emergency: !attended && emergencyOpen(paging, now),
     };
   },
 });
