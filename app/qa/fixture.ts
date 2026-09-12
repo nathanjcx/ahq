@@ -1,3 +1,4 @@
+import { scheduleSummary } from './fixtures/schedule';
 import type { EditorDraft } from '@/components/admin/draft-issues';
 import type {
   ActionProposal,
@@ -14,7 +15,6 @@ import type {
   RegistryTool,
   Task,
 } from '@/lib/contracts';
-import { scheduleSummary } from './fixtures/schedule';
 import { asId } from '@/lib/ui-api';
 
 /**
