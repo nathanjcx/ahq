@@ -18,6 +18,17 @@ The code reduction and quality review removed the desktop/demo runtime, obsolete
 
 The local Convex backend also compiled the project schema and functions. Runtime checks created three project floors, staffed them, and assigned tasks. They verified that editing a project preserves existing task context, archiving blocks new work, restoring permits the floor again, and coworkers cannot read each other's private tasks. Unit checks cover inbox project assignments and correction context after archiving. Session configuration checks confirm that a project brief does not enter privileged employee instructions.
 
+Browser checks exercised floor selection, employee filtering, task creation, saved project context, keyboard staffing selection, failed-save retention, automatic navigation after creation, archive/restore, archived task filtering, and mobile drawer focus and width. Screenshots were inspected across successive desktop and mobile passes. The populated views used a temporary UI fixture with data from the local test workspace. That route and its authentication stubs were removed before the production build.
+
+After fixture removal, `npm run build`, TypeScript, and all 35 tests passed. Both Playwright navigation tests passed against `npm start`, and the web health endpoint returned HTTP 200. The production build's route list contains no QA route.
+
+The reduction pass removed the replaced office layout and unused CSS. The quality pass corrected stale project selection, repeated task submission, archived history access, lobby staffing, keyboard focus, and employee status display. An independent review found no remaining scoped issues.
+
+- [Project floors, desktop](screenshots/floors-desktop.png)
+- [Project floors, mobile](screenshots/floors-mobile.png)
+- [Floor staffing, desktop](screenshots/floor-staffing-desktop.png)
+- [Floor staffing, mobile](screenshots/floor-staffing-mobile.png)
+
 See [project floors](project-floors.md) for behavior and deployment order.
 
 ## Visual review

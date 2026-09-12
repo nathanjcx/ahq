@@ -1078,6 +1078,7 @@ function EmployeeAvatar({
             onSelect?.(employee.id);
           }}
           aria-label={`${employee.name}, ${employee.role}`}
+          title={`${employee.name} · ${employee.role}`}
           style={
             {
               '--person-color': color,
@@ -1109,10 +1110,7 @@ function EmployeeAvatar({
               boxShadow: `0 0 8px ${color}60`,
             }}
           />
-          <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
-            <span>{employee.name.split(' ')[0]}</span>
-            <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.85 }}>{employee.role}</span>
-          </span>
+          <span>{employee.name.split(' ')[0]}</span>
           {employee.status.trim().toLowerCase() === 'working' && (
             <span className="office-view-work-dot" title="Working" aria-label="Working">
               <span />
@@ -1227,9 +1225,7 @@ export function OfficeScene({
       const home: Point =
         activity === 'discussion'
           ? [3.3 + (own % 3) * 0.95, 0, own % 6 < 3 ? -4.94 : -1.65]
-          : activity === 'lounge'
-            ? [3.65 + (own % 3) * 1.03, 0, 4.68]
-            : [desks[own % desks.length][0], 0, desks[own % desks.length][2] + 1];
+          : [desks[own % desks.length][0], 0, desks[own % desks.length][2] + 1];
       return { employee, index, activity, home };
     });
     return planned;

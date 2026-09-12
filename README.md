@@ -4,6 +4,8 @@ Astra HQ is a Next.js application for directing AI employees. The web build uses
 
 The application starts with an empty workspace and marketplace. Configure accounts and publish employees using [the deployment guide](docs/deployment.md).
 
+Organize work into [project floors](docs/project-floors.md), each with a brief and a team of employees. Employees can serve on multiple floors. Tasks keep a copy of their original project context for review.
+
 ## Run locally
 
 Install Node 22, copy `.env.example` to `.env.local`, and fill in a development Clerk instance and Convex deployment. Then run:

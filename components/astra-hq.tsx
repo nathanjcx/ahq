@@ -286,12 +286,6 @@ function WorkspaceShell({
     page === 'admin' ? 'Marketplace admin' : (nav.find((item) => item.id === page)?.label ?? 'Office');
 
   useEffect(() => {
-    if (selectedProjectId && !dashboard.projects.some((project) => project.id === selectedProjectId)) {
-      setSelectedProjectId(null);
-    }
-  }, [dashboard.projects, selectedProjectId]);
-
-  useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(null), 3600);
     return () => window.clearTimeout(timer);
@@ -746,11 +740,18 @@ function FloorsOfficePage({
   const archivedProjects = orderedProjects.filter((project) => project.archivedAt);
   const selectedProject = dashboard.projects.find((project) => project.id === selectedProjectId) ?? null;
   const assignedEmployeeIds = new Set(activeProjects.flatMap((project) => project.employeeIds));
+  const lobbyEmployeeIds = new Set(
+    dashboard.tasks
+      .filter((task) => !task.projectId && ['queued', 'running', 'awaiting_approval'].includes(task.status))
+      .map((task) => task.employeeId),
+  );
   const floorEmployees = selectedProject
     ? selectedProject.employeeIds
         .map((id) => dashboard.employees.find((employee) => employee.id === id))
         .filter((employee): employee is Employee => Boolean(employee))
-    : dashboard.employees.filter((employee) => !assignedEmployeeIds.has(employee.id));
+    : dashboard.employees.filter(
+        (employee) => !assignedEmployeeIds.has(employee.id) || lobbyEmployeeIds.has(employee.id),
+      );
   const floorTasks = dashboard.tasks.filter((task) =>
     selectedProject ? task.projectId === selectedProject.id : !task.projectId,
   );
@@ -760,13 +761,17 @@ function FloorsOfficePage({
   const officeEmployees = floorEmployees
     .filter((employee) => employee.status === 'ready')
     .map((employee) => {
-      const work = activeTasks.find((task) => task.employeeId === employee.id);
+      const work = activeTasks.filter((task) => task.employeeId === employee.id);
       return {
         id: employee.id,
         name: employee.name,
         role: employee.role,
         color: employee.color,
-        status: work?.status === 'awaiting_approval' ? 'review' : work ? 'working' : 'ready',
+        status: work.some((task) => task.status === 'awaiting_approval')
+          ? 'review'
+          : work.some((task) => task.status === 'running')
+            ? 'working'
+            : 'ready',
       };
     });
   const floorIndex = orderedProjects.findIndex((project) => project.id === selectedProject?.id);
@@ -809,7 +814,11 @@ function FloorsOfficePage({
             </div>
           </div>
           <div className="directory-list">
-            <button data-active={!selectedProject} onClick={() => onSelectProject(null)}>
+            <button
+              data-active={!selectedProject}
+              aria-pressed={!selectedProject}
+              onClick={() => onSelectProject(null)}
+            >
               <span className="floor-number">L</span>
               <span>
                 <strong>Lobby</strong>
@@ -821,6 +830,7 @@ function FloorsOfficePage({
               <button
                 key={project.id}
                 data-active={selectedProject?.id === project.id}
+                aria-pressed={selectedProject?.id === project.id}
                 onClick={() => onSelectProject(project.id)}
               >
                 <span className="floor-number">
@@ -855,6 +865,7 @@ function FloorsOfficePage({
                 <button
                   key={project.id}
                   data-active={selectedProject?.id === project.id}
+                  aria-pressed={selectedProject?.id === project.id}
                   onClick={() => onSelectProject(project.id)}
                 >
                   <Archive size={13} />
@@ -916,9 +927,13 @@ function FloorsOfficePage({
                   onSelect={onEmployee}
                   label={selectedProject ? `${floorLabel} · ${selectedProject.name}` : 'Lobby'}
                   emptyMessage={
-                    selectedProject
-                      ? 'This floor is ready. Edit the floor to add its project team.'
-                      : 'The lobby is clear. Employees staffed on project floors appear there.'
+                    floorEmployees.length
+                      ? 'This team needs its connections set up. Select an employee to review access.'
+                      : selectedProject
+                        ? 'This floor is ready. Edit the floor to add its project team.'
+                        : dashboard.employees.length
+                          ? 'The lobby is clear. Employees staffed on project floors appear there.'
+                          : 'Your office is ready. Hire your first employee to get started.'
                   }
                 />
               </div>
@@ -1149,35 +1164,48 @@ function InboxPage({
               </div>
               <div className="inbox-preview">{item.preview}</div>
               <div className="detail-actions">
-                <label>
-                  Project floor
-                  <select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
-                    <option value="">Lobby · Unassigned</option>
-                    {activeProjects.map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {project.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Employee
-                  <select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>
-                    <option value="">Choose an employee</option>
-                    {eligibleEmployees.map((employee) => (
-                      <option key={employee.id} value={employee.id}>
-                        {employee.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  className="primary-button compact"
-                  disabled={!employeeId || !configured}
-                  onClick={() => onAssign(item.id, employeeId, projectId || undefined)}
-                >
-                  Assign
-                </button>
+                {item.taskId ? (
+                  <a className="secondary-button" href="#tasks">
+                    Already assigned · View tasks <ArrowRight size={15} />
+                  </a>
+                ) : (
+                  <>
+                    <label>
+                      Project floor
+                      <select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
+                        <option value="">Lobby · Unassigned</option>
+                        {activeProjects.map((project) => (
+                          <option key={project.id} value={project.id}>
+                            {project.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Employee
+                      <select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>
+                        <option value="">Choose an employee</option>
+                        {eligibleEmployees.map((employee) => (
+                          <option key={employee.id} value={employee.id}>
+                            {employee.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      className="primary-button compact"
+                      disabled={
+                        !employeeId ||
+                        !configured ||
+                        Boolean(projectId && !selectedProject) ||
+                        item.status === 'assigned'
+                      }
+                      onClick={() => onAssign(item.id, employeeId, projectId || undefined)}
+                    >
+                      {item.status === 'assigned' ? 'Assigned' : 'Assign'}
+                    </button>
+                  </>
+                )}
                 {item.sourceUrl && (
                   <a className="secondary-button" href={item.sourceUrl} target="_blank" rel="noreferrer">
                     Open source <ExternalLink size={15} />
@@ -1402,13 +1430,12 @@ function TasksPage({
                 <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
                   <option value="all">All floors</option>
                   <option value="lobby">Lobby</option>
-                  {projects
-                    .filter((project) => !project.archivedAt)
-                    .map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {project.name}
-                      </option>
-                    ))}
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                      {project.archivedAt ? ' · Archived' : ''}
+                    </option>
+                  ))}
                 </select>
               </label>
             </div>
@@ -3401,7 +3428,7 @@ function NewTaskPanel({
   defaultProjectId: string | null;
   configured: boolean;
   onClose: () => void;
-  onCreate: (employeeId: string, title: string, prompt: string, projectId?: string) => void;
+  onCreate: (employeeId: string, title: string, prompt: string, projectId?: string) => Promise<void>;
 }) {
   const activeProjects = projects.filter((project) => !project.archivedAt);
   const [projectId, setProjectId] = useState(
@@ -3419,6 +3446,8 @@ function NewTaskPanel({
   );
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const unavailableProject = Boolean(projectId && !selectedProject);
   useEffect(() => {
     if (!ready.some((employee) => employee.id === employeeId)) setEmployeeId(ready[0]?.id ?? '');
   }, [employeeId, ready]);
@@ -3430,9 +3459,15 @@ function NewTaskPanel({
     >
       <form
         className="form-stack task-form"
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
-          onCreate(employeeId, title.trim(), prompt.trim(), projectId || undefined);
+          if (submitting || unavailableProject || !employeeId || !title.trim() || !prompt.trim()) return;
+          setSubmitting(true);
+          try {
+            await onCreate(employeeId, title.trim(), prompt.trim(), projectId || undefined);
+          } finally {
+            setSubmitting(false);
+          }
         }}
       >
         <label>
@@ -3445,7 +3480,13 @@ function NewTaskPanel({
               </option>
             ))}
           </select>
-          <small>{selectedProject ? selectedProject.brief : 'This task will stay in the lobby.'}</small>
+          <small>
+            {unavailableProject
+              ? 'This floor is no longer active. Choose another floor or the lobby.'
+              : selectedProject
+                ? selectedProject.brief
+                : 'This task will stay in the lobby.'}
+          </small>
         </label>
         <label>
           Employee
@@ -3469,6 +3510,7 @@ function NewTaskPanel({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Prepare the weekly customer review"
+            maxLength={200}
             required
           />
         </label>
@@ -3479,6 +3521,7 @@ function NewTaskPanel({
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="Include the outcome, relevant context, and any limits the employee should respect."
+            maxLength={50000}
             required
           />
         </label>
@@ -3486,8 +3529,19 @@ function NewTaskPanel({
           <ShieldCheck size={16} />
           <span>External writes still follow workspace permissions and action review rules.</span>
         </div>
-        <button className="primary-button full" disabled={!configured || !employeeId || !ready.length}>
-          {employees.length ? 'Start task' : 'Hire an employee first'}
+        <button
+          className="primary-button full"
+          disabled={
+            !configured ||
+            !employeeId ||
+            !ready.length ||
+            submitting ||
+            unavailableProject ||
+            !title.trim() ||
+            !prompt.trim()
+          }
+        >
+          {submitting ? 'Starting task…' : employees.length ? 'Start task' : 'Hire an employee first'}
           <ArrowRight size={16} />
         </button>
       </form>

@@ -21,6 +21,11 @@ test('empty workspace navigation and setup stay usable on desktop', async ({ pag
       .getByRole('button', { name: label, exact: true })
       .click();
     await expect(page.locator('.topbar')).toContainText(label);
+    if (label === 'Office') {
+      await expect(page.getByLabel('Building directory')).toBeVisible();
+      await page.locator('canvas').waitFor();
+      await page.waitForTimeout(5000);
+    }
     await page.screenshot({
       path: `test-results/desktop-${label.toLowerCase()}.png`,
       fullPage: true,
@@ -53,6 +58,11 @@ test('mobile navigation keeps every page within the viewport', async ({ page }) 
     await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
       .toBeLessThanOrEqual(390);
+    if (label === 'Office') {
+      await expect(page.getByLabel('Building directory')).toBeVisible();
+      await page.locator('canvas').waitFor();
+      await page.waitForTimeout(5000);
+    }
     await page.screenshot({
       path: `test-results/mobile-${label.toLowerCase()}.png`,
       fullPage: true,
