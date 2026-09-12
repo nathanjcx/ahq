@@ -1,14 +1,13 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
 import type { Doc } from './_generated/dataModel';
+import { toolRegistry, type ProviderId } from './registry';
 import { cleanText, identity, requirePlatformAdmin, requireWorkspace, sha256 } from './shared';
 
 const provider = v.union(
   v.literal('linear'),
   v.literal('slack'),
   v.literal('github'),
-  v.literal('salesforce'),
-  v.literal('servicenow'),
   v.literal('google-workspace'),
   v.literal('canva'),
 );
@@ -25,68 +24,6 @@ const media = v.object({
   alt: v.string(),
 });
 const skill = v.object({ name: v.string(), version: v.string(), sha256: v.string(), content: v.string() });
-const providerIds = [
-  'linear',
-  'slack',
-  'github',
-  'salesforce',
-  'servicenow',
-  'google-workspace',
-  'canva',
-] as const;
-type ProviderId = (typeof providerIds)[number];
-type RegistryTool = { name: string; description: string; mode: 'read' | 'write' | 'blocked' };
-
-function toolRegistry() {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(process.env.MCP_TOOL_REGISTRY_JSON || '{}');
-  } catch {
-    throw new Error('MCP_TOOL_REGISTRY_JSON is invalid JSON');
-  }
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw))
-    throw new Error('MCP_TOOL_REGISTRY_JSON must be an object keyed by provider');
-  const source = raw as Record<string, unknown>;
-  for (const key of Object.keys(source)) {
-    if (!providerIds.includes(key as ProviderId))
-      throw new Error(`MCP_TOOL_REGISTRY_JSON has an unknown provider: ${key}`);
-  }
-  return providerIds.map((providerId) => {
-    const value = source[providerId];
-    if (value === undefined) return { provider: providerId, configured: false, tools: [] as RegistryTool[] };
-    if (!Array.isArray(value))
-      throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId} must be an array`);
-    if (value.length > 2_000) throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId} has too many tools`);
-    const tools = value.map((item, index): RegistryTool => {
-      if (!item || typeof item !== 'object' || Array.isArray(item))
-        throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId}[${index}] is invalid`);
-      const record = item as Record<string, unknown>;
-      if (Object.keys(record).some((key) => key !== 'name' && key !== 'description' && key !== 'mode'))
-        throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId}[${index}] has an unknown field`);
-      if (
-        typeof record.name !== 'string' ||
-        !record.name.trim() ||
-        record.name !== record.name.trim() ||
-        record.name.length > 200
-      )
-        throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId}[${index}].name is invalid`);
-      if (
-        typeof record.description !== 'string' ||
-        !record.description.trim() ||
-        record.description !== record.description.trim() ||
-        record.description.length > 2_000
-      )
-        throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId}[${index}].description is invalid`);
-      if (record.mode !== 'read' && record.mode !== 'write' && record.mode !== 'blocked')
-        throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId}[${index}].mode is invalid`);
-      return { name: record.name, description: record.description, mode: record.mode };
-    });
-    if (new Set(tools.map((tool) => tool.name)).size !== tools.length)
-      throw new Error(`MCP_TOOL_REGISTRY_JSON.${providerId} has duplicate tool names`);
-    return { provider: providerId, configured: true, tools };
-  });
-}
-
 function validateCapabilities(capabilities: Array<{ provider: ProviderId; tools: string[]; optional: boolean }>) {
   const registry = new Map(toolRegistry().map((entry) => [entry.provider, entry]));
   const seenProviders = new Set<ProviderId>();

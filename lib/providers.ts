@@ -7,6 +7,8 @@ export interface ProviderDefinition {
   serverUrl: string;
   documentation: string;
   note: string;
+  /** Provider resources a user can follow in the inbox: label and example ID. */
+  inbox?: { label: string; example: string };
   products?: { name: string; url: string }[];
 }
 export const providers: ProviderDefinition[] = [
@@ -17,7 +19,8 @@ export const providers: ProviderDefinition[] = [
     color: '#6864d9',
     serverUrl: 'https://mcp.linear.app/mcp',
     documentation: 'https://linear.app/docs/mcp',
-    note: 'Connect your Linear account. Every external change is reviewed.',
+    note: 'Sign in with Linear. Every external change is reviewed before it happens.',
+    inbox: { label: 'Linear team IDs', example: 'a1b2c3d4-…' },
   },
   {
     id: 'slack',
@@ -26,7 +29,8 @@ export const providers: ProviderDefinition[] = [
     color: '#7b436c',
     serverUrl: 'https://mcp.slack.com/mcp',
     documentation: 'https://docs.slack.dev/ai/slack-mcp-server/',
-    note: 'Requires an internal or marketplace-published Slack app. Unlisted apps cannot use Slack MCP.',
+    note: 'Sign in with Slack. Your workspace administrator may need to approve the app first.',
+    inbox: { label: 'Slack channel IDs', example: 'C0123ABCD' },
   },
   {
     id: 'google-workspace',
@@ -35,7 +39,7 @@ export const providers: ProviderDefinition[] = [
     color: '#4285f4',
     serverUrl: 'https://gmailmcp.googleapis.com/mcp/v1',
     documentation: 'https://developers.google.com/workspace/guides/configure-mcp-servers',
-    note: 'Developer preview. Connect each product separately. Gmail prepares drafts; sending is unavailable.',
+    note: 'Developer preview. Choose the products to connect, then sign in with Google. Gmail prepares drafts; sending is unavailable.',
     products: [
       { name: 'Gmail', url: 'https://gmailmcp.googleapis.com/mcp/v1' },
       { name: 'Drive', url: 'https://drivemcp.googleapis.com/mcp/v1' },
@@ -52,26 +56,8 @@ export const providers: ProviderDefinition[] = [
     color: '#333b43',
     serverUrl: 'https://api.githubcopilot.com/mcp/',
     documentation: 'https://github.com/github/github-mcp-server',
-    note: 'Use a supported token restricted to the repositories this employee needs.',
-  },
-  {
-    id: 'salesforce',
-    name: 'Salesforce',
-    description: 'Customer records and the relationships behind them.',
-    color: '#129ed7',
-    serverUrl: 'https://api.salesforce.com/platform/mcp/v1/platform/sobject-all',
-    documentation:
-      'https://developer.salesforce.com/docs/platform/hosted-mcp-servers/guide/hosted-mcp-servers-overview.html',
-    note: 'Requires hosted MCP access in your organization. Restrict object and field permissions in Salesforce.',
-  },
-  {
-    id: 'servicenow',
-    name: 'ServiceNow',
-    description: 'Service requests, incidents, and operational work.',
-    color: '#4f7660',
-    serverUrl: '',
-    documentation: 'https://www.servicenow.com/docs/',
-    note: 'Your administrator must approve the instance hostname and configure its MCP server.',
+    note: 'Sign in with GitHub. Organization repositories need the app installed by an organization owner.',
+    inbox: { label: 'Repositories', example: 'acme/repo' },
   },
   {
     id: 'canva',
@@ -80,7 +66,7 @@ export const providers: ProviderDefinition[] = [
     color: '#00a9ae',
     serverUrl: 'https://mcp.canva.com/mcp',
     documentation: 'https://www.canva.dev/docs/mcp/',
-    note: 'Optional for creative employees. Canva must approve your application redirect URL. Available tools depend on the user account.',
+    note: 'Sign in with Canva. Available tools depend on your Canva account.',
   },
 ];
 export const providerCatalog = providers;
@@ -88,6 +74,9 @@ export function getProvider(id: string) {
   const provider = providers.find((p) => p.id === id);
   if (!provider) throw new Error('Unknown integration');
   return provider;
+}
+export function providerServerUrls(provider: ProviderDefinition) {
+  return provider.products?.map((product) => product.url) ?? [provider.serverUrl];
 }
 export const modelOptions = [
   { id: 'gpt-5.6-luna', name: 'Luna', description: 'Small, focused tasks' },

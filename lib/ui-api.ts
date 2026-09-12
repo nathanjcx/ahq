@@ -1,5 +1,5 @@
 import { makeFunctionReference } from 'convex/server';
-import type { Dashboard, Listing, Message, ModelId, ProviderId } from './contracts';
+import type { Dashboard, Listing, Message, ModelId, ProviderId, ProviderReadiness } from './contracts';
 
 type AdminDraft = {
   draftId: string;
@@ -55,9 +55,13 @@ export const uiApi = {
     { kind: 'task'; taskId: string } | { kind: 'proposal'; proposalId: string }
   >('actions:requestCorrection'),
   disconnect: mutation<{ connectionId: string }>('integrations:disconnect'),
-  setConnectionTools: mutation<{ connectionId: string; allowedTools: string[]; resourceScope?: string }>(
-    'integrations:setTools',
-  ),
+  updateConnectionAccess: mutation<{
+    connectionId: string;
+    allowedTools: string[];
+    resourceScope: string;
+    inboxResources: string[];
+  }>('integrations:updateAccess'),
+  readiness: query<Record<string, never>, ProviderReadiness[]>('integrations:readiness'),
   markInboxRead: mutation<{ itemId: string }>('inbox:markRead'),
   assignInbox: mutation<{ itemId: string; employeeId: string; projectId?: string }, { taskId: string }>(
     'inbox:assign',

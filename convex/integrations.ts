@@ -1,37 +1,7 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
-import type { Doc } from './_generated/dataModel';
+import { providerReadiness } from './registry';
 import { canSeeConnection, requireWorkspace } from './shared';
-
-function publicConnection(connection: Doc<'connections'>) {
-  return {
-    id: connection._id,
-    provider: connection.provider,
-    name: connection.name,
-    account: connection.account,
-    status: connection.status,
-    tools: connection.tools,
-    allowedTools: connection.allowedTools,
-    resourceScope: connection.resourceScope,
-    lastCheckedAt: connection.lastCheckedAt,
-    inboxMode: connection.inboxMode,
-    error: connection.error,
-  };
-}
-
-export const connectionForServer = query({
-  args: {},
-  handler: async (ctx) => {
-    const { workspace, actor, role } = await requireWorkspace(ctx);
-    const connections = await ctx.db
-      .query('connections')
-      .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
-      .collect();
-    return connections
-      .filter((connection) => canSeeConnection(connection, actor.subject, role))
-      .map(publicConnection);
-  },
-});
 
 export const disconnect = mutation({
   args: { connectionId: v.id('connections') },
@@ -56,11 +26,22 @@ export const disconnect = mutation({
   },
 });
 
-export const setTools = mutation({
+export const readiness = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireWorkspace(ctx);
+    return providerReadiness();
+  },
+});
+
+const resourceId = /^[-A-Za-z0-9_:/@.]{1,200}$/;
+
+export const updateAccess = mutation({
   args: {
     connectionId: v.id('connections'),
     allowedTools: v.array(v.string()),
-    resourceScope: v.optional(v.string()),
+    resourceScope: v.string(),
+    inboxResources: v.array(v.string()),
   },
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
@@ -71,9 +52,13 @@ export const setTools = mutation({
     const allowedTools = [...new Set(args.allowedTools)];
     if (allowedTools.some((tool) => !connection.tools.includes(tool)))
       throw new Error('An allowed tool was not discovered on this connection');
+    const inboxResources = [...new Set(args.inboxResources.map((id) => id.trim()).filter(Boolean))];
+    if (inboxResources.length > 100 || inboxResources.some((id) => !resourceId.test(id)))
+      throw new Error('Inbox resources must be exact provider IDs');
     await ctx.db.patch(connection._id, {
       allowedTools,
-      resourceScope: args.resourceScope === undefined ? connection.resourceScope : args.resourceScope.trim(),
+      resourceScope: args.resourceScope.trim(),
+      inboxResources,
     });
     return null;
   },

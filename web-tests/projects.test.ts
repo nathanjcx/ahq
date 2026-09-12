@@ -40,7 +40,9 @@ describe('workspace projects', () => {
     process.env.AHQ_SERVICE_SECRET = 'service-test-secret';
     process.env.PLATFORM_ADMIN_USER_IDS = 'platform-admin';
     process.env.MCP_SERVER_URLS_JSON = JSON.stringify({ linear: ['https://mcp.linear.example/'] });
-    process.env.MCP_TOOL_REGISTRY_JSON = JSON.stringify({ linear: [] });
+    process.env.MCP_TOOL_REGISTRY_JSON = JSON.stringify({
+      linear: [{ name: 'get_issue', description: 'Read one issue', mode: 'read' }],
+    });
   });
 
   it('shares floor metadata in one workspace while preserving task and tenant privacy', async () => {
@@ -161,10 +163,7 @@ describe('workspace projects', () => {
       provider: 'linear',
       name: 'Linear',
       account: 'acme',
-      tools: [],
-      allowedTools: [],
-      resourceScope: '',
-      inboxMode: 'push',
+      tools: ['get_issue'],
       serverUrl: 'https://mcp.linear.example',
       credentialCiphertext: 'encrypted-token',
       credentialKeyVersion: 'v1',
@@ -236,10 +235,7 @@ describe('workspace projects', () => {
       provider: 'linear',
       name: 'Linear',
       account: 'acme',
-      tools: [],
-      allowedTools: [],
-      resourceScope: '',
-      inboxMode: 'on-demand',
+      tools: ['get_issue'],
       serverUrl: 'https://mcp.linear.example',
       credentialCiphertext: 'encrypted-token',
       credentialKeyVersion: 'v1',

@@ -5,8 +5,6 @@ const provider = v.union(
   v.literal('linear'),
   v.literal('slack'),
   v.literal('github'),
-  v.literal('salesforce'),
-  v.literal('servicenow'),
   v.literal('google-workspace'),
   v.literal('canva'),
 );
@@ -107,6 +105,7 @@ export default defineSchema({
     tools: v.array(v.string()),
     allowedTools: v.array(v.string()),
     resourceScope: v.string(),
+    inboxResources: v.optional(v.array(v.string())),
     inboxMode: v.union(v.literal('push'), v.literal('on-demand'), v.literal('unsupported')),
     serverUrl: v.string(),
     credentialCiphertext: v.string(),
@@ -117,7 +116,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index('by_workspace', ['workspaceId'])
-    .index('by_owner', ['ownerSubject']),
+    .index('by_owner', ['ownerSubject'])
+    .index('by_provider_status', ['provider', 'status']),
   tasks: defineTable({
     workspaceId: v.id('workspaces'),
     projectId: v.optional(v.id('projects')),

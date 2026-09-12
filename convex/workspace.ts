@@ -23,6 +23,7 @@ function publicConnection(connection: Doc<'connections'>) {
     tools: connection.tools,
     allowedTools: connection.allowedTools,
     resourceScope: connection.resourceScope,
+    inboxResources: connection.inboxResources ?? [],
     lastCheckedAt: connection.lastCheckedAt,
     inboxMode: connection.inboxMode,
     error: connection.error,

@@ -22,8 +22,8 @@ export interface OAuthState {
   provider: string;
   name: string;
   serverUrl: string;
-  allowedTools: string[];
-  resourceScope: string;
+  /** Further servers of the same provider to connect after this one, in order. */
+  queue?: string[];
   createdAt: number;
   verifier?: string;
   discovery?: OAuthDiscoveryState;
@@ -34,13 +34,18 @@ export interface StoredCredential {
   accessToken?: string;
   oauth?: OAuthState;
 }
-function config(provider: string, serverUrl?: string): OAuthConfig {
+function configured(provider: string, serverUrl?: string): OAuthConfig | undefined {
   const configs = JSON.parse(process.env.MCP_OAUTH_CONFIG_JSON || '{}') as Record<string, OAuthConfig>;
   const value = (serverUrl ? configs[serverUrl] : undefined) || configs[provider];
-  if (!value?.clientId)
-    throw new Error(
-      `OAuth for ${provider} is not configured. An administrator must register its OAuth client, or you can connect with a scoped access token.`,
-    );
+  return value?.clientId ? value : undefined;
+}
+export function oauthConfigured(provider: string, serverUrl?: string) {
+  return Boolean(configured(provider, serverUrl));
+}
+function config(provider: string, serverUrl?: string): OAuthConfig {
+  const value = configured(provider, serverUrl);
+  if (!value)
+    throw new Error(`Sign-in for ${provider} is not set up yet. Ask your administrator to register its OAuth client.`);
   return value;
 }
 function providerFor(
@@ -129,4 +134,13 @@ export async function finishOAuth(state: OAuthState, code: string) {
 }
 export function oauthProvider(state: OAuthState, save: (state: OAuthState) => Promise<void>) {
   return providerFor(state, save).provider;
+}
+export function oauthCookie(requestUrl: string) {
+  return {
+    httpOnly: true,
+    sameSite: 'lax' as const,
+    path: '/api/integrations/callback',
+    maxAge: 600,
+    secure: new URL(requestUrl).protocol === 'https:',
+  };
 }

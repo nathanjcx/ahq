@@ -3,14 +3,13 @@ import { mutation, query } from './_generated/server';
 import type { Doc, Id } from './_generated/dataModel';
 import type { MutationCtx, QueryCtx } from './_generated/server';
 import { addSpend, utcBillingPeriod } from './budget';
+import { assertApprovedServerUrl, grantableTools, providerReadiness } from './registry';
 import { authKey, requireService, sha256, stableJson } from './shared';
 
 const provider = v.union(
   v.literal('linear'),
   v.literal('slack'),
   v.literal('github'),
-  v.literal('salesforce'),
-  v.literal('servicenow'),
   v.literal('google-workspace'),
   v.literal('canva'),
 );
@@ -67,25 +66,6 @@ function privateConnection(connection: Doc<'connections'>) {
     ownerSubject: connection.ownerSubject,
     visibleToSubjects: connection.visibleToSubjects,
   };
-}
-
-function assertApprovedServerUrl(providerId: string, serverUrl: string) {
-  let url: URL;
-  try {
-    url = new URL(serverUrl);
-  } catch {
-    throw new Error('Invalid MCP server URL');
-  }
-  if (url.protocol !== 'https:' || url.username || url.password)
-    throw new Error('MCP server URL must use HTTPS without embedded credentials');
-  let configured: Record<string, string[]>;
-  try {
-    configured = JSON.parse(process.env.MCP_SERVER_URLS_JSON || '{}');
-  } catch {
-    throw new Error('MCP_SERVER_URLS_JSON is invalid');
-  }
-  const approved = configured[providerId] || [];
-  if (!approved.includes(url.toString())) throw new Error('MCP server URL is not in the approved registry');
 }
 
 async function activeTaskContext(ctx: ReadCtx, task: Doc<'tasks'>) {
@@ -921,9 +901,6 @@ export const connectIntegration = mutation({
     name: v.string(),
     account: v.string(),
     tools: v.array(v.string()),
-    allowedTools: v.array(v.string()),
-    resourceScope: v.string(),
-    inboxMode: v.union(v.literal('push'), v.literal('on-demand'), v.literal('unsupported')),
     serverUrl: v.string(),
     credentialCiphertext: v.string(),
     credentialKeyVersion: v.string(),
@@ -936,8 +913,11 @@ export const connectIntegration = mutation({
     assertApprovedServerUrl(args.provider, args.serverUrl);
     if (!args.credentialCiphertext || args.credentialCiphertext.length > 100_000)
       throw new Error('Encrypted credential is missing or too large');
-    if (args.allowedTools.some((tool) => !args.tools.includes(tool)))
-      throw new Error('Allowed tools must be discovered first');
+    const tools = [...new Set(args.tools)];
+    // OAuth consent grants account scopes. Tool grants come from the administrator's reviewed registry.
+    const allowedTools = grantableTools(args.provider, tools);
+    if (!allowedTools.length)
+      throw new Error('None of the tools on this server are in the reviewed tool registry yet.');
     const owned = await ctx.db
       .query('connections')
       .withIndex('by_owner', (q) => q.eq('ownerSubject', args.authSubject))
@@ -957,10 +937,8 @@ export const connectIntegration = mutation({
       name: args.name,
       account: args.account,
       status: 'connected' as const,
-      tools: [...new Set(args.tools)],
-      allowedTools: [...new Set(args.allowedTools)],
-      resourceScope: args.resourceScope,
-      inboxMode: args.inboxMode,
+      tools,
+      allowedTools,
       serverUrl: args.serverUrl,
       credentialCiphertext: args.credentialCiphertext,
       credentialKeyVersion: args.credentialKeyVersion,
@@ -971,8 +949,37 @@ export const connectIntegration = mutation({
       await ctx.db.patch(existing._id, values);
       return { connectionId: existing._id };
     }
-    const connectionId = await ctx.db.insert('connections', { ...values, createdAt: Date.now() });
+    const connectionId = await ctx.db.insert('connections', {
+      ...values,
+      resourceScope: '',
+      inboxMode: 'on-demand',
+      createdAt: Date.now(),
+    });
     return { connectionId };
+  },
+});
+
+export const readiness = query({
+  args: { secret: v.string() },
+  handler: async (ctx, args) => {
+    void ctx;
+    requireService(args.secret);
+    return providerReadiness();
+  },
+});
+
+export const markConnectionError = mutation({
+  args: { secret: v.string(), connectionId: v.id('connections'), error: v.string() },
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const connection = await ctx.db.get(args.connectionId);
+    if (!connection || connection.status !== 'connected') return null;
+    await ctx.db.patch(connection._id, {
+      status: 'degraded',
+      error: args.error.slice(0, 500),
+      lastCheckedAt: Date.now(),
+    });
+    return null;
   },
 });
 
@@ -1296,68 +1303,71 @@ export const recordActionResult = mutation({
   },
 });
 
+const inboxItem = v.object({
+  externalId: v.string(),
+  title: v.string(),
+  preview: v.string(),
+  sourceUrl: v.optional(v.string()),
+  createdAt: v.number(),
+});
+
+async function insertInboxItems(
+  ctx: MutationCtx,
+  connection: Doc<'connections'>,
+  items: Array<{ externalId: string; title: string; preview: string; sourceUrl?: string; createdAt: number }>,
+) {
+  let inserted = 0;
+  for (const item of items) {
+    const existing = await ctx.db
+      .query('inbox')
+      .withIndex('by_connection_external', (q) =>
+        q.eq('connectionId', connection._id).eq('externalId', item.externalId),
+      )
+      .unique();
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        title: item.title,
+        preview: item.preview,
+        sourceUrl: item.sourceUrl,
+        createdAt: item.createdAt,
+      });
+      continue;
+    }
+    await ctx.db.insert('inbox', {
+      workspaceId: connection.workspaceId,
+      connectionId: connection._id,
+      ownerSubject: connection.ownerSubject,
+      visibleToSubjects: [],
+      externalId: item.externalId,
+      provider: connection.provider,
+      title: item.title,
+      preview: item.preview,
+      sourceUrl: item.sourceUrl,
+      createdAt: item.createdAt,
+      status: 'unread',
+    });
+    inserted += 1;
+  }
+  return inserted;
+}
+
 export const ingestInbox = mutation({
   args: {
     secret: v.string(),
     connectionId: v.id('connections'),
-    items: v.array(
-      v.object({
-        externalId: v.string(),
-        title: v.string(),
-        preview: v.string(),
-        sourceUrl: v.optional(v.string()),
-        createdAt: v.number(),
-        visibilitySubjects: v.optional(v.array(v.string())),
-      }),
-    ),
+    items: v.array(inboxItem),
     cursor: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     requireService(args.secret);
     if (
-      args.items.length > 200 ||
+      args.items.length > 100 ||
       args.items.some((item) => item.title.length > 500 || item.preview.length > 20_000)
     )
       throw new Error('Inbox batch is too large');
     const connection = await ctx.db.get(args.connectionId);
     if (!connection || connection.status !== 'connected') throw new Error('Connection is inactive');
-    let inserted = 0;
-    for (const item of args.items) {
-      const existing = await ctx.db
-        .query('inbox')
-        .withIndex('by_connection_external', (q) =>
-          q.eq('connectionId', connection._id).eq('externalId', item.externalId),
-        )
-        .unique();
-      const requested = item.visibilitySubjects || [];
-      const visibleToSubjects = requested.filter(
-        (subject) => subject === connection.ownerSubject || connection.visibleToSubjects.includes(subject),
-      );
-      if (existing) {
-        await ctx.db.patch(existing._id, {
-          title: item.title,
-          preview: item.preview,
-          sourceUrl: item.sourceUrl,
-          createdAt: item.createdAt,
-          visibleToSubjects,
-        });
-      } else {
-        await ctx.db.insert('inbox', {
-          workspaceId: connection.workspaceId,
-          connectionId: connection._id,
-          ownerSubject: connection.ownerSubject,
-          visibleToSubjects,
-          externalId: item.externalId,
-          provider: connection.provider,
-          title: item.title,
-          preview: item.preview,
-          sourceUrl: item.sourceUrl,
-          createdAt: item.createdAt,
-          status: 'unread',
-        });
-        inserted += 1;
-      }
-    }
+    const inserted = await insertInboxItems(ctx, connection, args.items);
     await ctx.db.patch(connection._id, {
       inboxMode: 'push',
       cursor: args.cursor === undefined ? connection.cursor : args.cursor,
@@ -1365,6 +1375,28 @@ export const ingestInbox = mutation({
       error: undefined,
     });
     return { inserted };
+  },
+});
+
+/** Delivers one provider event to every connected account following one of its resources. */
+export const ingestInboxByResource = mutation({
+  args: { secret: v.string(), provider, resourceIds: v.array(v.string()), items: v.array(inboxItem) },
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    if (args.items.length > 100 || args.items.some((item) => item.title.length > 500 || item.preview.length > 20_000))
+      throw new Error('Inbox batch is too large');
+    const connections = await ctx.db
+      .query('connections')
+      .withIndex('by_provider_status', (q) => q.eq('provider', args.provider).eq('status', 'connected'))
+      .collect();
+    let delivered = 0;
+    for (const connection of connections) {
+      if (!connection.inboxResources?.some((resource) => args.resourceIds.includes(resource))) continue;
+      delivered += await insertInboxItems(ctx, connection, args.items);
+      if (connection.inboxMode !== 'push')
+        await ctx.db.patch(connection._id, { inboxMode: 'push', lastCheckedAt: Date.now() });
+    }
+    return { delivered };
   },
 });
 

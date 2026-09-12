@@ -22,19 +22,9 @@ export function approvedMcpUrl(providerId: string, raw: string): URL {
     (url.port && url.port !== '443')
   )
     throw new Error('MCP servers must use HTTPS without embedded credentials or custom ports');
-  const official = [provider.serverUrl, ...(provider.products?.map((p) => p.url) || [])].filter(Boolean);
-  const approved = (process.env.MCP_APPROVED_HOSTS || '')
-    .split(',')
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  if (
-    !official.includes(url.toString()) &&
-    !official.includes(raw) &&
-    !approved.includes(url.hostname.toLowerCase())
-  )
-    throw new Error(
-      'This MCP endpoint is not approved. Ask your platform administrator to register its hostname.',
-    );
+  const official = [provider.serverUrl, ...(provider.products?.map((p) => p.url) || [])];
+  if (!official.includes(url.toString()) && !official.includes(raw))
+    throw new Error('This MCP endpoint is not in the provider registry.');
   if (isIP(url.hostname.replace(/^\[|\]$/g, '')))
     throw new Error('MCP endpoints must use an approved DNS hostname');
   return url;

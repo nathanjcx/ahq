@@ -2,70 +2,44 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { actor, failure, jsonBody } from '@/lib/server/http';
 import { approvedMcpUrl } from '@/lib/server/network';
-import { discoverTools } from '@/lib/server/mcp';
-import { startOAuth } from '@/lib/server/oauth';
+import { oauthConfigured, oauthCookie, startOAuth } from '@/lib/server/oauth';
 import { seal } from '@/lib/server/secrets';
-import { mutate } from '@/lib/server/backend';
-import { validateScope } from '@/lib/server/tool-policy';
+import { query } from '@/lib/server/backend';
+import { getProvider } from '@/lib/providers';
+import type { ProviderReadiness } from '@/lib/contracts';
 export const runtime = 'nodejs';
 const input = z.object({
   provider: z.string(),
-  name: z.string().trim().min(1).max(100),
-  serverUrl: z.string().max(2048).default(''),
-  accessToken: z.string().max(12000).optional(),
-  allowedTools: z.array(z.string().max(150)).max(200).default([]),
-  resourceScope: z.string().max(4000).default(''),
-  discoverOnly: z.boolean().default(false),
+  serverUrls: z.array(z.string().max(2048)).min(1).max(10).optional(),
 });
 export async function POST(request: Request) {
   try {
     const identity = await actor(request);
     const body = input.parse(await jsonBody(request));
-    const serverUrl = approvedMcpUrl(body.provider, body.serverUrl).href;
-    validateScope(body.resourceScope);
-    if (!body.accessToken) {
-      const flow = await startOAuth({
-        subject: identity.authSubject,
-        orgId: identity.authOrgId,
-        provider: body.provider,
-        name: body.name,
-        serverUrl,
-        allowedTools: body.allowedTools,
-        resourceScope: body.resourceScope,
-      });
-      const response = NextResponse.json({ authorizationUrl: flow.authorizationUrl });
-      response.cookies.set('ahq_oauth', seal(flow.state), {
-        httpOnly: true,
-        secure: new URL(request.url).protocol === 'https:',
-        sameSite: 'lax',
-        path: '/api/integrations/callback',
-        maxAge: 600,
-      });
-      return response;
+    const definition = getProvider(body.provider);
+    const serverUrls = [...new Set((body.serverUrls ?? [definition.serverUrl]).map((url) => approvedMcpUrl(body.provider, url).href))];
+    // Never send a user to a consent screen that cannot end in a working connection.
+    const readiness = (await query<ProviderReadiness[]>('services:readiness')).find(
+      (entry) => entry.provider === body.provider,
+    );
+    if (!readiness?.reviewedTools) throw new Error('No reviewed tools are available for this provider yet.');
+    for (const url of serverUrls) {
+      if (!readiness.enabledUrls.includes(url)) throw new Error('This server is not enabled by your administrator.');
+      if (!oauthConfigured(body.provider, url)) throw new Error('Sign-in for this server is not set up yet.');
     }
-    const credential = { accessToken: body.accessToken };
-    const tools = await discoverTools({ provider: body.provider, serverUrl }, credential);
-    if (body.discoverOnly)
-      return NextResponse.json({
-        tools: tools.map((t) => ({ name: t.name, description: t.description || '' })),
-      });
-    if (!body.allowedTools.length) throw new Error('Select at least one discovered tool before connecting.');
-    if (body.allowedTools.some((name) => !tools.some((t) => t.name === name)))
-      throw new Error('A selected tool is not available on this server.');
-    const result = await mutate('services:connectIntegration', {
-      ...identity,
+    const [serverUrl, ...queue] = serverUrls;
+    const productName = definition.products?.find((product) => product.url === serverUrl)?.name;
+    const flow = await startOAuth({
+      subject: identity.authSubject,
+      orgId: identity.authOrgId,
       provider: body.provider,
-      name: body.name,
-      account: body.name,
+      name: productName ? `${definition.name} ${productName}` : definition.name,
       serverUrl,
-      tools: tools.map((t) => t.name),
-      allowedTools: body.allowedTools,
-      resourceScope: body.resourceScope,
-      inboxMode: 'on-demand',
-      credentialCiphertext: seal(credential),
-      credentialKeyVersion: '1',
+      queue,
     });
-    return NextResponse.json(result);
+    const response = NextResponse.json({ authorizationUrl: flow.authorizationUrl });
+    response.cookies.set('ahq_oauth', seal(flow.state), oauthCookie(request.url));
+    return response;
   } catch (error) {
     return failure(error);
   }

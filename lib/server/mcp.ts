@@ -1,5 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { approvedMcpUrl, safeFetch } from './network';
 import { oauthProvider, type StoredCredential } from './oauth';
@@ -68,10 +69,20 @@ export async function connectedMcp<T>(
 ): Promise<T> {
   if (connection.status !== 'connected') throw new Error('Integration is no longer connected');
   const credentials = unseal<StoredCredential>(connection.credentialCiphertext);
-  return withMcp(connection, credentials, run, async (refreshed) => {
-    await mutate('services:refreshCredential', {
-      connectionId: connection.id,
-      credentialCiphertext: seal(refreshed),
+  try {
+    return await withMcp(connection, credentials, run, async (refreshed) => {
+      await mutate('services:refreshCredential', {
+        connectionId: connection.id,
+        credentialCiphertext: seal(refreshed),
+      });
     });
-  });
+  } catch (error) {
+    // A failed refresh means the provider revoked or expired the grant. Ask the owner to sign in again.
+    if (error instanceof UnauthorizedError)
+      await mutate('services:markConnectionError', {
+        connectionId: connection.id,
+        error: 'Authorization expired. Reconnect this integration to continue.',
+      }).catch(() => {});
+    throw error;
+  }
 }
