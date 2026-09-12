@@ -3,6 +3,7 @@ import { mutation, query } from './_generated/server';
 import type { Doc, Id } from './_generated/dataModel';
 import type { MutationCtx } from './_generated/server';
 import { reserveBudget, taskReservation } from './budget';
+import { assignmentForProject } from './projects';
 import { canSeeConnection, cleanText, randomToken, requireWorkspace } from './shared';
 
 async function assertEmployeeReady(
@@ -66,15 +67,24 @@ async function insertJob(
 }
 
 export const create = mutation({
-  args: { employeeId: v.id('installations'), prompt: v.string(), title: v.string() },
+  args: {
+    employeeId: v.id('installations'),
+    prompt: v.string(),
+    title: v.string(),
+    projectId: v.optional(v.id('projects')),
+  },
   handler: async (ctx, args) => {
     const { workspace, actor, role } = await requireWorkspace(ctx);
     const { version } = await assertEmployeeReady(ctx, workspace, actor, role, args.employeeId);
+    const project = args.projectId
+      ? await assignmentForProject(ctx, workspace._id, args.projectId, args.employeeId)
+      : {};
     const amount = taskReservation(version.model);
     const now = Date.now();
     await reserveBudget(ctx, workspace, amount, now);
     const taskId = await ctx.db.insert('tasks', {
       workspaceId: workspace._id,
+      ...project,
       createdBy: actor.subject,
       employeeId: args.employeeId,
       versionId: version._id,

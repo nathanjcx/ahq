@@ -124,6 +124,8 @@ export const requestCorrection = mutation({
       const prompt = `Review the requested correction for action ${original._id}. The original action was: ${original.summary}. Correction limits: ${original.correctionReason}. Prepare the safest supported correction or clear manual steps. Do not repeat the original action.`;
       const taskId = await ctx.db.insert('tasks', {
         workspaceId: workspace._id,
+        projectId: originalTask.projectId,
+        projectContext: originalTask.projectContext,
         createdBy: actor.subject,
         employeeId: originalTask.employeeId,
         versionId: originalTask.versionId,

@@ -10,8 +10,9 @@ export interface Listing {
   publishedAt: number;
 }
 export interface Employee { id: string; versionId: string; name: string; role: string; color: string; model: ModelId; status: string; missingCapabilities: string[] }
+export interface Project { id: string; name: string; brief: string; employeeIds: string[]; archivedAt?: number; createdAt: number; updatedAt: number }
 export interface Connection { id: string; provider: ProviderId; name: string; account: string; status: 'connected' | 'disconnected' | 'degraded' | 'revoked'; tools: string[]; allowedTools: string[]; resourceScope: string; lastCheckedAt?: number; inboxMode: 'push' | 'on-demand' | 'unsupported'; error?: string }
-export interface Task { id: string; employeeId: string; employeeName: string; title: string; prompt: string; status: TaskStatus; createdAt: number; updatedAt: number; sessionId?: string; error?: string; model: ModelId; usage?: { input: number; output: number; cached: number; estimatedCost: number } }
+export interface Task { id: string; projectId?: string; projectContext?: { name: string; brief: string }; employeeId: string; employeeName: string; title: string; prompt: string; status: TaskStatus; createdAt: number; updatedAt: number; sessionId?: string; error?: string; model: ModelId; usage?: { input: number; output: number; cached: number; estimatedCost: number } }
 export interface ActivityEvent { id: string; sequence: number; taskId?: string; type: string; text: string; createdAt: number; employeeName?: string; gap?: boolean }
 export interface Message { id: string; taskId: string; role: 'user' | 'assistant' | 'system'; text: string; createdAt: number; phase?: string }
 export interface ActionProposal { id: string; taskId: string; employeeName: string; provider: ProviderId; tool: string; arguments: string; summary: string; status: 'pending' | 'approved' | 'rejected' | 'executing' | 'succeeded' | 'failed' | 'uncertain' | 'corrected'; correction: CorrectionKind; correctionReason: string; createdAt: number; result?: string; originalActionId?: string }
@@ -19,7 +20,7 @@ export interface InboxItem { id: string; provider: ProviderId; title: string; pr
 export interface Artifact { id: string; taskId: string; name: string; mediaType: string; size: number; createdAt: number }
 export interface Dashboard {
   workspace: { id: string; name: string; role: string; monthlyBudget: number; spent: number } | null;
-  isPlatformAdmin: boolean; employees: Employee[]; connections: Connection[];
+  isPlatformAdmin: boolean; employees: Employee[]; connections: Connection[]; projects: Project[];
   tasks: Task[]; events: ActivityEvent[]; proposals: ActionProposal[]; inbox: InboxItem[]; artifacts: Artifact[];
 }
-export const emptyDashboard: Dashboard = {workspace: null,isPlatformAdmin:false,employees:[],connections:[],tasks:[],events:[],proposals:[],inbox:[],artifacts:[]};
+export const emptyDashboard: Dashboard = {workspace: null,isPlatformAdmin:false,employees:[],connections:[],projects:[],tasks:[],events:[],proposals:[],inbox:[],artifacts:[]};

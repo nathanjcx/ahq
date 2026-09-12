@@ -620,6 +620,10 @@ export const taskContext = query({
         createdAt: task.createdAt,
         updatedAt: task.updatedAt,
       },
+      project:
+        task.projectId && task.projectContext
+          ? { id: task.projectId, name: task.projectContext.name, brief: task.projectContext.brief }
+          : undefined,
       employeeVersion: {
         id: version._id,
         version: version.version,

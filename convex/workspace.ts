@@ -73,6 +73,7 @@ export const dashboard = query({
         isPlatformAdmin: isPlatformAdmin(actor.subject),
         employees: [],
         connections: [],
+        projects: [],
         tasks: [],
         events: [],
         proposals: [],
@@ -80,13 +81,17 @@ export const dashboard = query({
         artifacts: [],
       };
     const { workspace, role } = found;
-    const [installations, allConnections, tasks, events, proposals, inbox, artifacts] = await Promise.all([
+    const [installations, allConnections, projects, tasks, events, proposals, inbox, artifacts] = await Promise.all([
       ctx.db
         .query('installations')
         .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
         .collect(),
       ctx.db
         .query('connections')
+        .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
+        .collect(),
+      ctx.db
+        .query('projects')
         .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
         .collect(),
       ctx.db
@@ -161,8 +166,19 @@ export const dashboard = query({
       isPlatformAdmin: isPlatformAdmin(actor.subject),
       employees: employees.filter(Boolean),
       connections: connections.map(publicConnection),
+      projects: projects.map((project) => ({
+        id: project._id,
+        name: project.name,
+        brief: project.brief,
+        employeeIds: project.employeeIds,
+        archivedAt: project.archivedAt,
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt,
+      })),
       tasks: visibleTasks.map((task) => ({
         id: task._id,
+        projectId: task.projectId,
+        projectContext: task.projectContext,
         employeeId: task.employeeId,
         employeeName: task.employeeName,
         title: task.title,

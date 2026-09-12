@@ -1,6 +1,7 @@
 import { v } from 'convex/values';
 import { mutation } from './_generated/server';
 import { taskReservation } from './budget';
+import { assignmentForProject } from './projects';
 import { canSeeConnection, cleanText, randomToken, requireWorkspace, visibleTo } from './shared';
 
 export const markRead = mutation({
@@ -16,7 +17,11 @@ export const markRead = mutation({
 });
 
 export const assign = mutation({
-  args: { itemId: v.id('inbox'), employeeId: v.id('installations') },
+  args: {
+    itemId: v.id('inbox'),
+    employeeId: v.id('installations'),
+    projectId: v.optional(v.id('projects')),
+  },
   handler: async (ctx, args) => {
     const { workspace, actor, role } = await requireWorkspace(ctx);
     const item = await ctx.db.get(args.itemId);
@@ -27,6 +32,9 @@ export const assign = mutation({
     if (!installation || installation.workspaceId !== workspace._id) throw new Error('Employee not found');
     const version = await ctx.db.get(installation.versionId);
     if (!version || version.retiredAt) throw new Error('Employee version is retired');
+    const project = args.projectId
+      ? await assignmentForProject(ctx, workspace._id, args.projectId, args.employeeId)
+      : {};
     const connections = await ctx.db
       .query('connections')
       .withIndex('by_workspace', (q) => q.eq('workspaceId', workspace._id))
@@ -58,6 +66,7 @@ export const assign = mutation({
     );
     const taskId = await ctx.db.insert('tasks', {
       workspaceId: workspace._id,
+      ...project,
       createdBy: actor.subject,
       employeeId: installation._id,
       versionId: version._id,

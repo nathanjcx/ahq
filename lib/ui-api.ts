@@ -35,9 +35,17 @@ export const uiApi = {
   setBudget: mutation<{ monthlyBudget: number }>('workspace:setBudget'),
   listings: query<Record<string, never>, Listing[]>('marketplace:list'),
   hire: mutation<{ versionId: string }, { employeeId: string }>('marketplace:hire'),
-  createTask: mutation<{ employeeId: string; prompt: string; title: string }, { taskId: string }>(
-    'tasks:create',
+  createProject: mutation<{ name: string; brief: string; employeeIds: string[] }, { projectId: string }>(
+    'projects:create',
   ),
+  updateProject: mutation<{ projectId: string; name: string; brief: string; employeeIds: string[] }>(
+    'projects:update',
+  ),
+  setProjectArchived: mutation<{ projectId: string; archived: boolean }>('projects:setArchived'),
+  createTask: mutation<
+    { employeeId: string; prompt: string; title: string; projectId?: string },
+    { taskId: string }
+  >('tasks:create'),
   messages: query<{ taskId: string }, Message[]>('tasks:messages'),
   sendMessage: mutation<{ taskId: string; text: string }>('tasks:send'),
   cancelTask: mutation<{ taskId: string }>('tasks:cancel'),
@@ -51,7 +59,9 @@ export const uiApi = {
     'integrations:setTools',
   ),
   markInboxRead: mutation<{ itemId: string }>('inbox:markRead'),
-  assignInbox: mutation<{ itemId: string; employeeId: string }, { taskId: string }>('inbox:assign'),
+  assignInbox: mutation<{ itemId: string; employeeId: string; projectId?: string }, { taskId: string }>(
+    'inbox:assign',
+  ),
   adminDrafts: query<Record<string, never>, AdminDraft[]>('marketplace:adminList'),
   adminToolRegistry: query<Record<string, never>, AdminToolRegistry>('marketplace:adminToolRegistry'),
   saveDraft: mutation<Record<string, unknown>, { draftId: string }>('marketplace:saveDraft'),

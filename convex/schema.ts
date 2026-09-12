@@ -81,6 +81,16 @@ export default defineSchema({
   })
     .index('by_workspace', ['workspaceId'])
     .index('by_workspace_version', ['workspaceId', 'versionId']),
+  projects: defineTable({
+    workspaceId: v.id('workspaces'),
+    createdBy: v.string(),
+    name: v.string(),
+    brief: v.string(),
+    employeeIds: v.array(v.id('installations')),
+    archivedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index('by_workspace', ['workspaceId']),
   connections: defineTable({
     workspaceId: v.id('workspaces'),
     ownerSubject: v.string(),
@@ -110,6 +120,8 @@ export default defineSchema({
     .index('by_owner', ['ownerSubject']),
   tasks: defineTable({
     workspaceId: v.id('workspaces'),
+    projectId: v.optional(v.id('projects')),
+    projectContext: v.optional(v.object({ name: v.string(), brief: v.string() })),
     createdBy: v.string(),
     employeeId: v.id('installations'),
     versionId: v.id('employeeVersions'),

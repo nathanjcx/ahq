@@ -15,6 +15,7 @@ import type * as inbox from "../inbox.js";
 import type * as integrations from "../integrations.js";
 import type * as maintenance from "../maintenance.js";
 import type * as marketplace from "../marketplace.js";
+import type * as projects from "../projects.js";
 import type * as services from "../services.js";
 import type * as shared from "../shared.js";
 import type * as tasks from "../tasks.js";
@@ -34,6 +35,7 @@ declare const fullApi: ApiFromModules<{
   integrations: typeof integrations;
   maintenance: typeof maintenance;
   marketplace: typeof marketplace;
+  projects: typeof projects;
   services: typeof services;
   shared: typeof shared;
   tasks: typeof tasks;
