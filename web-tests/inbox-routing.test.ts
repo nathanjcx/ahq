@@ -55,6 +55,25 @@ describe('integration grants and inbox routing', () => {
     });
   });
 
+  it('keeps a narrowed tool list when the owner reconnects', async () => {
+    const t = harness();
+    await githubWorkspace(t);
+    const a = t.withIdentity(identity('user-a'));
+    await a.mutation(api.workspace.bootstrap, { name: 'Acme' });
+    const { connectionId } = await connect(t, 'user-a', ['issue_read', 'create_issue']);
+    await a.mutation(api.integrations.updateAccess, {
+      connectionId,
+      allowedTools: ['issue_read'],
+      resourceScope: '',
+      inboxResources: '',
+    });
+    const again = await connect(t, 'user-a', ['issue_read', 'create_issue']);
+    expect(again.connectionId).toBe(connectionId);
+    const [connection] = (await a.query(api.workspace.dashboard, {})).connections;
+    expect(connection.allowedTools).toEqual(['issue_read']);
+    expect(connection.tools).toEqual(['issue_read', 'create_issue']);
+  });
+
   it('delivers a provider event only to connections following that resource', async () => {
     const t = harness();
     await githubWorkspace(t);

@@ -5,6 +5,7 @@ import type { MutationCtx } from './_generated/server';
 import { canSeeTask, cleanText, requireWorkspace } from './shared';
 import {
   assertEmployeeReady,
+  assertTokenCap,
   finalAssistantMessage,
   insertHandoff,
   insertNote,
@@ -168,6 +169,7 @@ export const decideHandoff = mutation({
     }
     if (!project.employeeIds.includes(post.handoff.toEmployeeId))
       throw new Error('Employee is not assigned to this project');
+    await assertTokenCap(ctx, workspace);
     const { version } = await assertEmployeeReady(ctx, workspace, actor.subject, post.handoff.toEmployeeId);
     let prompt = post.handoff.brief;
     if (post.taskId) {

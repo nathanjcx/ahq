@@ -2,7 +2,7 @@
 
 What is proven, and what is not, as of September 12, 2026. No production account, provider credential, or live deployment exists for this build. Nothing below claims a real provider call succeeded.
 
-`npm run typecheck` passes. `npm test` runs 65 tests in 12 files, all passing.
+`npm run typecheck` passes. `npm test` runs 66 tests in 12 files, all passing.
 
 ## The runtime harness
 

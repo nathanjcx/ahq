@@ -71,8 +71,11 @@ export const connectIntegration = mutation({
       error: undefined,
     };
     if (existing) {
+      // Reconnecting refreshes the credential; it must not silently widen a list the owner narrowed.
+      const kept = allowedTools.filter((tool) => existing.allowedTools.includes(tool));
       await ctx.db.patch(existing._id, {
         ...values,
+        allowedTools: kept.length ? kept : allowedTools,
         inboxRelaySecretCiphertext: args.inboxRelaySecretCiphertext ?? existing.inboxRelaySecretCiphertext,
       });
       return { connectionId: existing._id };
