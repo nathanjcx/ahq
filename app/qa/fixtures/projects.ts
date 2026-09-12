@@ -1,7 +1,7 @@
 import { getFunctionName } from 'convex/server';
 import { qaFixture } from '../fixture';
 import type { FixtureQueries } from '@/components/shared/use-ui-query';
-import type { Listing, PlanProjection, Project, ProjectTask, RoadmapProposal } from '@/lib/contracts';
+import type { PlanProjection, Project, ProjectTask, RoadmapProposal } from '@/lib/contracts';
 import { uiApi } from '@/lib/ui-api';
 
 /**
