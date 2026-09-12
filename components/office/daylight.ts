@@ -33,7 +33,7 @@ const KEYFRAMES: Keyframe[] = [
     grid: '#2e3a4d',
     // Warm lamplight inside, cool moonlight through the glazing.
     ambient: '#ffd6a2',
-    ambientIntensity: 0.52,
+    ambientIntensity: 0.62,
     hemisphere: 0.22,
     sun: '#8fa9de',
     sunIntensity: 1.15,
@@ -82,7 +82,7 @@ const KEYFRAMES: Keyframe[] = [
     night: false,
   },
   {
-    hour: 19,
+    hour: 20,
     background: '#e7e3da',
     ground: '#efe7db',
     grid: '#b5a996',
@@ -98,6 +98,25 @@ const KEYFRAMES: Keyframe[] = [
     skyHeight: 1.5,
     interior: 0.5,
     night: false,
+  },
+  {
+    // Dusk: the sky has gone cold and the room is running on its own lamps.
+    hour: 21,
+    background: '#222c3c',
+    ground: '#2a3342',
+    grid: '#3b4759',
+    ambient: '#ffcf9a',
+    ambientIntensity: 0.58,
+    hemisphere: 0.28,
+    sun: '#7f9bd0',
+    sunIntensity: 1.35,
+    sunPosition: [-14, 7, 5],
+    fill: '#5f7ca6',
+    fillIntensity: 0.5,
+    disc: '#e4ecff',
+    skyHeight: 3.4,
+    interior: 0.88,
+    night: true,
   },
 ];
 

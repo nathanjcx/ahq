@@ -253,7 +253,6 @@ function Figure({
   );
 }
 
-
 const scratch = new THREE.Vector3();
 const heading = new THREE.Vector3();
 

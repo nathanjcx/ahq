@@ -40,10 +40,8 @@ export type LabelPlacement = {
   hidden: boolean;
 };
 
-function overlaps(a: Rect, b: Rect): boolean {
-  return (
-    Math.abs(a.x - b.x) * 2 < a.width + b.width && Math.abs(a.y - b.y) * 2 < a.height + b.height
-  );
+export function overlaps(a: Rect, b: Rect): boolean {
+  return Math.abs(a.x - b.x) * 2 < a.width + b.width && Math.abs(a.y - b.y) * 2 < a.height + b.height;
 }
 
 /**
@@ -94,28 +92,57 @@ export function rankBubbles(candidates: BubbleCandidate[]): string[] {
     .map((candidate) => candidate.id);
 }
 
+/** How far the gap between a figure and its bubble is, and the step a bubble shifts by. */
+export const BUBBLE_GAP = 15;
+export const BUBBLE_STEP = 26;
+
+export type BubblePlacement = { side: 'left' | 'right'; lift: number };
+
 /**
- * The side of the figure a bubble opens onto: whichever one covers fewer pills,
- * and failing that, whichever one has room inside the canvas.
+ * Where a bubble opens: on the side of its figure that has room, shifted up or
+ * down if that is what it takes to clear the pills and the other bubble. The
+ * first clear candidate wins; if none is clear, the least covered one does.
  */
-export function bubbleSide(
-  anchor: Rect,
+export function placeBubble(
+  anchor: { x: number; y: number },
   bubble: { width: number; height: number },
-  pills: Rect[],
+  obstacles: Rect[],
   viewport: { width: number; height: number },
-): 'left' | 'right' {
-  const cover = (side: -1 | 1) => {
-    const rect = {
-      x: anchor.x + (side * (anchor.width + bubble.width)) / 2,
-      y: anchor.y,
-      width: bubble.width,
-      height: bubble.height,
-    };
-    const outside = rect.x - rect.width / 2 < 0 || rect.x + rect.width / 2 > viewport.width ? 1 : 0;
-    return pills.filter((pill) => overlaps(rect, pill)).length + outside * 2;
+): BubblePlacement {
+  const sides: BubblePlacement['side'][] =
+    anchor.x > viewport.width / 2 ? ['left', 'right'] : ['right', 'left'];
+  let best: BubblePlacement = { side: sides[0], lift: 0 };
+  let fewest = Infinity;
+  for (const lift of [0, BUBBLE_STEP, -BUBBLE_STEP, BUBBLE_STEP * 2, -BUBBLE_STEP * 2])
+    for (const side of sides) {
+      const rect = bubbleRect(anchor, bubble, side, lift);
+      const spills =
+        rect.x - rect.width / 2 < 0 ||
+        rect.x + rect.width / 2 > viewport.width ||
+        rect.y - rect.height / 2 < 0
+          ? 2
+          : 0;
+      const cover = obstacles.filter((other) => overlaps(rect, other)).length + spills;
+      if (cover === 0) return { side, lift };
+      if (cover < fewest) {
+        fewest = cover;
+        best = { side, lift };
+      }
+    }
+  return best;
+}
+
+/** The screen rectangle a placed bubble occupies. */
+export function bubbleRect(
+  anchor: { x: number; y: number },
+  bubble: { width: number; height: number },
+  side: BubblePlacement['side'],
+  lift: number,
+): Rect {
+  return {
+    x: anchor.x + (side === 'left' ? -1 : 1) * (bubble.width / 2 + BUBBLE_GAP),
+    y: anchor.y - lift,
+    width: bubble.width,
+    height: bubble.height,
   };
-  const left = cover(-1);
-  const right = cover(1);
-  if (left === right) return anchor.x > viewport.width / 2 ? 'left' : 'right';
-  return left < right ? 'left' : 'right';
 }

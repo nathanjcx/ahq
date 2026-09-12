@@ -43,8 +43,7 @@ export function deskGrid(count: number): Point[] {
   const spacing = rows > 3 ? 2.72 : 3.3;
   const first = -((rows - 1) / 2) * spacing + 0.1;
   const grid: Point[] = [];
-  for (let row = 0; row < rows; row++)
-    for (const x of [-6.3, -3.1]) grid.push([x, 0, first + row * spacing]);
+  for (let row = 0; row < rows; row++) for (const x of [-6.3, -3.1]) grid.push([x, 0, first + row * spacing]);
   return grid;
 }
 
@@ -70,9 +69,7 @@ const EDGE = Array.from({ length: 11 }, (_, i): Station => ({
 
 /** Every home a floor can offer, in the order people take them. */
 export function homeStations(count: number): Station[] {
-  const desks = deskGrid(count).map(
-    (desk): Station => ({ at: [desk[0], 0, desk[2] + 1], facing: Math.PI }),
-  );
+  const desks = deskGrid(count).map((desk): Station => ({ at: [desk[0], 0, desk[2] + 1], facing: Math.PI }));
   return [...desks, ...SEATS, ...EDGE];
 }
 

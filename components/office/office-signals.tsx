@@ -115,9 +115,7 @@ export function ReviewLectern({
             className="office-tray-count"
             data-stuck={stuck ? 'true' : undefined}
             title={
-              stuck
-                ? `${waiting} waiting too long for a decision`
-                : `${waiting} waiting for your review`
+              stuck ? `${waiting} waiting too long for a decision` : `${waiting} waiting for your review`
             }
             aria-label={`${waiting} waiting for review`}
             onClick={(event) => {

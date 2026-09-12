@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   LABEL_STEP,
   LABEL_STEPS,
-  bubbleSide,
+  placeBubble,
   labelPriority,
   layoutLabels,
   rankBubbles,
@@ -83,11 +83,26 @@ describe('bubbles', () => {
   });
 
   it('opens away from the pills it would otherwise cover', () => {
-    const anchor = { x: 500, y: 300, width: 80, height: 18 };
+    const anchor = { x: 500, y: 300 };
+    const box = { width: 160, height: 40 };
     const viewport = { width: 1000, height: 600 };
-    const covered = { x: 380, y: 300, width: 120, height: 40 };
-    expect(bubbleSide(anchor, { width: 160, height: 40 }, [covered], viewport)).toBe('right');
-    expect(bubbleSide({ ...anchor, x: 60 }, { width: 160, height: 40 }, [], viewport)).toBe('right');
-    expect(bubbleSide({ ...anchor, x: 940 }, { width: 160, height: 40 }, [], viewport)).toBe('left');
+    const covered = { x: 380, y: 300, width: 160, height: 40 };
+    expect(placeBubble(anchor, box, [covered], viewport)).toEqual({ side: 'right', lift: 0 });
+    expect(placeBubble({ x: 940, y: 300 }, box, [], viewport)).toEqual({ side: 'left', lift: 0 });
+  });
+
+  it('shifts a bubble clear when both sides are covered', () => {
+    const anchor = { x: 500, y: 300 };
+    const box = { width: 160, height: 40 };
+    const viewport = { width: 1000, height: 600 };
+    const both = [
+      { x: 380, y: 300, width: 160, height: 40 },
+      { x: 620, y: 300, width: 160, height: 40 },
+    ];
+    const placement = placeBubble(anchor, box, both, viewport);
+    expect(placement.lift).not.toBe(0);
+    expect(
+      both.every((rect) => Math.abs(rect.y - (anchor.y - placement.lift)) * 2 >= rect.height + box.height),
+    ).toBe(true);
   });
 });

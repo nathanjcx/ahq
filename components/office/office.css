@@ -31,13 +31,13 @@
   white-space: nowrap;
   box-shadow: 0 2px 8px #07161240;
   cursor: pointer;
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
+  /* Only the fade is animated: the transform follows the figure 20 times a second. */
+  transition: opacity 0.18s ease;
 }
 
 /* Covered by four other pills: gone, until it is hovered, focused or picked. */
 .office-pill[data-covered='true'] {
+  visibility: hidden;
   opacity: 0;
   pointer-events: none;
 }
@@ -71,20 +71,23 @@
   left: 0;
   top: 0;
   width: max-content;
-  max-width: 200px;
-  transform: translate(15px, -50%);
+  max-width: 178px;
+  transform: translate(15px, calc(-50% - var(--bubble-lift, 0px)));
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.45s ease;
+  /* The outgoing line clears before the next one arrives, so a handover never
+     puts three cards on the floor at once. */
+  transition: opacity 0.2s ease;
 }
 
 .office-bubble[data-side='left'] {
-  transform: translate(calc(-100% - 15px), -50%);
+  transform: translate(calc(-100% - 15px), calc(-50% - var(--bubble-lift, 0px)));
 }
 
 .office-bubble[data-visible='true'] {
   opacity: 1;
   pointer-events: auto;
+  transition: opacity 0.35s ease 0.3s;
 }
 
 .office-bubble > button {
@@ -127,7 +130,8 @@
 .office-bubble::after {
   content: '';
   position: absolute;
-  top: 50%;
+  /* The tail stays level with the figure even when the card shifts to clear a pill. */
+  top: calc(50% + var(--bubble-lift, 0px));
   left: -5px;
   width: 9px;
   height: 9px;

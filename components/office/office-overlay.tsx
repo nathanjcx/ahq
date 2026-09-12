@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef } fr
 import type { ReactNode } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { bubbleSide, layoutLabels, type LabelInput } from './office-labels';
+import { bubbleRect, layoutLabels, overlaps, placeBubble, type LabelInput } from './office-labels';
 
 /** One figure's overlay: where its head is, and the two elements that hang off it. */
 export type OverlayEntry = {
@@ -51,6 +51,7 @@ export function OfficeOverlay({ children }: { children: ReactNode }) {
   const input = useRef<LabelInput[]>([]);
   const points = useRef(new Map<string, { x: number; y: number }>());
   const rects = useRef<LabelInput[]>([]);
+  const cards = useRef<LabelInput[]>([]);
   const last = useRef(-1);
 
   const overlay = useMemo<Overlay>(
@@ -110,17 +111,34 @@ export function OfficeOverlay({ children }: { children: ReactNode }) {
       const source = pills[index];
       placed.push({ ...source, y: source.y - placement.lift });
     });
+    // Bubbles avoid the pills and each other, so two open lines never collide.
+    const bubbles = cards.current;
+    bubbles.length = 0;
     for (const entry of entries.current.values()) {
       const bubble = entry.bubble;
       const head = heads.get(entry.id);
-      if (!bubble?.offsetWidth || !head) continue;
-      bubble.dataset.side = bubbleSide(
-        { ...head, width: 0, height: 0 },
-        { width: bubble.offsetWidth, height: bubble.offsetHeight },
+      // Only the lines actually on screen take up room.
+      if (!bubble?.offsetWidth || !head || bubble.dataset.visible !== 'true') continue;
+      const box = { width: bubble.offsetWidth, height: bubble.offsetHeight };
+      const { side, lift } = placeBubble(
+        head,
+        box,
         placed.filter((rect) => rect.id !== entry.id),
         size,
       );
+      bubble.dataset.side = side;
+      bubble.style.setProperty('--bubble-lift', `${lift}px`);
+      const rect = { id: entry.id, priority: 0, ...bubbleRect(head, box, side, lift) };
+      placed.push(rect);
+      bubbles.push(rect);
     }
+    // A bubble carries its own name, so any pill it covers gives way to it.
+    if (bubbles.length)
+      for (const rect of placed) {
+        const entry = entries.current.get(rect.id)!;
+        if (!entry.pill || entry.forced || bubbles.includes(rect)) continue;
+        if (bubbles.some((card) => overlaps(rect, card))) entry.pill.dataset.covered = 'true';
+      }
   }, [camera, size]);
 
   // The office runs on demand when motion is reduced, so lay the labels out

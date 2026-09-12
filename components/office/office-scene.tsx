@@ -12,14 +12,7 @@ import { OfficeOverlay } from './office-overlay';
 import { EmployeeAvatar } from './office-people';
 import { BoardNote, ProviderConsole, ReviewLectern, StatusDevice } from './office-signals';
 import { Halo, SurfaceContext, useSurfaceTextures, type Point } from './office-primitives';
-import {
-  CONSOLE_X,
-  CONSOLE_Z,
-  LECTERN,
-  deskGrid,
-  layoutStations,
-  type Station,
-} from './office-stations';
+import { CONSOLE_X, CONSOLE_Z, LECTERN, deskGrid, layoutStations, type Station } from './office-stations';
 import { Architecture } from './office-room';
 
 /** The one employee shape this component understands. */
@@ -74,7 +67,7 @@ const BOARD_NOTE: Point = [4.5, 2.16, -5.7];
 /** The floor plate and the people on it. Taller props are allowed to crop. */
 const ROOM = { x: 9.3, y: 1.9, z: 6.3 };
 /** How much of the tighter axis the room fills, on a wide stage and on a phone. */
-const FILL = 0.8;
+const FILL = 0.85;
 const FILL_COMPACT = 1.18;
 /** A stage narrower than this gets the closer framing and the compact chrome. */
 const COMPACT_WIDTH = 560;
@@ -181,7 +174,11 @@ function Lighting({ light, budget }: { light: Daylight; budget: number }) {
     <>
       <ambientLight ref={ambient} intensity={light.ambientIntensity * dim} color={light.ambient} />
       <hemisphereLight
-        args={[light.night ? '#8ea6c8' : '#dce7df', light.night ? '#2a3340' : '#3e4631', light.hemisphere * dim]}
+        args={[
+          light.night ? '#8ea6c8' : '#dce7df',
+          light.night ? '#2a3340' : '#3e4631',
+          light.hemisphere * dim,
+        ]}
       />
       <directionalLight
         ref={sun}
@@ -210,7 +207,7 @@ function Lighting({ light, budget }: { light: Daylight; budget: number }) {
         p={[-11.5, light.skyHeight, 4.2]}
         size={[4.6, 4.6]}
         color={light.disc}
-        opacity={0.2 + light.interior * 0.4}
+        opacity={light.interior * 0.55}
       />
     </>
   );
