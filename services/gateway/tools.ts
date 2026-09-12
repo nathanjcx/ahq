@@ -96,13 +96,9 @@ export function providerServer(
     const args = call.params.arguments || {};
     try {
       const current = await authorize(request, connection, tool, args);
-      const policy = toolPolicy(current.policies, current.connection.provider, tool);
-      if (policy.mode !== 'write')
+      if (current.policy.mode !== 'write')
         return await auditedRead(request.runToken, current.connection, current.policies, tool, args);
-      return jsonResult({
-        ...(await propose(request, current.connection, current.policies, tool, args)),
-        requestId: request.requestId,
-      });
+      return jsonResult({ ...(await propose(request, current, tool, args)), requestId: request.requestId });
     } catch (error) {
       const failure =
         error instanceof GatewayError
@@ -153,7 +149,7 @@ async function authorize(
         'policy_denied',
         'Correction requires access to the configured record-reading tool.',
       );
-    return { connection: active, policies: current.policies };
+    return { connection: active, policies: current.policies, policy };
   } catch (error) {
     const failure =
       error instanceof GatewayError ? error : new GatewayError('policy_denied', safeError(error));
@@ -167,12 +163,11 @@ async function authorize(
 /** A write never reaches the provider from here: it becomes a proposal a human decides. */
 async function propose(
   request: GatewayRequest,
-  connection: PrivateConnection,
-  policies: GatewayContext['policies'],
+  authorized: Awaited<ReturnType<typeof authorize>>,
   tool: string,
   args: Record<string, unknown>,
 ) {
-  const policy = toolPolicy(policies, connection.provider, tool);
+  const { connection, policies, policy } = authorized;
   let beforeState: Record<string, unknown> | undefined;
   if (policy.correction) {
     const rule = policy.correction;

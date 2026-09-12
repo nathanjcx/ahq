@@ -8,7 +8,7 @@ export function healthServer(runtime: WorkerRuntime, port: number): Server {
     res.writeHead(connected ? 200 : 503, { 'Content-Type': 'application/json' });
     res.end(
       JSON.stringify({
-        status: connected ? 'ok' : 'connecting',
+        status: runtime.stopping ? 'stopping' : connected ? 'ok' : 'connecting',
         service: 'worker',
         workerId: runtime.workerId,
         connected,
