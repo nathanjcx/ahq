@@ -12,7 +12,6 @@ import {
   savedResponse,
   subscribedResponse,
   type AlertSecretRequest,
-  type ClearAlertSecretRequest,
   type ClearInboxSecretRequest,
   type ConnectRequest,
   type InboxSecretRequest,
@@ -100,8 +99,8 @@ export const webClient = {
   admin: {
     setAlertSecret: (input: AlertSecretRequest) =>
       request({ path: webApi.adminAlertSecret, schema: savedResponse, method: 'POST', body: input }),
-    clearAlertSecret: (input: ClearAlertSecretRequest) =>
-      request({ path: webApi.adminAlertSecret, schema: removedResponse, method: 'DELETE', body: input }),
+    clearAlertSecret: () =>
+      request({ path: webApi.adminAlertSecret, schema: removedResponse, method: 'DELETE', body: {} }),
     setOAuthClient: (input: OAuthClientRequest) =>
       request({ path: webApi.adminOAuthClient, schema: savedResponse, method: 'POST', body: input }),
     removeOAuthClient: (input: RemoveOAuthClientRequest) =>

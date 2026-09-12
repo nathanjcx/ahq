@@ -172,11 +172,7 @@ export const alertResponse = z.object({
   /** True when the fingerprint matched an alert that is already open. */
   duplicate: z.boolean(),
 });
-export const alertSecretRequest = z.object({
-  workspaceId: z.string().min(1).max(100),
-  alertSecret: z.string().min(32).max(2000),
-});
-export const clearAlertSecretRequest = z.object({ workspaceId: z.string().min(1).max(100) });
+export const alertSecretRequest = z.object({ alertSecret: z.string().min(32).max(2000) });
 
 // Notifications and browser push.
 export const notificationSchema = z.object({
@@ -216,7 +212,6 @@ export type RemovedResponse = z.infer<typeof removedResponse>;
 export type AlertRequest = z.infer<typeof alertRequest>;
 export type AlertResponse = z.infer<typeof alertResponse>;
 export type AlertSecretRequest = z.infer<typeof alertSecretRequest>;
-export type ClearAlertSecretRequest = z.infer<typeof clearAlertSecretRequest>;
 export type Notification = z.infer<typeof notificationSchema>;
 export type NotificationsResponse = z.infer<typeof notificationsResponse>;
 export type AcknowledgedResponse = z.infer<typeof acknowledgedResponse>;

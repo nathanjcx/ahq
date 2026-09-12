@@ -58,7 +58,7 @@ const KIND_ICON: Partial<Record<PostKind, ReactNode>> = {
  * never reach a model until a person settles them, so the feed has to make one impossible to miss.
  */
 function isContested(post: Post) {
-  return post.kind === 'decision' && post.text.startsWith('Contested:');
+  return post.flag === 'contested';
 }
 
 function message(failure: unknown) {

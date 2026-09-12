@@ -400,9 +400,7 @@ export const fileIncidentReport = mutation({
     const alert = await alertForTask(ctx, task._id);
     const body = [
       `Incident report: ${alert?.title ?? task.title}`,
-      ...REPORT_SECTIONS.map(
-        ([field, label]) => `${label}: ${cleanText(args[field], label, 5_000)}`,
-      ),
+      ...REPORT_SECTIONS.map(([field, label]) => `${label}: ${cleanText(args[field], label, 5_000)}`),
     ].join('\n');
     await postToChannels(ctx, workspace, alert?.affectedFloorIds ?? [], {
       kind: 'finding',
@@ -649,8 +647,7 @@ export const setAlertSecretForActor = mutation({
     const workspace = await workspaceForActor(ctx, args.authSubject, args.authOrgId);
     if (!workspace) throw new Error('Create a workspace first');
     const role = clerkRole(args.authOrgId, args.authOrgRole);
-    if (role !== 'owner' && role !== 'admin')
-      throw new Error('Workspace administrator access required');
+    if (role !== 'owner' && role !== 'admin') throw new Error('Workspace administrator access required');
     const settings = await ensureSettings(ctx, workspace._id);
     const updatedAt = Date.now();
     await ctx.db.patch(settings._id, {
@@ -659,27 +656,5 @@ export const setAlertSecretForActor = mutation({
       updatedAt,
     });
     return { updatedAt };
-  },
-});
-
-export const setAlertSecret = mutation({
-  args: {
-    secret: v.string(),
-    workspaceId: v.id('workspaces'),
-    alertSecretCiphertext: v.optional(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    requireService(args.secret);
-    const workspace = await ctx.db.get(args.workspaceId);
-    if (!workspace) throw new Error('Workspace not found');
-    const settings = await ensureSettings(ctx, workspace._id);
-    const updatedAt = Date.now();
-    await ctx.db.patch(settings._id, {
-      alertSecretCiphertext: args.alertSecretCiphertext,
-      alertSecretUpdatedAt: updatedAt,
-      updatedAt,
-    });
-    return null;
   },
 });

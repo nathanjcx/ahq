@@ -329,9 +329,11 @@ describe('the signed alert route', () => {
   it('accepts a signed body, refuses a forged or stale one, and pages on a new critical alert', async () => {
     const { t, workspaceId } = await workspace();
     installBackend(testBackend(t));
-    await t.mutation(api.services.triage.setAlertSecret, {
+    await t.mutation(api.services.triage.setAlertSecretForActor, {
       secret,
-      workspaceId,
+      authSubject: 'owner',
+      authOrgId: 'acme',
+      authOrgRole: 'org:admin',
       alertSecretCiphertext: seal(alertSecret),
     });
 
@@ -514,16 +516,18 @@ describe('what the Triage page reads', () => {
   });
 
   it('describes intake without ever handing back the signing secret', async () => {
-    const { t, user, workspaceId } = await workspace();
+    const { t, user } = await workspace();
     expect(await user.query(api.triage.intake, {})).toMatchObject({
       signedEndpointReady: false,
       rules: [],
       emailClassification: false,
     });
     await user.mutation(api.triage.setRules, { rules: ['SEV1', 'sev1', 'outage'] });
-    await t.mutation(api.services.triage.setAlertSecret, {
+    await t.mutation(api.services.triage.setAlertSecretForActor, {
       secret,
-      workspaceId,
+      authSubject: 'owner',
+      authOrgId: 'acme',
+      authOrgRole: 'org:admin',
       alertSecretCiphertext: seal(alertSecret),
     });
     const intake = await user.query(api.triage.intake, {});
