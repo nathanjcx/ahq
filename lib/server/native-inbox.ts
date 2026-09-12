@@ -1,21 +1,26 @@
 import { createHash, createHmac } from 'node:crypto';
-import { z } from 'zod';
 import { equalSecret } from './secrets';
 
 export type NativeProvider = 'github' | 'linear' | 'slack';
 
-const configSchema = z.object({
-  provider: z.enum(['github', 'linear', 'slack']),
-  secret: z.string().min(16).max(500),
-  resourceIds: z.array(z.string().min(1).max(300)).min(1).max(500),
-  teamId: z.string().min(1).max(300).optional(),
-});
+export function isNativeProvider(value: string): value is NativeProvider {
+  return value === 'github' || value === 'linear' || value === 'slack';
+}
 
-export interface NativeConfig {
-  provider: NativeProvider;
-  secret: string;
-  resourceIds: string[];
-  teamId?: string;
+/** The operator's app-level webhook secret for one provider, shared by every connection. */
+export function nativeSecret(
+  provider: NativeProvider,
+  raw = process.env.NATIVE_INBOX_SECRETS_JSON,
+): string | undefined {
+  if (!raw) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('NATIVE_INBOX_SECRETS_JSON is invalid');
+  }
+  const secret = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>)[provider] : undefined;
+  return typeof secret === 'string' && secret.length > 0 ? secret : undefined;
 }
 
 export interface NativeInboxItem {
@@ -27,26 +32,9 @@ export interface NativeInboxItem {
 }
 
 export type NativeDelivery =
-  | { kind: 'items'; items: NativeInboxItem[] }
+  | { kind: 'items'; resourceIds: string[]; items: NativeInboxItem[] }
   | { kind: 'challenge'; challenge: string }
   | { kind: 'ignored' };
-
-export function nativeConfig(
-  connectionId: string,
-  raw = process.env.NATIVE_INBOX_CONFIG_JSON,
-): NativeConfig | undefined {
-  if (!raw) return undefined;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error('NATIVE_INBOX_CONFIG_JSON is invalid');
-  }
-  const value =
-    parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>)[connectionId] : undefined;
-  if (value === undefined) return undefined;
-  return configSchema.parse(value);
-}
 
 function header(headers: Headers, name: string) {
   return headers.get(name);
@@ -92,8 +80,8 @@ function signedBodyId(provider: NativeProvider, body: string) {
   return `${provider}:${createHash('sha256').update(body).digest('hex')}`;
 }
 
-function github(body: string, headers: Headers, config: NativeConfig): NativeDelivery {
-  verifyHmac(body, config.secret, header(headers, 'x-hub-signature-256'), 'sha256=');
+function github(body: string, headers: Headers, secret: string): NativeDelivery {
+  verifyHmac(body, secret, header(headers, 'x-hub-signature-256'), 'sha256=');
   const delivery = header(headers, 'x-github-delivery');
   const event = header(headers, 'x-github-event');
   if (!delivery || !event) throw new Error('GitHub delivery headers are required');
@@ -102,12 +90,7 @@ function github(body: string, headers: Headers, config: NativeConfig): NativeDel
   const repository = payload.repository;
   const repositoryId = repository && repository.id !== undefined ? String(repository.id) : '';
   const repositoryName = typeof repository?.full_name === 'string' ? repository.full_name : '';
-  if (
-    !repositoryId ||
-    !repositoryName ||
-    !config.resourceIds.some((id) => id === repositoryId || id === repositoryName)
-  )
-    return { kind: 'ignored' };
+  if (!repositoryId || !repositoryName) return { kind: 'ignored' };
   const subject = event === 'pull_request' ? payload.pull_request : payload.issue;
   if (!subject || typeof subject !== 'object') return { kind: 'ignored' };
   const subjectTitle = clip(subject.title, 500) || `${event} in ${repositoryName}`;
@@ -116,30 +99,26 @@ function github(body: string, headers: Headers, config: NativeConfig): NativeDel
   const bodyText = clip(event === 'issue_comment' ? payload.comment?.body : subject.body, 5_000);
   const preview = clip([action, author && `by ${author}`, bodyText].filter(Boolean).join(' '), 5_000);
   const createdAt = Date.parse(subject.updated_at || payload.comment?.updated_at || '') || Date.now();
+  const sourceUrl = httpsUrl(
+    event === 'issue_comment' ? payload.comment?.html_url || subject.html_url : subject.html_url,
+  );
   return {
     kind: 'items',
+    resourceIds: [repositoryId, repositoryName],
     items: [
       {
         externalId: signedBodyId('github', body),
         title: `GitHub ${event === 'pull_request' ? 'pull request' : event === 'issue_comment' ? 'issue comment' : 'issue'}: ${subjectTitle}`,
         preview,
-        ...(httpsUrl(
-          event === 'issue_comment' ? payload.comment?.html_url || subject.html_url : subject.html_url,
-        )
-          ? {
-              sourceUrl: httpsUrl(
-                event === 'issue_comment' ? payload.comment?.html_url || subject.html_url : subject.html_url,
-              ),
-            }
-          : {}),
+        ...(sourceUrl ? { sourceUrl } : {}),
         createdAt,
       },
     ],
   };
 }
 
-function linear(body: string, headers: Headers, config: NativeConfig, now: number): NativeDelivery {
-  verifyHmac(body, config.secret, header(headers, 'linear-signature'));
+function linear(body: string, headers: Headers, secret: string, now: number): NativeDelivery {
+  verifyHmac(body, secret, header(headers, 'linear-signature'));
   const payload = parseJson(body);
   const timestamp = Number(payload.webhookTimestamp);
   verifyFreshness(timestamp, now, 60_000);
@@ -152,7 +131,7 @@ function linear(body: string, headers: Headers, config: NativeConfig, now: numbe
   const data = payload.data && typeof payload.data === 'object' ? payload.data : undefined;
   if (!data) return { kind: 'ignored' };
   const teamId = clip(data.team?.id || data.teamId || data.issue?.team?.id, 300);
-  if (!teamId || !config.resourceIds.includes(teamId)) return { kind: 'ignored' };
+  if (!teamId) return { kind: 'ignored' };
   const title = clip(data.title || data.identifier || data.body, 500) || `${type} in team ${teamId}`;
   const preview = clip(
     [clip(payload.action, 80), clip(data.body || data.description, 5_000)].filter(Boolean).join(' '),
@@ -162,6 +141,7 @@ function linear(body: string, headers: Headers, config: NativeConfig, now: numbe
   const sourceUrl = httpsUrl(payload.url || data.url);
   return {
     kind: 'items',
+    resourceIds: [teamId],
     items: [
       {
         externalId: signedBodyId('linear', body),
@@ -174,7 +154,7 @@ function linear(body: string, headers: Headers, config: NativeConfig, now: numbe
   };
 }
 
-function slack(body: string, headers: Headers, config: NativeConfig, now: number): NativeDelivery {
+function slack(body: string, headers: Headers, secret: string, now: number): NativeDelivery {
   const timestampHeader = header(headers, 'x-slack-request-timestamp');
   if (!timestampHeader || !/^\d+$/.test(timestampHeader)) throw new Error('Invalid webhook timestamp');
   const timestampSeconds = Number(timestampHeader);
@@ -182,7 +162,7 @@ function slack(body: string, headers: Headers, config: NativeConfig, now: number
   verifyFreshness(timestamp, now, 300_000);
   const signature = header(headers, 'x-slack-signature');
   if (!signature || !/^v0=[0-9a-f]{64}$/i.test(signature)) throw new Error('Invalid webhook signature');
-  const expected = `v0=${createHmac('sha256', config.secret)
+  const expected = `v0=${createHmac('sha256', secret)
     .update(`v0:${Math.floor(timestampSeconds)}:${body}`)
     .digest('hex')}`;
   if (!equalSecret(signature.toLowerCase(), expected)) throw new Error('Invalid webhook signature');
@@ -197,15 +177,8 @@ function slack(body: string, headers: Headers, config: NativeConfig, now: number
     return { kind: 'ignored' };
   const message = event.subtype === 'message_changed' ? event.message : event;
   if (!message || typeof message !== 'object') return { kind: 'ignored' };
-  const teamId = clip(payload.team_id, 300);
   const channelId = clip(message.channel || event.channel, 300);
-  if (
-    !teamId ||
-    !channelId ||
-    (config.teamId && config.teamId !== teamId) ||
-    !config.resourceIds.includes(channelId)
-  )
-    return { kind: 'ignored' };
+  if (!channelId) return { kind: 'ignored' };
   const eventId = clip(payload.event_id, 300);
   if (!eventId) return { kind: 'ignored' };
   const text = clip(message.text, 5_000);
@@ -215,6 +188,7 @@ function slack(body: string, headers: Headers, config: NativeConfig, now: number
     Number.isFinite(eventTs) && eventTs > 0 ? eventTs : Number(payload.event_time) * 1_000 || now;
   return {
     kind: 'items',
+    resourceIds: [channelId],
     items: [
       {
         externalId: signedBodyId('slack', body),
@@ -226,14 +200,16 @@ function slack(body: string, headers: Headers, config: NativeConfig, now: number
   };
 }
 
+/** Verify one provider delivery and normalize it, with the resource keys a connection can follow. */
 export function parseNativeDelivery(
-  config: NativeConfig,
+  provider: NativeProvider,
+  secret: string,
   body: string,
   headers: Headers,
   now = Date.now(),
 ): NativeDelivery {
   if (Buffer.byteLength(body, 'utf8') > 1_000_000) throw new Error('Request is too large');
-  if (config.provider === 'github') return github(body, headers, config);
-  if (config.provider === 'linear') return linear(body, headers, config, now);
-  return slack(body, headers, config, now);
+  if (provider === 'github') return github(body, headers, secret);
+  if (provider === 'linear') return linear(body, headers, secret, now);
+  return slack(body, headers, secret, now);
 }
