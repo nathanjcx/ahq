@@ -68,7 +68,7 @@ export interface TaskContext {
 
 /** What `services/actions:gatewayContext` returns: live authorization for one run token. */
 export interface GatewayContext {
-  task: { id: string; workspaceId: string; status: TaskStatus; createdBy: string };
+  task: { id: string; workspaceId: string; status: TaskStatus; createdBy: string; projectId?: string };
   employeeVersion: { id: string; capabilities: Capability[] };
   connections: PrivateConnection[];
   policies: ToolPolicy[];

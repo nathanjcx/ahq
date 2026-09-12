@@ -475,5 +475,9 @@ it('shows the whole operation in the audit timeline', async () => {
     'corrected',
   ]);
   expect(timeline.proposals.filter((entry) => entry.summary.startsWith('Correct:'))).toHaveLength(2);
-  expect(timeline.events.some((event) => event.type === 'action.precondition')).toBe(true);
+  expect(
+    timeline.toolCalls.some(
+      (call) => call.operationId.startsWith('precondition:') && call.outcome === 'succeeded',
+    ),
+  ).toBe(true);
 });

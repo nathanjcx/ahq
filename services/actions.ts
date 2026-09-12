@@ -2,7 +2,7 @@ import { query, journalMutation } from '../lib/server/backend';
 import { connectedMcp } from '../lib/server/mcp';
 import { canonical, checkResourceScope, resultObject, toolPolicy } from '../lib/server/tool-policy';
 import { toolEvidence } from '../lib/server/audit-mcp';
-import { safeError } from '../lib/server/secrets';
+import { safeError, seal } from '../lib/server/secrets';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { CorrectionDescriptor } from '../lib/contracts';
 import type { Job, PrivateConnection, ToolPolicy } from './types';
@@ -17,17 +17,15 @@ interface ExecutableAction {
  * A compensating write has to know what it is restoring, so the live record is read through the
  * configured read tool and the correction is refused when the version is no longer the one the
  * original write returned. Without this the provider's precondition would reject the write after
- * dispatch, leaving an uncertain outcome instead of a clear refusal.
- *
- * The read is journaled as a task event rather than a sealed tool call because
- * `services/actions:recordToolCall` refuses reads on a finished task, and corrections are usually
- * requested after the task finished.
+ * dispatch, leaving an uncertain outcome instead of a clear refusal. The read is a sealed tool call
+ * under the correction's lease, so the audit trail shows exactly what was compared.
  */
 async function verifyCorrectionPrecondition(
   client: Client,
   input: {
-    taskId: string;
+    runToken: string;
     proposalId: string;
+    leaseToken: string;
     connection: PrivateConnection;
     policies: ToolPolicy[];
     rule: CorrectionDescriptor;
@@ -41,25 +39,44 @@ async function verifyCorrectionPrecondition(
     throw new Error('Correction requires access to the configured record-reading tool.');
   const args = { [rule.idArgument]: input.id };
   checkResourceScope(connection.resourceScope, args, policy);
-  const result = await client.callTool({ name: rule.readTool, arguments: args }, undefined, {
-    timeout: 45_000,
+  const base = {
+    runToken: input.runToken,
+    connectionId: connection.id,
+    tool: rule.readTool,
+    operationId: `precondition:${input.proposalId}`,
+    proposalId: input.proposalId,
+    leaseToken: input.leaseToken,
+    argumentsCiphertext: toolEvidence(args).ciphertext,
+  };
+  await journalMutation('services/actions:recordToolCall', { ...base, outcome: 'started' });
+  const started = Date.now();
+  let result;
+  try {
+    result = await client.callTool({ name: rule.readTool, arguments: args }, undefined, { timeout: 45_000 });
+  } catch (error) {
+    await journalMutation('services/actions:recordToolCall', {
+      ...base,
+      outcome: 'failed',
+      reason: 'provider_error',
+      durationMs: Date.now() - started,
+      resultCiphertext: seal({ error: safeError(error) }),
+    });
+    throw error;
+  }
+  const output = toolEvidence(result);
+  await journalMutation('services/actions:recordToolCall', {
+    ...base,
+    outcome: result.isError ? 'failed' : 'succeeded',
+    ...(result.isError ? { reason: 'provider_error' } : {}),
+    durationMs: Date.now() - started,
+    resultCiphertext: output.ciphertext,
+    sha256: output.sha256,
   });
   if (result.isError) throw new Error('The record could not be read before correcting it.');
   const version = resultObject(result)[rule.versionField];
-  await journalMutation('services/sessions:recordEvents', {
-    taskId: input.taskId,
-    events: [
-      {
-        externalId: `correction-precondition:${input.proposalId}`,
-        type: 'action.precondition',
-        text: `Checked the record version before correcting: expected ${canonical(input.expectedVersion)}, found ${canonical(version)}.`,
-        createdAt: Date.now(),
-      },
-    ],
-  });
   if (version === undefined || canonical(version) !== canonical(input.expectedVersion))
     throw new Error(
-      'The record changed after the original action, so the automatic correction no longer applies. Review it manually.',
+      `The record changed after the original action (expected version ${canonical(input.expectedVersion)}, found ${canonical(version)}), so the automatic correction no longer applies. Review it manually.`,
     );
 }
 
@@ -120,8 +137,9 @@ export async function executeAction(job: Job) {
       );
       if (precondition)
         await verifyCorrectionPrecondition(client, {
-          taskId: current.task.id,
+          runToken: current.task.runToken,
           proposalId,
+          leaseToken: job.leaseToken,
           connection: current.connection,
           policies: current.policies,
           rule: precondition.rule,

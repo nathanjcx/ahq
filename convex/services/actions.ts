@@ -2,6 +2,7 @@ import { v } from 'convex/values';
 import { mutation, query } from '../_generated/server';
 import { correctionKind } from '../schema';
 import { canSeeTask, requireService, sha256, stableJson } from '../shared';
+import { registryToolsFor } from '../registry';
 import { taskTimeline } from '../work';
 import {
   activeTaskContext,
@@ -19,7 +20,13 @@ export const gatewayContext = query({
     const task = await taskForRunToken(ctx, args.runToken);
     const { version, connections, policies } = await activeTaskContext(ctx, task);
     return {
-      task: { id: task._id, workspaceId: task.workspaceId, status: task.status, createdBy: task.createdBy },
+      task: {
+        id: task._id,
+        workspaceId: task.workspaceId,
+        status: task.status,
+        createdBy: task.createdBy,
+        projectId: task.projectId,
+      },
       employeeVersion: { id: version._id, capabilities: version.capabilities },
       connections: connections.map(privateConnection),
       policies,
@@ -344,17 +351,25 @@ export const recordToolCall = mutation({
       throw new Error('Connection does not belong to this task');
     if (args.outcome === 'started') {
       if (args.proposalId) {
-        if (!args.leaseToken || args.operationId !== `action:${args.proposalId}`)
+        // A correction first reads the live record; that read is audited under the same lease.
+        const precondition = args.operationId === `precondition:${args.proposalId}`;
+        if (!args.leaseToken || (!precondition && args.operationId !== `action:${args.proposalId}`))
           throw new Error('Action audit requires its proposal and lease');
         const proposal = await ctx.db.get(args.proposalId);
         if (
           !proposal ||
           proposal.taskId !== task._id ||
           proposal.connectionId !== args.connectionId ||
-          proposal.tool !== args.tool ||
           proposal.status !== 'executing'
         )
           throw new Error('Action is not executable');
+        if (precondition) {
+          const rule = (await registryToolsFor(ctx, proposal.provider)).find(
+            (row) => row.name === proposal.tool,
+          )?.correction;
+          if (!proposal.originalActionId || rule?.readTool !== args.tool)
+            throw new Error('A precondition read must use the configured read tool of a correction');
+        } else if (proposal.tool !== args.tool) throw new Error('Action is not executable');
         if (
           ['cancelled', 'failed', 'uncertain'].includes(task.status) ||
           (task.status === 'completed' && !proposal.originalActionId)
