@@ -35,7 +35,7 @@ const employees: Employee[] = [
     kind: 'worker' as const,
     versionId: 'ver_ada',
     name: 'Ada',
-    version: 1,
+    version: 2,
     updateAvailable: false,
     instanceOf: 'Ada',
     role: 'Operations analyst',

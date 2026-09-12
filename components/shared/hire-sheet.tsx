@@ -15,13 +15,6 @@ import './hire-sheet.css';
 /** The most the marketplace hires at once, matching what `marketplace:hire` accepts. */
 const MAX_COUNT = 20;
 
-/** Instances that count against the concurrency cap: the workspace makes its own reserved staff. */
-function workerCount(employees: Employee[]) {
-  return employees.filter(
-    (employee) => (employee.kind ?? 'worker') === 'worker' && employee.status !== 'retired',
-  ).length;
-}
-
 /** `Ada`, `Ada 2`, `Ada 3`: the names hiring would give, skipping the ones the floor already uses. */
 function suggestNames(stem: string, employees: Employee[], floorId: string | undefined, count: number) {
   const taken = new Set(
@@ -52,7 +45,6 @@ export function HireSheet({
   hiringPolicy,
   role,
   usedTokens,
-  maxConcurrentInstances,
   onClose,
   onHire,
 }: {
@@ -65,7 +57,6 @@ export function HireSheet({
   role: 'owner' | 'admin' | 'member';
   /** Tokens the workspace has recorded this period, which the projection is measured from. */
   usedTokens: number;
-  maxConcurrentInstances: number;
   onClose: () => void;
   onHire: (options: HireOptions) => Promise<boolean>;
 }) {
@@ -80,13 +71,15 @@ export function HireSheet({
     (name, index) => edits[index] ?? name,
   );
 
-  const workers = workerCount(employees);
-  const perInstance = workers ? Math.round(usedTokens / workers) : 0;
+  // The projection is the one place that counts instances the way the hiring cap counts them, so
+  // the capacity it reports is what the sheet shows and what it refuses to go past.
+  const capacityNow = useUiQuery(uiApi.planProjection, { projectedTokens: 0 })?.capacity;
+  const perInstance = capacityNow?.instances ? Math.round(usedTokens / capacityNow.instances) : 0;
   const projection = useUiQuery(uiApi.planProjection, { projectedTokens: perInstance * count });
   const openFloors = floors.filter((floor) => floor.archivedAt === undefined);
   const needsApproval = hiringPolicy === 'approval' && role === 'member';
   const blocked = hiringPolicy === 'admins' && role === 'member';
-  const overCap = workers + count > maxConcurrentInstances;
+  const overCap = capacityNow ? capacityNow.instances + count > capacityNow.maxConcurrentInstances : false;
   const verb = needsApproval ? 'Request' : 'Hire';
 
   return (
@@ -204,12 +197,15 @@ export function HireSheet({
         <section className="hire-effect">
           <h3>What this adds</h3>
           <dl>
-            <div>
-              <dt>Parallel tasks</dt>
-              <dd>
-                {workers} → {workers + count} of {maxConcurrentInstances}
-              </dd>
-            </div>
+            {capacityNow && (
+              <div>
+                <dt>Parallel tasks</dt>
+                <dd>
+                  {capacityNow.instances} → {capacityNow.instances + count} of{' '}
+                  {capacityNow.maxConcurrentInstances}
+                </dd>
+              </div>
+            )}
             {projection?.plan === 'subscription' && projection.monthlyAllowance > 0 && (
               <div>
                 <dt>Monthly allowance</dt>
@@ -236,8 +232,8 @@ export function HireSheet({
         {overCap && (
           <p className="hire-warning">
             <AlertTriangle size={15} />
-            This workspace runs at most {maxConcurrentInstances} instances. Retire one, hire fewer, or
-            raise the limit in Settings.
+            This workspace runs at most {capacityNow?.maxConcurrentInstances} instances. Retire one,
+            hire fewer, or raise the limit in Settings.
           </p>
         )}
         {blocked && (

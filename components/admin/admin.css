@@ -42,10 +42,15 @@
 }
 .admin-list article {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) auto auto auto;
+  grid-template-columns: 38px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 11px;
   padding: 13px;
+}
+.draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .draft-avatar {
   width: 38px;
@@ -310,16 +315,13 @@
     grid-column: auto;
   }
   .admin-list article {
-    grid-template-columns: 38px 1fr auto;
+    grid-template-columns: 38px minmax(0, 1fr);
   }
   .admin-list article .model-pill {
     grid-column: 2;
   }
-  .admin-list article button {
-    grid-row: 2;
-  }
-  .admin-list article button:last-child {
-    grid-column: 3;
+  .draft-actions {
+    grid-column: 1 / -1;
   }
   .editor-footer {
     flex-wrap: wrap;

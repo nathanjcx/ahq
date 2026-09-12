@@ -12,9 +12,8 @@ import { PageIntro } from '../shared/page-intro';
 import { relativeTime } from '../shared/time';
 import { useUiQuery } from '../shared/use-ui-query';
 import { EmployeeDetail } from './employee-detail';
-import { groupInstances, isReserved, reservedStaff, shiftLabel } from './instances';
+import { groupInstances, isReserved, readinessLabel, reservedStaff, shiftLabel } from './instances';
 import type { Employee, InstanceStatus, Listing } from '@/lib/contracts';
-import { defaultWorkspaceSettings } from '@/lib/contracts';
 import { pluralize } from '@/lib/text';
 import { uiApi } from '@/lib/ui-api';
 import './employees.css';
@@ -41,10 +40,8 @@ function InstanceCard({
         <p>{shiftLabel(status)}</p>
       </div>
       <span className="model-pill">{modelName(employee.model)}</span>
-      <span className="card-meta">
-        {employee.status === 'retired'
-          ? 'Retired'
-          : `${(status?.tokensToday ?? 0).toLocaleString()} tokens today`}
+      <span className="card-meta" data-blocked={employee.status !== 'ready'}>
+        {readinessLabel(employee) ?? `${(status?.tokensToday ?? 0).toLocaleString()} tokens today`}
       </span>
     </button>
   );
@@ -107,12 +104,6 @@ export function EmployeesPage({ listings, ...props }: Props) {
   const [hiring, setHiring] = useState<{ listing: Listing; floorId?: string } | null>(null);
   const { open, openDetail, closeDetail } = useMasterDetail();
   const statuses = useUiQuery(uiApi.instanceStatus, {});
-  const settings = dashboard.settings ?? {
-    ...defaultWorkspaceSettings,
-    timezone: 'UTC',
-    updatedAt: 0,
-  };
-
   const visible = dashboard.employees.filter(
     (employee) => showRetired || employee.status !== 'retired',
   );
@@ -126,7 +117,8 @@ export function EmployeesPage({ listings, ...props }: Props) {
     visible.find((employee) => employee.id === props.selectedEmployee) ?? visible[0] ?? null;
   const statusFor = (id: string) => statuses?.find((entry) => entry.employeeId === id);
   const role = dashboard.workspace?.role ?? 'member';
-  const needsApproval = settings.hiringPolicy === 'approval' && role === 'member';
+  const hiringPolicy = dashboard.settings?.hiringPolicy ?? 'anyone';
+  const needsApproval = hiringPolicy === 'approval' && role === 'member';
   const usedTokens = (dashboard.workspace?.usage.byModel ?? []).reduce(
     (total, row) => total + row.input + row.output,
     0,
@@ -281,10 +273,9 @@ export function EmployeesPage({ listings, ...props }: Props) {
           employees={dashboard.employees}
           floors={dashboard.floors}
           floorId={hiring.floorId}
-          hiringPolicy={settings.hiringPolicy}
+          hiringPolicy={hiringPolicy}
           role={role}
           usedTokens={usedTokens}
-          maxConcurrentInstances={settings.maxConcurrentInstances}
           onClose={() => setHiring(null)}
           onHire={(options) =>
             run(

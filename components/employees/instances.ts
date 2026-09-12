@@ -1,8 +1,19 @@
+import { providerName } from '../shared/format';
 import { shortTime } from '../shared/time';
-import type { Employee, Floor, InstanceStatus } from '@/lib/contracts';
+import type { Employee, Floor, InstanceStatus, ProviderId } from '@/lib/contracts';
 
 export function isReserved(employee: Employee) {
   return (employee.kind ?? 'worker') !== 'worker';
+}
+
+/** Why an instance cannot take work, or nothing when it can. */
+export function readinessLabel(employee: Employee) {
+  if (employee.status === 'retired') return 'Retired';
+  if (employee.status !== 'ready')
+    return employee.missingCapabilities.length
+      ? `Blocked · needs ${employee.missingCapabilities.map((id) => providerName(id as ProviderId)).join(', ')}`
+      : 'Blocked';
+  return null;
 }
 
 /** Where an instance is in its day, in the words the card and the detail both use. */

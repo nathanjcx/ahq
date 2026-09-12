@@ -85,22 +85,24 @@ export function MarketplaceStudioPage({
                     </p>
                   </div>
                   <span className="model-pill">{modelName(draft.model)}</span>
-                  <button className="secondary-button" onClick={() => setPreviewing(draft)}>
-                    <Eye size={15} />
-                    Preview
-                  </button>
-                  <button className="secondary-button" onClick={() => setEditing(draft)}>
-                    Edit
-                  </button>
-                  <button
-                    className="primary-button"
-                    disabled={issues.length > 0}
-                    title={issues.join(' ')}
-                    onClick={() => onPublish(draft.id)}
-                  >
-                    <BadgeCheck size={15} />
-                    {issues.length ? 'Not ready' : 'Publish'}
-                  </button>
+                  <div className="draft-actions">
+                    <button className="secondary-button" onClick={() => setPreviewing(draft)}>
+                      <Eye size={15} />
+                      Preview
+                    </button>
+                    <button className="secondary-button" onClick={() => setEditing(draft)}>
+                      Edit
+                    </button>
+                    <button
+                      className="primary-button"
+                      disabled={issues.length > 0}
+                      title={issues.join(' ')}
+                      onClick={() => onPublish(draft.id)}
+                    >
+                      <BadgeCheck size={15} />
+                      {issues.length ? 'Not ready' : 'Publish'}
+                    </button>
+                  </div>
                 </article>
               );
             })}
@@ -134,9 +136,11 @@ export function MarketplaceStudioPage({
                   </p>
                 </div>
                 <span className="model-pill">{modelName(listing.model)}</span>
-                <button className="secondary-button danger" onClick={() => onRetire(listing.versionId)}>
-                  Retire version
-                </button>
+                <div className="draft-actions">
+                  <button className="secondary-button danger" onClick={() => onRetire(listing.versionId)}>
+                    Retire version
+                  </button>
+                </div>
               </article>
             ))}
           </div>

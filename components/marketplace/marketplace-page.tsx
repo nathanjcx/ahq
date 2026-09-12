@@ -10,7 +10,6 @@ import { PageIntro } from '../shared/page-intro';
 import { missingRequiredCapabilities } from './capabilities';
 import { MarketplaceDetail } from './marketplace-detail';
 import type { Employee, Listing } from '@/lib/contracts';
-import { defaultWorkspaceSettings } from '@/lib/contracts';
 import { pluralize } from '@/lib/text';
 import './marketplace.css';
 
@@ -38,9 +37,9 @@ export function MarketplacePage({ listings, ...props }: Props) {
   const [selected, setSelected] = useState<Listing | null>(null);
   const [hiring, setHiring] = useState<Listing | null>(null);
 
-  const settings = dashboard.settings ?? { ...defaultWorkspaceSettings, timezone: 'UTC', updatedAt: 0 };
   const role = dashboard.workspace?.role ?? 'member';
-  const needsApproval = settings.hiringPolicy === 'approval' && role === 'member';
+  const hiringPolicy = dashboard.settings?.hiringPolicy ?? 'anyone';
+  const needsApproval = hiringPolicy === 'approval' && role === 'member';
   const usedTokens = (dashboard.workspace?.usage.byModel ?? []).reduce(
     (total, row) => total + row.input + row.output,
     0,
@@ -239,10 +238,9 @@ export function MarketplacePage({ listings, ...props }: Props) {
           listing={hiring}
           employees={dashboard.employees}
           floors={dashboard.floors}
-          hiringPolicy={settings.hiringPolicy}
+          hiringPolicy={hiringPolicy}
           role={role}
           usedTokens={usedTokens}
-          maxConcurrentInstances={settings.maxConcurrentInstances}
           onClose={() => setHiring(null)}
           onHire={(options) =>
             run(

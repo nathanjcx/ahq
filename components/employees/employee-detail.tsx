@@ -9,7 +9,7 @@ import { modelName, providerName } from '../shared/format';
 import { Avatar } from '../shared/marks';
 import { relativeTime, shortTime } from '../shared/time';
 import { useUiQuery } from '../shared/use-ui-query';
-import { shiftLabel } from './instances';
+import { readinessLabel, shiftLabel } from './instances';
 import type {
   Connection,
   Employee,
@@ -103,6 +103,10 @@ function InstanceFindings({ employeeId, onAudit }: { employeeId: string; onAudit
   );
 }
 
+/**
+ * Everything this instance's floor has posted. A channel of an instance's own is not a thing the
+ * channels module carries yet, so the feed is the floor's, read from where the instance stands.
+ */
 function InstanceFeed({ employee, actions }: { employee: Employee; actions: Actions }) {
   const channels = useUiQuery(uiApi.channels, {});
   const channel = channels?.find(
@@ -230,7 +234,7 @@ export function EmployeeDetail({
                 <dt>Status</dt>
                 <dd>
                   <i className={`status-dot ${employee.status === 'ready' ? 'working' : 'waiting'}`} />
-                  {employee.status}
+                  {readinessLabel(employee) ?? 'Ready'}
                 </dd>
               </div>
               <div>
