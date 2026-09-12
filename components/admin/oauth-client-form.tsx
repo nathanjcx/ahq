@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { serverLabel, type OAuthClientInput } from './operations-api';
 import type { OAuthClientConfig } from '@/lib/contracts';
 import { providerServerUrls, type ProviderDefinition } from '@/lib/providers';
-import { serverLabel, type OAuthClientInput } from './operations-api';
 
 /** Add or edit one OAuth client. The client secret leaves the browser once and never comes back. */
 export function OAuthClientForm({

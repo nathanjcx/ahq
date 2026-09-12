@@ -1,17 +1,17 @@
 'use client';
 
 import { Plus } from 'lucide-react';
-import type { Dashboard, Employee, Floor, Task } from '@/lib/contracts';
 import type { Actions } from '../app/actions';
 import type { Page } from '../app/nav';
 import type { OfficeEmployee } from '../office/office-view';
-import { PageIntro } from '../shared/page-intro';
 import { timeGreeting } from '../shared/format';
+import { PageIntro } from '../shared/page-intro';
 import { FloorBoard, LiveFloorBoard } from './floor-board';
 import { FloorDirectory } from './floor-directory';
+import { ACTIVE_TASK_STATUSES, summarizeFloor, type FloorEntry } from './floor-stats';
 import { FloorView } from './floor-view';
 import { LobbyView } from './lobby-view';
-import { ACTIVE_TASK_STATUSES, summarizeFloor, type FloorEntry } from './floor-stats';
+import type { Dashboard, Employee, Floor, Task } from '@/lib/contracts';
 import './floors.css';
 
 /** Maps a floor's employees to the 3D office, using their live work for presence. */

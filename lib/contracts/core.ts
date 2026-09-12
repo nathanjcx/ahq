@@ -1,7 +1,15 @@
 export type ModelId = 'gpt-5.6-luna' | 'gpt-5.6-terra' | 'gpt-5.6-sol' | 'gpt-6-astra';
 export type ProviderId = 'linear' | 'slack' | 'github' | 'google-workspace' | 'canva';
 export type TaskStatus =
-  'queued' | 'running' | 'awaiting_approval' | 'completed' | 'failed' | 'cancelled' | 'uncertain';
+  | 'queued'
+  | 'running'
+  | 'awaiting_approval'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'uncertain'
+  | 'waiting'
+  | 'blocked';
 export type CorrectionKind = 'supported' | 'partial' | 'manual' | 'irreversible' | 'unknown';
 export type ToolMode = 'read' | 'write' | 'blocked';
 export type ConnectionVisibility = 'private' | 'members' | 'workspace';
@@ -46,6 +54,9 @@ export interface Employee {
   status: string;
   missingCapabilities: string[];
   persona?: Persona;
+  /** Undefined means the lobby. */
+  floorId?: string;
+  kind?: 'worker' | 'janitor' | 'auditor' | 'triage';
 }
 export interface Member {
   subject: string;
@@ -118,6 +129,11 @@ export interface Task {
   floorId?: string;
   floorContext?: { name: string; brief: string };
   sourceTaskId?: string;
+  projectId?: string;
+  milestoneId?: string;
+  cadence?: 'once' | 'daily';
+  deadlineAt?: number;
+  dependsOn?: string[];
   employeeId: string;
   employeeName: string;
   createdBy: string;

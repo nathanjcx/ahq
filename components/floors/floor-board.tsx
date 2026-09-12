@@ -3,11 +3,11 @@
 import { useQuery } from 'convex/react';
 import { ArrowUpRight, MessagesSquare, Send, UserPlus, X } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
-import type { Employee, FloorPost } from '@/lib/contracts';
-import { asId, uiApi } from '@/lib/ui-api';
 import { EmptyPane } from '../shared/empty';
 import { relativeTime, safeHttpsUrl } from '../shared/format';
 import { SkeletonList } from '../shared/skeleton';
+import type { Employee, FloorPost } from '@/lib/contracts';
+import { asId, uiApi } from '@/lib/ui-api';
 
 export type FloorBoardProps = {
   /** Board posts oldest first, or undefined while the subscription loads. */

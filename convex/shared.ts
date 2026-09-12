@@ -1,5 +1,5 @@
-import type { MutationCtx, QueryCtx } from './_generated/server';
 import type { Doc } from './_generated/dataModel';
+import type { MutationCtx, QueryCtx } from './_generated/server';
 
 export type Ctx = QueryCtx | MutationCtx;
 /** Read-only slice shared with service modules that only touch the database. */

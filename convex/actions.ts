@@ -1,9 +1,9 @@
 import { v } from 'convex/values';
-import { mutation } from './_generated/server';
 import type { Doc } from './_generated/dataModel';
+import { mutation } from './_generated/server';
 import type { MutationCtx } from './_generated/server';
 import { canDecide, requireWorkspace, sha256, type WorkspaceRole } from './shared';
-import { startTask } from './work';
+import { startTask } from './lib/tasks';
 
 async function decidable(
   ctx: MutationCtx,

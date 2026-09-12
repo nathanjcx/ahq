@@ -2,13 +2,13 @@
 
 import { BadgeCheck, Bot, FileText, LockKeyhole, Plus, Store } from 'lucide-react';
 import { useState } from 'react';
-import type { Listing, RegistryTool } from '@/lib/contracts';
 import { EmptyMini } from '../shared/empty';
 import { modelName, relativeTime } from '../shared/format';
 import { PageIntro } from '../shared/page-intro';
 import { draftPublishIssues, type EditorDraft } from './draft-issues';
-import { groupRegistryTools } from './registry';
 import { EmployeeEditor } from './employee-editor';
+import { groupRegistryTools } from './registry';
+import type { Listing, RegistryTool } from '@/lib/contracts';
 
 export function MarketplaceStudioPage({
   drafts,

@@ -2,8 +2,6 @@
 
 import { KeyRound, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import type { OAuthClientConfig, ProviderConfig } from '@/lib/contracts';
-import { providerServerUrls, type ProviderDefinition } from '@/lib/providers';
 import { EmptyMini } from '../shared/empty';
 import { relativeTime } from '../shared/format';
 import { ProviderLogo } from '../shared/marks';
@@ -20,6 +18,8 @@ import {
   type OperationsStatus,
 } from './operations-api';
 import { ReadinessMark } from './operations-status';
+import type { OAuthClientConfig, ProviderConfig } from '@/lib/contracts';
+import { providerServerUrls, type ProviderDefinition } from '@/lib/providers';
 
 export function ProviderOperationsCard({
   provider,

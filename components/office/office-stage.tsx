@@ -1,15 +1,15 @@
 'use client';
 
-import dynamic from 'next/dynamic';
 import { useQuery } from 'convex/react';
+import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState } from 'react';
+import { deriveActivities, type EmployeeActivity } from './activity';
+import type { LabelMode } from './office-labels';
+import type { OfficeEmployee, OfficeProvider } from './office-scene';
+import { useActivityCues } from './sound';
 import type { Dashboard, FloorPost } from '@/lib/contracts';
 import { providers as providerCatalog } from '@/lib/providers';
 import { asId, uiApi } from '@/lib/ui-api';
-import { deriveActivities, type EmployeeActivity } from './activity';
-import { useActivityCues } from './sound';
-import type { LabelMode } from './office-labels';
-import type { OfficeEmployee, OfficeProvider } from './office-scene';
 
 const OfficeView = dynamic(() => import('./office-view'), { ssr: false });
 

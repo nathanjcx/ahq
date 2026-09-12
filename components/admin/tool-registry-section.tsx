@@ -2,12 +2,12 @@
 
 import { Download, Plus, Search, Wrench } from 'lucide-react';
 import { useState } from 'react';
-import type { Connection, ProviderId, RegistryTool } from '@/lib/contracts';
-import { providers } from '@/lib/providers';
 import { EmptyMini } from '../shared/empty';
 import { providerName, relativeTime } from '../shared/format';
 import { groupRegistryTools } from './registry';
 import { RegistryToolSheet, type RegistryToolInput } from './registry-tool-sheet';
+import type { Connection, ProviderId, RegistryTool } from '@/lib/contracts';
+import { providers } from '@/lib/providers';
 
 export function ToolRegistrySection({
   tools,

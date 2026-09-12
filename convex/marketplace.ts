@@ -1,10 +1,10 @@
 import { v } from 'convex/values';
-import { mutation, query } from './_generated/server';
-import type { Doc } from './_generated/dataModel';
 import type { Persona, ProviderId } from '../lib/contracts';
 import { PERSONA_LIMITS, isPersonaTrait } from '../lib/personas';
-import { persona as personaValidator } from './schema';
+import type { Doc } from './_generated/dataModel';
+import { mutation, query } from './_generated/server';
 import { registryToolsFor } from './registry';
+import { persona as personaValidator } from './schema';
 import { cleanText, identity, requirePlatformAdmin, requireWorkspace, sha256, type Ctx } from './shared';
 
 const provider = v.union(

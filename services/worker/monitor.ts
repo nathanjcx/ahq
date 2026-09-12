@@ -221,7 +221,7 @@ async function monitorSession(runtime: WorkerRuntime, taskId: string, controller
             });
           }
         } else if (event.type === 'agent.session.turn.item.done') {
-          const message = itemMessage(event.item as AgentSessionItem);
+          const message = itemMessage(event.item);
           if (message) {
             messages.set(message.externalId, message);
             completed.add(message.externalId);

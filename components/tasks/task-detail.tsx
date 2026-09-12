@@ -2,7 +2,6 @@
 
 import { ShieldCheck, Square, UserRoundPlus } from 'lucide-react';
 import { useState } from 'react';
-import type { ActionProposal, Employee, Task, TaskVisibility } from '@/lib/contracts';
 import { EmptyPane } from '../shared/empty';
 import { statusLabel } from '../shared/format';
 import { StatusMark } from '../shared/marks';
@@ -11,6 +10,7 @@ import { HandoffSheet } from './handoff-sheet';
 import { ProposalCard } from './proposal-card';
 import { TaskConversation } from './task-conversation';
 import { VisibilityMenu } from './visibility-menu';
+import type { ActionProposal, Employee, Task, TaskVisibility } from '@/lib/contracts';
 
 const TABS = [
   { id: 'conversation', label: 'Conversation' },

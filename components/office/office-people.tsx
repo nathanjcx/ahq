@@ -1,16 +1,16 @@
 'use client';
 
+import { Html } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { useFrame } from '@react-three/fiber';
-import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Activity, EmployeeActivity } from './activity';
 import { labelPriority, type LabelMode } from './office-labels';
 import { useOverlayEntry } from './office-overlay';
 import { Box, C, Cylinder, Round } from './office-primitives';
-import type { Station } from './office-stations';
 import type { OfficeEmployee } from './office-scene';
+import type { Station } from './office-stations';
 
 type Appearance = {
   gender: 'neutral' | 'feminine' | 'masculine';

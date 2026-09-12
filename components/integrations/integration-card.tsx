@@ -2,12 +2,12 @@
 
 import { ExternalLink, Link2, LoaderCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
-import type { Connection } from '@/lib/contracts';
-import type { ProviderDefinition } from '@/lib/providers';
 import { ProviderLogo } from '../shared/marks';
 import { OverflowMenu, type OverflowAction } from '../shared/overflow-menu';
 import { useIsNarrow } from '../shared/use-media';
 import { connectionLabel, sharedReach, sharingSummary, type ProviderSetup } from './connect';
+import type { Connection } from '@/lib/contracts';
+import type { ProviderDefinition } from '@/lib/providers';
 
 function accountDetail(connection: Connection) {
   if (connection.status !== 'connected') return connection.error || 'Sign in again to continue.';

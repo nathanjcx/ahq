@@ -1,17 +1,9 @@
 'use client';
 
-import type {
-  Dashboard,
-  Listing,
-  Floor,
-  ProviderConfig,
-  ProviderReadiness,
-  RegistryTool,
-} from '@/lib/contracts';
+import { ActivityPage } from '../activity/activity-page';
 import type { EditorDraft } from '../admin/draft-issues';
 import { MarketplaceStudioPage } from '../admin/marketplace-studio';
 import { OperationsPage } from '../admin/operations-page';
-import { ActivityPage } from '../activity/activity-page';
 import { EmployeesPage } from '../employees/employees-page';
 import { FilesPage } from '../files/files-page';
 import { FloorPage } from '../floors/floor-page';
@@ -21,6 +13,14 @@ import { MarketplacePage } from '../marketplace/marketplace-page';
 import { TasksPage } from '../tasks/tasks-page';
 import type { Actions } from './actions';
 import type { Page } from './nav';
+import type {
+  Dashboard,
+  Listing,
+  Floor,
+  ProviderConfig,
+  ProviderReadiness,
+  RegistryTool,
+} from '@/lib/contracts';
 
 export type PageContentProps = {
   page: Page;

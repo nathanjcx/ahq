@@ -167,7 +167,7 @@ describe('Convex data boundaries', () => {
       tokenIdentifier: 'test|jwt-v2-owner',
       issuer: 'test',
       o: { id: 'org-v2', rol: 'member' },
-    } as never);
+    });
     const admin = t.withIdentity({
       subject: 'jwt-v2-admin',
       tokenIdentifier: 'test|jwt-v2-admin',
@@ -175,7 +175,7 @@ describe('Convex data boundaries', () => {
       given_name: 'Ada',
       family_name: 'Byron',
       o: { id: 'org-v2', rol: 'admin' },
-    } as never);
+    });
     await owner.mutation(api.workspace.bootstrap, { name: 'JWT v2 company' });
     await admin.mutation(api.workspace.setTokenCap, { monthlyTokenCap: 250_000 });
     const dashboard = await admin.query(api.workspace.dashboard, {});

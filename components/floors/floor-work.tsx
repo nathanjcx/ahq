@@ -1,10 +1,10 @@
 'use client';
 
 import { ChevronRight, Plus } from 'lucide-react';
-import type { ActionProposal, Task } from '@/lib/contracts';
 import { relativeTime, statusLabel } from '../shared/format';
 import { StatusMark } from '../shared/marks';
 import { taskGroup, type TaskGroup } from './floor-stats';
+import type { ActionProposal, Task } from '@/lib/contracts';
 
 const GROUPS: { id: TaskGroup; title: string; empty: string }[] = [
   { id: 'active', title: 'Active', empty: 'Nothing running on this floor.' },

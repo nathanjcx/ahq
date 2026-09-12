@@ -1,7 +1,6 @@
 'use client';
 
 import { useMutation } from 'convex/react';
-import { asId, uiApi } from '@/lib/ui-api';
 import type {
   ConnectionVisibility,
   CorrectionDescriptor,
@@ -9,11 +8,12 @@ import type {
   TaskVisibility,
   ToolMode,
 } from '@/lib/contracts';
+import { asId, uiApi } from '@/lib/ui-api';
 
 export type CorrectionResult = { kind: 'task'; taskId: string } | { kind: 'proposal'; proposalId: string };
 
 /** Every workspace mutation the UI can perform, in UI terms. */
-export type Actions = {
+export type CoreActions = {
   bootstrap: (name: string) => Promise<unknown>;
   setTokenCap: (monthlyTokenCap: number) => Promise<unknown>;
   hire: (versionId: string) => Promise<unknown>;
@@ -73,7 +73,7 @@ const unavailableCorrection = async (): Promise<CorrectionResult> => {
 };
 
 /** Preview mode: every mutation is a no-op so the interface stays explorable. */
-export const offlineActions: Actions = {
+export const offlineCoreActions: CoreActions = {
   bootstrap: unavailable,
   setTokenCap: unavailable,
   hire: unavailable,
@@ -103,7 +103,7 @@ export const offlineActions: Actions = {
   importDiscoveredTools: unavailable,
 };
 
-export function useWorkspaceActions(): Actions {
+export function useCoreActions(): CoreActions {
   const bootstrap = useMutation(uiApi.bootstrapWorkspace);
   const setTokenCap = useMutation(uiApi.setTokenCap);
   const hire = useMutation(uiApi.hire);

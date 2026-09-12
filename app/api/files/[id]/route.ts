@@ -1,5 +1,5 @@
-import { actor, failure } from '../../../../lib/server/http';
 import { query } from '../../../../lib/server/backend';
+import { actor, failure } from '../../../../lib/server/http';
 import { getArtifact } from '../../../../lib/server/storage';
 export const runtime = 'nodejs';
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -12,7 +12,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     );
     const file = await getArtifact(artifact.storageKey);
     if (!file.Body) throw new Error('File is unavailable');
-    return new Response(file.Body.transformToWebStream() as ReadableStream, {
+    return new Response(file.Body.transformToWebStream(), {
       headers: {
         'Content-Type': 'application/octet-stream',
         'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(artifact.name)}`,

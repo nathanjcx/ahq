@@ -2,8 +2,8 @@
 
 import { Check, Copy, Eye, LoaderCircle, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
-import type { RelaySecretResponse } from '@/lib/api/schemas';
 import { webClient } from '@/lib/api/client';
+import type { RelaySecretResponse } from '@/lib/api/schemas';
 
 type Relay = RelaySecretResponse;
 

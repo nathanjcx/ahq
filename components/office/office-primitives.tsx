@@ -1,7 +1,7 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo } from 'react';
 import { RoundedBox } from '@react-three/drei';
+import { createContext, useContext, useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
 export type Point = [number, number, number];

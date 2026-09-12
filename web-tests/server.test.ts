@@ -1,13 +1,13 @@
-import { describe, expect, it } from 'vitest';
 import { createHmac, randomBytes } from 'node:crypto';
 import { unzipSync, strFromU8 } from 'fflate';
-import { seal, unseal } from '../lib/server/secrets';
-import { publicAddress, approvedMcpUrl } from '../lib/server/network';
-import { toolPolicy, checkResourceScope, canonical } from '../lib/server/tool-policy';
-import { verifyInboxSignature, inboxPayload } from '../lib/server/inbox-events';
+import { describe, expect, it } from 'vitest';
 import { sessionConfiguration, sessionUsage } from '../lib/server/agents';
-import type { TaskContext, ToolPolicy } from '../services/types';
+import { verifyInboxSignature, inboxPayload } from '../lib/server/inbox-events';
+import { publicAddress, approvedMcpUrl } from '../lib/server/network';
+import { seal, unseal } from '../lib/server/secrets';
+import { toolPolicy, checkResourceScope, canonical } from '../lib/server/tool-policy';
 import { initialTaskInput } from '../services/task-input';
+import type { TaskContext, ToolPolicy } from '../services/types';
 
 const policies: ToolPolicy[] = [
   { provider: 'github', name: 'get_me', mode: 'read' },

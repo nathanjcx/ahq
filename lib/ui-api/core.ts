@@ -7,7 +7,7 @@ import type { Id, TableNames } from '@/convex/_generated/dataModel';
  * generated ones, so arguments and results are typed by the Convex functions themselves and a
  * renamed or re-shaped function fails the build here rather than at runtime.
  */
-export const uiApi = {
+export const coreApi = {
   // Workspace
   dashboard: api.workspace.dashboard,
   bootstrapWorkspace: api.workspace.bootstrap,

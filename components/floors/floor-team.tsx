@@ -2,13 +2,13 @@
 
 import { Pencil, Plus, Users } from 'lucide-react';
 import { useState } from 'react';
-import type { Employee } from '@/lib/contracts';
 import type { OfficeSceneData } from '../office/office-stage';
 import type { OfficeEmployee } from '../office/office-view';
 import { EmptyMini } from '../shared/empty';
 import { Avatar } from '../shared/marks';
 import { FloorReplay } from './floor-replay';
 import { FloorScene } from './floor-scene';
+import type { Employee } from '@/lib/contracts';
 
 export function FloorTeam({
   floorName,

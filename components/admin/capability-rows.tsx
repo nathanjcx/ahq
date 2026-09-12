@@ -2,11 +2,11 @@
 
 import { Link2, LockKeyhole, X } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { Capability, ProviderId, ToolMode } from '@/lib/contracts';
-import { providers } from '@/lib/providers';
 import { EmptyMini } from '../shared/empty';
 import { providerName } from '../shared/format';
 import type { RegistryByProvider } from './registry';
+import type { Capability, ProviderId, ToolMode } from '@/lib/contracts';
+import { providers } from '@/lib/providers';
 
 export type CapabilityRow = Capability & { rowId: string };
 

@@ -12,10 +12,10 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import { useEffect, useState, type CSSProperties } from 'react';
-import type { Listing, ProviderId } from '@/lib/contracts';
 import { providerName } from '../shared/format';
 import { ProviderMark } from '../shared/marks';
 import { Sheet } from '../shared/sheet';
+import type { Listing, ProviderId } from '@/lib/contracts';
 
 export function MarketplaceDetail({
   listing,

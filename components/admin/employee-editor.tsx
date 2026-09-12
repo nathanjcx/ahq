@@ -2,15 +2,15 @@
 
 import { Check, LockKeyhole, Plus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import type { ModelId, Persona } from '@/lib/contracts';
-import { PERSONA_LIMITS, PERSONA_TRAITS, type PersonaTrait } from '@/lib/personas';
 import { lines } from '../shared/format';
 import { Sheet } from '../shared/sheet';
 import { CapabilityRows, type CapabilityRow } from './capability-rows';
-import { MediaRows, type MediaRow } from './media-rows';
-import { SkillRows, type SkillRow } from './skill-rows';
 import { editorRowId, sha256, type EditorDraft } from './draft-issues';
+import { MediaRows, type MediaRow } from './media-rows';
 import type { RegistryByProvider } from './registry';
+import { SkillRows, type SkillRow } from './skill-rows';
+import type { ModelId, Persona } from '@/lib/contracts';
+import { PERSONA_LIMITS, PERSONA_TRAITS, type PersonaTrait } from '@/lib/personas';
 
 export function EmployeeEditor({
   draft,

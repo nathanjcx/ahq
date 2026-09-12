@@ -1,6 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { PageIntro } from '../shared/page-intro';
+import { providerRows } from './operations-api';
+import { OperationsOverview } from './operations-status';
+import { ProviderOperationsCard } from './provider-operations-card';
+import type { RegistryToolInput } from './registry-tool-sheet';
+import { ToolRegistrySection } from './tool-registry-section';
 import type {
   Connection,
   ProviderConfig,
@@ -8,12 +14,6 @@ import type {
   ProviderReadiness,
   RegistryTool,
 } from '@/lib/contracts';
-import { PageIntro } from '../shared/page-intro';
-import { providerRows } from './operations-api';
-import { OperationsOverview } from './operations-status';
-import { ProviderOperationsCard } from './provider-operations-card';
-import type { RegistryToolInput } from './registry-tool-sheet';
-import { ToolRegistrySection } from './tool-registry-section';
 import './operations.css';
 
 export function OperationsPage({

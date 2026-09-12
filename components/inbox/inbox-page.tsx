@@ -2,12 +2,12 @@
 
 import { ArrowRight, ExternalLink, Inbox, MessageSquareText, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { Employee, InboxItem, Floor } from '@/lib/contracts';
 import { EmptyPane } from '../shared/empty';
 import { providerName, relativeTime } from '../shared/format';
 import { ProviderMark } from '../shared/marks';
 import { MasterDetail, useMasterDetail } from '../shared/master-detail';
 import { PageIntro } from '../shared/page-intro';
+import type { Employee, InboxItem, Floor } from '@/lib/contracts';
 
 export function InboxPage({
   items,

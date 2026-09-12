@@ -3,13 +3,13 @@
 import { useQuery } from 'convex/react';
 import { History, Pause, Play, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ActionProposal, ActivityEvent, AuditTimeline, Task } from '@/lib/contracts';
-import { providers as providerCatalog } from '@/lib/providers';
-import { uiApi } from '@/lib/ui-api';
-import { webClient } from '@/lib/api/client';
 import { deriveActivities, providerForTool } from '../office/activity';
 import type { OfficeSceneData } from '../office/office-stage';
 import type { OfficeProvider } from '../office/office-view';
+import { webClient } from '@/lib/api/client';
+import type { ActionProposal, ActivityEvent, AuditTimeline, Task } from '@/lib/contracts';
+import { providers as providerCatalog } from '@/lib/providers';
+import { uiApi } from '@/lib/ui-api';
 
 /** Replay runs at ten times the recorded pace. */
 const SPEED = 10;

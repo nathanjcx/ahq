@@ -1,15 +1,15 @@
+import { randomBytes } from 'node:crypto';
 import {
   auth as mcpAuth,
   type OAuthClientProvider,
   type OAuthDiscoveryState,
 } from '@modelcontextprotocol/sdk/client/auth.js';
 import type { OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js';
+import type { ProviderRuntimeConfig } from '../../services/types';
 import type { ProviderId } from '../contracts';
-import { randomBytes } from 'node:crypto';
+import { providerRuntimeConfig } from './config';
 import { safeFetch } from './network';
 import { requiredEnv, unseal } from './secrets';
-import { providerRuntimeConfig } from './config';
-import type { ProviderRuntimeConfig } from '../../services/types';
 export interface OAuthConfig {
   clientId: string;
   clientSecret?: string;

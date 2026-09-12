@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import type { Connection, ConnectionVisibility } from '@/lib/contracts';
 import { useMembers } from '../shared/members';
-import { SkeletonList } from '../shared/skeleton';
 import { Sheet } from '../shared/sheet';
+import { SkeletonList } from '../shared/skeleton';
+import type { Connection, ConnectionVisibility } from '@/lib/contracts';
 
 const choices: { value: ConnectionVisibility; title: string; detail: string }[] = [
   { value: 'private', title: 'Private', detail: 'Only me' },

@@ -2,12 +2,12 @@
 
 import { ArrowRight, Bot, LockKeyhole, Search, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 import { useState, type CSSProperties } from 'react';
-import type { Connection, Employee, Listing } from '@/lib/contracts';
 import { providerName } from '../shared/format';
 import { ProviderMark } from '../shared/marks';
 import { PageIntro } from '../shared/page-intro';
 import { missingRequiredCapabilities } from './capabilities';
 import { MarketplaceDetail } from './marketplace-detail';
+import type { Connection, Employee, Listing } from '@/lib/contracts';
 
 export function MarketplacePage({
   listings,

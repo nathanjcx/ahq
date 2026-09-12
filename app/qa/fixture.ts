@@ -1,3 +1,4 @@
+import type { EditorDraft } from '@/components/admin/draft-issues';
 import type {
   ActionProposal,
   ActivityEvent,
@@ -13,7 +14,6 @@ import type {
   RegistryTool,
   Task,
 } from '@/lib/contracts';
-import type { EditorDraft } from '@/components/admin/draft-issues';
 import { asId } from '@/lib/ui-api';
 
 /**

@@ -1,6 +1,7 @@
 import type { FunctionReturnType } from 'convex/server';
 import { expectTypeOf, test } from 'vitest';
-import { api } from '../convex/_generated/api';
+import { type api } from '../convex/_generated/api';
+import type { AuditResponse } from '../lib/api/schemas';
 import type {
   AuditTimeline,
   Dashboard,
@@ -11,7 +12,6 @@ import type {
   ProviderReadiness,
   RegistryTool,
 } from '../lib/contracts';
-import type { AuditResponse } from '../lib/api/schemas';
 
 /**
  * lib/contracts.ts is the shape the interface renders. These assertions fail the build the moment a

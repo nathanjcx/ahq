@@ -1,6 +1,6 @@
-import type { AdminDraft } from '@/lib/ui-api';
 import { providerName } from '../shared/format';
 import type { RegistryByProvider } from './registry';
+import type { AdminDraft } from '@/lib/ui-api';
 
 export type EditorDraft = AdminDraft & { id: string };
 

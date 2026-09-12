@@ -4,6 +4,9 @@ export default defineConfig({
   testMatch: '**/*.spec.ts',
   fullyParallel: false,
   workers: 1,
+  // Office baselines: deterministic renders of the lab route compared at a one percent tolerance.
+  snapshotPathTemplate: '{testDir}/lab/baselines/{arg}{ext}',
+  expect: { toHaveScreenshot: { maxDiffPixelRatio: 0.01, animations: 'disabled' } },
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3010',
     screenshot: 'on',

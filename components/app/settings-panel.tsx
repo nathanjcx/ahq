@@ -2,9 +2,9 @@
 
 import { CheckCircle2, Cloud, LockKeyhole } from 'lucide-react';
 import { useState } from 'react';
-import type { Dashboard, ModelUsage } from '@/lib/contracts';
 import { modelName } from '../shared/format';
 import { Sheet } from '../shared/sheet';
+import type { Dashboard, ModelUsage } from '@/lib/contracts';
 
 /** Cached tokens as a share of input tokens, the practical cache hit rate. */
 function cacheHitRate(usage: ModelUsage) {

@@ -2,9 +2,9 @@
 
 import { Archive, Check, LoaderCircle, RotateCcw, Users } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import type { Employee, Floor } from '@/lib/contracts';
-import { Sheet } from '../shared/sheet';
 import { Avatar } from '../shared/marks';
+import { Sheet } from '../shared/sheet';
+import type { Employee, Floor } from '@/lib/contracts';
 
 export function FloorPanel({
   floor,

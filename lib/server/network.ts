@@ -1,7 +1,7 @@
 import { lookup } from 'node:dns';
 import { isIP } from 'node:net';
-import { Agent, fetch as networkFetch } from 'undici';
 import ipaddr from 'ipaddr.js';
+import { Agent, fetch as networkFetch } from 'undici';
 import { getProvider } from '../providers';
 export function publicAddress(address: string): boolean {
   try {

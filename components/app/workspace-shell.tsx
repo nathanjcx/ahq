@@ -1,15 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type {
-  ActionProposal,
-  Dashboard,
-  Listing,
-  Floor,
-  ProviderConfig,
-  ProviderReadiness,
-  RegistryTool,
-} from '@/lib/contracts';
 import type { EditorDraft } from '../admin/draft-issues';
 import { FloorPanel } from '../floors/floor-panel';
 import type { Actions } from './actions';
@@ -21,6 +12,15 @@ import { ReviewBar } from './review-bar';
 import { SettingsPanel } from './settings-panel';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
+import type {
+  ActionProposal,
+  Dashboard,
+  Listing,
+  Floor,
+  ProviderConfig,
+  ProviderReadiness,
+  RegistryTool,
+} from '@/lib/contracts';
 
 export function WorkspaceShell({
   configured,

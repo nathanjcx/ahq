@@ -1,17 +1,16 @@
 import { v } from 'convex/values';
-import { mutation, query } from './_generated/server';
 import type { Doc, Id } from './_generated/dataModel';
+import { mutation, query } from './_generated/server';
 import type { MutationCtx } from './_generated/server';
 import { canSeeTask, cleanText, requireWorkspace, untrustedBlock } from './shared';
 import {
   assertEmployeeReady,
   assertTokenCap,
   finalAssistantMessage,
-  insertHandoff,
-  insertNote,
   requireFloor,
   startTask,
-} from './work';
+} from './lib/tasks';
+import { insertHandoff, insertNote } from './lib/posts';
 
 function floorFields(name: string, brief: string) {
   return {

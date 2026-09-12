@@ -22,6 +22,8 @@ export const taskStatus = v.union(
   v.literal('failed'),
   v.literal('cancelled'),
   v.literal('uncertain'),
+  v.literal('waiting'),
+  v.literal('blocked'),
 );
 export const correctionKind = v.union(
   v.literal('supported'),
@@ -37,6 +39,71 @@ export const connectionVisibility = v.union(
   v.literal('workspace'),
 );
 export const taskVisibility = v.union(v.literal('private'), v.literal('workspace'));
+export const employeeKind = v.union(
+  v.literal('worker'),
+  v.literal('janitor'),
+  v.literal('auditor'),
+  v.literal('triage'),
+);
+export const cadence = v.union(v.literal('once'), v.literal('daily'));
+export const memoryScope = v.union(
+  v.literal('task'),
+  v.literal('agent'),
+  v.literal('floor'),
+  v.literal('project'),
+  v.literal('workspace'),
+);
+export const memoryKind = v.union(
+  v.literal('fact'),
+  v.literal('decision'),
+  v.literal('preference'),
+  v.literal('procedure'),
+  v.literal('glossary'),
+  v.literal('status'),
+);
+export const memoryStatus = v.union(
+  v.literal('proposed'),
+  v.literal('active'),
+  v.literal('contested'),
+  v.literal('archived'),
+);
+export const memoryAuthor = v.union(v.literal('agent'), v.literal('person'), v.literal('janitor'));
+export const channelKind = v.union(
+  v.literal('floor'),
+  v.literal('project'),
+  v.literal('workspace'),
+  v.literal('triage'),
+  v.literal('audit'),
+);
+export const postKind = v.union(
+  v.literal('note'),
+  v.literal('report'),
+  v.literal('feedback'),
+  v.literal('alert'),
+  v.literal('finding'),
+  v.literal('decision'),
+  v.literal('handoff'),
+  v.literal('system'),
+);
+export const calendarKind = v.union(
+  v.literal('deadline'),
+  v.literal('meeting'),
+  v.literal('audit'),
+  v.literal('shift'),
+);
+export const severity = v.union(
+  v.literal('low'),
+  v.literal('medium'),
+  v.literal('high'),
+  v.literal('critical'),
+);
+export const overnightPolicy = v.union(v.literal('off'), v.literal('audits_only'), v.literal('cheap'));
+export const hiringPolicy = v.union(v.literal('anyone'), v.literal('admins'), v.literal('approval'));
+export const attendee = v.object({
+  kind: v.union(v.literal('employee'), v.literal('person')),
+  id: v.string(),
+  name: v.string(),
+});
 export const tokenUsage = v.object({ input: v.number(), cached: v.number(), output: v.number() });
 export const correctionDescriptor = v.object({
   readTool: v.string(),
@@ -173,10 +240,17 @@ export default defineSchema({
     versionId: v.id('employeeVersions'),
     hiredBy: v.string(),
     status: v.union(v.literal('ready'), v.literal('blocked'), v.literal('retired')),
+    /** One instance lives on one floor; undefined means the lobby. */
+    floorId: v.optional(v.id('floors')),
+    /** Instance name; defaults to the version name, made unique per floor when hiring a count. */
+    name: v.optional(v.string()),
+    kind: v.optional(employeeKind),
+    overnightModel: v.optional(model),
     createdAt: v.number(),
   })
     .index('by_workspace', ['workspaceId'])
-    .index('by_workspace_version', ['workspaceId', 'versionId']),
+    .index('by_workspace_version', ['workspaceId', 'versionId'])
+    .index('by_floor', ['floorId']),
 
   floors: defineTable({
     workspaceId: v.id('workspaces'),
@@ -184,10 +258,36 @@ export default defineSchema({
     name: v.string(),
     brief: v.string(),
     employeeIds: v.array(v.id('installations')),
+    reserved: v.optional(v.union(v.literal('lobby'), v.literal('triage'))),
     archivedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index('by_workspace', ['workspaceId']),
+  projects: defineTable({
+    workspaceId: v.id('workspaces'),
+    createdBy: v.string(),
+    createdByName: v.string(),
+    name: v.string(),
+    brief: v.string(),
+    floorIds: v.array(v.id('floors')),
+    status: v.union(v.literal('planning'), v.literal('active'), v.literal('done'), v.literal('archived')),
+    /** The planner's latest proposal, kept until a person confirms or discards it. */
+    proposal: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index('by_workspace', ['workspaceId']),
+  milestones: defineTable({
+    workspaceId: v.id('workspaces'),
+    projectId: v.id('projects'),
+    order: v.number(),
+    title: v.string(),
+    description: v.string(),
+    deadlineAt: v.optional(v.number()),
+    dependsOn: v.array(v.id('milestones')),
+    status: v.union(v.literal('planned'), v.literal('active'), v.literal('done')),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index('by_project', ['projectId', 'order']),
   floorPosts: defineTable({
     workspaceId: v.id('workspaces'),
     floorId: v.id('floors'),
@@ -260,6 +360,11 @@ export default defineSchema({
     workspaceId: v.id('workspaces'),
     floorId: v.optional(v.id('floors')),
     floorContext: v.optional(v.object({ name: v.string(), brief: v.string() })),
+    projectId: v.optional(v.id('projects')),
+    milestoneId: v.optional(v.id('milestones')),
+    cadence: v.optional(cadence),
+    deadlineAt: v.optional(v.number()),
+    dependsOn: v.optional(v.array(v.id('tasks'))),
     sourceTaskId: v.optional(v.id('tasks')),
     createdBy: v.string(),
     createdByName: v.string(),
@@ -283,6 +388,7 @@ export default defineSchema({
   })
     .index('by_workspace', ['workspaceId'])
     .index('by_floor', ['floorId'])
+    .index('by_project', ['projectId'])
     .index('by_run_token', ['runToken'])
     .index('by_status', ['status'])
     .index('by_source_proposal', ['sourceProposalId']),
@@ -428,6 +534,247 @@ export default defineSchema({
   })
     .index('by_task_operation_outcome', ['taskId', 'operationId', 'outcome'])
     .index('by_task', ['taskId']),
+  shifts: defineTable({
+    workspaceId: v.id('workspaces'),
+    taskId: v.id('tasks'),
+    employeeId: v.id('installations'),
+    date: v.string(),
+    model,
+    kind: v.union(v.literal('work'), v.literal('review'), v.literal('prep'), v.literal('wrapup')),
+    startedAt: v.number(),
+    endedAt: v.optional(v.number()),
+    reportId: v.optional(v.id('reports')),
+  })
+    .index('by_task_date', ['taskId', 'date'])
+    .index('by_workspace_date', ['workspaceId', 'date']),
+  reports: defineTable({
+    workspaceId: v.id('workspaces'),
+    taskId: v.id('tasks'),
+    employeeId: v.id('installations'),
+    shiftId: v.optional(v.id('shifts')),
+    done: v.array(v.string()),
+    inProgress: v.array(v.string()),
+    blockedOn: v.array(v.string()),
+    next: v.array(v.string()),
+    risks: v.array(v.string()),
+    deadlineConfidence: v.optional(v.number()),
+    inferred: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index('by_task', ['taskId', 'createdAt'])
+    .index('by_employee', ['employeeId', 'createdAt']),
+  taskSummaries: defineTable({
+    workspaceId: v.id('workspaces'),
+    taskId: v.id('tasks'),
+    outcome: v.string(),
+    decisions: v.array(v.string()),
+    openQuestions: v.array(v.string()),
+    artifactIds: v.array(v.id('artifacts')),
+    text: v.string(),
+    inferred: v.boolean(),
+    createdAt: v.number(),
+  }).index('by_task', ['taskId']),
+  memories: defineTable({
+    workspaceId: v.id('workspaces'),
+    scope: memoryScope,
+    scopeId: v.string(),
+    kind: memoryKind,
+    text: v.string(),
+    tags: v.array(v.string()),
+    sourceTaskId: v.optional(v.id('tasks')),
+    author: memoryAuthor,
+    authorName: v.string(),
+    confidence: v.number(),
+    status: memoryStatus,
+    supersedesId: v.optional(v.id('memories')),
+    contestReason: v.optional(v.string()),
+    expiresAt: v.optional(v.number()),
+    lastUsedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_scope_status', ['workspaceId', 'scope', 'scopeId', 'status'])
+    .index('by_workspace_status', ['workspaceId', 'status']),
+  channels: defineTable({
+    workspaceId: v.id('workspaces'),
+    kind: channelKind,
+    /** Floor id, project id, or empty for workspace, triage, and audit channels. */
+    scopeId: v.string(),
+    name: v.string(),
+    createdAt: v.number(),
+  }).index('by_workspace_kind_scope', ['workspaceId', 'kind', 'scopeId']),
+  posts: defineTable({
+    workspaceId: v.id('workspaces'),
+    channelId: v.id('channels'),
+    kind: postKind,
+    authorSubject: v.optional(v.string()),
+    authorEmployeeId: v.optional(v.id('installations')),
+    authorName: v.string(),
+    text: v.string(),
+    taskId: v.optional(v.id('tasks')),
+    /** Employee a note is addressed to; accepting turns it into a task. */
+    toEmployeeId: v.optional(v.id('installations')),
+    handoff: v.optional(
+      v.object({
+        toEmployeeId: v.id('installations'),
+        toEmployeeName: v.string(),
+        brief: v.string(),
+        status: v.union(v.literal('pending'), v.literal('accepted'), v.literal('declined')),
+        taskId: v.optional(v.id('tasks')),
+        decidedBy: v.optional(v.string()),
+        decidedAt: v.optional(v.number()),
+      }),
+    ),
+    createdAt: v.number(),
+  })
+    .index('by_channel', ['channelId', 'createdAt'])
+    .index('by_employee', ['authorEmployeeId', 'createdAt']),
+  calendarEntries: defineTable({
+    workspaceId: v.id('workspaces'),
+    kind: calendarKind,
+    title: v.string(),
+    startsAt: v.number(),
+    endsAt: v.number(),
+    projectId: v.optional(v.id('projects')),
+    floorId: v.optional(v.id('floors')),
+    taskId: v.optional(v.id('tasks')),
+    attendees: v.array(attendee),
+    agenda: v.array(v.string()),
+    purpose: v.optional(v.string()),
+    status: v.union(v.literal('scheduled'), v.literal('live'), v.literal('done'), v.literal('cancelled')),
+    createdBy: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_workspace_start', ['workspaceId', 'startsAt'])
+    .index('by_task', ['taskId']),
+  meetings: defineTable({
+    workspaceId: v.id('workspaces'),
+    calendarEntryId: v.id('calendarEntries'),
+    status: v.union(
+      v.literal('preparing'),
+      v.literal('ready'),
+      v.literal('live'),
+      v.literal('closing'),
+      v.literal('closed'),
+    ),
+    openedBy: v.optional(v.string()),
+    openedAt: v.optional(v.number()),
+    closedAt: v.optional(v.number()),
+    usage: v.optional(tokenUsage),
+    createdAt: v.number(),
+  }).index('by_entry', ['calendarEntryId']),
+  meetingTurns: defineTable({
+    workspaceId: v.id('workspaces'),
+    meetingId: v.id('meetings'),
+    kind: v.union(v.literal('report'), v.literal('question'), v.literal('answer'), v.literal('outcome')),
+    authorSubject: v.optional(v.string()),
+    employeeId: v.optional(v.id('installations')),
+    authorName: v.string(),
+    /** For questions: the employees addressed; empty means everyone. */
+    addressedTo: v.optional(v.array(v.id('installations'))),
+    inReplyTo: v.optional(v.id('meetingTurns')),
+    text: v.string(),
+    /** For outcomes: the proposed follow-up, confirmed by a person. */
+    outcome: v.optional(
+      v.object({
+        kind: v.union(v.literal('task'), v.literal('deadline'), v.literal('meeting'), v.literal('note')),
+        payload: v.string(),
+        status: v.union(v.literal('proposed'), v.literal('confirmed'), v.literal('dismissed')),
+      }),
+    ),
+    createdAt: v.number(),
+  }).index('by_meeting', ['meetingId', 'createdAt']),
+  auditFindings: defineTable({
+    workspaceId: v.id('workspaces'),
+    employeeId: v.id('installations'),
+    taskId: v.optional(v.id('tasks')),
+    auditDate: v.string(),
+    severity,
+    claim: v.string(),
+    evidence: v.string(),
+    requiredAction: v.string(),
+    status: v.union(v.literal('open'), v.literal('addressed'), v.literal('verified'), v.literal('escalated')),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_employee_status', ['employeeId', 'status'])
+    .index('by_workspace_date', ['workspaceId', 'auditDate']),
+  alerts: defineTable({
+    workspaceId: v.id('workspaces'),
+    source: v.union(v.literal('github'), v.literal('webhook'), v.literal('email'), v.literal('manual')),
+    fingerprint: v.string(),
+    severity,
+    title: v.string(),
+    detail: v.string(),
+    url: v.optional(v.string()),
+    status: v.union(
+      v.literal('open'),
+      v.literal('triaging'),
+      v.literal('fixed'),
+      v.literal('closed'),
+      v.literal('dismissed'),
+    ),
+    triageTaskId: v.optional(v.id('tasks')),
+    affectedFloorIds: v.array(v.id('floors')),
+    occurrences: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_workspace_fingerprint', ['workspaceId', 'fingerprint'])
+    .index('by_workspace_status', ['workspaceId', 'status']),
+  notifications: defineTable({
+    workspaceId: v.id('workspaces'),
+    subject: v.string(),
+    kind: v.union(v.literal('triage'), v.literal('meeting'), v.literal('finding'), v.literal('general')),
+    title: v.string(),
+    text: v.string(),
+    alertId: v.optional(v.id('alerts')),
+    channels: v.array(v.string()),
+    attempt: v.number(),
+    sentAt: v.number(),
+    deliveredAt: v.optional(v.number()),
+    acknowledgedAt: v.optional(v.number()),
+  })
+    .index('by_subject', ['subject', 'sentAt'])
+    .index('by_alert', ['alertId']),
+  pushSubscriptions: defineTable({
+    workspaceId: v.id('workspaces'),
+    subject: v.string(),
+    endpoint: v.string(),
+    keysCiphertext: v.string(),
+    createdAt: v.number(),
+  }).index('by_subject', ['subject']),
+  workspaceSettings: defineTable({
+    workspaceId: v.id('workspaces'),
+    timezone: v.string(),
+    workingDays: v.array(v.number()),
+    startHour: v.number(),
+    endHour: v.number(),
+    attendedStartHour: v.number(),
+    attendedEndHour: v.number(),
+    overnightPolicy,
+    dailyTokenCap: v.number(),
+    triageAllowance: v.number(),
+    memoryBudgets: v.object({
+      workspace: v.number(),
+      project: v.number(),
+      floor: v.number(),
+      agent: v.number(),
+      summaries: v.number(),
+    }),
+    hiringPolicy,
+    auditPolicy: v.union(v.literal('soft'), v.literal('hard')),
+    triageAllowList: v.array(v.string()),
+    emergencyAllowList: v.array(v.string()),
+    notificationChannels: v.array(v.string()),
+    plan: v.union(v.literal('subscription'), v.literal('byok')),
+    monthlyAllowance: v.number(),
+    maxConcurrentInstances: v.number(),
+    rates: v.array(v.object({ model, input: v.number(), cached: v.number(), output: v.number() })),
+    standards: v.string(),
+    updatedAt: v.number(),
+  }).index('by_workspace', ['workspaceId']),
   workerSignals: defineTable({ name: v.string(), revision: v.number(), updatedAt: v.number() }).index(
     'by_name',
     ['name'],

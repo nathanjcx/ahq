@@ -1,12 +1,12 @@
 'use client';
 
 import { ArrowRight, ChevronRight, Clock3, Plus, Users } from 'lucide-react';
-import type { Employee, Task } from '@/lib/contracts';
 import type { OfficeEmployee } from '../office/office-view';
 import { EmptyMini } from '../shared/empty';
 import { relativeTime, statusLabel } from '../shared/format';
 import { Avatar, StatusMark } from '../shared/marks';
 import { FloorScene } from './floor-scene';
+import type { Employee, Task } from '@/lib/contracts';
 
 /** The ground floor: the office scene plus whoever and whatever is not on a floor floor. */
 export function LobbyView({

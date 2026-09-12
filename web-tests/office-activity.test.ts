@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { ActionProposal, ActivityEvent, FloorPost, Task } from '../lib/contracts';
 import {
   BUBBLE_MS,
   CELEBRATING_MS,
@@ -11,6 +10,7 @@ import {
   providerForTool,
   type ActivityInput,
 } from '../components/office/activity';
+import type { ActionProposal, ActivityEvent, FloorPost, Task } from '../lib/contracts';
 
 const NOW = 1_700_000_000_000;
 const ada = { id: 'emp_ada', name: 'Ada' };

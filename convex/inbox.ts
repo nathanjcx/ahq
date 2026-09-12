@@ -1,9 +1,9 @@
 import { v } from 'convex/values';
-import { mutation } from './_generated/server';
 import type { Doc, Id } from './_generated/dataModel';
+import { mutation } from './_generated/server';
 import type { Ctx } from './shared';
 import { canSeeConnection, requireWorkspace, untrustedBlock } from './shared';
-import { assertEmployeeReady, assertTokenCap, assignmentForFloor, startTask } from './work';
+import { assertEmployeeReady, assertTokenCap, assignmentForFloor, startTask } from './lib/tasks';
 
 /** An inbox item is visible to whoever can use the connection that delivered it. */
 async function visibleItem(

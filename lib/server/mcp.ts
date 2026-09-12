@@ -1,13 +1,13 @@
+import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import { GatewayError } from '../../services/gateway/errors';
+import type { PrivateConnection } from '../../services/types';
+import { mutate } from './backend';
 import { approvedMcpUrl, safeFetch } from './network';
 import { oauthProvider, type StoredCredential } from './oauth';
 import { unseal, seal } from './secrets';
-import { mutate } from './backend';
-import { GatewayError } from '../../services/gateway/errors';
-import type { PrivateConnection } from '../../services/types';
 export async function withMcp<T>(
   connection: Pick<PrivateConnection, 'provider' | 'serverUrl'>,
   credential: StoredCredential,

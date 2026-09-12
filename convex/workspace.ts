@@ -1,7 +1,7 @@
 import { v } from 'convex/values';
+import type { Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import type { QueryCtx } from './_generated/server';
-import type { Id } from './_generated/dataModel';
 import { registryToolsFor } from './registry';
 import {
   authKey,
@@ -15,7 +15,7 @@ import {
   usagePeriod,
   workspaceForIdentity,
 } from './shared';
-import { periodUsage } from './work';
+import { periodUsage } from './lib/tasks';
 
 /** Statuses the workspace is still waiting on; only these carry a live message into the office. */
 const ACTIVE_TASK_STATUSES = ['queued', 'running', 'awaiting_approval'];

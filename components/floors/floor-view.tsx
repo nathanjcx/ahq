@@ -2,13 +2,13 @@
 
 import { Archive, ChevronDown, Pencil, RotateCcw } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
-import type { ActionProposal, Employee, Floor, Task } from '@/lib/contracts';
 import type { OfficeEmployee } from '../office/office-view';
-import { Avatar } from '../shared/marks';
 import { relativeTime } from '../shared/format';
+import { Avatar } from '../shared/marks';
+import type { FloorSummary } from './floor-stats';
 import { FloorTeam } from './floor-team';
 import { FloorWork } from './floor-work';
-import type { FloorSummary } from './floor-stats';
+import type { ActionProposal, Employee, Floor, Task } from '@/lib/contracts';
 
 type Region = 'board' | 'work' | 'team';
 

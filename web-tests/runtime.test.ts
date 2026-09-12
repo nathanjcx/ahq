@@ -1,13 +1,13 @@
+import { once } from 'node:events';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { once } from 'node:events';
-import { afterAll, beforeAll, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { Server as UpstreamServer } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { makeFunctionReference } from 'convex/server';
+import { afterAll, beforeAll, expect, it } from 'vitest';
 import { api } from '../convex/_generated/api';
 import type { Backend } from '../lib/server/backend';
 import { seal, unseal } from '../lib/server/secrets';
@@ -68,7 +68,7 @@ function upstream() {
       ],
     }));
     mcp.setRequestHandler(CallToolRequestSchema, async (call) => {
-      const args = (call.params.arguments || {}) as Record<string, unknown>;
+      const args = (call.params.arguments || {});
       const issue = issues.get(String(args.id));
       if (!issue) return failure('No such issue.');
       if (call.params.name === 'get_issue') return record(issue);

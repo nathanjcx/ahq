@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { AuditTimeline } from '../lib/contracts';
 import { entryAt, sceneAt } from '../components/floors/floor-replay';
+import type { AuditTimeline } from '../lib/contracts';
 
 const START = 1_700_000_000_000;
 const at = (seconds: number) => START + seconds * 1000;

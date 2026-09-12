@@ -1,6 +1,6 @@
 import { clerkClient } from '@clerk/nextjs/server';
-import { actor, displayName, failure, jsonOk } from '@/lib/server/http';
 import type { MembersResponse } from '@/lib/api/schemas';
+import { actor, displayName, failure, jsonOk } from '@/lib/server/http';
 export const runtime = 'nodejs';
 
 function role(clerkRole: string): MembersResponse[number]['role'] {

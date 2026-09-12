@@ -1,6 +1,6 @@
-import type { CorrectionKind, ProviderId } from '../contracts';
-import type { ToolPolicy } from '../../services/types';
 import { GatewayError } from '../../services/gateway/errors';
+import type { ToolPolicy } from '../../services/types';
+import type { CorrectionKind, ProviderId } from '../contracts';
 
 export type ResolvedPolicy = Pick<ToolPolicy, 'mode' | 'resourceArgument' | 'correction'>;
 

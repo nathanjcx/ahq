@@ -9,8 +9,8 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useRef, type TouchEvent } from 'react';
-import type { Dashboard } from '@/lib/contracts';
 import { nav, type Page } from './nav';
+import type { Dashboard } from '@/lib/contracts';
 
 /** How far left a swipe has to travel before it closes the drawer. */
 const SWIPE_CLOSE = 60;

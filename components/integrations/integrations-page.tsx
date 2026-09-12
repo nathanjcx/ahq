@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import type { Connection, ConnectionVisibility, ProviderId, ProviderReadiness } from '@/lib/contracts';
-import { getProvider, providers } from '@/lib/providers';
 import { PageIntro } from '../shared/page-intro';
 import { providerSetup, startConnect } from './connect';
 import { IntegrationCard } from './integration-card';
 import { ManageAccessPanel } from './manage-access-panel';
 import { ProductPicker } from './product-picker';
 import { SharePanel } from './share-panel';
+import type { Connection, ConnectionVisibility, ProviderId, ProviderReadiness } from '@/lib/contracts';
+import { getProvider, providers } from '@/lib/providers';
 import './integrations.css';
 
 export function IntegrationsPage({

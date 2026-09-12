@@ -1,8 +1,8 @@
 'use client';
 
+import { useFrame, useThree } from '@react-three/fiber';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { bubbleRect, layoutLabels, overlaps, placeBubble, type LabelInput } from './office-labels';
 

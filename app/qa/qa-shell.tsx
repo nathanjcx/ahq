@@ -3,9 +3,9 @@
 import { ClerkProvider } from '@clerk/nextjs';
 import { ConvexProvider, ConvexReactClient } from 'convex/react';
 import { useEffect, useState } from 'react';
+import { qaFixture, type QaFixture } from './fixture';
 import { offlineActions } from '@/components/app/actions';
 import { WorkspaceShell } from '@/components/app/workspace-shell';
-import { qaFixture, type QaFixture } from './fixture';
 
 /** Syntactically valid but unreachable. Clerk's widgets render their signed-out state and stop. */
 const clerkKey = 'pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk';

@@ -1,12 +1,12 @@
 'use client';
 
 import { Archive, ArrowRight, BadgeCheck, Link2, Play, UserPlus, Users } from 'lucide-react';
-import type { Connection, Employee, ProviderId } from '@/lib/contracts';
 import { EmptySection } from '../shared/empty';
 import { modelName, providerName } from '../shared/format';
 import { Avatar, ProviderMark } from '../shared/marks';
 import { MasterDetail, useMasterDetail } from '../shared/master-detail';
 import { PageIntro } from '../shared/page-intro';
+import type { Connection, Employee, ProviderId } from '@/lib/contracts';
 
 /**
  * Why a capability is missing, in terms of the connections this viewer can see.

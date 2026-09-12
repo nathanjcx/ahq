@@ -2,7 +2,8 @@ import { v } from 'convex/values';
 import { mutation } from '../_generated/server';
 import type { MutationCtx } from '../_generated/server';
 import { requireService } from '../shared';
-import { insertHandoff, insertNote, requireFloor } from '../work';
+import { requireFloor } from '../lib/tasks';
+import { insertHandoff, insertNote } from '../lib/posts';
 import { taskForRunToken } from './context';
 
 /** Agents post notes and request handoffs from a floor task. People accept them. */

@@ -14,6 +14,8 @@ const taskStatus = z.enum([
   'failed',
   'cancelled',
   'uncertain',
+  'waiting',
+  'blocked',
 ]);
 const correctionKind = z.enum(['supported', 'partial', 'manual', 'irreversible', 'unknown']);
 const proposalStatus = z.enum([

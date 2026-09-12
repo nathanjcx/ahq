@@ -2,8 +2,8 @@
 
 import { Link2, LoaderCircle } from 'lucide-react';
 import { useState } from 'react';
-import type { ProviderDefinition } from '@/lib/providers';
 import { Sheet } from '../shared/sheet';
+import type { ProviderDefinition } from '@/lib/providers';
 
 export function ProductPicker({
   provider,

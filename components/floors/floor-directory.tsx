@@ -2,8 +2,8 @@
 
 import { Archive, Building2, ChevronRight } from 'lucide-react';
 import { relativeTime } from '../shared/format';
-import { FloorSwitcher } from './floor-switcher';
 import { countsLabel, type FloorEntry } from './floor-stats';
+import { FloorSwitcher } from './floor-switcher';
 
 export function FloorDirectory({
   workspaceName,

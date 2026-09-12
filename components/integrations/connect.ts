@@ -1,5 +1,5 @@
-import type { Connection, ProviderId, ProviderReadiness } from '@/lib/contracts';
 import { webClient } from '@/lib/api/client';
+import type { Connection, ProviderId, ProviderReadiness } from '@/lib/contracts';
 import { providerServerUrls, type ProviderDefinition } from '@/lib/providers';
 
 export type ProviderSetup = {

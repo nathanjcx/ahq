@@ -2,8 +2,8 @@
 
 import { ArrowRight, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { Employee, Floor } from '@/lib/contracts';
 import { Sheet } from '../shared/sheet';
+import type { Employee, Floor } from '@/lib/contracts';
 
 export function NewTaskPanel({
   employees,

@@ -1,10 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { connectedMcp } from './mcp';
-import { journalMutation, query } from './backend';
-import { canonical, checkResourceScope, toolPolicy } from './tool-policy';
-import { seal, safeError } from './secrets';
 import { GatewayError, upstreamFailure } from '../../services/gateway/errors';
 import type { PrivateConnection, TaskContext, ToolPolicy } from '../../services/types';
+import { journalMutation, query } from './backend';
+import { connectedMcp } from './mcp';
+import { seal, safeError } from './secrets';
+import { canonical, checkResourceScope, toolPolicy } from './tool-policy';
 
 export function toolEvidence(value: unknown) {
   const serialized = canonical(value),

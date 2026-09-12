@@ -3,10 +3,10 @@
 import { useQuery } from 'convex/react';
 import { Send } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import type { Task } from '@/lib/contracts';
-import { asId, uiApi } from '@/lib/ui-api';
 import { SkeletonList } from '../shared/skeleton';
 import { MessageBubble } from './message-bubble';
+import type { Task } from '@/lib/contracts';
+import { asId, uiApi } from '@/lib/ui-api';
 
 export function TaskConversation({
   task,

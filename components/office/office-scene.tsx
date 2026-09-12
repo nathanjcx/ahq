@@ -1,19 +1,19 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { EmployeeActivity } from './activity';
 import { daylight, type Daylight } from './daylight';
-import { rankBubbles, type LabelMode } from './office-labels';
-import { useOfficePan } from './office-pan';
 import { FileCabinet, OfficeSpeakers } from './office-furniture';
+import { rankBubbles, type LabelMode } from './office-labels';
 import { OfficeOverlay } from './office-overlay';
+import { useOfficePan } from './office-pan';
 import { EmployeeAvatar } from './office-people';
-import { BoardNote, ProviderConsole, ReviewLectern, StatusDevice } from './office-signals';
 import { Halo, SurfaceContext, useSurfaceTextures, type Point } from './office-primitives';
-import { CONSOLE_X, CONSOLE_Z, LECTERN, deskGrid, layoutStations, type Station } from './office-stations';
 import { Architecture } from './office-room';
+import { BoardNote, ProviderConsole, ReviewLectern, StatusDevice } from './office-signals';
+import { CONSOLE_X, CONSOLE_Z, LECTERN, deskGrid, layoutStations, type Station } from './office-stations';
 
 /** The one employee shape this component understands. */
 export type OfficeEmployee = {

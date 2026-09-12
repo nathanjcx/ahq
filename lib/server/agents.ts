@@ -1,7 +1,7 @@
-import OpenAI from 'openai';
 import { strToU8, zipSync } from 'fflate';
-import type { SessionCreateParamsNonStreaming } from 'openai/resources/beta/agents/sessions/sessions';
+import OpenAI from 'openai';
 import type { TokenUsage } from 'openai/resources/beta/agents/agents';
+import type { SessionCreateParamsNonStreaming } from 'openai/resources/beta/agents/sessions/sessions';
 import type { TaskContext } from '../../services/types';
 import { personaInstructions } from '../personas';
 import { requiredEnv } from './secrets';

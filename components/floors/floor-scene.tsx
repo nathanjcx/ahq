@@ -4,8 +4,8 @@ import { Tag, Volume2, VolumeX } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { OfficeStage, type OfficeSceneData } from '../office/office-stage';
 import type { OfficeEmployee } from '../office/office-view';
-import { useLabelMode } from '../office/use-labels';
 import { useSound } from '../office/sound';
+import { useLabelMode } from '../office/use-labels';
 
 const LABEL_TITLE = {
   names: 'Labels: names. Show status dots only.',

@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
-import { mutation } from '../_generated/server';
 import type { Doc } from '../_generated/dataModel';
+import { mutation } from '../_generated/server';
 import type { MutationCtx } from '../_generated/server';
 import { provider } from '../schema';
 import { requireService } from '../shared';

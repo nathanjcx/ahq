@@ -2,15 +2,15 @@
 
 import { Download, RefreshCw, ScrollText } from 'lucide-react';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { webClient, WebApiError } from '@/lib/api/client';
-import type { AuditResponse } from '@/lib/api/schemas';
-import type { AuditEntry } from '@/lib/contracts';
 import { EmptyPane } from '../shared/empty';
 import { correctionLabel, providerName } from '../shared/format';
 import { JsonView } from '../shared/json-view';
 import { ProviderMark } from '../shared/marks';
 import { SkeletonList } from '../shared/skeleton';
 import { StateDiff } from '../shared/state-diff';
+import { webClient, WebApiError } from '@/lib/api/client';
+import type { AuditResponse } from '@/lib/api/schemas';
+import type { AuditEntry } from '@/lib/contracts';
 
 const NO_ACCESS = 'You need access to this task to read its audit trail.';
 const LOAD_FAILED = 'The audit trail could not be loaded.';

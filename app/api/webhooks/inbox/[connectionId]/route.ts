@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { rawBody, HttpError, failure } from '@/lib/server/http';
 import { mutate, query } from '@/lib/server/backend';
+import { rawBody, HttpError, failure } from '@/lib/server/http';
 import { inboxPayload, verifyInboxSignature } from '@/lib/server/inbox-events';
-import { unseal } from '@/lib/server/secrets';
 import { withinRateLimit } from '@/lib/server/rate-limit';
+import { unseal } from '@/lib/server/secrets';
 export const runtime = 'nodejs';
 
 /** Normalized relay deliveries are signed with the connection's own sealed relay secret. */

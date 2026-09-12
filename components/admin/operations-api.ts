@@ -1,6 +1,6 @@
+import { webClient } from '@/lib/api/client';
 import type { OAuthClientConfig, ProviderConfig, ProviderId, ProviderReadiness } from '@/lib/contracts';
 import { providers, type ProviderDefinition } from '@/lib/providers';
-import { webClient } from '@/lib/api/client';
 
 /** A provider delivers events by webhook exactly when it has inbox resources to follow. */
 export function hasNativeInbox(provider: ProviderDefinition) {

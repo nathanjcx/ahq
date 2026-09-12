@@ -1,6 +1,6 @@
 import { connection } from 'next/server';
-import { ClientProviders, type PublicConfig } from '@/lib/client';
 import { AstraHq } from '@/components/app';
+import { ClientProviders, type PublicConfig } from '@/lib/client';
 
 export default async function Home() {
   // Clerk and Convex settings are runtime variables, so read them per request, not at build.

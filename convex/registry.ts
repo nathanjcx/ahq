@@ -1,7 +1,7 @@
-import type { Doc } from './_generated/dataModel';
-import type { DbCtx } from './shared';
 import type { ProviderConfig, ProviderId, ProviderReadiness, RegistryTool } from '../lib/contracts';
 import type { ToolPolicy } from '../services/types';
+import type { Doc } from './_generated/dataModel';
+import type { DbCtx } from './shared';
 
 export const providerIds: ProviderId[] = ['linear', 'slack', 'github', 'google-workspace', 'canva'];
 

@@ -1,5 +1,5 @@
-import { query } from './backend';
 import type { ProviderRuntimeConfig } from '../../services/types';
+import { query } from './backend';
 
 let cache: { at: number; value: ProviderRuntimeConfig[] } | undefined;
 

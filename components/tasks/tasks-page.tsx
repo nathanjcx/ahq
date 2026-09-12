@@ -2,13 +2,13 @@
 
 import { ListTodo, Plus } from 'lucide-react';
 import { useState } from 'react';
-import type { ActionProposal, Employee, Floor, Task, TaskVisibility } from '@/lib/contracts';
 import { EmptyPane, EmptySection } from '../shared/empty';
 import { relativeTime } from '../shared/format';
 import { StatusMark } from '../shared/marks';
 import { MasterDetail, useMasterDetail } from '../shared/master-detail';
 import { PageIntro } from '../shared/page-intro';
 import { TaskDetail } from './task-detail';
+import type { ActionProposal, Employee, Floor, Task, TaskVisibility } from '@/lib/contracts';
 import './tasks.css';
 
 export function taskFloorName(task: Task, floors: Floor[]) {

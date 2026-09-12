@@ -2,9 +2,9 @@
 
 import { ArrowUpRight, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { ActionProposal } from '@/lib/contracts';
 import { Sheet } from '../shared/sheet';
 import { DecideButtons, ProposalEvidence, ProposalHeading } from '../tasks/proposal-card';
+import type { ActionProposal } from '@/lib/contracts';
 
 /** Proposals this viewer is the one to decide. */
 export function reviewable(proposals: ActionProposal[]) {

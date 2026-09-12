@@ -3,8 +3,8 @@
 import { Bot, Clock3, Users } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { Message } from '@/lib/contracts';
 import { relativeTime, safeHttpsUrl } from '../shared/format';
+import type { Message } from '@/lib/contracts';
 
 export function MessageBubble({ message }: { message: Message }) {
   if (message.role === 'system')

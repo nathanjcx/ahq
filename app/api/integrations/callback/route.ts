@@ -1,8 +1,11 @@
-import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { randomBytes } from 'node:crypto';
+import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js';
+import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
+import { getProvider } from '@/lib/providers';
+import { mutate } from '@/lib/server/backend';
 import { actor, displayName, failure } from '@/lib/server/http';
-import { unseal, seal, equalSecret, requiredEnv } from '@/lib/server/secrets';
+import { discoverTools } from '@/lib/server/mcp';
 import {
   finishOAuth,
   oauthCookie,
@@ -10,10 +13,7 @@ import {
   type OAuthState,
   type StoredCredential,
 } from '@/lib/server/oauth';
-import { discoverTools } from '@/lib/server/mcp';
-import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js';
-import { mutate } from '@/lib/server/backend';
-import { getProvider } from '@/lib/providers';
+import { unseal, seal, equalSecret, requiredEnv } from '@/lib/server/secrets';
 export const runtime = 'nodejs';
 
 async function connect(

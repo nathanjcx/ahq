@@ -1,13 +1,13 @@
 'use client';
 
-import { Component, useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
 import { Canvas, events as createPointerEvents } from '@react-three/fiber';
 import type { CanvasProps } from '@react-three/fiber';
+import { Component, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import * as THREE from 'three';
+import type { LabelMode } from './office-labels';
 import { OfficeScene, isActiveEmployee } from './office-scene';
 import type { OfficeEmployee, OfficeProvider } from './office-scene';
-import type { LabelMode } from './office-labels';
 import './office-view.css';
 import './office.css';
 

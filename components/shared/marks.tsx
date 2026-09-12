@@ -13,9 +13,9 @@ import {
   X,
 } from 'lucide-react';
 import type { CSSProperties } from 'react';
+import { providerShort } from './format';
 import type { Employee, ProviderId, Task } from '@/lib/contracts';
 import { providers, type ProviderDefinition } from '@/lib/providers';
-import { providerShort } from './format';
 
 export function Avatar({ employee, large = false }: { employee: Employee; large?: boolean }) {
   return (

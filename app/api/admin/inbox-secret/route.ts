@@ -1,13 +1,13 @@
-import { failure, jsonOk, parseBody, platformAdmin } from '@/lib/server/http';
 import {
   clearInboxSecretRequest,
   inboxSecretRequest,
   type RemovedResponse,
   type SavedResponse,
 } from '@/lib/api/schemas';
-import { mutate } from '@/lib/server/backend';
-import { seal } from '@/lib/server/secrets';
 import { getProvider } from '@/lib/providers';
+import { mutate } from '@/lib/server/backend';
+import { failure, jsonOk, parseBody, platformAdmin } from '@/lib/server/http';
+import { seal } from '@/lib/server/secrets';
 export const runtime = 'nodejs';
 
 /** The provider's app-level webhook signing secret, sealed here and stored only as ciphertext. */

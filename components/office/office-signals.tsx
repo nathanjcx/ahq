@@ -1,9 +1,9 @@
 'use client';
 
+import { Html } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { JSX } from 'react';
-import { useFrame } from '@react-three/fiber';
-import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { useOverlayEntry } from './office-overlay';
 import { Box, C, Round, type Point } from './office-primitives';

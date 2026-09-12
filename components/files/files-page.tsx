@@ -1,10 +1,10 @@
 'use client';
 
 import { Archive, ArrowRight, FileText } from 'lucide-react';
-import type { Artifact } from '@/lib/contracts';
 import { EmptySection } from '../shared/empty';
 import { fileSize, relativeTime } from '../shared/format';
 import { PageIntro } from '../shared/page-intro';
+import type { Artifact } from '@/lib/contracts';
 
 export function FilesPage({ artifacts, onTasks }: { artifacts: Artifact[]; onTasks: () => void }) {
   return (

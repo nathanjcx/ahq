@@ -1,10 +1,10 @@
 'use client';
 
 import { Activity, LockKeyhole } from 'lucide-react';
-import type { ActivityEvent } from '@/lib/contracts';
 import { EmptyPane } from '../shared/empty';
 import { relativeTime } from '../shared/format';
 import { PageIntro } from '../shared/page-intro';
+import type { ActivityEvent } from '@/lib/contracts';
 
 export function ActivityPage({ events }: { events: ActivityEvent[] }) {
   return (

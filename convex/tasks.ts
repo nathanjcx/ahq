@@ -11,7 +11,7 @@ import {
   insertJob,
   startTask,
   taskTimeline,
-} from './work';
+} from './lib/tasks';
 
 export const create = mutation({
   args: {

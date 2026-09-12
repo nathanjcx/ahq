@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import type { ProviderId, RegistryTool, ToolMode } from '@/lib/contracts';
-import { providers } from '@/lib/providers';
 import { lines } from '../shared/format';
 import { Sheet } from '../shared/sheet';
+import type { ProviderId, RegistryTool, ToolMode } from '@/lib/contracts';
+import { providers } from '@/lib/providers';
 
 export type RegistryToolInput = Pick<
   RegistryTool,

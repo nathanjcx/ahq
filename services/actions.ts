@@ -1,10 +1,10 @@
-import { query, journalMutation } from '../lib/server/backend';
-import { connectedMcp } from '../lib/server/mcp';
-import { canonical, checkResourceScope, resultObject, toolPolicy } from '../lib/server/tool-policy';
-import { toolEvidence } from '../lib/server/audit-mcp';
-import { safeError, seal } from '../lib/server/secrets';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { CorrectionDescriptor } from '../lib/contracts';
+import { toolEvidence } from '../lib/server/audit-mcp';
+import { query, journalMutation } from '../lib/server/backend';
+import { connectedMcp } from '../lib/server/mcp';
+import { safeError, seal } from '../lib/server/secrets';
+import { canonical, checkResourceScope, resultObject, toolPolicy } from '../lib/server/tool-policy';
 import type { Job, PrivateConnection, ToolPolicy } from './types';
 interface ExecutableAction {
   action: { id: string; tool: string; arguments: string; beforeState?: string; originalActionId?: string };

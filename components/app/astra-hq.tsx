@@ -2,11 +2,11 @@
 
 import { SignedIn, SignedOut } from '@clerk/nextjs';
 import { useConvexAuth, useQuery } from 'convex/react';
-import { emptyDashboard } from '@/lib/contracts';
-import { uiApi } from '@/lib/ui-api';
 import { offlineActions, useWorkspaceActions } from './actions';
 import { CenteredLoader, SignInScreen } from './status-screens';
 import { WorkspaceShell } from './workspace-shell';
+import { emptyDashboard } from '@/lib/contracts';
+import { uiApi } from '@/lib/ui-api';
 
 export function AstraHq({ configured }: { configured: boolean }) {
   return configured ? (

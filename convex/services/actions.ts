@@ -1,9 +1,9 @@
 import { v } from 'convex/values';
 import { mutation, query } from '../_generated/server';
+import { registryToolsFor } from '../registry';
 import { correctionKind } from '../schema';
 import { canSeeTask, requireService, sha256, stableJson, untrustedBlock } from '../shared';
-import { registryToolsFor } from '../registry';
-import { taskTimeline } from '../work';
+import { taskTimeline } from '../lib/tasks';
 import {
   activeTaskContext,
   isTerminal,

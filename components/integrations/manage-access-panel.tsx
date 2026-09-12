@@ -1,11 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import type { Connection } from '@/lib/contracts';
-import { getProvider } from '@/lib/providers';
 import { Sheet } from '../shared/sheet';
 import { ToolChecklist } from '../shared/tool-checklist';
 import { RelaySecret } from './relay-secret';
+import type { Connection } from '@/lib/contracts';
+import { getProvider } from '@/lib/providers';
 
 export function ManageAccessPanel({
   connection,
