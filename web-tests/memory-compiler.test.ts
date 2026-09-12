@@ -134,6 +134,6 @@ describe('the working memory compiler', () => {
   });
 
   it('produces nothing when there is nothing to say', () => {
-    expect(compileWorkingMemory(inputs())).toEqual({ text: '', tokens: 0, omitted: [] });
+    expect(compileWorkingMemory(inputs())).toEqual({ text: '', tokens: 0, omitted: [], usedIds: [] });
   });
 });

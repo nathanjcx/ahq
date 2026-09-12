@@ -1,13 +1,7 @@
 import type { Severity } from '../../../lib/contracts';
 import { getArtifact } from '../../../lib/server/storage';
 import { GatewayError } from '../errors';
-import {
-  boundedNumber,
-  optionalString,
-  requireString,
-  untrusted,
-  type InternalTool,
-} from './shared';
+import { boundedNumber, optionalString, requireString, untrusted, type InternalTool } from './shared';
 
 /** How much of an archived file the code reader returns. Beyond this the auditor asks for a slice. */
 const ARTIFACT_BYTE_CAP = 200_000;
@@ -175,11 +169,4 @@ export const submitFindings: InternalTool = {
   },
 };
 
-export const auditTools = [
-  readReports,
-  readJournal,
-  readArtifact,
-  readMemory,
-  readChannel,
-  submitFindings,
-];
+export const auditTools = [readReports, readJournal, readArtifact, readMemory, readChannel, submitFindings];

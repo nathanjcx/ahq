@@ -329,6 +329,23 @@ export const submitReport = mutation({
   },
 });
 
+/**
+ * Ends a shift that files no report. A review shift's output is the feedback it posted, and a report
+ * from it would read as progress on a task that did none and would skew the next pacing note.
+ */
+export const endReviewShift = mutation({
+  args: { secret: v.string(), shiftId: v.id('shifts') },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const shift = await ctx.db.get(args.shiftId);
+    if (!shift) throw new Error('Shift not found');
+    if (shift.kind !== 'review') throw new Error('Only a review shift ends without a report');
+    if (shift.endedAt === undefined) await ctx.db.patch(shift._id, { endedAt: Date.now() });
+    return null;
+  },
+});
+
 /** The task's shift that has not ended yet, newest first. */
 async function openShiftFor(ctx: MutationCtx, taskId: Id<'tasks'>) {
   const shifts = await ctx.db

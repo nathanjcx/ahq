@@ -267,10 +267,7 @@ export interface TurnMemoryOptions {
  * block is built, so the agent budget evicts on what actually reached a model rather than on what
  * was merely available.
  */
-export async function workingMemory(
-  taskId: string,
-  options: TurnMemoryOptions = {},
-): Promise<WorkingMemory> {
+export async function workingMemory(taskId: string, options: TurnMemoryOptions = {}): Promise<WorkingMemory> {
   const inputs = await query<WorkingMemoryInputs & { workspaceId: string; employeeId: string }>(
     'services/memory:compileInputs',
     { taskId },

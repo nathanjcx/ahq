@@ -82,8 +82,9 @@ it('canonicalizes nested arguments for action deduplication', () => {
 it('builds an isolated hosted session with only the employee/tool grant intersection', () => {
   process.env.MCP_GATEWAY_URL = 'https://gateway.example';
   const context = {
-    task: { id: 'task1', model: 'gpt-5.6-terra', prompt: 'Review the pipeline.' },
+    task: { id: 'task1', kind: 'work', model: 'gpt-5.6-terra', prompt: 'Review the pipeline.' },
     floor: { id: 'project1', name: 'Growth', brief: 'A user-authored floor brief.' },
+    employee: { id: 'employee1', name: 'Analyst', kind: 'worker' },
     employeeVersion: {
       id: 'version1',
       instructions: 'Private instructions',
@@ -108,10 +109,13 @@ it('builds an isolated hosted session with only the employee/tool grant intersec
   expect(initialTaskInput({ task: context.task })).toBe(context.task.prompt);
   expect(config.input).toBeUndefined();
   expect(config.agent?.multi_agent?.enabled).toBe(false);
-  expect(config.agent?.tools).toHaveLength(2);
+  // The provider grant, plus the three internal servers a worker's own task reaches.
+  expect(config.agent?.tools).toHaveLength(4);
   expect(config.agent?.tools?.[0]).toMatchObject({ allowed_tools: ['get_me'], connection_origin: 'service' });
-  // A floor task also reaches the internal board through the gateway, with a rule about it.
-  expect(config.agent?.tools?.[1]).toMatchObject({
+  expect(config.agent?.tools?.flatMap((tool) => ('server_label' in tool ? [tool.server_label] : []))).toEqual(
+    ['github_connection1', 'astra_memory', 'astra_floor', 'astra_shift'],
+  );
+  expect(config.agent?.tools?.[2]).toMatchObject({
     server_label: 'astra_floor',
     allowed_tools: ['floor_post', 'floor_handoff'],
     required: false,

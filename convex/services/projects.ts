@@ -14,6 +14,8 @@ import { ensureJanitorFor } from './memory';
 
 /** Active memory claims the planner should know about, newest first. */
 const MEMORY_SAMPLE = 40;
+/** Deliverables a review shift is shown per dependency. */
+const ARTIFACT_SAMPLE = 20;
 
 /**
  * Everything the planner turn needs to propose a roadmap. The worker builds the prompt from this:
@@ -134,6 +136,56 @@ export const recordProposal = mutation({
       updatedAt: Date.now(),
     });
     return null;
+  },
+});
+
+/**
+ * What a waiting task's review shift reads: for each dependency that has not finished, its latest
+ * report and the deliverables it has archived so far. Rows come back verbatim — a report is the
+ * other employee's own claims — and the worker fences them into the prompt.
+ */
+export const dependencyReviews = query({
+  args: { secret: v.string(), taskId: v.id('tasks') },
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new Error('Task not found');
+    const reviews = await Promise.all(
+      (task.dependsOn ?? []).map(async (id) => {
+        const dependency = await ctx.db.get(id);
+        if (!dependency || dependency.workspaceId !== task.workspaceId) return null;
+        const [report, artifacts] = await Promise.all([
+          ctx.db
+            .query('reports')
+            .withIndex('by_task', (q) => q.eq('taskId', dependency._id))
+            .order('desc')
+            .first(),
+          ctx.db
+            .query('artifacts')
+            .withIndex('by_task', (q) => q.eq('taskId', dependency._id))
+            .take(ARTIFACT_SAMPLE),
+        ]);
+        return {
+          id: dependency._id,
+          title: dependency.title,
+          status: dependency.status,
+          report: report && {
+            done: report.done,
+            inProgress: report.inProgress,
+            blockedOn: report.blockedOn,
+            next: report.next,
+            risks: report.risks,
+            inferred: report.inferred,
+          },
+          artifacts: artifacts.map((artifact) => ({
+            id: artifact._id,
+            name: artifact.name,
+            size: artifact.size,
+          })),
+        };
+      }),
+    );
+    return reviews.filter((review) => review !== null && review.status !== 'completed');
   },
 });
 

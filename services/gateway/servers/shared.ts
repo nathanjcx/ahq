@@ -123,16 +123,12 @@ export function internalServer(
   tools: InternalTool[],
   dynamic?: DynamicTools,
 ): Server {
-  const mcp = new Server(
-    { name: `astra-hq-${server}`, version: '1.0.0' },
-    { capabilities: { tools: {} } },
-  );
+  const mcp = new Server({ name: `astra-hq-${server}`, version: '1.0.0' }, { capabilities: { tools: {} } });
   const current = async () => {
     const context = await request.backend
       .query<GatewayContext | null>('services/actions:gatewayContext', { runToken: request.runToken })
       .catch(() => null);
-    if (!context)
-      throw new GatewayError('unauthorized', 'This run token does not belong to an active task.');
+    if (!context) throw new GatewayError('unauthorized', 'This run token does not belong to an active task.');
     if (!serversFor(context.employee.kind, context.task.kind).includes(server))
       throw new GatewayError('policy_denied', 'This employee is not authorized to use those tools.');
     return context;
@@ -163,8 +159,7 @@ export function internalServer(
       const context = await current();
       taskId = context.task.id;
       const tool = tools.find((candidate) => candidate.name === name);
-      if (!tool && !dynamic)
-        throw new GatewayError('policy_denied', `${name} is not a tool on this server.`);
+      if (!tool && !dynamic) throw new GatewayError('policy_denied', `${name} is not a tool on this server.`);
       const result = tool
         ? await tool.run(request, context, args)
         : await dynamic!.run(request, context, name, args);
