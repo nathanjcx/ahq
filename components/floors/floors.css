@@ -1,0 +1,452 @@
+/* === components/floors: floor header, board, work, team === */
+
+/* Header */
+.floor-heading p.brief-open {
+  display: block;
+  max-width: none;
+}
+.floor-heading .text-button {
+  margin: 2px 0 0 -5px;
+}
+.floor-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 11px;
+}
+.floor-meta small {
+  color: #7c897c;
+  font-size: 11px;
+}
+.staff-avatars {
+  display: flex;
+  align-items: center;
+}
+.staff-avatars .avatar {
+  margin-right: -7px;
+  border: 2px solid #fffef8;
+}
+.staff-avatars em {
+  margin-left: 12px;
+  color: #7c897c;
+  font-size: 11px;
+  font-style: normal;
+}
+.handoff-badge {
+  padding: 2px 7px;
+  color: #fffdf5;
+  border-radius: 999px;
+  background: var(--terra);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 740;
+  white-space: nowrap;
+}
+.archived-badge {
+  padding: 2px 8px;
+  color: #6d7a6d;
+  border: 1px solid #d9ded2;
+  border-radius: 999px;
+  background: #f3f4ed;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* Regions */
+.floor-region-switch {
+  display: none;
+  margin: 12px 16px 0;
+}
+.floor-region-switch button {
+  flex: 1;
+  padding: 8px;
+  font-size: 10px;
+}
+.floor-regions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+.floor-region {
+  min-width: 0;
+}
+.region-board,
+.region-team {
+  display: flex;
+  flex-direction: column;
+  height: 585px;
+}
+.region-board {
+  border-right: 1px solid var(--line);
+}
+.region-team {
+  background: #fffef8;
+}
+.region-work {
+  display: block;
+  grid-column: 1 / -1;
+  padding: 17px 21px 20px;
+  border-top: 1px solid var(--line);
+  background: #fbfaf4;
+}
+
+/* Board */
+.board-stream {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  padding: 18px 20px;
+  overflow-y: auto;
+}
+.board-stream .empty-pane {
+  margin: auto;
+}
+.board-post {
+  padding: 11px 13px;
+  border: 1px solid #e6e9e0;
+  border-radius: 9px;
+  background: #fffef9;
+}
+.board-post > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.board-post > header strong {
+  font-size: 12px;
+}
+.board-post > header small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.post-text p {
+  margin-top: 7px;
+  color: #4d5b50;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+.post-text a {
+  color: var(--terra-dark);
+  text-decoration: underline;
+  word-break: break-word;
+}
+.board-system {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.board-system > i {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #c3cbbf;
+}
+.board-system > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-system > small {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: #a3ada2;
+  font-size: 10px;
+}
+.board-system .text-button {
+  flex: 0 0 auto;
+  padding: 2px 4px;
+}
+.board-handoff {
+  padding: 12px 13px;
+  border: 1px solid #e1d4bc;
+  border-radius: 9px;
+  background: #fffcf3;
+}
+.board-handoff > header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.board-handoff > header small {
+  margin-left: auto;
+  color: #a2977f;
+  font-size: 10px;
+}
+.board-handoff > p {
+  margin-top: 8px;
+  color: #4d5b50;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.handoff-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 720;
+  text-transform: capitalize;
+}
+.handoff-pill[data-status='pending'] {
+  color: #8c6632;
+  background: #f7efdf;
+}
+.handoff-pill[data-status='accepted'] {
+  color: #476e47;
+  background: #e6f0e2;
+}
+.handoff-pill[data-status='declined'] {
+  color: #8d5049;
+  background: #f6e6e3;
+}
+.handoff-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 11px;
+}
+.handoff-form {
+  display: grid;
+  gap: 9px;
+  margin: 0 20px 10px;
+  padding: 13px;
+  border: 1px solid #d5ddd0;
+  border-radius: 9px;
+  background: #fffef9;
+}
+.handoff-form > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.handoff-form > header strong {
+  font-size: 12px;
+}
+.handoff-form label {
+  display: grid;
+  gap: 5px;
+  color: #62705f;
+  font-size: 11px;
+  font-weight: 650;
+}
+.handoff-form select,
+.handoff-form textarea {
+  padding: 8px 9px;
+  resize: none;
+  border: 1px solid #d8ded1;
+  border-radius: 7px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 400;
+}
+.handoff-form textarea {
+  min-height: 64px;
+}
+.board-composer > div {
+  gap: 10px;
+}
+.board-composer .text-button {
+  flex: 0 0 auto;
+}
+.board-composer > div > span {
+  margin-left: auto;
+  text-align: right;
+}
+
+/* Team rail */
+.region-team .floor-canvas {
+  border-right: 0;
+  border-bottom: 1px solid var(--line);
+}
+.floor-canvas-compact .floor-stage {
+  /* The office view has its own 280px minimum; match it so its empty-office note stays visible. */
+  height: 280px;
+  min-height: 280px;
+}
+.floor-canvas-compact .office-legend {
+  display: none;
+}
+.region-team .floor-team {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.region-team .floor-team-list {
+  flex: 1;
+  max-height: none;
+  overflow-y: auto;
+}
+.team-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  align-items: center;
+  border-bottom: 1px solid #e9ebe4;
+}
+.team-row:hover {
+  background: var(--sage-50);
+}
+.floor-team-list .team-open {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 3px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+}
+
+/* Work */
+.work-groups {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 13px;
+  margin-top: 13px;
+}
+.work-group h4 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 8px;
+  color: #77857a;
+  font-size: 10px;
+  font-weight: 720;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.work-group h4 span {
+  min-width: 19px;
+  padding: 1px 5px;
+  color: #60745e;
+  border-radius: 5px;
+  background: var(--sage-100);
+  text-align: center;
+  letter-spacing: 0;
+}
+.work-list {
+  display: grid;
+  gap: 6px;
+}
+.work-list > button {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 25px minmax(0, 1fr) auto 13px;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  text-align: left;
+  border: 1px solid #e1e5dc;
+  border-radius: 7px;
+  background: #fffef9;
+}
+.work-list > button:hover {
+  border-color: #bdcbb6;
+}
+.work-list strong,
+.work-list small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.work-list strong {
+  font-size: 12px;
+}
+.work-list small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.work-list > button > svg {
+  color: #a0aa9d;
+}
+.work-empty {
+  padding: 11px 12px;
+  color: #8b968b;
+  border: 1px dashed #d8ddd2;
+  border-radius: 7px;
+  background: #fffef9;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* Directory rows carry counts, a handoff badge, and last activity */
+.floor-directory .directory-list strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.floor-directory .directory-list strong > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.floor-directory .directory-list .handoff-badge {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  font-size: 9px;
+}
+.floor-directory .directory-list small {
+  white-space: normal;
+}
+.directory-list small + small {
+  margin-top: 1px;
+  color: #a3ada2;
+}
+
+@media (max-width: 1120px) {
+  .region-work .work-groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .floor-region-switch {
+    display: flex;
+  }
+  .floor-regions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .floor-region {
+    display: none;
+    grid-column: 1;
+  }
+  .region-board {
+    border-right: 0;
+  }
+  .floor-regions[data-region='board'] .region-board,
+  .floor-regions[data-region='team'] .region-team {
+    display: flex;
+  }
+  .floor-regions[data-region='work'] .region-work {
+    display: block;
+    border-top: 0;
+  }
+  .region-team {
+    height: auto;
+  }
+  .region-team .floor-team-list {
+    overflow-y: visible;
+  }
+  .region-work .work-groups {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 620px) {
+  .region-board {
+    height: 520px;
+  }
+  .handoff-form select,
+  .handoff-form textarea {
+    font-size: 16px;
+  }
+}
