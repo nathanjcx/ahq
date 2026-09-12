@@ -216,13 +216,164 @@
 }
 .notification-button i {
   position: absolute;
-  top: 7px;
-  right: 7px;
-  width: 6px;
-  height: 6px;
+  top: 3px;
+  right: 2px;
+  display: flex;
+  min-width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  color: #fffdf5;
   border: 2px solid var(--cream);
-  border-radius: 50%;
+  border-radius: 999px;
   background: var(--terra);
+  font-size: var(--text-2xs);
+  font-style: normal;
+  font-weight: 780;
+}
+
+/* === components/app/topbar.tsx: the notifications ledger === */
+.notification-bell {
+  position: relative;
+}
+.bell-scrim {
+  position: fixed;
+  z-index: 40;
+  border: 0;
+  background: transparent;
+  inset: 0;
+}
+.bell-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 41;
+  display: flex;
+  width: 340px;
+  max-height: min(70vh, 480px);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+.bell-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.bell-panel > header strong {
+  font-size: var(--text-md);
+}
+.bell-review {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: #f7efdf;
+}
+.bell-review span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.bell-review strong {
+  font-size: var(--text-md);
+}
+.bell-review small {
+  color: #8c6632;
+  font-size: var(--text-base);
+}
+.bell-list {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+.bell-item {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.bell-item[data-unread='true'] {
+  background: var(--sage-50);
+  box-shadow: inset 3px 0 0 var(--terra);
+}
+.bell-item > header {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+.bell-item > header strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bell-item > header small {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.bell-item > p {
+  margin-top: 4px;
+  color: var(--ink-soft);
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+.bell-item > footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+.bell-empty {
+  padding: 16px 14px;
+  color: var(--muted);
+  font-size: var(--text-base);
+  text-align: center;
+}
+
+/* === components/app/incident-strip.tsx === */
+.incident-strip {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 34px;
+  color: #8c6632;
+  border-bottom: 1px solid #e8d9bb;
+  background: #f9f0dc;
+}
+.incident-strip[data-urgent='true'] {
+  color: #8d5049;
+  border-bottom-color: #e6cac4;
+  background: #f9e6e1;
+}
+.incident-strip > svg {
+  flex: 0 0 auto;
+}
+.incident-strip p {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: var(--text-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.incident-strip p small {
+  margin-left: 8px;
+  opacity: 0.75;
+}
+.incident-strip button {
+  flex: 0 0 auto;
 }
 .clerk-user {
   display: grid;
@@ -632,6 +783,25 @@
 @media (max-width: 640px) {
   .nav-item {
     height: var(--tap);
+  }
+  /* The ledger takes the width of the screen, and the strip stays one line. */
+  .bell-panel {
+    position: fixed;
+    top: 58px;
+    right: 8px;
+    left: 8px;
+    width: auto;
+  }
+  .bell-item,
+  .bell-review {
+    min-height: var(--tap);
+  }
+  .incident-strip {
+    gap: 8px;
+    padding: 8px 12px;
+  }
+  .incident-strip p small {
+    display: none;
   }
   /* The review bar rides above the bottom of the screen, and the toast rides above it. */
   .toast {
