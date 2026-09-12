@@ -101,7 +101,7 @@ type BellProps = {
   pending: ActionProposal[];
   actions: Pick<TriageActions, 'acknowledgeNotification' | 'acknowledgeNotifications'>;
   onReview: (taskId: string) => void;
-  onOpen?: (page: Page) => void;
+  onOpen: (page: Page) => void;
 };
 
 /** Subscribes to the ledger. Only mount this where a Convex client exists. */
@@ -167,7 +167,7 @@ function NotificationPanel({
   actions: Pick<TriageActions, 'acknowledgeNotification' | 'acknowledgeNotifications'>;
   onClose: () => void;
   onReview: (taskId: string) => void;
-  onOpen?: (page: Page) => void;
+  onOpen: (page: Page) => void;
 }) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

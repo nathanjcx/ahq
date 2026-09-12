@@ -335,12 +335,6 @@
   gap: 12px;
   margin-top: 6px;
 }
-.bell-empty {
-  padding: 16px 14px;
-  color: var(--muted);
-  font-size: var(--text-base);
-  text-align: center;
-}
 
 /* === components/app/incident-strip.tsx === */
 .incident-strip {
