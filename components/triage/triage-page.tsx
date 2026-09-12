@@ -213,7 +213,12 @@ function ReportsTab({ onTask }: { onTask: (taskId: string) => void }) {
   return (
     <div className="incident-reports">
       {reports.map((report) => (
-        <article key={report.id} className="card incident-report" data-emergency={report.emergency}>
+        <article
+          key={report.id}
+          className="card incident-report"
+          data-emergency={report.emergency}
+          data-missing={report.missing}
+        >
           <header>
             {report.severity && (
               <span className="severity-pill" data-severity={report.severity}>
@@ -222,6 +227,7 @@ function ReportsTab({ onTask }: { onTask: (taskId: string) => void }) {
             )}
             <strong>{report.alertTitle ?? 'Incident'}</strong>
             {report.emergency && <span className="emergency-pill">Acted without permission</span>}
+            {report.missing && <span className="emergency-pill">No report filed</span>}
             <small>
               {report.authorName} · {relativeTime(report.createdAt)}
             </small>

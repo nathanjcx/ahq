@@ -228,6 +228,7 @@ const reports: IncidentReport[] = [
     text: 'Incident report: Checkout writes are failing on the primary database\nIssue: every write to the primary timed out from 14:06.\nReproduction: 40 of 40 write attempts timed out; the pool held 20 connections against 40 workers.\nFix: raised the pool cap to 60 and pinned it to the worker count, then merged and deployed it.\nWhy I acted without permission: three pages were delivered over twenty-one minutes outside attended hours and none was answered; checkout was down for the whole window.\nSide effects: the primary now holds 60 connections, inside its 200 limit. Replica lag rose to 1.4s during the deploy and recovered.\nKnock-on risks: the cap is now derived from the worker count, so raising workers raises connections. A second guard on the database side is the follow-up.',
     taskId: 'task_triage_db',
     emergency: true,
+    missing: false,
     createdAt: ago(0.4),
   },
   {
@@ -239,7 +240,20 @@ const reports: IncidentReport[] = [
     text: 'Post-mortem: Bounce rate on transactional mail crossed 5%\nCause: the new sender domain had no DKIM record, so two large providers rejected outright.\nFix: moved transactional mail back to the old sender domain.\nPrevention: publish DKIM and warm a domain before any sender change.\nRegression test: web-tests/mail-sender.test.ts asserts a configured sender has a DKIM record.',
     taskId: 'task_triage_mail',
     emergency: false,
+    missing: false,
     createdAt: ago(19),
+  },
+  {
+    id: 'report_gh',
+    alertId: 'alert_gh',
+    alertTitle: 'Migration 4120 leaves orphaned rows on rollback',
+    severity: 'high',
+    authorName: 'Triage',
+    text: 'Incident report missing: Migration 4120 leaves orphaned rows on rollback\nThe triage lead used the emergency allow-list on this incident and filed no incident report.\nThe issue, the reproduction, the fix, why it acted without permission, and the side effects are all unrecorded. Read the timeline for what it actually called.',
+    taskId: 'task_triage_gh',
+    emergency: true,
+    missing: true,
+    createdAt: ago(6),
   },
 ];
 

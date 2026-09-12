@@ -6,6 +6,7 @@ import {
   labelPriority,
   layoutLabels,
   rankBubbles,
+  shortName,
   type LabelInput,
 } from '../components/office/office-labels';
 
@@ -16,6 +17,23 @@ const pill = (id: string, x: number, y: number, priority = 0): LabelInput => ({
   width: 80,
   height: 18,
   priority,
+});
+
+describe('short name', () => {
+  it('leaves a short name whole', () => {
+    expect(shortName('Ada')).toBe('Ada');
+    expect(shortName('Ada 2')).toBe('Ada 2');
+  });
+
+  it('names the reserved staff by what they do, not by their article', () => {
+    expect(shortName('The auditor')).toBe('Auditor');
+    expect(shortName('The janitor')).toBe('Janitor');
+    expect(shortName('The triage lead')).toBe('Triage');
+  });
+
+  it('takes the first word of a long name', () => {
+    expect(shortName('Bartholomew Featherstone')).toBe('Bartholomew');
+  });
 });
 
 describe('label priority', () => {

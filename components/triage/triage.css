@@ -280,6 +280,10 @@
   border-color: #e0bdb5;
   background: #fdf5f3;
 }
+/* A placeholder the platform filed: there is nothing here but the fact that nothing was written. */
+.incident-report[data-missing='true'] {
+  border-style: dashed;
+}
 .incident-report > header {
   display: flex;
   align-items: center;

@@ -6,7 +6,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import * as THREE from 'three';
 import type { Activity, EmployeeActivity } from './activity';
-import { labelPriority, type LabelMode } from './office-labels';
+import { labelPriority, shortName, type LabelMode } from './office-labels';
 import { Static } from './office-merge';
 import { useOverlayLabel, useOverlayRelayout } from './office-overlay';
 import { Box, C, Cylinder, Round } from './office-primitives';
@@ -613,7 +613,7 @@ export function EmployeeAvatar({
             title={`${employee.name} · ${employee.role} · ${activityLabel(activity)}`}
           >
             <span className="office-pill-dot" />
-            <span>{employee.name.split(' ')[0]}</span>
+            <span>{shortName(employee.name)}</span>
           </button>
         )}
         {bubble && (
@@ -633,7 +633,7 @@ export function EmployeeAvatar({
                 onSelect?.(employee.id);
               }}
             >
-              <strong>{employee.name.split(' ')[0]}</strong>
+              <strong>{shortName(employee.name)}</strong>
               <span>{bubble}</span>
             </button>
           </div>

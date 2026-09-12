@@ -58,7 +58,7 @@ export interface IncidentReport {
   taskId?: string;
   emergency: boolean;
   /** The platform filed this placeholder because the run used emergency authority and wrote no report. */
-  missing?: boolean;
+  missing: boolean;
   createdAt: number;
 }
 /** How alerts reach this workspace. The signing secret is never read back, only whether one is set. */
