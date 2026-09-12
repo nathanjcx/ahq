@@ -136,11 +136,54 @@ async function releaseReservation(ctx: MutationCtx, task: Doc<'tasks'>) {
   await ctx.db.patch(task._id, { budgetFinalized: true });
 }
 
+async function taskInputState(ctx: ReadCtx, taskId: Id<'tasks'>) {
+  const [latestStart, latestMessage, queued, leased] = await Promise.all([
+    ctx.db
+      .query('jobs')
+      .withIndex('by_task_kind_created', (q) => q.eq('taskId', taskId).eq('kind', 'start_task'))
+      .order('desc')
+      .first(),
+    ctx.db
+      .query('jobs')
+      .withIndex('by_task_kind_created', (q) => q.eq('taskId', taskId).eq('kind', 'send_message'))
+      .order('desc')
+      .first(),
+    ctx.db
+      .query('jobs')
+      .withIndex('by_task_state', (q) => q.eq('taskId', taskId).eq('state', 'queued'))
+      .collect(),
+    ctx.db
+      .query('jobs')
+      .withIndex('by_task_state', (q) => q.eq('taskId', taskId).eq('state', 'leased'))
+      .collect(),
+  ]);
+  const latestInput = [latestStart, latestMessage]
+    .filter((job): job is Doc<'jobs'> => Boolean(job))
+    .sort((a, b) => b.createdAt - a.createdAt || b._creationTime - a._creationTime)[0];
+  return {
+    inputRevision: latestInput ? String(latestInput._id) : '',
+    pendingInput: [...queued, ...leased].some(
+      (job) => job.kind === 'start_task' || job.kind === 'send_message',
+    ),
+  };
+}
+
 export const workerState = query({
   args: { secret: v.string() },
   handler: async (ctx, args) => {
     requireService(args.secret);
-    const [queued, leased, queuedTasks, running, awaitingApproval, signal] = await Promise.all([
+    const [
+      queued,
+      leased,
+      queuedStarts,
+      queuedMessages,
+      leasedStarts,
+      leasedMessages,
+      queuedTasks,
+      running,
+      awaitingApproval,
+      signal,
+    ] = await Promise.all([
       ctx.db
         .query('jobs')
         .withIndex('by_state_available', (q) => q.eq('state', 'queued'))
@@ -149,6 +192,22 @@ export const workerState = query({
         .query('jobs')
         .withIndex('by_state_available', (q) => q.eq('state', 'leased'))
         .take(100),
+      ctx.db
+        .query('jobs')
+        .withIndex('by_state_kind_available', (q) => q.eq('state', 'queued').eq('kind', 'start_task'))
+        .collect(),
+      ctx.db
+        .query('jobs')
+        .withIndex('by_state_kind_available', (q) => q.eq('state', 'queued').eq('kind', 'send_message'))
+        .collect(),
+      ctx.db
+        .query('jobs')
+        .withIndex('by_state_kind_available', (q) => q.eq('state', 'leased').eq('kind', 'start_task'))
+        .collect(),
+      ctx.db
+        .query('jobs')
+        .withIndex('by_state_kind_available', (q) => q.eq('state', 'leased').eq('kind', 'send_message'))
+        .collect(),
       ctx.db
         .query('tasks')
         .withIndex('by_status', (q) => q.eq('status', 'queued'))
@@ -167,9 +226,9 @@ export const workerState = query({
         .unique(),
     ]);
     const pendingInputTasks = new Set(
-      [...queued, ...leased]
-        .filter((job) => job.kind === 'start_task' || job.kind === 'send_message')
-        .map((job) => String(job.taskId)),
+      [...queuedStarts, ...queuedMessages, ...leasedStarts, ...leasedMessages].map((job) =>
+        String(job.taskId),
+      ),
     );
     return {
       pendingJobs: queued.length + leased.length,
@@ -299,7 +358,14 @@ export const claimJobs = mutation({
         .query('jobs')
         .withIndex('by_task_state', (q) => q.eq('taskId', job.taskId).eq('state', 'leased'))
         .collect();
-      if (activeLeases.some((active) => (active.leaseExpiresAt || 0) > now)) continue;
+      const activeLeaseExpiresAt = activeLeases.reduce(
+        (latest, active) => Math.max(latest, active.leaseExpiresAt || 0),
+        0,
+      );
+      if (activeLeaseExpiresAt > now) {
+        await ctx.db.patch(job._id, { availableAt: activeLeaseExpiresAt, updatedAt: now });
+        continue;
+      }
       const task = await ctx.db.get(job.taskId);
       if (!task) {
         await ctx.db.patch(job._id, { state: 'failed', error: 'Task not found', updatedAt: now });
@@ -434,21 +500,29 @@ export const completeJob = mutation({
       if (proposal && proposal.status === 'executing')
         throw new Error('Record the external action result before completing its job');
     }
+    const now = Date.now();
     const task = await ctx.db.get(job.taskId);
     if (
       task &&
       (job.kind === 'start_task' || job.kind === 'send_message') &&
       !['completed', 'failed', 'cancelled', 'uncertain'].includes(task.status)
     )
-      await ctx.db.patch(task._id, { status: 'running', updatedAt: Date.now() });
+      await ctx.db.patch(task._id, { status: 'running', updatedAt: now });
     await ctx.db.patch(job._id, {
       state: 'completed',
       result: args.result,
       leaseOwner: undefined,
       leaseToken: undefined,
       leaseExpiresAt: undefined,
-      updatedAt: Date.now(),
+      updatedAt: now,
     });
+    const queued = await ctx.db
+      .query('jobs')
+      .withIndex('by_task_state', (q) => q.eq('taskId', job.taskId).eq('state', 'queued'))
+      .collect();
+    for (const next of queued) {
+      if (next.availableAt > now) await ctx.db.patch(next._id, { availableAt: now, updatedAt: now });
+    }
     return null;
   },
 });
@@ -567,23 +641,13 @@ export const sessionContext = query({
     requireService(args.secret);
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error('Task not found');
-    const [artifacts, jobs] = await Promise.all([
+    const [artifacts, input] = await Promise.all([
       ctx.db
         .query('artifacts')
         .withIndex('by_task', (q) => q.eq('taskId', task._id))
         .take(100),
-      ctx.db
-        .query('jobs')
-        .withIndex('by_task_created', (q) => q.eq('taskId', task._id))
-        .order('desc')
-        .take(100),
+      taskInputState(ctx, task._id),
     ]);
-    const latestInput = jobs.find((job) => job.kind === 'start_task' || job.kind === 'send_message');
-    const pendingInput = jobs.some(
-      (job) =>
-        (job.kind === 'start_task' || job.kind === 'send_message') &&
-        (job.state === 'queued' || job.state === 'leased'),
-    );
     return {
       task: {
         id: task._id,
@@ -597,8 +661,8 @@ export const sessionContext = query({
       },
       authorization: { workspaceId: task.workspaceId, userId: task.createdBy },
       archivedStorageKeys: artifacts.map((artifact) => artifact.storageKey),
-      inputRevision: latestInput ? String(latestInput._id) : '',
-      pendingInput,
+      inputRevision: input.inputRevision,
+      pendingInput: input.pendingInput,
     };
   },
 });
@@ -794,18 +858,8 @@ export const recordEvents = mutation({
       let staleTerminal = false;
       if (reportedTerminal) {
         if (!args.inputRevision) throw new Error('Terminal session events require an input revision');
-        const inputJobs = await ctx.db
-          .query('jobs')
-          .withIndex('by_task_created', (q) => q.eq('taskId', task._id))
-          .order('desc')
-          .take(100);
-        const latestInput = inputJobs.find((job) => job.kind === 'start_task' || job.kind === 'send_message');
-        const pendingInput = inputJobs.some(
-          (job) =>
-            (job.kind === 'start_task' || job.kind === 'send_message') &&
-            (job.state === 'queued' || job.state === 'leased'),
-        );
-        staleTerminal = pendingInput || String(latestInput?._id || '') !== args.inputRevision;
+        const input = await taskInputState(ctx, task._id);
+        staleTerminal = input.pendingInput || input.inputRevision !== args.inputRevision;
       }
       if (['completed', 'failed', 'cancelled', 'uncertain'].includes(task.status) || staleTerminal) {
         nextStatus = task.status;

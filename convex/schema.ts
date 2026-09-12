@@ -245,7 +245,7 @@ export default defineSchema({
     .index('by_state_kind_available', ['state', 'kind', 'availableAt'])
     .index('by_state_lease_expiration', ['state', 'leaseExpiresAt'])
     .index('by_task_state', ['taskId', 'state'])
-    .index('by_task_created', ['taskId', 'createdAt']),
+    .index('by_task_kind_created', ['taskId', 'kind', 'createdAt']),
   inbox: defineTable({
     workspaceId: v.id('workspaces'),
     connectionId: v.id('connections'),

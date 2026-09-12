@@ -1,7 +1,7 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
 import type { Doc } from './_generated/dataModel';
-import { cleanText, identity, requirePlatformAdmin, requireWorkspace } from './shared';
+import { cleanText, identity, requirePlatformAdmin, requireWorkspace, sha256 } from './shared';
 
 const provider = v.union(
   v.literal('linear'),
@@ -106,6 +106,20 @@ function validateCapabilities(capabilities: Array<{ provider: ProviderId; tools:
       if (!registered) throw new Error(`${capability.provider}.${tool} is not in the MCP tool registry`);
       if (registered.mode === 'blocked') throw new Error(`${capability.provider}.${tool} is blocked`);
     }
+  }
+}
+
+function validateMedia(items: Array<{ url: string; type: 'image' | 'video'; alt: string }>) {
+  for (const item of items) {
+    let url: URL;
+    try {
+      url = new URL(item.url);
+    } catch {
+      throw new Error('Marketplace media URL is invalid');
+    }
+    if (url.protocol !== 'https:' || url.username || url.password || item.url.length > 2_000)
+      throw new Error('Marketplace media must use HTTPS without embedded credentials');
+    cleanText(item.alt, 'Marketplace media alt text', 500);
   }
 }
 const draftFields = {
@@ -215,6 +229,17 @@ export const saveDraft = mutation({
   args: { draftId: v.optional(v.id('employeeDrafts')), ...draftFields },
   handler: async (ctx, args) => {
     const actor = await requirePlatformAdmin(ctx);
+    if (args.media.length > 10) throw new Error('At most 10 media items are allowed');
+    if (
+      args.skills.length > 10 ||
+      args.skills.reduce((size, item) => size + item.content.length, 0) > 600_000
+    )
+      throw new Error('Private skill package is too large');
+    for (const item of args.skills) {
+      cleanText(item.name, 'Skill name', 120);
+      cleanText(item.version, 'Skill version', 80);
+      if (!item.content.trim()) throw new Error('Skill content is required');
+    }
     const normalized = {
       name: cleanText(args.name, 'Name', 120),
       role: cleanText(args.role, 'Role', 120),
@@ -227,20 +252,11 @@ export const saveDraft = mutation({
       color: cleanText(args.color, 'Color', 40),
       media: args.media,
       instructions: cleanText(args.instructions, 'Instructions', 100_000),
-      skills: args.skills,
+      skills: await Promise.all(
+        args.skills.map(async (item) => ({ ...item, sha256: await sha256(item.content) })),
+      ),
       updatedAt: Date.now(),
     };
-    if (args.media.length > 10) throw new Error('At most 10 media items are allowed');
-    if (
-      args.skills.length > 10 ||
-      args.skills.reduce((size, item) => size + item.content.length, 0) > 600_000
-    )
-      throw new Error('Private skill package is too large');
-    for (const item of args.skills) {
-      cleanText(item.name, 'Skill name', 120);
-      cleanText(item.version, 'Skill version', 80);
-      cleanText(item.sha256, 'Skill digest', 128);
-    }
     if (args.draftId) {
       const draft = await ctx.db.get(args.draftId);
       if (!draft) throw new Error('Draft not found');
@@ -259,6 +275,10 @@ export const publish = mutation({
     const draft = await ctx.db.get(args.draftId);
     if (!draft) throw new Error('Draft not found');
     validateCapabilities(draft.capabilities);
+    validateMedia(draft.media);
+    const skills = await Promise.all(
+      draft.skills.map(async (item) => ({ ...item, sha256: await sha256(item.content) })),
+    );
     const prior = await ctx.db
       .query('employeeVersions')
       .withIndex('by_draft', (q) => q.eq('draftId', args.draftId))
@@ -277,7 +297,7 @@ export const publish = mutation({
       color: draft.color,
       media: draft.media,
       instructions: draft.instructions,
-      skills: draft.skills,
+      skills,
       publishedBy: actor.subject,
       publishedAt: Date.now(),
     });

@@ -207,6 +207,99 @@ describe('Convex job and audit invariants', () => {
     expect((await t.run((ctx) => ctx.db.get(taskId)))?.status).toBe('completed');
   });
 
+  it('moves commands behind active leases out of the claim window', async () => {
+    const t = convexTest(schema, modules);
+    const { user, employeeId } = await setupEmployee(t);
+    const { taskId: seedTaskId } = await user.mutation(api.tasks.create, {
+      employeeId,
+      title: 'Seed',
+      prompt: 'Seed task.',
+    });
+    const runnableTaskId = await t.run(async (ctx) => {
+      const seed = await ctx.db.get(seedTaskId);
+      if (!seed) throw new Error('Expected seed task');
+      const seedJob = await ctx.db
+        .query('jobs')
+        .withIndex('by_unique_key', (q) => q.eq('uniqueKey', `start:${seedTaskId}`))
+        .unique();
+      if (!seedJob) throw new Error('Expected seed job');
+      await ctx.db.patch(seedJob._id, { state: 'completed', updatedAt: 1 });
+      const { _id, _creationTime, ...taskFields } = seed;
+      void _id;
+      void _creationTime;
+      for (let index = 0; index < 100; index++) {
+        const busyTaskId = await ctx.db.insert('tasks', {
+          ...taskFields,
+          status: 'running',
+          runToken: `busy-run-${index}`,
+          createdAt: 1,
+          updatedAt: 1,
+        });
+        await ctx.db.insert('jobs', {
+          workspaceId: seed.workspaceId,
+          taskId: busyTaskId,
+          uniqueKey: `busy-lease-${index}`,
+          kind: 'start_task',
+          payload: '{}',
+          state: 'leased',
+          attempts: 1,
+          availableAt: 1,
+          leaseOwner: 'busy-worker',
+          leaseToken: `busy-lease-token-${index}`,
+          leaseExpiresAt: Date.now() + 60_000,
+          createdAt: 1,
+          updatedAt: 1,
+        });
+        await ctx.db.insert('jobs', {
+          workspaceId: seed.workspaceId,
+          taskId: busyTaskId,
+          uniqueKey: `busy-message-${index}`,
+          kind: 'send_message',
+          payload: '{}',
+          state: 'queued',
+          attempts: 0,
+          availableAt: 1,
+          createdAt: 1,
+          updatedAt: 1,
+        });
+      }
+      const runnableTaskId = await ctx.db.insert('tasks', {
+        ...taskFields,
+        status: 'queued',
+        runToken: 'runnable-run',
+        createdAt: 2,
+        updatedAt: 2,
+      });
+      await ctx.db.insert('jobs', {
+        workspaceId: seed.workspaceId,
+        taskId: runnableTaskId,
+        uniqueKey: 'runnable-start',
+        kind: 'start_task',
+        payload: '{}',
+        state: 'queued',
+        attempts: 0,
+        availableAt: 2,
+        createdAt: 2,
+        updatedAt: 2,
+      });
+      return runnableTaskId;
+    });
+
+    const first = await t.mutation(api.services.claimJobs, {
+      secret: 'service-test-secret',
+      workerId: 'worker-1',
+      limit: 1,
+    });
+    expect(first).toEqual([]);
+    const second = await t.mutation(api.services.claimJobs, {
+      secret: 'service-test-secret',
+      workerId: 'worker-1',
+      limit: 1,
+    });
+    expect(second).toHaveLength(1);
+    expect(second[0].taskId).toBe(runnableTaskId);
+  });
+
   it('prioritizes cancellation and never recovers stale work into a cancelled task', async () => {
     const t = convexTest(schema, modules);
     const { user, employeeId } = await setupEmployee(t);

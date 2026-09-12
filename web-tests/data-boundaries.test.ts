@@ -67,6 +67,8 @@ describe('Convex data boundaries', () => {
     const serverContext = await t.query(api.services.taskContext, { secret: 'service-test-secret', taskId });
     expect(serverContext.employeeVersion.instructions).toContain('approved task');
     expect(serverContext.employeeVersion.skills[0].content).toBe('Private skill body');
+    expect(serverContext.employeeVersion.skills[0].sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(serverContext.employeeVersion.skills[0].sha256).not.toBe('abc123');
 
     for (const message of [
       { text: 'Working', createdAt: 1, phase: 'commentary', completed: false },
@@ -357,5 +359,23 @@ describe('Convex data boundaries', () => {
     await expect(admin.mutation(api.marketplace.publish, { draftId })).rejects.toThrow(
       'linear.unknown_tool is not in the MCP tool registry',
     );
+
+    const { draftId: unsafeMediaDraftId } = await admin.mutation(api.marketplace.saveDraft, {
+      name: 'Unsafe media employee',
+      role: 'Analyst',
+      description: 'Has an invalid media URL.',
+      category: 'Operations',
+      strengths: [],
+      limitations: [],
+      capabilities: [],
+      model: 'gpt-5.6-luna',
+      color: '#000000',
+      media: [{ url: 'http://media.example/preview.png', type: 'image', alt: 'Preview' }],
+      instructions: 'Review records.',
+      skills: [],
+    });
+    await expect(
+      admin.mutation(api.marketplace.publish, { draftId: unsafeMediaDraftId }),
+    ).rejects.toThrow('Marketplace media must use HTTPS');
   });
 });
