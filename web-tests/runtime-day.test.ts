@@ -25,6 +25,23 @@ process.env.ALLOW_INSECURE_MCP_FOR_TESTS = '1';
 process.env.CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 5).toString('base64');
 process.env.APP_URL = 'https://app.example';
 process.env.MAX_TURN_SECONDS = '60';
+// Push is the transport the emergency rule counts: an in-app row always lands, so it says nothing
+// about whether a person was reached. The workspace configures it and this stands in for the service.
+process.env.VAPID_PUBLIC_KEY = 'day-public';
+process.env.VAPID_PRIVATE_KEY = 'day-private';
+process.env.VAPID_SUBJECT = 'mailto:ops@example.com';
+
+vi.mock('web-push', () => {
+  class WebPushError extends Error {
+    constructor(public statusCode: number) {
+      super(`push endpoint answered ${statusCode}`);
+    }
+  }
+  return {
+    default: { setVapidDetails: () => {}, sendNotification: async () => {} },
+    WebPushError,
+  };
+});
 
 const subject = 'day-owner';
 const upstreamToken = 'day-upstream-token';
@@ -34,6 +51,7 @@ const providerTools = ['get_pull_request', 'create_pull_request', 'merge_pull_re
 const WEDNESDAY_10 = Date.parse('2026-09-16T10:00:00.000Z');
 const WEDNESDAY_22 = Date.parse('2026-09-16T22:00:00.000Z');
 const THURSDAY_10 = Date.parse('2026-09-17T10:00:00.000Z');
+const FRIDAY_10 = Date.parse('2026-09-18T10:00:00.000Z');
 const DAY_ONE = '2026-09-16';
 
 interface ToolCall {
@@ -112,6 +130,14 @@ let backend: Backend;
 const scripts = new Map<string, Script>();
 /** Every turn input the runner saw, so a scenario can assert what reached the model. */
 const inputs: { kind: string; text: string }[] = [];
+/**
+ * Session tokens per task, cumulative as a real session reports them.
+ *
+ * This matters beyond realism: a turn that recorded the session total as its own cost would charge an
+ * attendee's second answer for its preparation and its first answer as well, so a per-turn figure here
+ * would hide exactly the bug the meeting scenario asserts against.
+ */
+const sessionTokens = new Map<string, { input: number; cached: number; output: number }>();
 
 async function mcpClient(server: string, runToken: string) {
   const client = new Client({ name: 'scripted-agent', version: '1.0.0' });
@@ -156,9 +182,16 @@ const scriptedRunner: TurnRunner = {
     const text = script
       ? await script({ job: request.job, context: request.context, input: request.input, call, list })
       : '';
-    return { text, status: 'completed', usage: { input: 1_200, cached: 0, output: 300 } };
+    const before = sessionTokens.get(request.context.task.id) ?? { input: 0, cached: 0, output: 0 };
+    const usage = { input: before.input + TURN_INPUT, cached: 0, output: before.output + TURN_OUTPUT };
+    sessionTokens.set(request.context.task.id, usage);
+    return { text, status: 'completed', usage };
   },
 };
+
+/** What one scripted turn costs, whatever the session total it is added to. */
+const TURN_INPUT = 1_200;
+const TURN_OUTPUT = 300;
 
 const INPUT_KINDS = ['start_task', 'send_message', 'cancel_task'];
 
@@ -181,9 +214,29 @@ async function assertAdvertisedToolsExist(context: TaskContext) {
   }
 }
 
+/**
+ * The five-minute cron and the per-workspace transactions it schedules, which is where the jobs
+ * appear. `convex-test` starts a scheduled function on a timer of its own, so this waits for each one
+ * to be picked up as well as to finish.
+ */
+async function tick() {
+  await t.mutation(internal.services.schedule.tick, {});
+  for (let pass = 0; pass < 10; pass++) {
+    const waiting = await t.run(async (ctx) =>
+      (await ctx.db.system.query('_scheduled_functions').collect()).some((job) =>
+        ['pending', 'inProgress'].includes(job.state.kind),
+      ),
+    );
+    if (!waiting) return;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await t.finishInProgressScheduledFunctions();
+  }
+  throw new Error('The scheduler never drained its per-workspace ticks');
+}
+
 /** Runs the scheduler, then runs every job of the given kinds the way the worker would. */
 async function runQueue(kinds: string[]) {
-  await t.mutation(internal.services.schedule.tick, {});
+  await tick();
   const ran: Job[] = [];
   const skipped = new Set<string>();
   for (let pass = 0; pass < 12; pass++) {
@@ -346,12 +399,21 @@ beforeAll(async () => {
     auditPolicy: 'soft',
     triageAllowList: ['create_pull_request'],
     emergencyAllowList: ['merge_pull_request'],
-    notificationChannels: ['in_app'],
+    notificationChannels: ['in_app', 'push'],
     plan: 'subscription',
     monthlyAllowance: 0,
     maxConcurrentInstances: 8,
     rates: [],
     standards: 'Every claim in a report names the file it changed.',
+  });
+
+  // The one browser this workspace pages. Without it no channel leaves the building and the
+  // emergency rule could never be reached, which is the point of counting delivered pages.
+  await t.mutation(api.services.notifications.subscribePush, {
+    secret,
+    authSubject: subject,
+    endpoint: 'https://push.example/day-owner',
+    keysCiphertext: seal({ p256dh: 'key', auth: 'auth' }),
   });
 
   gateway = createGateway({ backend }).listen(0, '127.0.0.1');
@@ -530,6 +592,14 @@ it('prepares, answers, and wraps up a meeting with a confirmable outcome', async
   expect(answers.filter((turn) => turn.inReplyTo === everyone.turnId)).toHaveLength(2);
   expect(answers.some((turn) => turn.text.includes('re-checked per call'))).toBe(true);
 
+  // An attendee prepares and answers on one session, and a session reports its tokens cumulatively.
+  // Each answer records the turn's own share, so a second answer is not charged for the preparation
+  // and the first answer on top of itself.
+  const builderAnswers = answers.filter((turn) => String(turn.employeeId) === String(employeeId));
+  expect(builderAnswers).toHaveLength(2);
+  for (const answer of builderAnswers)
+    expect(answer.usage).toMatchObject({ input: TURN_INPUT, output: TURN_OUTPUT });
+
   scripts.set('meeting_wrapup', async ({ context }) =>
     JSON.stringify({
       outcomes: [
@@ -548,6 +618,13 @@ it('prepares, answers, and wraps up a meeting with a confirmable outcome', async
   await user.mutation(api.meetings.close, { meetingId: meeting._id });
   await runQueue(['meeting_wrapup']);
   await user.mutation(api.meetings.finalize, { meetingId: meeting._id });
+
+  // Two preparations, three answers, two wrap-ups: the meeting's total is the turns, added once each.
+  const turnsRun = 7;
+  expect(await t.run(async (ctx) => (await ctx.db.get(meeting._id))?.usage)).toMatchObject({
+    input: turnsRun * TURN_INPUT,
+    output: turnsRun * TURN_OUTPUT,
+  });
 
   const outcome = (
     await t.run(async (ctx) =>
@@ -771,8 +848,9 @@ it('re-pages an unanswered incident on the scheduler’s own clock until three a
 
   // The tick sends the first page, and the worker is what delivers it.
   await runQueue(['page_alert']);
+  // Push is tried before the in-app row, and only a real transport counts toward the emergency rule.
   expect((await ledger(alert.alertId)).map((row) => [row.attempt, row.deliveredChannel])).toEqual([
-    [1, 'in_app'],
+    [1, 'push'],
   ]);
   // Nothing pages again inside the re-page interval.
   vi.setSystemTime(firstPageAt + 5 * 60_000);
@@ -830,10 +908,27 @@ it('merges under the emergency rule and files the incident report the rule requi
   });
   if (!alert.taskId) throw new Error('Expected a triage task');
   const runToken = await runTokenFor(String(alert.taskId));
+
+  // The first run arrives while a person could still answer, and it ends. Nothing would ever plan
+  // another one for this incident if a run's key did not carry the state of the ledger it was briefed
+  // with, so the emergency path would be unreachable however long the pages went unanswered.
+  const sawMerge: boolean[] = [];
+  scripts.set('triage_run', async ({ list, job }) => {
+    if (job.payload.alertId !== alert.alertId) return 'Not this incident.';
+    sawMerge.push((await list('triage')).includes('merge_pull_request'));
+    return 'Looked at it; there is nothing I may do while a person could answer.';
+  });
   for (let page = 0; page < 3; page++) {
     vi.setSystemTime(openedAt + page * 8 * 60_000);
-    await runQueue(['page_alert']);
+    await runQueue(['triage_run', 'page_alert']);
   }
+  // Three pages, each delivered by a real transport, sent by the tick and nothing else.
+  expect((await ledger(alert.alertId)).map((row) => [row.attempt, row.deliveredChannel])).toEqual([
+    [1, 'push'],
+    [2, 'push'],
+    [3, 'push'],
+  ]);
+  expect(sawMerge).toEqual([false, false, false]);
   vi.setSystemTime(openedAt + 25 * 60_000);
   expect(await triageAuthority(runToken)).toMatchObject({ emergency: true });
 
@@ -858,7 +953,8 @@ it('merges under the emergency rule and files the incident report the rule requi
     });
     return 'Merged the revert under the emergency rule and filed the report.';
   });
-  await runQueue(['triage_run']);
+  // The gate opened, so the tick plans a fresh run for this incident and that run is the one that acts.
+  expect(await runQueue(['triage_run'])).toHaveLength(1);
 
   const reports = await t.withIdentity(identity(subject)).query(api.triage.incidentReports, {});
   const filed = reports.find((report) => report.alertId === alert.alertId);
@@ -945,4 +1041,56 @@ it('refuses a worker token the audit server and an auditor token a provider writ
     (error: Error) => error.message,
   );
   expect(refused).toContain('policy_denied');
+});
+
+/** What the session monitor does when a session goes idle at the end of a shift. */
+async function completeSession(taskId: string) {
+  const { inputRevision } = await t.query(api.services.sessions.sessionContext, { secret, taskId });
+  await t.mutation(api.services.sessions.recordEvents, {
+    secret,
+    taskId,
+    events: [],
+    status: 'completed',
+    inputRevision,
+  });
+}
+
+it('shifts a daily task again on a later day, though its session finished the last one', async () => {
+  const dependent = (await t.run(async (ctx) => ctx.db.query('tasks').collect())).find(
+    (task) => task.title === 'Document the tool servers',
+  );
+  if (!dependent) throw new Error('Expected the dependent task');
+
+  await completeSession(String(dailyTaskId));
+  expect(await t.run(async (ctx) => (await ctx.db.get(dailyTaskId))?.status)).toBe('completed');
+  // A daily task's session completing is the end of a shift, not the end of the work: the task waiting
+  // on it is not released, and it has weeks of shifts left to run.
+  expect(await t.run(async (ctx) => (await ctx.db.get(dependent._id))?.status)).toBe('waiting');
+
+  scripts.set('start_shift', async ({ call, context }) => {
+    await call('shift', 'submit_report', {
+      done: ['Held the line on day three.'],
+      inProgress: [],
+      blockedOn: [],
+      next: [],
+      risks: [],
+      deadlineConfidence: 0.8,
+    });
+    // The session goes idle as the shift ends, so the monitor completes it again from inside the job.
+    if (context.task.id === String(dailyTaskId)) await completeSession(context.task.id);
+    return 'Day three finished.';
+  });
+  vi.setSystemTime(FRIDAY_10);
+  const ran = await runQueue(['start_shift']);
+
+  expect(ran.some((job) => job.taskId === String(dailyTaskId))).toBe(true);
+  const worked = (await rows<{ taskId: string; kind: string; date: string }>('shifts'))
+    .filter((shift) => shift.taskId === dailyTaskId && shift.kind === 'work')
+    .map((shift) => shift.date);
+  expect(worked).toEqual(['2026-09-16', '2026-09-17', '2026-09-18']);
+  // No closing summary either: a daily task is closed on purpose, not at the end of every shift.
+  expect(
+    (await rows<{ taskId: string }>('taskSummaries')).some((row) => row.taskId === dailyTaskId),
+  ).toBe(false);
+  scripts.delete('start_shift');
 });

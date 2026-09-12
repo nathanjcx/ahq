@@ -298,7 +298,11 @@ export const recordEvents = mutation({
       let nextStatus = args.status;
       let staleTerminal = false;
       if (isTerminal(args.status)) {
-        if (!args.inputRevision) throw new Error('Terminal session events require an input revision');
+        // The revision may legitimately be empty: a daily task's input is its shift job, not a
+        // `start_task`, so it has no input job to name. What the check needs is that the caller read
+        // one and passed it, so that an input arriving mid-turn still makes this terminal stale.
+        if (args.inputRevision === undefined)
+          throw new Error('Terminal session events require an input revision');
         const input = await taskInputState(ctx, task._id);
         staleTerminal = input.pendingInput || input.inputRevision !== args.inputRevision;
       }
