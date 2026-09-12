@@ -1355,6 +1355,7 @@ export const ingestInbox = mutation({
       }
     }
     await ctx.db.patch(connection._id, {
+      inboxMode: 'push',
       cursor: args.cursor === undefined ? connection.cursor : args.cursor,
       lastCheckedAt: Date.now(),
       error: undefined,
