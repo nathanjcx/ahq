@@ -5,7 +5,13 @@ import { useFrame } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, JSX } from 'react';
 import * as THREE from 'three';
-import { boardLayout, CALENDAR_ENTRIES, type BoardCard, type CalendarEntry } from './office-layout';
+import {
+  boardLayout,
+  CALENDAR_ENTRIES,
+  TABLE,
+  type BoardCard,
+  type CalendarEntry,
+} from './office-layout';
 import { useOverlayLabel, useOverlayRelayout } from './office-overlay';
 import { Box, C, Round, type Point } from './office-primitives';
 import { STATUS_COLOR, type SelectProp } from './office-props';
@@ -365,4 +371,78 @@ export function CalendarCard({
       </div>
     </Html>
   );
+}
+
+/** How long one speech mark takes to swell and fade, and how far apart the seats start. */
+const MURMUR_SECONDS = 2.6;
+const MURMUR_STEP = 0.42;
+/** Marks open over the table rather than over a head, where the name pill already is. */
+const MURMUR_REACH = 0.55;
+const MURMUR_HEIGHT = 1.72;
+
+/**
+ * A live meeting, seen from across the room: a speech mark over each attendee,
+ * swelling and fading round the table so the conversation reads as moving. Who
+ * actually holds the floor keeps theirs open.
+ */
+export function MeetingMurmur({
+  seats,
+  speakingIndex,
+  motion,
+}: {
+  /** Where the attendees are sitting, in the room's own coordinates. */
+  seats: Point[];
+  /** The attendee with the floor, if the transcript names one. */
+  speakingIndex?: number;
+  motion: boolean;
+}): JSX.Element {
+  const marks = useRef<THREE.Group>(null);
+  useFrame((state) => {
+    if (!motion || !marks.current) return;
+    const t = state.clock.elapsedTime / MURMUR_SECONDS;
+    marks.current.children.forEach((mark, index) => {
+      const wave = mark.userData.speaking === true ? 1 : murmurWave(t - index * MURMUR_STEP);
+      mark.scale.setScalar(0.75 + wave * 0.35);
+      mark.visible = wave > 0.05;
+    });
+  });
+  return (
+    <group ref={marks}>
+      {seats.map((seat, index) => {
+        const speaking = index === speakingIndex;
+        // Still frames fix the phase by seat, so a baseline always sees the same table.
+        const wave = speaking ? 1 : murmurWave(index * MURMUR_STEP * 1.7);
+        return (
+          <group
+            key={`${seat[0]} ${seat[2]}`}
+            position={[seat[0] + 0.3, MURMUR_HEIGHT, seat[2] + (TABLE.z - seat[2]) * MURMUR_REACH]}
+            scale={0.75 + wave * 0.35}
+            visible={wave > 0.05}
+            userData={{ speaking }}
+          >
+            <Round s={[0.66, 0.46, 0.07]} color={speaking ? AMBER : '#f1ead6'} radius={0.09} />
+            {/* The tail, pointing down at whoever is speaking. */}
+            <Box
+              p={[-0.16, -0.26, 0]}
+              s={[0.16, 0.2, 0.06]}
+              color={speaking ? AMBER : '#f1ead6'}
+              rotation={[0, 0, 0.5]}
+            />
+            {[-0.13, 0.08].map((x) => (
+              <group key={x} position={[x, 0.04, 0.04]}>
+                <Box s={[0.066, 0.14, 0.012]} color="#3a4a40" />
+                <Box p={[-0.02, -0.12, 0]} s={[0.038, 0.11, 0.012]} color="#3a4a40" />
+              </group>
+            ))}
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
+/** One swell: up, held, then gone, over `MURMUR_SECONDS`. */
+function murmurWave(phase: number): number {
+  const cycle = phase - Math.floor(phase);
+  return Math.max(0, Math.sin(cycle * Math.PI) ** 1.6 - 0.12);
 }

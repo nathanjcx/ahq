@@ -60,6 +60,8 @@ type Preset = {
   label: string;
   lightBudget?: number;
   providers?: boolean;
+  /** Extra state per person: what they are waiting on, whose desk they are at, which alert. */
+  detail?: (ids: string[], index: number) => Partial<EmployeeActivity>;
   /** Everything past the people: the room, its props, the schedule, the meeting. */
   dressing?: (ids: string[]) => OfficeDressing;
 };
@@ -143,6 +145,50 @@ const PRESETS: Record<string, Preset> = {
     label: 'Triage',
     dressing: () => ({ room: 'triage', incident: true, incidentCount: 3 }),
   },
+  'meeting-live': {
+    roles: ['presenting', 'answering', 'thinking', 'thinking', 'reading'],
+    label: 'Boardroom · September release review',
+    providers: false,
+    dressing: (ids) => ({
+      room: 'boardroom',
+      meeting: { attendeeIds: ids.slice(0, 5), speakingId: ids[0], live: true },
+    }),
+  },
+  'audit-night': {
+    roles: ['auditing', 'reporting', 'uneasy', 'off_shift', 'off_shift'],
+    kinds: ['auditor'],
+    label: FLOOR_LABEL,
+    lightBudget: 0.55,
+    detail: (ids, index) => (index === 0 ? { visitingId: ids[2] } : {}),
+    dressing: (ids) => ({
+      schedule: { working: false, attended: false, overnightCheap: true },
+      memory: {
+        floorFill: 0.62,
+        agentFills: new Map(ids.map((id, index) => [id, [0.7, 0.4, 0.55, 0.2, 0.3][index] ?? 0.4])),
+        contested: 1,
+      },
+      findings: new Map([[ids[2], 2]]),
+    }),
+  },
+  incident: {
+    roles: ['triaging', 'writing', 'waiting', 'blocked', 'thinking'],
+    kinds: ['triage'],
+    label: FLOOR_LABEL,
+    detail: (_ids, index) =>
+      index === 0
+        ? { alertId: 'alr_1', bubble: 'Checkout is returning 500 on card payments.' }
+        : index === 2
+          ? { waitingOn: 'c2' }
+          : index === 3
+            ? { waitingOn: 'c3' }
+            : {},
+    dressing: () => ({
+      board: { cards: CARDS },
+      incident: true,
+      incidentCount: 2,
+      emergency: { title: 'Deployed the checkout fix without approval.', since: NOW - 900_000 },
+    }),
+  },
 };
 
 const PROVIDERS: OfficeProvider[] = [
@@ -170,6 +216,10 @@ function buildScene(name: string, hour: number, seed: number) {
     if (!activity) return;
     const partner = activity === 'talking' ? employees[index % 2 === 0 ? index + 1 : index - 1] : undefined;
     activities.set(employee.id, {
+      ...preset.detail?.(
+        employees.map((item) => item.id),
+        index,
+      ),
       activity,
       since: NOW - 10_000 - index * 1_000,
       bubble:

@@ -8,11 +8,32 @@ export const LABEL_MODES: LabelMode[] = ['names', 'dots', 'off'];
 export const LABEL_STEP = 20;
 export const LABEL_STEPS = 4;
 
-const WORKING: Activity[] = ['thinking', 'reading', 'calling', 'writing', 'reviewing', 'celebrating'];
+/** The day's exceptions: an incident, an audit, a meeting, a dependency nobody has cleared. */
+const NOTABLE: Activity[] = ['triaging', 'auditing', 'presenting', 'answering', 'blocked', 'uneasy'];
+const WORKING: Activity[] = [
+  'thinking',
+  'reading',
+  'calling',
+  'writing',
+  'reviewing',
+  'celebrating',
+  'failed',
+  'reading_memory',
+  'remembering',
+  'filing',
+  'planning',
+  'reporting',
+  'preparing',
+  'reviewing_peer',
+  'waiting',
+  'arriving',
+  'leaving',
+];
 
 /**
  * Who keeps their pill when the room is crowded. Selected first, then whoever
- * needs a person, then a handoff, then work, then everybody else.
+ * needs a person, then a handoff or one of the day's exceptions, then work,
+ * then everybody else.
  */
 export function labelPriority(person: {
   selected?: boolean;
@@ -21,8 +42,8 @@ export function labelPriority(person: {
 }): number {
   if (person.selected) return 4;
   if (person.attention) return 3;
-  if (person.activity === 'talking') return 2;
-  if (WORKING.includes(person.activity) || person.activity === 'failed') return 1;
+  if (person.activity === 'talking' || NOTABLE.includes(person.activity)) return 2;
+  if (WORKING.includes(person.activity)) return 1;
   return 0;
 }
 

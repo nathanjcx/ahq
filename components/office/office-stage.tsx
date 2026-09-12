@@ -3,12 +3,19 @@
 import { useQuery } from 'convex/react';
 import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState } from 'react';
-import { deriveActivities, type EmployeeActivity } from './activity';
+import {
+  deriveActivities,
+  deriveFloorSignals,
+  shiftsFromCalendar,
+  type DayInput,
+  type EmployeeActivity,
+} from './activity';
 import type { LabelMode } from './office-labels';
 import type { SelectProp } from './office-props';
 import type { OfficeDressing, OfficeEmployee, OfficeProvider } from './office-scene';
 import type { RenderStats } from './office-view';
 import { useActivityCues } from './sound';
+import { useUiQuery } from '@/components/shared/use-ui-query';
 import type { Dashboard, FloorPost } from '@/lib/contracts';
 import { providers as providerCatalog } from '@/lib/providers';
 import { asId, uiApi } from '@/lib/ui-api';
@@ -54,12 +61,15 @@ export type OfficeStageProps = {
   onRenderStats?: (stats: RenderStats) => void;
 };
 
-/** Turns one dashboard and one board into everything the room shows. */
+const NO_DAY: DayInput = {};
+
+/** Turns one dashboard, one board and the day around them into everything the room shows. */
 export function deriveScene(
   dashboard: Dashboard,
   posts: FloorPost[],
   floorId: string | undefined,
   now: number,
+  day: DayInput = NO_DAY,
 ): OfficeSceneData {
   const tasks = dashboard.tasks.filter((task) => (floorId ? task.floorId === floorId : !task.floorId));
   const taskIds = new Set(tasks.map((task) => task.id));
@@ -82,6 +92,7 @@ export function deriveScene(
     0,
   );
   const note = [...posts].reverse().find((post) => post.kind === 'note');
+  const signals = deriveFloorSignals(day, floorId, now);
   return {
     traits: new Map(
       dashboard.employees
@@ -95,11 +106,63 @@ export function deriveScene(
       proposals: dashboard.proposals,
       posts,
       now,
+      day,
     }),
     providers,
     ...(note ? { note: note.text.slice(0, NOTE_CHARS) } : {}),
     lightBudget: cap > 0 ? Math.min(1, used / cap) : 0,
+    ...(signals.incident ? { incident: true, incidentCount: signals.incidentCount } : {}),
+    ...(signals.emergency ? { emergency: signals.emergency } : {}),
+    ...(signals.meeting ? { meeting: signals.meeting } : {}),
+    ...(signals.findings.size ? { findings: signals.findings } : {}),
+    ...(dashboard.schedule
+      ? {
+          schedule: {
+            working: dashboard.schedule.working,
+            attended: dashboard.schedule.attended,
+            overnightCheap: dashboard.schedule.overnightPolicy === 'cheap',
+          },
+        }
+      : {}),
   };
+}
+
+const DAY_MS = 86_400_000;
+
+/** Local midnight before `now`, which is where the office's day starts. */
+export function startOfDay(now: number): number {
+  return new Date(now).setHours(0, 0, 0, 0);
+}
+
+/**
+ * The rest of the day, live. Everything here is optional: a workspace whose
+ * backend has not answered yet simply renders the office as it always was.
+ */
+function useDay(now: number): DayInput {
+  const midnight = startOfDay(now);
+  const range = useMemo(() => ({ from: midnight, to: midnight + DAY_MS }), [midnight]);
+  const entries = useUiQuery(uiApi.calendarEntries, range);
+  const findings = useUiQuery(uiApi.auditFindings, {});
+  const alerts = useUiQuery(uiApi.alerts, {});
+  const notifications = useUiQuery(uiApi.notifications, {});
+  // One meeting at a time: whichever of today's is open or about to be.
+  const entry = (entries ?? []).find(
+    (item) => item.kind === 'meeting' && item.status !== 'cancelled' && now < item.endsAt,
+  );
+  const meeting = useUiQuery(
+    uiApi.meeting,
+    entry ? { calendarEntryId: asId<'calendarEntries'>(entry.id) } : 'skip',
+  );
+  return useMemo(
+    () => ({
+      shifts: shiftsFromCalendar(entries ?? []),
+      ...(entry ? { meetings: [{ entry, ...(meeting ? { meeting } : {}) }] } : {}),
+      findings: findings ?? [],
+      alerts: alerts ?? [],
+      notifications: notifications ?? [],
+    }),
+    [entries, entry, meeting, findings, alerts, notifications],
+  );
 }
 
 /**
@@ -129,9 +192,10 @@ function LiveStage(props: Omit<OfficeStageProps, 'live' | 'scene'>) {
     props.floorId ? { floorId: asId<'floors'>(props.floorId) } : 'skip',
   );
   const now = useNow(5_000);
+  const day = useDay(now);
   const scene = useMemo(
-    () => (dashboard ? deriveScene(dashboard, posts ?? [], props.floorId, now) : emptyScene),
-    [dashboard, posts, props.floorId, now],
+    () => (dashboard ? deriveScene(dashboard, posts ?? [], props.floorId, now, day) : emptyScene),
+    [dashboard, posts, props.floorId, now, day],
   );
   useActivityCues(scene.activities);
   return <Stage {...props} scene={scene} />;

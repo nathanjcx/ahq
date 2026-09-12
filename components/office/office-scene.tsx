@@ -3,12 +3,13 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import type { EmployeeActivity } from './activity';
+import { isWorking, type EmployeeActivity } from './activity';
 import { afterHours, daylight, windowless, type Daylight } from './daylight';
 import { FileCabinet, OfficeSpeakers } from './office-furniture';
 import { rankBubbles, type LabelMode } from './office-labels';
 import {
   boardroomSeats,
+  cardPin,
   defaultShelves,
   recordsStations,
   type BoardCard,
@@ -24,6 +25,7 @@ import {
   CalendarWall,
   ContestedFolder,
   DeskNotebook,
+  EmergencyNotice,
   FindingsFolder,
   IncidentLamp,
   LiftDoor,
@@ -31,6 +33,7 @@ import {
   OvernightLamp,
   StatusLamp,
   TaskBoard,
+  WaitingString,
   type SelectProp,
 } from './office-props';
 import { Architecture } from './office-room';
@@ -38,12 +41,24 @@ import { Boardroom, RecordsRoom } from './office-rooms';
 import {
   BoardNote,
   CalendarCard,
+  MeetingMurmur,
   ProviderConsole,
   ReviewLectern,
   StatusDevice,
   TaskCards,
 } from './office-signals';
-import { CONSOLE_X, CONSOLE_Z, LECTERN, deskGrid, layoutStations, type Station } from './office-stations';
+import {
+  BINDER,
+  CONSOLE_X,
+  CONSOLE_Z,
+  DOORWAY,
+  INCIDENT_LAMP,
+  LECTERN,
+  TASK_BOARD,
+  deskGrid,
+  layoutStations,
+  type Station,
+} from './office-stations';
 
 /** The one employee shape this component understands. */
 export type OfficeEmployee = {
@@ -78,7 +93,9 @@ export type OfficeDressing = {
   /** Open incidents, for the triage floor's alert board. */
   incidentCount?: number;
   schedule?: { working: boolean; attended: boolean; overnightCheap: boolean };
-  meeting?: { attendeeIds: string[]; speakingId?: string };
+  meeting?: { attendeeIds: string[]; speakingId?: string; live?: boolean };
+  /** Triage acted without permission: the floor carries the notice by the door. */
+  emergency?: { title: string; since: number };
   /** Named shelves for the records room. Without them the room derives them from memory. */
   records?: { shelves: ShelfSpec[] };
   calendar?: CalendarEntry[];
@@ -218,15 +235,16 @@ type Placed = {
 };
 
 const EMPTY_DRESSING: OfficeDressing = {};
-/** The floor's props, in the room's coordinates. Desk props are in the desk's own. */
-const BINDER: Point = [4.55, 0.99, -3.95];
-const TASK_BOARD: Point = [-0.9, 0, 2.55];
-const INCIDENT_LAMP: Point = [0.6, 0, 5.15];
+/** The floor's props, in the room's coordinates. Desk props are in the desk's own.
+ *  The ones a figure walks to live in office-stations, so both agree on where they are. */
 const CALENDAR_WALL: Point = [2.75, 1.72, -0.6];
+/** Beside the door, at eye height, where a notice is read on the way in. */
+const NOTICE: Point = [-8.84, 1.62, -3.2];
+/** A waiting figure holds its string at about chest height. */
+const STRING_HEIGHT = 1.18;
 /** The overlay cards hang above the props they belong to. */
 const TASK_CARDS: Point = [-2.3, 3.4, 2.55];
 const CALENDAR_CARD: Point = [2.75, 2.85, -0.6];
-const LIFT_DOOR: Point = [-8.5, 0, -5.88];
 /** The triage signals stack on the window wall's pier: the board, then the lamp. */
 const ALERT_BOARD: Point = [-8.86, 1.4, -0.8];
 const STATUS_LAMP: Point = [-8.8, 2.66, -0.8];
@@ -386,6 +404,7 @@ export function OfficeScene({
   const contested = dressing.memory?.contested ?? 0;
   // Whoever has the floor in a meeting sits a little higher and keeps their name.
   const speakingInMeeting = room === 'boardroom' ? meeting?.speakingId : undefined;
+  const speakingSeat = people.findIndex((person) => person.employee.id === speakingInMeeting);
 
   return (
     <>
@@ -396,7 +415,18 @@ export function OfficeScene({
         {room === 'records' && (
           <RecordsRoom shelves={shelves} interior={light.interior} onSelectProp={onSelectProp} />
         )}
-        {room === 'boardroom' && <Boardroom interior={light.interior} onSelectProp={onSelectProp} />}
+        {room === 'boardroom' && (
+          <>
+            <Boardroom interior={light.interior} onSelectProp={onSelectProp} />
+            {meeting?.live && (
+              <MeetingMurmur
+                seats={people.map((person) => person.station.at)}
+                {...(speakingSeat >= 0 ? { speakingIndex: speakingSeat } : {})}
+                motion={motion}
+              />
+            )}
+          </>
+        )}
         {onFloor && (
           <>
             <Architecture desks={desks} interior={light.interior} />
@@ -537,7 +567,16 @@ function FloorDressing({
   people: Placed[];
   onSelectProp?: SelectProp;
 }) {
-  const { memory, board, findings, incident, incidentCount = 0, schedule, calendar = [] } = dressing;
+  const {
+    memory,
+    board,
+    findings,
+    incident,
+    incidentCount = 0,
+    schedule,
+    calendar = [],
+    emergency,
+  } = dressing;
   const overnight = Boolean(schedule && !schedule.working && schedule.overnightCheap);
   return (
     <group>
@@ -547,7 +586,7 @@ function FloorDressing({
         if (!desk) return null;
         const fill = memory?.agentFills.get(person.employee.id);
         const open = findings?.get(person.employee.id) ?? 0;
-        const working = overnight && person.state.activity !== 'idle';
+        const working = overnight && isWorking(person.state.activity);
         if (fill === undefined && open <= 0 && !working) return null;
         return (
           <group key={person.employee.id} position={desk}>
@@ -573,11 +612,32 @@ function FloorDressing({
         );
       })}
       {board && <TaskBoard position={TASK_BOARD} cards={board.cards} onSelectProp={onSelectProp} />}
+      {/* A task that cannot start yet is on a string to the card it is waiting for.
+          Board card ids are task ids, which is what makes the two ends meet. */}
+      {board &&
+        people.flatMap((person) => {
+          const { waitingOn, activity } = person.state;
+          if (!waitingOn) return [];
+          const pin = cardPin(board.cards, waitingOn);
+          if (!pin) return [];
+          const stand = person.station.at;
+          return [
+            <WaitingString
+              key={person.employee.id}
+              from={[stand[0], STRING_HEIGHT, stand[2]]}
+              to={[TASK_BOARD[0] + pin[0], pin[1], TASK_BOARD[2] + pin[2]]}
+              blocked={activity === 'blocked'}
+            />,
+          ];
+        })}
+      {emergency && (
+        <EmergencyNotice position={NOTICE} rotation={[0, Math.PI / 2, 0]} onSelectProp={onSelectProp} />
+      )}
       {incident && <IncidentLamp position={INCIDENT_LAMP} onSelectProp={onSelectProp} />}
       {room === 'lobby' && (
         <>
           <CalendarWall position={CALENDAR_WALL} entries={calendar} onSelectProp={onSelectProp} />
-          <LiftDoor position={LIFT_DOOR} onSelectProp={onSelectProp} />
+          <LiftDoor position={DOORWAY} onSelectProp={onSelectProp} />
         </>
       )}
       {room === 'triage' && (

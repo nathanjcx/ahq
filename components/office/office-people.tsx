@@ -30,7 +30,23 @@ export type EmployeeKind = 'worker' | 'janitor' | 'auditor' | 'triage';
 const COAT = '#2f3740';
 
 /** Activities that happen in the chair rather than on the person's feet. */
-const SEATED: Activity[] = ['idle', 'thinking', 'reading', 'writing', 'failed'];
+const SEATED: Activity[] = [
+  'idle',
+  'thinking',
+  'reading',
+  'writing',
+  'failed',
+  'reading_memory',
+  'remembering',
+  'reporting',
+  'waiting',
+  'blocked',
+  'uneasy',
+  'off_shift',
+  'reviewing_peer',
+  'presenting',
+  'answering',
+];
 /** How long the hop-and-arms-up lasts, however long the task stays freshly completed. */
 const CELEBRATION_MS = 3_000;
 /** Every walk across the floor takes the same time, however far it is. */
@@ -155,6 +171,103 @@ function poseFor(activity: Activity, time: number, age: number, traits: string[]
         elbow: [-0.2, -1.15],
         headPitch: Math.sin(time * 2) * 0.12,
       };
+    case 'reading_memory':
+    case 'reviewing_peer': {
+      // The same two-handed read as `reading`, a little lower over the page.
+      const turn = Math.max(0, Math.sin(time * 1.7) - 0.88) * 4;
+      return { ...base, shoulder: [-0.99, -0.99], elbow: [-0.7, -0.7 - turn], headPitch: 0.31 };
+    }
+    case 'remembering':
+    case 'reporting': {
+      // Writing by hand rather than typing: one arm still, the other working.
+      const stroke = Math.sin(time * 3.4);
+      return {
+        ...base,
+        shoulder: [-0.86, -1.04],
+        elbow: [-0.7, -1.12 + stroke * 0.14],
+        headPitch: 0.34,
+      };
+    }
+    case 'waiting':
+    case 'blocked':
+      // Turned away from the desk toward whatever the string leads to.
+      return {
+        ...base,
+        shoulder: [-0.5, -0.5],
+        elbow: [-0.45, -0.45],
+        headPitch: activity === 'blocked' ? 0.2 : 0.05,
+        headYaw: 0.6 + Math.sin(time * 0.3) * 0.12,
+      };
+    case 'uneasy':
+      // A glance at the folder, then back, then another one.
+      return {
+        ...base,
+        shoulder: [-0.7, -0.82],
+        elbow: [-0.7, -0.95],
+        headPitch: 0.1 + Math.sin(time * 1.9) * 0.07,
+        headYaw: Math.sin(time * 0.9) * 0.42,
+        lean: Math.sin(time * 1.3) * 0.035,
+      };
+    case 'off_shift':
+      return { ...base, shoulder: [-0.6, -0.6], elbow: [-0.4, -0.4], headPitch: 0.42 };
+    case 'preparing':
+      // On their feet with the prep report in both hands, waiting for the lift.
+      return { ...base, shoulder: [-1.05, -1.05], elbow: [-1.25, -1.25], headPitch: 0.24 };
+    case 'presenting':
+      return {
+        ...base,
+        shoulder: [-0.55, -0.95 + Math.sin(time * 2.6) * 0.22],
+        elbow: [-0.6, -1.2],
+        headPitch: Math.sin(time * 2.2) * 0.1,
+      };
+    case 'answering':
+      // One hand up, the other on the table.
+      return { ...base, shoulder: [-0.8, -2.1], elbow: [-0.8, -0.7], headPitch: -0.06 };
+    case 'auditing': {
+      // Standing at somebody else's desk, writing on the clipboard.
+      const note = Math.sin(time * 2.8);
+      return {
+        ...base,
+        shoulder: [-1.18, -1.02],
+        elbow: [-1.3, -1.15 + note * 0.12],
+        headPitch: 0.4,
+      };
+    }
+    case 'triaging': {
+      // Fast and two-handed at the console; the shoulders never settle.
+      const rush = Math.sin(time * 6.4);
+      return {
+        ...base,
+        shoulder: [-1.1 + rush * 0.12, -1.1 - rush * 0.12],
+        elbow: [-1.15, -1.15],
+        headPitch: 0.2,
+        hop: Math.abs(rush) * 0.02,
+      };
+    }
+    case 'filing': {
+      // Reaching a binder onto the shelf, then down for the next one.
+      const reach = Math.sin(time * 1.1);
+      return {
+        ...base,
+        shoulder: [-1.2 - reach * 0.9, -1.2 - reach * 0.9],
+        elbow: [-0.5, -0.5],
+        headPitch: -0.12 - reach * 0.18,
+      };
+    }
+    case 'planning': {
+      // Pinning a string: one arm high on the board, the other holding the card.
+      const pin = Math.max(0, Math.sin(time * 0.9));
+      return {
+        ...base,
+        shoulder: [-1.0, -2.3 - pin * 0.3],
+        elbow: [-1.1, -0.35],
+        headPitch: -0.16,
+      };
+    }
+    case 'arriving':
+    case 'leaving':
+      // Between the door and the desk, with the day's things in one hand.
+      return { ...base, shoulder: [-0.14, -0.1], elbow: [-0.5, -0.14], headPitch: 0.02 };
     default: {
       // Idle, tuned by persona: fast fidgets sooner, cautious looks around,
       // playful turns all the way round now and then.
@@ -536,25 +649,34 @@ function turnToward(current: number, target: number, step: number): number {
   return Math.abs(difference) <= step ? target : current + Math.sign(difference) * step;
 }
 
+const LABELS: Partial<Record<Activity, string>> = {
+  thinking: 'Thinking',
+  reading: 'Reading a result',
+  calling: 'Using a tool',
+  writing: 'Writing',
+  reviewing: 'Waiting for review',
+  celebrating: 'Just finished',
+  failed: 'Stopped on an error',
+  talking: 'Handing work over',
+  reading_memory: 'Reading memory',
+  remembering: 'Writing memory down',
+  filing: 'Filing memory',
+  waiting: 'Waiting on another task',
+  blocked: 'Blocked',
+  reviewing_peer: 'Reviewing a dependency',
+  preparing: 'Preparing for a meeting',
+  presenting: 'Speaking in the meeting',
+  answering: 'Answering a question',
+  auditing: 'Auditing a desk',
+  triaging: 'On an incident',
+  planning: 'Planning the project',
+  arriving: 'Starting a shift',
+  leaving: 'Ending a shift',
+  off_shift: 'Off shift',
+  reporting: 'Writing the shift report',
+  uneasy: 'Has an open finding',
+};
+
 function activityLabel(activity: Activity): string {
-  switch (activity) {
-    case 'thinking':
-      return 'Thinking';
-    case 'reading':
-      return 'Reading a result';
-    case 'calling':
-      return 'Using a tool';
-    case 'writing':
-      return 'Writing';
-    case 'reviewing':
-      return 'Waiting for review';
-    case 'celebrating':
-      return 'Just finished';
-    case 'failed':
-      return 'Stopped on an error';
-    case 'talking':
-      return 'Handing work over';
-    default:
-      return 'Available';
-  }
+  return LABELS[activity] ?? 'Available';
 }
