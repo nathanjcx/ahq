@@ -1,0 +1,269 @@
+import { describe, expect, it } from 'vitest';
+import { api } from '../convex/_generated/api';
+import { compileWorkingMemory } from '../lib/server/memory';
+import { harness, identity as orgIdentity, publishEmployee, secret, type Harness } from './support';
+
+const admin = orgIdentity('owner', 'acme', 'org:admin');
+const colleague = orgIdentity('colleague', 'acme');
+
+/** One workspace with a staffed floor and a running task, which is what memory hangs off. */
+async function tower(t: Harness) {
+  const { versionId } = await publishEmployee(t);
+  const owner = t.withIdentity(admin);
+  const member = t.withIdentity(colleague);
+  await owner.mutation(api.workspace.bootstrap, { name: 'Acme' });
+  const { employeeId } = await owner.mutation(api.marketplace.hire, { versionId });
+  const { floorId } = await owner.mutation(api.floors.create, {
+    name: 'Launch',
+    brief: 'Prepare the launch.',
+    employeeIds: [employeeId],
+  });
+  const { taskId } = await owner.mutation(api.tasks.create, {
+    floorId,
+    employeeId,
+    title: 'Ship the launch',
+    prompt: 'Prepare the launch.',
+  });
+  const { runToken, workspaceId } = await t.run(async (ctx) => {
+    const task = await ctx.db.get(taskId);
+    return { runToken: task!.runToken, workspaceId: task!.workspaceId };
+  });
+  return { t, owner, member, employeeId, floorId, taskId, runToken, workspaceId };
+}
+
+type Tower = Awaited<ReturnType<typeof tower>>;
+
+/** A janitor instance with a task of its own, which is how janitor tools authorize. */
+async function janitor(context: Tower) {
+  const { employeeId } = await context.t.mutation(api.services.memory.ensureJanitor, {
+    secret,
+    workspaceId: context.workspaceId,
+  });
+  const { taskId } = await context.owner.mutation(api.tasks.create, {
+    employeeId,
+    title: 'Curate the memory',
+    prompt: 'Merge, contest, archive, and promote.',
+  });
+  const runToken = await context.t.run(async (ctx) => (await ctx.db.get(taskId))!.runToken);
+  return { employeeId, runToken };
+}
+
+function claim(runToken: string, text: string, over: Record<string, unknown> = {}) {
+  return { secret, runToken, scope: 'self' as const, kind: 'fact' as const, text, ...over };
+}
+
+describe('workspace memory', () => {
+  it('holds an agent floor claim until a person approves it, then compiles it into working memory', async () => {
+    const t = harness();
+    const { owner, runToken, taskId, floorId } = await tower(t);
+
+    const { memoryId, status } = await t.mutation(
+      api.services.memory.remember,
+      claim(runToken, 'The launch moved to March 12.', { scope: 'floor', kind: 'decision' }),
+    );
+    expect(status).toBe('proposed');
+    expect((await t.query(api.services.memory.compileInputs, { secret, taskId })).entries.floor).toEqual(
+      [],
+    );
+
+    await owner.mutation(api.memory.approve, { id: memoryId });
+    const inputs = await t.query(api.services.memory.compileInputs, { secret, taskId });
+    expect(inputs.entries.floor.map((entry) => entry.text)).toEqual(['The launch moved to March 12.']);
+    expect(compileWorkingMemory(inputs).text).toContain('- [decision] The launch moved to March 12.');
+
+    // Use is recorded after the compile, not during it, so the compiler stays a pure read.
+    await t.mutation(api.services.memory.touch, { secret, ids: [memoryId] });
+    expect(await t.run(async (ctx) => (await ctx.db.get(memoryId))!.lastUsedAt)).toBeGreaterThan(0);
+    expect(
+      (await owner.query(api.memory.summaries, { scope: 'floor' })).find(
+        (summary) => summary.scopeId === floorId,
+      ),
+    ).toEqual(expect.objectContaining({ active: 1, proposed: 0, contested: 0, budget: 4_000 }));
+  });
+
+  it('supersedes a replaced claim and keeps the notebook inside its budget', async () => {
+    const t = harness();
+    const { owner, runToken, employeeId } = await tower(t);
+
+    const first = await t.mutation(api.services.memory.remember, claim(runToken, 'The staging key is old.'));
+    const second = await t.mutation(
+      api.services.memory.remember,
+      claim(runToken, 'The staging key rotated on Monday.', { supersedesId: first.memoryId }),
+    );
+    const replaced = await t.run(async (ctx) => ctx.db.get(first.memoryId));
+    expect(replaced).toEqual(
+      expect.objectContaining({ status: 'archived', supersedesId: second.memoryId }),
+    );
+
+    // The budget holds two six-token notes, so each new note evicts the least recently used one.
+    await owner.mutation(api.memory.setBudgets, {
+      budgets: { workspace: 2_000, project: 3_000, floor: 4_000, agent: 12, summaries: 1_500 },
+    });
+    const texts = ['Oldest note here ok.....', 'Middle note here ok.....', 'Newest note here ok.....'];
+    for (const text of texts) await t.mutation(api.services.memory.remember, claim(runToken, text));
+    const notebook = await owner.query(api.memory.list, { scope: 'agent', scopeId: employeeId });
+    expect(notebook.filter((entry) => entry.status === 'active').map((entry) => entry.text)).toEqual([
+      texts[2],
+      texts[1],
+    ]);
+  });
+
+  it('only lets the janitor curate, and a promoted claim still needs an administrator', async () => {
+    const t = harness();
+    const context = await tower(t);
+    const { owner, member, runToken, floorId, workspaceId } = context;
+    const { runToken: janitorToken } = await janitor(context);
+    const first = await owner.mutation(api.memory.propose, {
+      scope: 'floor',
+      scopeId: floorId,
+      kind: 'fact',
+      text: 'Design review happens on Tuesday.',
+    });
+    const second = await owner.mutation(api.memory.propose, {
+      scope: 'floor',
+      scopeId: floorId,
+      kind: 'fact',
+      text: 'The design review is every Tuesday morning.',
+    });
+
+    await expect(
+      t.mutation(api.services.memory.contest, {
+        secret,
+        runToken,
+        id: first.memoryId,
+        reason: 'Two dates.',
+      }),
+    ).rejects.toThrow('Janitor access required');
+
+    const merged = await t.mutation(api.services.memory.merge, {
+      secret,
+      runToken: janitorToken,
+      ids: [first.memoryId, second.memoryId],
+      text: 'The design review is on Tuesday morning.',
+      kind: 'fact',
+      tags: ['review'],
+    });
+    const chain = await t.run(async (ctx) => [
+      await ctx.db.get(first.memoryId),
+      await ctx.db.get(second.memoryId),
+    ]);
+    expect(chain.map((entry) => [entry!.status, entry!.supersedesId])).toEqual([
+      ['archived', merged.memoryId],
+      ['archived', merged.memoryId],
+    ]);
+
+    const promoted = await t.mutation(api.services.memory.promote, {
+      secret,
+      runToken: janitorToken,
+      id: merged.memoryId,
+    });
+    const copy = await t.run(async (ctx) => ctx.db.get(promoted.memoryId));
+    expect(copy).toEqual(
+      expect.objectContaining({
+        scope: 'workspace',
+        scopeId: workspaceId,
+        status: 'proposed',
+        sourceMemoryId: merged.memoryId,
+      }),
+    );
+    await expect(member.mutation(api.memory.approve, { id: promoted.memoryId })).rejects.toThrow(
+      'Workspace administrator access required',
+    );
+    await owner.mutation(api.memory.approve, { id: promoted.memoryId });
+    expect(await t.run(async (ctx) => (await ctx.db.get(promoted.memoryId))!.status)).toBe('active');
+  });
+
+  it('keeps a contested claim out of working memory until a person resolves it', async () => {
+    const t = harness();
+    const context = await tower(t);
+    const { owner, taskId, floorId } = context;
+    const { runToken: janitorToken } = await janitor(context);
+    const { memoryId } = await owner.mutation(api.memory.propose, {
+      scope: 'floor',
+      scopeId: floorId,
+      kind: 'decision',
+      text: 'We ship on Thursday.',
+    });
+
+    const contested = await t.mutation(api.services.memory.contest, {
+      secret,
+      runToken: janitorToken,
+      id: memoryId,
+      reason: 'A report says Friday.',
+    });
+    expect(contested).toEqual(
+      expect.objectContaining({ status: 'contested', contestReason: 'A report says Friday.' }),
+    );
+    const inputs = await t.query(api.services.memory.compileInputs, { secret, taskId });
+    expect(inputs.entries.floor).toEqual([]);
+    expect(compileWorkingMemory(inputs).text).not.toContain('We ship on Thursday.');
+
+    await owner.mutation(api.memory.resolveContest, { id: memoryId, keep: 'this' });
+    expect(
+      (await t.query(api.services.memory.compileInputs, { secret, taskId })).entries.floor,
+    ).toHaveLength(1);
+  });
+
+  it('ranks recall by tags, then keywords, then recency, and keeps notebooks private', async () => {
+    const t = harness();
+    const { owner, member, runToken, employeeId, taskId, floorId } = await tower(t);
+    await owner.mutation(api.memory.propose, {
+      scope: 'floor',
+      scopeId: floorId,
+      kind: 'procedure',
+      text: 'Tag the release branch before the deploy.',
+      tags: ['deploy'],
+    });
+    await owner.mutation(api.memory.propose, {
+      scope: 'floor',
+      scopeId: floorId,
+      kind: 'fact',
+      text: 'The deploy window is short.',
+    });
+    await t.mutation(api.services.memory.remember, claim(runToken, 'Unrelated note about invoices.'));
+
+    const found = await t.query(api.services.memory.recall, { secret, runToken, query: 'deploy' });
+    expect(found.map((entry) => entry.text)).toEqual([
+      'Tag the release branch before the deploy.',
+      'The deploy window is short.',
+    ]);
+
+    // A colleague who never used this employee cannot read its notebook; an administrator can.
+    expect(await member.query(api.memory.list, { scope: 'agent', scopeId: employeeId })).toEqual([]);
+    expect(await owner.query(api.memory.list, { scope: 'agent', scopeId: employeeId })).toHaveLength(1);
+
+    const summary = {
+      secret,
+      taskId,
+      outcome: 'The launch shipped.',
+      decisions: ['Shipped on Thursday'],
+      openQuestions: [],
+      artifactIds: [],
+      text: 'The launch shipped on Thursday with the release notes.',
+      inferred: false,
+    };
+    const first = await t.mutation(api.services.memory.recordSummary, summary);
+    const again = await t.mutation(api.services.memory.recordSummary, {
+      ...summary,
+      outcome: 'The launch shipped on time.',
+    });
+    expect(again.summaryId).toBe(first.summaryId);
+    expect(await owner.query(api.memory.taskSummary, { taskId })).toEqual(
+      expect.objectContaining({ outcome: 'The launch shipped on time.' }),
+    );
+  });
+
+  it('creates one janitor per workspace on a reserved version', async () => {
+    const t = harness();
+    const { workspaceId } = await tower(t);
+    const first = await t.mutation(api.services.memory.ensureJanitor, { secret, workspaceId });
+    const again = await t.mutation(api.services.memory.ensureJanitor, { secret, workspaceId });
+    expect(again.employeeId).toBe(first.employeeId);
+    expect(await t.query(api.services.memory.janitorFor, { secret, workspaceId })).toEqual({
+      employeeId: first.employeeId,
+      name: 'The Janitor',
+    });
+    const installed = await t.run(async (ctx) => ctx.db.get(first.employeeId));
+    expect(installed).toEqual(expect.objectContaining({ kind: 'janitor', status: 'ready' }));
+  });
+});
