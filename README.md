@@ -37,7 +37,7 @@ The pre-migration demo is preserved at commit `110d2ba` on `origin/demo`. Check 
 
 ## Current limits
 
-External writes create an approval proposal before dispatch. A rejected proposal stops dependent work. A timeout can leave an external result uncertain and needs provider reconciliation. Correction is provider and tool specific, so the UI must not describe every action as undoable. Gmail support prepares drafts; it does not send mail.
+External writes create an approval proposal before dispatch. A rejected proposal stops dependent work. A timeout can leave an external result uncertain and needs provider reconciliation. Correction is provider and tool specific, so the UI must not describe every action as undoable. Gmail support prepares drafts; it does not send mail. A user can hold one connection per provider server per workspace, and reconnecting replaces it. Availability of Slack and Google Workspace for other companies depends on the vendor review gates described in [the deployment guide](docs/deployment.md).
 
 The cost shown by the app is a reservation or estimate. It is not an invoice. OpenAI model and hosted-session charges are separate from Railway compute, storage, and network charges, and from any provider charges.
 

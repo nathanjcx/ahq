@@ -15,7 +15,7 @@ gcloud services enable \
   --project=PROJECT_ID
 ```
 
-Configure Google Auth Platform branding and consent. Use an internal audience when the Workspace is internal. If the project must use an external audience, add only the test users who need to connect it. Request only the product scopes required for the selected tools. Google lists the scope choices in its [MCP setup guide](https://developers.google.com/workspace/guides/configure-mcp-servers), including Gmail read and compose, Drive read and file, and product-specific Docs, Sheets, Slides, and Calendar scopes.
+Configure Google Auth Platform branding and consent. Use an internal audience when the Workspace is internal. Gmail and Drive scopes are restricted: an external audience requires Google OAuth verification and a security assessment. Until that completes, only listed test users can connect and they see an unverified-app warning. A Workspace administrator can also block third-party apps. Request only the product scopes required for the reviewed tools. Google lists the scope choices in its [MCP setup guide](https://developers.google.com/workspace/guides/configure-mcp-servers), including Gmail read and compose, Drive read and file, and product-specific Docs, Sheets, Slides, and Calendar scopes.
 
 ## Register the OAuth client
 
@@ -25,23 +25,25 @@ In Google Auth Platform, create an OAuth client with application type `Web appli
 https://your-web-origin.example.com/api/integrations/callback
 ```
 
-Copy the client ID and secret into the web service's `MCP_OAUTH_CONFIG_JSON` under the `google-workspace` key:
+Copy the client ID and secret into the web service's `MCP_OAUTH_CONFIG_JSON` under the `google-workspace` key. For a single sign-in across products, `scopes` must be the union of the scopes for every product the deployment enables:
 
 ```json
 {
   "google-workspace": {
     "clientId": "GOOGLE_CLIENT_ID",
     "clientSecret": "GOOGLE_CLIENT_SECRET",
-    "scopes": "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose"
+    "scopes": "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file"
   }
 }
 ```
+
+Add the Docs, Sheets, Slides, and Calendar scopes to the same string when those products are enabled.
 
 The app uses the MCP server's OAuth discovery when the authorization and token URLs are omitted. If the selected server requires fixed endpoints, add its documented `authorizationUrl`, `tokenUrl`, and `tokenAuthMethod`. Do not put access tokens in this variable. The callback seals the resulting credential before storing it.
 
 ## Use the product URLs
 
-Put the exact URLs for the products that the organization has enabled in `MCP_SERVER_URLS_JSON` in Convex. Connect each product separately in the UI by selecting its URL:
+Put the exact URLs for the products that the organization has enabled in `MCP_SERVER_URLS_JSON` in Convex:
 
 | Product  | MCP URL                                     |
 | -------- | ------------------------------------------- |
@@ -52,7 +54,11 @@ Put the exact URLs for the products that the organization has enabled in `MCP_SE
 | Slides   | `https://slidesmcp.googleapis.com/mcp/v1`   |
 | Calendar | `https://calendarmcp.googleapis.com/mcp/v1` |
 
-The current provider registry shows Gmail as the default URL and lists the five other supported product URLs. Keep the exact trailing path. A URL in `MCP_SERVER_URLS_JSON` is an admission allowlist, not a grant to any tool. After discovery, select only the tools and resources needed for that connection. The employee capability and per-connection tool grant must both allow a call.
+The current provider registry shows Gmail as the default URL and lists the five other supported product URLs. Keep the exact trailing path. A URL in `MCP_SERVER_URLS_JSON` is an admission allowlist, not a grant to any tool.
+
+In the UI the user picks which products to connect (Gmail, Drive, Docs, Sheets, Slides, Calendar) in one dialog and signs in once. After the callback, the app connects each remaining product with the same grant whenever Google accepts it. If one product's server rejects the token, the user is sent through consent again for that product, which is what happens when the client's scopes do not cover it.
+
+Each connection's allowed tools are the intersection of the tools discovered on that product server and the non-blocked tools registered for `google-workspace` in `MCP_TOOL_REGISTRY_JSON`. Connecting a product fails when that intersection is empty. The owner can narrow tools and set a resource scope afterwards on the connection's Manage access panel. The employee capability and the per-connection tool grant must both allow a call.
 
 ## Gmail and write safety
 
@@ -74,9 +80,9 @@ The endpoint accepts normalized items only, at most 100 per request, with an HTT
 
 ## Test plan
 
-Use a test Workspace account and a non-sensitive document or calendar. Run one read-only search for each product you enable. For Gmail, run a draft request addressed to a test mailbox and verify that the message remains a draft. Confirm that the UI shows the provider account, selected tools, and resource scope. Then test a signed relay fixture and resend it to verify deduplication.
+Use a test Workspace account and a non-sensitive document or calendar. Select the products, sign in once, and confirm one connection appears per selected product with the reviewed tools. Run one read-only search for each product you enable. For Gmail, run a draft request addressed to a test mailbox and verify that the message remains a draft. Confirm that the UI shows the provider account, allowed tools, and resource scope. Then test a signed relay fixture and resend it to verify deduplication.
 
-If OAuth fails, inspect the Google OAuth logs and check the callback, consent audience, test-user list, enabled APIs, enabled MCP services, and requested scopes. If discovery succeeds but a tool is missing, inspect the selected tool grant and the employee capability. A successful Google login alone does not prove that a provider operation is authorized.
+If OAuth fails, inspect the Google OAuth logs and check the callback, consent audience, test-user list, enabled APIs, enabled MCP services, and requested scopes. If the user is asked to consent a second time for one product, the configured scopes do not cover that product. If discovery succeeds but a tool is missing, inspect `MCP_TOOL_REGISTRY_JSON`, the connection's allowed tools, and the employee capability. A successful Google login alone does not prove that a provider operation is authorized.
 
 ## References
 
@@ -84,4 +90,4 @@ If OAuth fails, inspect the Google OAuth logs and check the callback, consent au
 - [Google Workspace event subscriptions](https://developers.google.com/workspace/events)
 - [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy)
 
-When products need different scopes, use their full MCP URL as the key in `MCP_OAUTH_CONFIG_JSON`. Endpoint entries override the `google-workspace` default. For example, a Drive entry under `https://drivemcp.googleapis.com/mcp/v1` can request Drive scopes without adding Gmail scopes. Set this configuration on web, gateway, and worker so refreshes use the same client.
+When a deployment wants separate scopes per product instead of one sign-in, use the product's full MCP URL as the key in `MCP_OAUTH_CONFIG_JSON`. Endpoint entries override the `google-workspace` default. For example, a Drive entry under `https://drivemcp.googleapis.com/mcp/v1` can request Drive scopes without adding Gmail scopes; the user then consents once per product. Set this configuration on web, gateway, and worker so refreshes use the same client.
