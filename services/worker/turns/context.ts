@@ -37,10 +37,32 @@ export function taskContext(taskId: string) {
   return query<TaskContext>('services/sessions:taskContext', { taskId });
 }
 
-/** The tokens a turn cost, recorded against the task without touching its status. */
-export async function recordTurnUsage(taskId: string, result: TurnResult) {
-  if (!result.usage) return;
-  await mutate('services/sessions:recordEvents', { taskId, events: [], usage: result.usage });
+/**
+ * What a turn leaves in the record: its final message and what it cost.
+ *
+ * The message matters beyond the transcript. A shift that ends without filing a report has one
+ * inferred from the journal, and a task summary falls back the same way, so a turn whose words were
+ * never written down would leave both of those with nothing to say.
+ */
+export async function recordTurn(job: Job, taskId: string, result: TurnResult) {
+  await mutate('services/sessions:recordEvents', {
+    taskId,
+    events: [],
+    ...(result.text
+      ? {
+          messages: [
+            {
+              externalId: `turn:${job.id}`,
+              role: 'assistant' as const,
+              text: result.text,
+              createdAt: Date.now(),
+              completed: true,
+            },
+          ],
+        }
+      : {}),
+    ...(result.usage ? { usage: result.usage } : {}),
+  });
 }
 
 export interface TurnOptions extends SessionOptions, TurnMemoryOptions {
@@ -68,7 +90,7 @@ export async function runTurn(
     input: [memory.text, ...brief].filter(Boolean).join('\n\n'),
     maxMs: runtime.maxRuntimeMs,
   });
-  await recordTurnUsage(context.task.id, result);
+  await recordTurn(job, context.task.id, result);
   return result;
 }
 
@@ -90,7 +112,7 @@ export async function runBareTurn(
     input: brief.filter(Boolean).join('\n\n'),
     maxMs: runtime.maxRuntimeMs,
   });
-  await recordTurnUsage(context.task.id, result);
+  await recordTurn(job, context.task.id, result);
   return result;
 }
 

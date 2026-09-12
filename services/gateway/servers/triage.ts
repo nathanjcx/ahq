@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { toolEvidence } from '../../../lib/server/audit-mcp';
+import { journalDenied, toolEvidence } from '../../../lib/server/audit-mcp';
 import { connectedMcp } from '../../../lib/server/mcp';
 import { safeError, seal } from '../../../lib/server/secrets';
 import { checkResourceScope, toolPolicy } from '../../../lib/server/tool-policy';
@@ -104,25 +104,43 @@ export async function dispatchTriageWrite(
   tool: string,
   args: Record<string, unknown>,
 ) {
-  const authority = await authorityQuery(request);
-  const { tools, emergency } = admittedTools(authority);
-  if (!tools.includes(tool))
-    throw new GatewayError(
-      'policy_denied',
-      emergency.length
-        ? 'That tool is not on this workspace’s triage allow-list.'
-        : 'That tool needs approval, or the emergency allow-list, which is closed while a person can still answer.',
-    );
-  const target = await request.backend.query<TriageWriteTarget>('services/triage:writeConnections', {
-    runToken: request.runToken,
-  });
+  const [authority, target] = await Promise.all([
+    authorityQuery(request),
+    request.backend.query<TriageWriteTarget>('services/triage:writeConnections', {
+      runToken: request.runToken,
+    }),
+  ]);
+  // The connection is resolved before the gates, so a refusal is journaled as a denied call against
+  // the integration it was aimed at rather than disappearing into the task's events.
   const connection = target.connections.find((candidate) => candidate.allowedTools.includes(tool));
   if (!connection)
     throw new GatewayError('revoked', 'No connected integration grants that tool to this workspace.');
-  const policy = toolPolicy(target.policies, connection.provider, tool);
-  if (policy.mode !== 'write')
-    throw new GatewayError('policy_denied', 'That tool is not reviewed as an external write.');
-  checkResourceScope(connection.resourceScope, args, policy);
+  const { tools, emergency } = admittedTools(authority);
+  try {
+    if (!tools.includes(tool))
+      throw new GatewayError(
+        'policy_denied',
+        emergency.length
+          ? 'That tool is not on this workspace’s triage allow-list.'
+          : 'That tool needs approval, or the emergency allow-list, which is closed while a person can still answer.',
+      );
+    const mode = toolPolicy(target.policies, connection.provider, tool).mode;
+    if (mode !== 'write')
+      throw new GatewayError('policy_denied', 'That tool is not reviewed as an external write.');
+    checkResourceScope(
+      connection.resourceScope,
+      args,
+      toolPolicy(target.policies, connection.provider, tool),
+    );
+  } catch (error) {
+    const failure =
+      error instanceof GatewayError ? error : new GatewayError('policy_denied', safeError(error));
+    await journalDenied(request.runToken, connection.id, tool, args, failure.reason).catch(
+      (journalFailure: unknown) =>
+        console.error(`gateway journal failed reason=${safeError(journalFailure)}`),
+    );
+    throw failure;
+  }
   const base = {
     runToken: request.runToken,
     connectionId: connection.id,
