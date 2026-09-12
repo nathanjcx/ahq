@@ -294,8 +294,8 @@ export function OfficeScene({
           </group>
         ))}
         <StatusDevice position={STATUS_DEVICE} degraded={degraded} motion={motion} />
-        <BoardNote position={BOARD_NOTE} note={note} />
         <OfficeOverlay>
+          <BoardNote position={BOARD_NOTE} note={note} />
           {people.map((person) => (
             <EmployeeAvatar
               key={person.employee.id}

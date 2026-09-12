@@ -171,3 +171,15 @@
     bottom: 59px;
   }
 }
+
+/* The floor label and the empty-office note keep their desktop sizes and lift to
+   the 12px mobile floor on a phone. */
+@media (max-width: 620px) {
+  .office-view-floor,
+  .office-view-note,
+  .office-view-fallback p,
+  .office-view-fallback button,
+  .office-view-fallback button span {
+    font-size: 12px;
+  }
+}

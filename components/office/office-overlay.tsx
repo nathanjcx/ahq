@@ -17,6 +17,8 @@ export type OverlayEntry = {
   bubble: HTMLElement | null;
   /** Hover, focus or selection keeps a pill on screen even when it is covered. */
   forced: boolean;
+  /** A fixed card, such as the board note: it never moves, so everything routes around it. */
+  pinned?: boolean;
 };
 
 export type Overlay = {
@@ -97,7 +99,7 @@ export function OfficeOverlay({ children }: { children: ReactNode }) {
         y,
         width: pill.offsetWidth,
         height: pill.offsetHeight,
-        priority: entry.forced ? 5 : entry.priority,
+        priority: entry.pinned ? 6 : entry.forced ? 5 : entry.priority,
       });
     }
     layoutLabels(pills).forEach((placement, index) => {
