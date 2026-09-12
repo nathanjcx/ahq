@@ -23,6 +23,7 @@ function publicTurn(turn: Doc<'meetingTurns'>) {
     addressedTo: turn.addressedTo,
     inReplyTo: turn.inReplyTo,
     text: turn.text,
+    usage: turn.usage,
     outcome: turn.outcome,
     createdAt: turn.createdAt,
   };

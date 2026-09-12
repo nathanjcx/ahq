@@ -4,8 +4,8 @@ export type AlertSource = 'github' | 'webhook' | 'email' | 'manual';
 export type AlertStatus = 'open' | 'triaging' | 'fixed' | 'closed' | 'dismissed';
 
 /**
- * How far the emergency rule has run on one alert: delivered pages nobody answered inside the
- * twenty-minute window, and when the emergency allow-list opens if nobody answers.
+ * How far the emergency rule has run on one alert: delivered pages nobody has answered since the
+ * first of them, and when the emergency allow-list opens if nobody answers.
  */
 export interface AlertPaging {
   attempts: number;
@@ -13,7 +13,10 @@ export interface AlertPaging {
   firstAttemptAt?: number;
   lastAttemptAt?: number;
   opensAt?: number;
+  /** Answered, and nothing has paged since. An acknowledgement resets the rule. */
   acknowledged: boolean;
+  /** When the scheduler sends the next page, while fewer than `required` have been delivered. */
+  nextAttemptAt?: number;
 }
 export interface Alert {
   id: string;
@@ -54,11 +57,15 @@ export interface IncidentReport {
   text: string;
   taskId?: string;
   emergency: boolean;
+  /** The platform filed this placeholder because the run used emergency authority and wrote no report. */
+  missing?: boolean;
   createdAt: number;
 }
 /** How alerts reach this workspace. The signing secret is never read back, only whether one is set. */
 export interface TriageIntake {
   signedEndpointReady: boolean;
+  /** When the signing secret was last written. The secret itself is never read back. */
+  secretUpdatedAt?: number;
   rules: string[];
   github: string[];
   emailClassification: boolean;

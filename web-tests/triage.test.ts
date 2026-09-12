@@ -224,6 +224,7 @@ describe('triage authority', () => {
       allowList: ['create_pull_request'],
       emergencyAllowList: ['merge_pull_request', 'deploy'],
       unattendedAttempts: 0,
+      emergency: false,
     });
 
     vi.setSystemTime(unattendedNow);
@@ -254,24 +255,40 @@ describe('triage authority', () => {
       expect.objectContaining({ attempt: 1, acknowledgedAt: unattendedNow }),
     ]);
 
-    // A page older than the twenty-minute window never authorizes anything.
-    const second = await t.mutation(api.services.notifications.attempt, {
-      secret,
-      workspaceId,
-      kind: 'triage',
-      title: incident.title,
-      text: incident.detail,
-      alertId,
-    });
-    expect(second[0].attempt).toBe(2);
-    await t.mutation(api.services.notifications.markDelivered, {
-      secret,
-      id: second[0].id,
-      channel: 'in_app',
-    });
+    // Pages after the acknowledgement start the count again, and it only grows from there.
+    const page = async () => {
+      const rows = await t.mutation(api.services.notifications.attempt, {
+        secret,
+        workspaceId,
+        kind: 'triage',
+        title: incident.title,
+        text: incident.detail,
+        alertId,
+      });
+      for (const row of rows)
+        await t.mutation(api.services.notifications.markDelivered, {
+          secret,
+          id: row.id,
+          channel: 'in_app',
+        });
+      return rows[0];
+    };
+    vi.setSystemTime(unattendedNow + 60_000);
+    const second = await page();
+    expect(second.attempt).toBe(2);
     expect((await authority()).unattendedAttempts).toBe(1);
-    vi.setSystemTime(unattendedNow + 21 * 60_000);
-    expect((await authority()).unattendedAttempts).toBe(0);
+    vi.setSystemTime(unattendedNow + 8 * 60_000);
+    await page();
+    vi.setSystemTime(unattendedNow + 15 * 60_000);
+    await page();
+    // Three attempts stand, but the first of them is not yet twenty minutes old.
+    expect(await authority()).toMatchObject({ unattendedAttempts: 3, emergency: false });
+    vi.setSystemTime(unattendedNow + 22 * 60_000);
+    expect(await authority()).toMatchObject({ unattendedAttempts: 3, emergency: true });
+    // Answering resets the rule: every page sent before the answer is spent, and the emergency
+    // allow-list shuts again until three new ones stand unanswered.
+    await user.mutation(api.notifications.acknowledge, { id: second.id });
+    expect(await authority()).toMatchObject({ unattendedAttempts: 0, emergency: false });
   });
 
   it('posts the post-mortem to the affected floors and proposes the prevention to memory', async () => {
@@ -510,7 +527,45 @@ describe('what the Triage page reads', () => {
       alertSecretCiphertext: seal(alertSecret),
     });
     const intake = await user.query(api.triage.intake, {});
-    expect(intake).toMatchObject({ signedEndpointReady: true, rules: ['sev1', 'outage'] });
+    expect(intake).toMatchObject({
+      signedEndpointReady: true,
+      rules: ['sev1', 'outage'],
+      secretUpdatedAt: expect.any(Number),
+    });
     expect(JSON.stringify(intake)).not.toContain(alertSecret);
+  });
+
+  it('lets a workspace administrator set and clear the signing secret, and nobody else', async () => {
+    const { t, user } = await workspace();
+    const rotate = (subject: string, orgRole: string, ciphertext?: string) =>
+      t.mutation(api.services.triage.setAlertSecretForActor, {
+        secret,
+        authSubject: subject,
+        authOrgId: 'acme',
+        authOrgRole: orgRole,
+        ...(ciphertext ? { alertSecretCiphertext: ciphertext } : {}),
+      });
+
+    await expect(rotate('member', 'org:member', seal(alertSecret))).rejects.toThrow(
+      'administrator access required',
+    );
+    expect(await user.query(api.triage.intake, {})).toMatchObject({ signedEndpointReady: false });
+
+    const { updatedAt } = await rotate('owner', 'org:admin', seal(alertSecret));
+    expect(await user.query(api.triage.intake, {})).toMatchObject({
+      signedEndpointReady: true,
+      secretUpdatedAt: updatedAt,
+    });
+    // The sealed secret is still only readable by the service that verifies a signature.
+    expect(
+      await t.query(api.services.triage.alertSecret, {
+        secret,
+        workspaceId: (await user.query(api.workspace.dashboard, {})).workspace!.id,
+      }),
+    ).toContain('.');
+
+    // Writing no ciphertext clears it, which closes the signed endpoint.
+    await rotate('owner', 'org:admin');
+    expect(await user.query(api.triage.intake, {})).toMatchObject({ signedEndpointReady: false });
   });
 });

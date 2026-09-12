@@ -18,6 +18,8 @@ export interface Project {
   id: string;
   name: string;
   brief: string;
+  /** When the project is due, as a field the planner reads rather than a line in the brief. */
+  deadlineAt?: number;
   floorIds: string[];
   status: ProjectStatus;
   createdBy: string;

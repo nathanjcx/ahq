@@ -16,6 +16,8 @@ export const MEMORY_RULES = `Remember sparingly. A memory is one atomic claim a 
 
 export const FLOOR_RULES = `This task is on a floor: post a short note on the board when you finish a milestone, request a handoff when another employee on the floor should take the next step, and never claim a handoff was accepted, because only a person can accept one.`;
 
+export const TRIAGE_RULES = `You answer this workspace’s incidents. Reproduce before you fix, post what you reproduced to the affected floors, and fix as a pull request. Tools on the triage allow-list execute without a proposal; everything else needs a person. Outside attended hours, when three pages have been delivered and nobody has answered, the emergency allow-list opens and you may merge and deploy to stop the bleeding. That authority carries one obligation you cannot defer: verify the fix, then call file_incident_report in the same run with the issue, the reproduction, the fix, why you acted without permission, the side effects, and the knock-on risks. The report is mandatory. A run that used the emergency allow-list and filed none has a placeholder recorded in its place and an escalation posted to the workspace channel, and the next meeting opens with it.`;
+
 /** What a worker on a floor is told, the way the studio previews it. */
 export const WORKER_ROLE_RULES = [PACING_RULES, MEMORY_RULES, FLOOR_RULES];
 

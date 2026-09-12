@@ -29,10 +29,13 @@ const projectStatus = v.union(
   v.literal('archived'),
 );
 
-function projectFields(name: string, brief: string) {
+function projectFields(name: string, brief: string, deadlineAt?: number) {
+  if (deadlineAt !== undefined && (!Number.isFinite(deadlineAt) || deadlineAt <= 0))
+    throw new Error('A project deadline is a moment in time');
   return {
     name: cleanText(name, 'Project name', 120),
     brief: cleanText(brief, 'Project brief', 20_000),
+    deadlineAt,
   };
 }
 
@@ -87,11 +90,17 @@ export const tasks = query({
 });
 
 export const create = mutation({
-  args: { name: v.string(), brief: v.string(), floorIds: v.array(v.id('floors')) },
+  args: {
+    name: v.string(),
+    brief: v.string(),
+    floorIds: v.array(v.id('floors')),
+    /** When the project is due. The planner reads this field; it never parses the brief. */
+    deadlineAt: v.optional(v.number()),
+  },
   returns: v.object({ projectId: v.id('projects') }),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
-    const fields = projectFields(args.name, args.brief);
+    const fields = projectFields(args.name, args.brief, args.deadlineAt);
     await validateFloors(ctx, workspace._id, args.floorIds);
     const now = Date.now();
     const projectId = await ctx.db.insert('projects', {
@@ -116,12 +125,13 @@ export const update = mutation({
     name: v.string(),
     brief: v.string(),
     floorIds: v.array(v.id('floors')),
+    deadlineAt: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const { workspace } = await requireWorkspace(ctx);
     const project = await requireProject(ctx, workspace._id, args.projectId);
-    const fields = projectFields(args.name, args.brief);
+    const fields = projectFields(args.name, args.brief, args.deadlineAt);
     await validateFloors(ctx, workspace._id, args.floorIds);
     await ctx.db.patch(project._id, { ...fields, floorIds: args.floorIds, updatedAt: Date.now() });
     return null;

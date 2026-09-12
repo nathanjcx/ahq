@@ -1,5 +1,6 @@
 import { v, type Infer } from 'convex/values';
 import type { WorkspaceSettings } from '../../lib/contracts';
+import { pagingState } from '../../lib/paging';
 import type { Doc, Id } from '../_generated/dataModel';
 import { internalMutation, mutation, query, type MutationCtx } from '../_generated/server';
 import { ensureAuditRun, ensureAuditor, openFindings } from '../lib/audit';
@@ -208,18 +209,31 @@ async function tickWorkspace(ctx: MutationCtx, workspace: Doc<'workspaces'>, now
   for (const task of tasks)
     if (triageEmployees.has(task.employeeId)) triageUsageToday += tokensByTask.get(task._id) ?? 0;
 
+  // Each open incident carries its own notification ledger, which is what the planner re-pages from.
+  const plannerAlerts: PlannerAlert[] = await Promise.all(
+    alerts.map(async (alert) => {
+      const pages = await ctx.db
+        .query('notifications')
+        .withIndex('by_alert', (q) => q.eq('alertId', alert._id))
+        .collect();
+      return {
+        alertId: alert._id,
+        severity: alert.severity,
+        createdAt: alert.createdAt,
+        triageTaskId: alert.triageTaskId,
+        paging: pagingState(pages, now),
+        pagesSent: pages.length,
+      };
+    }),
+  );
+
   const planned = planTick({
     now,
     settings,
     tasks: plannerTasks,
     instances,
     meetings,
-    alerts: alerts.map((alert): PlannerAlert => ({
-      alertId: alert._id,
-      severity: alert.severity,
-      createdAt: alert.createdAt,
-      triageTaskId: alert.triageTaskId,
-    })),
+    alerts: plannerAlerts,
     findings,
     proposedMemories: proposed.length,
     usageToday: usage.input + usage.output,

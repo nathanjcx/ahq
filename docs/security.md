@@ -121,26 +121,33 @@ The one place an agent's write reaches a provider unattended. Its guardrails:
    refused, so a typo cannot widen what triage may do.
 2. **Triage tasks only.** `services/triage:writeConnections` refuses a run token whose instance is
    not of kind `triage`, and narrows each connection's granted tools to the admitted set.
-3. **The emergency list is shut while a person can answer.** It opens only outside attended hours and
-   only when at least three delivered, unacknowledged pages for that alert sit in the ledger within
-   the last twenty minutes. Older attempts stop counting, so a stale page authorizes nothing.
+3. **The emergency list is shut while a person can answer.** It opens only outside attended hours,
+   only once three delivered, unacknowledged pages for that alert stand, and only once the first of
+   them is twenty minutes old. The count runs from the first page that still stands rather than over a
+   rolling window, so it cannot be reset by the passage of time — only by an answer, which spends every
+   page before it and starts the count again at zero. The rule is one pure function (`lib/paging.ts`)
+   read by the scheduler that sends the pages, the authority query, and the interface.
 4. **Recomputed per call.** `admittedTools` runs on every listing and every dispatch. An
    acknowledgement between discovery and use closes the list again mid-incident.
 5. **Every gate re-checked at dispatch.** The tool is still admitted, a connected connection still
    grants it, the registry still reviews it as a `write`, and the resource restriction still holds. A
    refusal is journaled as a denied call against the integration it was aimed at, not lost in the
    task's events.
-6. **Mandatory report.** An emergency call returns the instruction to verify the fix and file the
-   incident report: the issue, the reproduction, the fix, why it acted without permission, and the
-   side effects and knock-on risks. The tool descriptions say the same thing, so the model sees it
-   before it calls.
+6. **Mandatory report, enforced.** An emergency call returns the instruction to verify the fix and
+   call `file_incident_report`: the issue, the reproduction, the fix, why it acted without permission,
+   and the side effects and knock-on risks. The tool descriptions and the triage instructions say the
+   same thing, so the model sees it before it calls. Enforcement is at run close, not on trust:
+   `services/triage:closeRun` runs at the end of every triage turn, and a run with a succeeded
+   emergency-only call and no report has a placeholder filed in its name, marked `missing`, with an
+   escalation posted to the workspace channel. Silence is recorded, not tolerated.
 7. **Closing is a person's.** `resolve_alert` marks the alert `fixed` and says in its result that a
    person confirms the incident is closed.
 
 ## Alert intake
 
-`/api/alerts` requires an `x-astra-workspace` header, a workspace alert secret set by a platform
-administrator through `/api/admin/alert-secret`, and an HMAC over `timestamp + "." + rawBody`. The
+`/api/alerts` requires an `x-astra-workspace` header, a workspace alert secret set by that
+workspace's own owner or administrator (`services/triage:setAlertSecretForActor`, which decides the
+role from the caller's Clerk claims), and an HMAC over `timestamp + "." + rawBody`. The
 signature covers the timestamp, so a replayed body with a fresh timestamp does not verify and a stale
 timestamp is refused outright; the window is five minutes. Bodies are capped at 100 KB, `url` must be
 HTTPS, and the rate limit is 120 per workspace per window. A workspace with no secret answers 404.
@@ -158,7 +165,12 @@ Acknowledgement is what the emergency rule counts as an answer, and only the sub
 both `notifications:acknowledge` (Clerk identity) and
 `services/notifications:acknowledgeForSubject` check the row's subject. Push subscription keys are
 sealed by the web route before Convex stores them; Convex holds ciphertext and the endpoint.
-`services/notifications:pushTargets` hands sealed keys back only to a service holding the secret.
+`services/notifications:pushTargets` hands sealed keys back only to a service holding the secret, and
+the worker unseals them to send. Push is on only where `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and
+`VAPID_SUBJECT` are all set; the private key never leaves the server. An endpoint that reports itself
+gone (404 or 410) is deleted rather than retried, so a revoked browser stops being a delivery target.
+Real transports are tried before the in-app row, so a delivered attempt means something left the
+building where it can.
 
 Who a workspace can reach is derived, not claimed: the owner of a personal workspace plus everyone
 who created a floor or project there, with `system` removed so the platform never pages itself.
@@ -220,12 +232,11 @@ the two webhook routes. Health endpoints are unlimited by design.
 
 ## Known gaps
 
-- **The emergency rule is unreachable in production, and the ledger is the only gate.** Nothing
-  re-pages, so the count never reaches three by itself. If it did, three delivered in-app rows — which
-  is to say three database writes nobody read — would be enough to open merge and deploy. There is no
-  second factor and no per-tool ceiling.
-- **`in_app` delivery is trivially satisfied.** A delivered attempt is a row marked delivered. Until a
-  real transport exists, "we paged you" means "we wrote it down".
+- **The ledger is the only gate on the emergency rule.** Three delivered pages and twenty minutes
+  open merge and deploy. There is no second factor and no per-tool ceiling, and a workspace whose only
+  channel is `in_app` satisfies "delivered" with three database writes nobody read. Configure push.
+- **A missing incident report is recorded, not prevented.** The emergency call has already executed
+  by the time `closeRun` notices no report was filed.
 - **Memory hygiene is instruction, not enforcement.** Nothing scans a claim for a credential before
   it is stored, and an agent's own notebook is active the moment it is written.
 - **Rate limits are per instance.** Several web replicas multiply every limit by the replica count.
@@ -238,8 +249,6 @@ the two webhook routes. Health endpoints are unlimited by design.
 - **The service secret is a single shared bearer.** Any process holding it can call every Convex
   service function. There is no per-service scoping, so a compromised gateway can call
   `services/triage:ingest` or `services/audit:recordFindings` as freely as the worker.
-- **The alert secret is a platform-administrator route.** A workspace administrator cannot set or
-  rotate their own intake secret.
 - **Two copies of the fence.** `lib/server/untrusted.ts` and `convex/shared.ts` implement
   `untrustedBlock` separately because Convex cannot import `node:crypto`. They must be changed
   together.

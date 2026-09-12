@@ -8,6 +8,9 @@ import {
   type TaskStatus,
   type WorkspaceSettings,
 } from '../../lib/contracts';
+import type { AlertPaging } from '../../lib/contracts/triage';
+import type { JobKind } from '../../lib/jobs';
+import { PAGING_SEVERITIES } from '../../lib/paging';
 import type { Id } from '../_generated/dataModel';
 import type { MutationCtx } from '../_generated/server';
 import type { Ctx } from '../shared';
@@ -52,6 +55,7 @@ export async function settingsFor(ctx: Ctx, workspaceId: Id<'workspaces'>): Prom
     _creationTime: _createdAt,
     workspaceId: _workspaceId,
     alertSecretCiphertext: _secret,
+    alertSecretUpdatedAt: _secretUpdatedAt,
     ...values
   } = row;
   return values;
@@ -184,6 +188,10 @@ export interface PlannerAlert {
   createdAt: number;
   /** The task already opened for this alert, if triage has started one. */
   triageTaskId?: string;
+  /** How far the emergency rule has run on this incident, from its notification ledger. */
+  paging: AlertPaging;
+  /** Every page ever recorded for this incident, spent ones included, so a page has a stable key. */
+  pagesSent: number;
 }
 export interface PlannerFinding {
   findingId: string;
@@ -211,11 +219,9 @@ export interface PlannerInput {
   busyEmployeeIds: string[];
 }
 
-export type PlannedJobKind = 'shift' | 'review_shift' | 'meeting_prep' | 'curation' | 'audit' | 'triage';
-/** The queue kinds the worker implements, beyond the ones it already handles. */
-export type JobKind =
-  'start_shift' | 'review_shift' | 'meeting_prep' | 'curation_run' | 'audit_run' | 'triage_run';
-/** The queue kind the worker implements for each planned kind. */
+export type PlannedJobKind =
+  'shift' | 'review_shift' | 'meeting_prep' | 'curation' | 'audit' | 'triage' | 'page';
+/** The queue kind the worker implements for each planned kind; `lib/jobs.ts` names them all. */
 export const JOB_KINDS: Record<PlannedJobKind, JobKind> = {
   shift: 'start_shift',
   review_shift: 'review_shift',
@@ -223,6 +229,7 @@ export const JOB_KINDS: Record<PlannedJobKind, JobKind> = {
   curation: 'curation_run',
   audit: 'audit_run',
   triage: 'triage_run',
+  page: 'page_alert',
 };
 
 /** One job the tick will enqueue. `uniqueKey` is what keeps a run to once per task per date. */
@@ -251,13 +258,23 @@ const SEVERITY_ORDER: Record<Severity, number> = { critical: 0, high: 1, medium:
  * The scheduler, as one pure function over the workspace's clock, caps, and open work.
  *
  * Priority runs triage, preparation, work shifts (findings first, then the earliest deadline),
- * review shifts, curation, and finally audits. Triage preempts: it ignores working hours and the
- * concurrency limit, and stops only at its own allowance. Everything else fits inside the free
- * slots, takes at most one run per instance per tick, and stops at the daily token cap.
+ * review shifts, curation, and finally audits. Triage preempts: it ignores working hours, the
+ * overnight policy, and the concurrency limit, and stops only at its own allowance, because an
+ * incident is why a workspace runs at night at all. Everything else fits inside the free slots,
+ * takes at most one run per instance per tick, and stops at the daily token cap.
+ *
+ * Outside working hours the overnight policy decides what may run: `off` runs nothing, `audits_only`
+ * runs the reserved nights (the audit pass and curation), and `cheap` adds work shifts on the
+ * instance's overnight model. The audit policy decides what an instance with open findings may do:
+ * `soft` puts the findings first that day, `hard` lets it run nothing else until they are cleared.
  */
 export function planTick(input: PlannerInput): PlannedJob[] {
   const { now, settings } = input;
   const working = isWorkingTime(now, settings);
+  const attended = isAttendedTime(now, settings);
+  // Outside working hours the overnight policy is what opens the night at all.
+  const runsWork = working || settings.overnightPolicy === 'cheap';
+  const runsNights = working || settings.overnightPolicy !== 'off';
   const date = shiftDate(now, settings);
   const instances = new Map(input.instances.map((instance) => [instance.employeeId, instance]));
   const unavailable = new Set(input.busyEmployeeIds);
@@ -302,10 +319,39 @@ export function planTick(input: PlannerInput): PlannedJob[] {
     }
   }
 
+  // The pages the emergency rule counts. They are sent outside attended hours, where nobody is
+  // expected to be watching, and re-sent on the re-page interval until three of them stand
+  // unanswered. A page costs no model tokens and no slot, so neither the cap nor the concurrency
+  // limit holds it back; only an acknowledgement stops it.
+  // A page rides the triage instance's standing session by preference: it runs no turn, and the
+  // incident's own task is busy with one exactly when the page matters most.
+  const pager = input.instances.find((instance) => instance.kind === 'triage');
+  if (!attended && pager)
+    for (const alert of input.alerts) {
+      const { paging } = alert;
+      if (!PAGING_SEVERITIES.includes(alert.severity)) continue;
+      if (paging.acknowledged || paging.attempts >= paging.required) continue;
+      if ((paging.nextAttemptAt ?? now) > now) continue;
+      const taskId = pager.standingTaskId ?? alert.triageTaskId;
+      if (!taskId) continue;
+      planned.push({
+        kind: 'page',
+        taskId,
+        employeeId: pager.employeeId,
+        uniqueKey: `page:${alert.alertId}:${alert.pagesSent + 1}`,
+        date,
+        model: pager.model,
+        findingIds: [],
+        alertId: alert.alertId,
+        reason: `page ${paging.attempts + 1} of ${paging.required}: nobody has answered`,
+      });
+    }
+
   if (settings.dailyTokenCap > 0 && input.usageToday >= settings.dailyTokenCap) return planned;
 
   const candidates: PlannedJob[] = [];
-  for (const meeting of [...input.meetings].sort((a, b) => a.startsAt - b.startsAt)) {
+  const meetings = runsWork ? [...input.meetings].sort((a, b) => a.startsAt - b.startsAt) : [];
+  for (const meeting of meetings) {
     if (meeting.startsAt <= now) continue;
     if (workingHoursBetween(now, meeting.startsAt, settings) > PREP_LEAD_HOURS) continue;
     for (const attendee of meeting.attendees) {
@@ -327,8 +373,7 @@ export function planTick(input: PlannerInput): PlannedJob[] {
   }
 
   const open = input.tasks.filter((task) => !CLOSED_STATUSES.includes(task.status));
-  const canWorkNow = working || settings.overnightPolicy === 'cheap';
-  const shifts = canWorkNow
+  const shifts = runsWork
     ? open.filter(
         (task) =>
           task.cadence === 'daily' &&
@@ -378,7 +423,7 @@ export function planTick(input: PlannerInput): PlannedJob[] {
       });
     }
 
-  for (const instance of input.instances) {
+  for (const instance of runsNights ? input.instances : []) {
     if (instance.kind !== 'janitor' || !instance.standingTaskId) continue;
     const batch = Math.floor(input.proposedMemories / CURATION_THRESHOLD);
     if (!batch && working) continue;
@@ -396,7 +441,7 @@ export function planTick(input: PlannerInput): PlannedJob[] {
     });
   }
 
-  if (!working)
+  if (!working && runsNights)
     for (const instance of input.instances) {
       if (instance.kind !== 'auditor' || !instance.auditTaskId) continue;
       candidates.push({
@@ -411,10 +456,32 @@ export function planTick(input: PlannerInput): PlannedJob[] {
       });
     }
 
+  // Under a `hard` audit policy an instance with open findings runs one thing and stops: the shift
+  // the findings lead, which is the first this instance has in the sorted order. Everything else it
+  // might do — another task, a review, a preparation turn, a second shift later in the day — waits
+  // until the findings are addressed. Under `soft` the findings lead the day and hold nothing back.
+  const hard = settings.auditPolicy === 'hard';
+  const clearing = new Map<string, string>();
+  if (hard)
+    for (const candidate of candidates)
+      if (
+        candidate.kind === 'shift' &&
+        findingsByEmployee.has(candidate.employeeId) &&
+        !clearing.has(candidate.employeeId)
+      )
+        clearing.set(candidate.employeeId, candidate.taskId);
+  const workedToday = new Set(
+    open.filter((task) => task.lastShiftDate === date).map((task) => task.employeeId),
+  );
+  const heldByFindings = (candidate: PlannedJob) =>
+    hard &&
+    findingsByEmployee.has(candidate.employeeId) &&
+    (workedToday.has(candidate.employeeId) || clearing.get(candidate.employeeId) !== candidate.taskId);
+
   let slots = Math.max(0, input.freeSlots);
   for (const candidate of candidates) {
     if (slots <= 0) break;
-    if (unavailable.has(candidate.employeeId)) continue;
+    if (unavailable.has(candidate.employeeId) || heldByFindings(candidate)) continue;
     take(candidate);
     slots -= 1;
   }

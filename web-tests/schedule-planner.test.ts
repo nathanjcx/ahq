@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   planTick,
   type PlannedJob,
+  type PlannerAlert,
   type PlannerInput,
   type PlannerInstance,
   type PlannerTask,
@@ -29,6 +30,17 @@ function daily(taskId: string, employeeId: string, extra: Partial<PlannerTask> =
     cadence: 'daily',
     unfinishedDependencies: [],
     model: 'gpt-5.6-terra',
+    ...extra,
+  };
+}
+/** An open alert nobody has been paged about yet. */
+function alert(alertId: string, extra: Partial<PlannerAlert> = {}): PlannerAlert {
+  return {
+    alertId,
+    severity: 'high',
+    createdAt: 1,
+    paging: { attempts: 0, required: 3, acknowledged: false },
+    pagesSent: 0,
     ...extra,
   };
 }
@@ -195,15 +207,24 @@ describe('triage and preparation', () => {
       instances: [responder, worker('ann')],
       tasks: [daily('one', 'ann')],
       alerts: [
-        { alertId: 'low', severity: 'low', createdAt: 1 },
-        { alertId: 'bad', severity: 'critical', createdAt: 2 },
+        alert('low', { severity: 'low' }),
+        alert('bad', { severity: 'critical', createdAt: 2 }),
       ],
     });
     // One responder takes the worst alert first, and the shift still waits for a slot.
     expect(planTick(plan).map((job) => [job.kind, job.alertId, job.uniqueKey])).toEqual([
       ['triage', 'bad', 'triage:bad'],
     ]);
-    expect(planTick({ ...plan, now: mondayNight })).toHaveLength(1);
+    // At night nobody is watching, so the incident worth waking someone for is also paged. The low
+    // one is not: it waits for the morning.
+    expect(
+      planTick({ ...plan, now: mondayNight })
+        .map((job) => [job.kind, job.alertId])
+        .sort(),
+    ).toEqual([
+      ['page', 'bad'],
+      ['triage', 'bad'],
+    ]);
     expect(
       planTick({ ...plan, instances: [responder, worker('two', { kind: 'triage', standingTaskId: 't2' })] }),
     ).toHaveLength(2);
@@ -213,7 +234,7 @@ describe('triage and preparation', () => {
     const jobs = planTick(
       input({
         instances: [responder],
-        alerts: [{ alertId: 'bad', severity: 'high', createdAt: 1, triageTaskId: 'alert-task' }],
+        alerts: [alert('bad', { triageTaskId: 'alert-task' })],
       }),
     );
     expect(jobs[0].taskId).toBe('alert-task');
@@ -251,7 +272,7 @@ describe('caps', () => {
       usageToday: 1_000,
       tasks: [daily('one', 'ann')],
       instances: [worker('ann'), worker('tri', { kind: 'triage', standingTaskId: 'triage-task' })],
-      alerts: [{ alertId: 'bad', severity: 'high', createdAt: 1 }],
+      alerts: [alert('bad')],
     });
     expect(shape(planTick(plan))).toEqual([['triage', 'triage-task']]);
     expect(shape(planTick({ ...plan, usageToday: 999 }))).toEqual([
@@ -265,9 +286,143 @@ describe('caps', () => {
       settings: { ...settings, triageAllowance: 500 },
       triageUsageToday: 500,
       instances: [worker('tri', { kind: 'triage', standingTaskId: 'triage-task' })],
-      alerts: [{ alertId: 'bad', severity: 'high', createdAt: 1 }],
+      alerts: [alert('bad')],
     });
     expect(planTick(plan)).toEqual([]);
     expect(planTick({ ...plan, triageUsageToday: 499 })).toHaveLength(1);
+  });
+});
+
+describe('the emergency rule', () => {
+  const responder = worker('tri', { kind: 'triage', standingTaskId: 'triage-task' });
+  const night = { ...settings, overnightPolicy: 'audits_only' as const };
+
+  it('pages an unanswered incident on the re-page interval until three attempts stand', () => {
+    const at = (attempts: number, lastAttemptAt?: number) =>
+      planTick(
+        input({
+          now: mondayNight,
+          settings: night,
+          instances: [responder],
+          alerts: [
+            alert('bad', {
+              triageTaskId: 'alert-task',
+              pagesSent: attempts,
+              paging: {
+                attempts,
+                required: 3,
+                acknowledged: false,
+                lastAttemptAt,
+                nextAttemptAt: lastAttemptAt === undefined ? mondayNight : lastAttemptAt + 7 * 60_000,
+              },
+            }),
+          ],
+        }),
+      ).filter((job) => job.kind === 'page');
+    // The first page goes out at once, on the responder's standing session rather than on the
+    // incident's own task, which is busy with the turn.
+    expect(at(0).map((job) => [job.taskId, job.uniqueKey])).toEqual([['triage-task', 'page:bad:1']]);
+    // The second waits for the interval, then goes out with the next attempt number.
+    expect(at(1, mondayNight - 60_000)).toEqual([]);
+    expect(at(1, mondayNight - 8 * 60_000).map((job) => job.uniqueKey)).toEqual(['page:bad:2']);
+    expect(at(2, mondayNight - 8 * 60_000).map((job) => job.uniqueKey)).toEqual(['page:bad:3']);
+    // Three attempts is the whole ledger; nothing pages again.
+    expect(at(3, mondayNight - 8 * 60_000)).toEqual([]);
+  });
+
+  it('pages nobody inside attended hours or after an acknowledgement', () => {
+    const paging = { attempts: 1, required: 3, acknowledged: false, lastAttemptAt: monday - 3_600_000 };
+    const attended = input({ instances: [responder], alerts: [alert('bad', { paging })] });
+    expect(planTick(attended).map((job) => job.kind)).toEqual(['triage']);
+    const answered = input({
+      now: mondayNight,
+      settings: night,
+      instances: [responder],
+      alerts: [alert('bad', { paging: { ...paging, acknowledged: true } })],
+    });
+    expect(planTick(answered).map((job) => job.kind)).toEqual(['triage']);
+  });
+});
+
+describe('the overnight policy', () => {
+  const nightly = (overnightPolicy: WorkspaceSettings['overnightPolicy']) =>
+    planTick(
+      input({
+        now: mondayNight,
+        settings: { ...settings, overnightPolicy },
+        tasks: [daily('one', 'ann')],
+        instances: [
+          worker('ann', { overnightModel: 'gpt-5.6-luna' }),
+          worker('aud', { kind: 'auditor', standingTaskId: 'standing', auditTaskId: 'audit-task' }),
+          worker('jan', { kind: 'janitor', standingTaskId: 'janitor-task' }),
+        ],
+      }),
+    );
+
+  it('runs nothing outside working hours when it is off, not even the audit', () => {
+    expect(nightly('off')).toEqual([]);
+  });
+
+  it('runs the reserved nights only when it is audits_only', () => {
+    expect(shape(nightly('audits_only')).sort()).toEqual([
+      ['audit', 'audit-task'],
+      ['curation', 'janitor-task'],
+    ]);
+  });
+
+  it('adds the day’s shifts on the overnight model when it is cheap', () => {
+    const cheap = nightly('cheap');
+    expect(shape(cheap).sort()).toEqual([
+      ['audit', 'audit-task'],
+      ['curation', 'janitor-task'],
+      ['shift', 'one'],
+    ]);
+    expect(cheap.find((job) => job.kind === 'shift')?.model).toBe('gpt-5.6-luna');
+  });
+});
+
+describe('the audit policy', () => {
+  const plan = (auditPolicy: WorkspaceSettings['auditPolicy']) =>
+    input({
+      settings: { ...settings, auditPolicy },
+      tasks: [
+        daily('flagged', 'ann', { deadlineAt: monday + 86_400_000 }),
+        daily('other', 'ann', { deadlineAt: monday + 2 * 86_400_000 }),
+        daily('waiting', 'ann', { status: 'waiting', unfinishedDependencies: ['x'] }),
+        daily('clear', 'bob'),
+      ],
+      instances: [worker('ann'), worker('bob')],
+      findings: [{ findingId: 'f1', employeeId: 'ann' }],
+    });
+
+  it('lets other work follow the findings the same day when it is soft', () => {
+    // One run per instance per tick, so the flagged instance takes its leading shift; the tick after
+    // the shift ends offers the rest of its day.
+    const soft = plan('soft');
+    expect(shape(planTick(soft))).toEqual([
+      ['shift', 'flagged'],
+      ['shift', 'clear'],
+    ]);
+    const later = { ...soft, tasks: soft.tasks.map((task) => task.taskId === 'flagged' ? { ...task, lastShiftDate: '2026-06-01' } : task) };
+    expect(shape(planTick(later))).toEqual([
+      ['shift', 'other'],
+      ['shift', 'clear'],
+    ]);
+  });
+
+  it('runs nothing else for a flagged instance when it is hard', () => {
+    const hard = plan('hard');
+    expect(shape(planTick(hard))).toEqual([
+      ['shift', 'flagged'],
+      ['shift', 'clear'],
+    ]);
+    // Its other tasks and its review shift stay held until the findings are addressed.
+    const later = { ...hard, tasks: hard.tasks.map((task) => task.taskId === 'flagged' ? { ...task, lastShiftDate: '2026-06-01' } : task) };
+    expect(shape(planTick(later))).toEqual([['shift', 'clear']]);
+    // Cleared findings release the day; the instance takes its next task, one run at a time.
+    expect(shape(planTick({ ...later, findings: [] }))).toEqual([
+      ['shift', 'other'],
+      ['shift', 'clear'],
+    ]);
   });
 });

@@ -8,14 +8,14 @@ import { GatewayError, upstreamFailure } from '../errors';
 import type { GatewayRequest } from '../tools';
 import { requireString, untrusted, type InternalTool } from './shared';
 
-/** Delivered, unanswered pages that admit the emergency allow-list. Fewer than this and it stays shut. */
-const EMERGENCY_ATTEMPTS = 3;
-
 export interface TriageAuthority {
   attended: boolean;
   allowList: string[];
   emergencyAllowList: string[];
+  /** Delivered pages nobody has answered since the first of them. */
   unattendedAttempts: number;
+  /** Whether the notification ledger and the clock have opened the emergency allow-list. */
+  emergency: boolean;
 }
 
 interface TriageWriteTarget {
@@ -33,15 +33,13 @@ export function authorityQuery(request: GatewayRequest) {
  * The provider tools a triage run may use right now.
  *
  * The ordinary allow-list is always open for a triage task: that is the authority the workspace
- * granted when it named those tools. The emergency list opens only outside attended hours, after at
- * least three pages were delivered and none was acknowledged. Both are recomputed on every call, so
- * a person acknowledging a page between discovery and use closes the emergency list again.
+ * granted when it named those tools. The emergency list opens only when `services/triage:authority`
+ * says the clock and the notification ledger both admit it — outside attended hours, three delivered
+ * pages standing unanswered for twenty minutes. Both are recomputed on every call, so a person
+ * acknowledging a page between discovery and use closes the emergency list again.
  */
 export function admittedTools(authority: TriageAuthority): { tools: string[]; emergency: string[] } {
-  const emergency =
-    !authority.attended && authority.unattendedAttempts >= EMERGENCY_ATTEMPTS
-      ? authority.emergencyAllowList
-      : [];
+  const emergency = authority.emergency ? authority.emergencyAllowList : [];
   return { tools: [...new Set([...authority.allowList, ...emergency])], emergency };
 }
 
@@ -87,7 +85,38 @@ const resolveAlert: InternalTool = {
   },
 };
 
-export const triageTools = [reportReproduction, resolveAlert];
+/**
+ * The report the emergency rule requires. Filing it is not optional: a run that used the emergency
+ * allow-list and ended without one has a placeholder filed against it at run close and an escalation
+ * posted to the workspace channel, so the gap is on the record either way.
+ */
+const fileIncidentReport: InternalTool = {
+  name: 'file_incident_report',
+  description:
+    'File the incident report the emergency rule requires after you acted without permission: what broke, how you reproduced it, what you changed, why you could not wait for a person, and what it may have knocked over. Mandatory; the platform records its absence.',
+  properties: {
+    issue: { type: 'string', description: 'What was broken, in production terms.' },
+    reproduction: { type: 'string', description: 'How you reproduced it.' },
+    fix: { type: 'string', description: 'What you changed, and how you verified it.' },
+    reason: { type: 'string', description: 'Why you acted without a person’s permission.' },
+    sideEffects: { type: 'string', description: 'What else your change touched.' },
+    risks: { type: 'string', description: 'Knock-on risks a person should watch for.' },
+  },
+  required: ['issue', 'reproduction', 'fix', 'reason', 'sideEffects', 'risks'],
+  async run(request, _context, args) {
+    return request.backend.mutate<Record<string, unknown>>('services/triage:fileIncidentReport', {
+      runToken: request.runToken,
+      issue: requireString(args, 'issue'),
+      reproduction: requireString(args, 'reproduction'),
+      fix: requireString(args, 'fix'),
+      reason: requireString(args, 'reason'),
+      sideEffects: requireString(args, 'sideEffects'),
+      risks: requireString(args, 'risks'),
+    });
+  },
+};
+
+export const triageTools = [reportReproduction, resolveAlert, fileIncidentReport];
 
 /**
  * A provider write a triage run makes directly, without a proposal.
@@ -183,7 +212,7 @@ export async function dispatchTriageWrite(
     ...(emergency.includes(tool)
       ? {
           instruction:
-            'You acted without permission under the emergency rule. Verify the fix, then file the incident report: the issue, the reproduction, the fix, why you acted, and the side effects and knock-on risks.',
+            'You acted without permission under the emergency rule. Verify the fix, then call file_incident_report before this run ends: the issue, the reproduction, the fix, why you acted, and the side effects and knock-on risks. If you do not, the platform files the gap in your name and escalates it.',
         }
       : {}),
   };

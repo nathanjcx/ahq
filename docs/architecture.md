@@ -28,12 +28,15 @@ Every table is in `convex/schema.ts`. The types the interface renders are in `li
 
 | Object    | Table        | Meaning                                                                                                                |
 | --------- | ------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| Floor     | `floors`     | A room and a team: name, brief, `employeeIds`, optional `reserved` (`lobby` or `triage`), archive                      |
-| Project   | `projects`   | A plan across floors: `floorIds`, `status` (`planning`, `active`, `done`, `archived`), the planner's stored `proposal` |
+| Floor     | `floors`     | A room and a team: name, brief, `employeeIds`, optional `reserved` (`triage`), archive                                 |
+| Project   | `projects`   | A plan across floors: `floorIds`, optional `deadlineAt`, `status` (`planning`, `active`, `done`, `archived`), the planner's stored `proposal` |
 | Milestone | `milestones` | An ordered step of a project with `deadlineAt`, `dependsOn` (milestone ids), `status`                                  |
 
-A floor is a place; a project is a plan that spans floors. A task belongs to a floor and may belong
-to a project and a milestone. `convex/lib/projects.ts` validates a roadmap proposal;
+A floor is a place; a project is a plan that spans floors. The only reserved floor is Triage: the
+lobby is a room in the office, not a team, and a task without a floor is simply floorless. A project's
+deadline is a field the planner reads, never a line parsed out of the brief, and `recordProposal`
+raises a prompt for any milestone planned past it. A task belongs to a floor and may belong to a
+project and a milestone. `convex/lib/projects.ts` validates a roadmap proposal;
 `convex/lib/dependencies.ts` holds the graph rules (`topologicalOrder`, `readyToStart`,
 `dependentsOf`, `milestoneStatus`) as pure functions.
 
@@ -95,7 +98,10 @@ six kinds (`fact`, `decision`, `preference`, `procedure`, `glossary`, `status`),
 `channels` are `floor`, `project`, `workspace`, `triage`, and `audit`, keyed by kind and scope id.
 `posts` carry a kind (`note`, `report`, `feedback`, `alert`, `finding`, `decision`, `handoff`,
 `system`), an author that is a person or an instance, an optional `taskId`, an optional `handoff`
-record, an optional `toEmployeeId` for an addressed note, and `reportId` so one report posts once.
+record, an optional `toEmployeeId` for an addressed note, and `reportId` so one report posts once. An
+optional `flag` says what a post is where its kind cannot: `contested` for a claim the janitor
+contested, `incident` for an incident report, `missing` for the placeholder filed when one never
+arrived. Nothing reads a post's text to classify it.
 `channelReads` holds one `lastReadAt` per channel per person, which is what the unread counts read.
 
 Agents read their floor, project, and workspace channels through `read_board` and write through
@@ -111,7 +117,8 @@ confirmed roadmap. `calendar:suggestAgenda` proposes agenda items from what is d
 meeting, what reads behind, contested memory, open findings, and open alerts.
 
 `meetings` moves `preparing` → `ready` → `live` → `closing` → `closed`. `meetingTurns` holds
-`report`, `question`, `answer`, and `outcome` turns. Each attending instance prepares and answers on
+`report`, `question`, `answer`, and `outcome` turns, each with the `usage` it cost, so the boardroom
+prices a question as well as the meeting. Each attending instance prepares and answers on
 its own hidden meeting session task. A question names attendees or goes to everyone; each addressed
 attendee gets one `meeting_answer` job. Closing enqueues one `meeting_wrapup` per attendee, and
 `meetings:finalize` closes the meeting once they have all landed. An outcome is `proposed` until a
@@ -141,19 +148,34 @@ posts the notice to the triage channel and to each affected floor's channel.
 
 `notifications` is the ledger of attempts to reach a person: `channels`, `attempt`, `sentAt`,
 `deliveredAt`, `deliveredChannel`, `acknowledgedAt`. An attempt counts only once a channel reported
-delivery. `pushSubscriptions` stores a browser endpoint with its keys sealed.
+delivery. `pushSubscriptions` stores a browser endpoint with its keys sealed; `lib/server/notify.ts`
+delivers to them by Web Push and prunes the ones a push service reports gone.
+
+The emergency rule lives in one pure place, `lib/paging.ts`, read by the planner that sends the pages,
+the authority query the gateway asks, and the interface that explains the wait. Outside attended hours
+the five-minute tick pages every open, unanswered alert and re-pages it every `REPAGE_INTERVAL_MS`
+(seven minutes) until `EMERGENCY_ATTEMPTS` (three) delivered attempts stand. Attempts count from the
+first page that still stands rather than over a rolling window, so the count only grows while nobody
+answers; an acknowledgement spends every page before it, resets the count, and stops the paging.
 
 Triage authority is decided per call by the gateway from `services/triage:authority`: the workspace's
 `triageAllowList` is always open to a triage task; the `emergencyAllowList` opens only outside
-attended hours once at least three delivered, unacknowledged pages for that alert sit in the last
-twenty minutes. Both lists are recomputed on every call, so an acknowledgement closes the emergency
-list mid-incident.
+attended hours once three delivered, unacknowledged pages stand and the first of them is
+`EMERGENCY_DELAY_MS` (twenty minutes) old. Both lists are recomputed on every call, so an
+acknowledgement closes the emergency list mid-incident.
+
+An emergency call is owed an incident report. The run is expected to call `file_incident_report`,
+which writes a `finding` post flagged `incident` to the triage channel and the affected floors;
+`services/triage:closeRun` runs at the end of every triage turn, and when a succeeded
+emergency-only call has no report it files a placeholder flagged `missing` in the instance's name and
+posts an escalation to the workspace channel.
 
 ### Marketplace and workspace settings
 
 `listings` is the marketplace unit: one per draft, pinned to `currentVersionId`, with `visibility`
 (`published`, `hidden`, `retired`), optional `evidence`, and `hires` and `completedTasks` counters.
-`hireRequests` holds a member's request under the `approval` hiring policy. An instance shows
+`hireRequests` holds a member's request under the `approval` hiring policy, with the `names` and
+`overnightModel` they asked for, so approving it hires what was requested. An instance shows
 `updateAvailable` when its listing has moved on; upgrading re-checks capability readiness and rolls
 back when the new version needs a connection the workspace cannot reach.
 
@@ -175,28 +197,37 @@ jobs, which is what makes the planner testable without a clock.
 
 Priority inside one tick:
 
-1. **Triage**, one run per open alert, severity then age. It ignores working hours and the
-   concurrency limit and stops only at `triageAllowance`.
-2. Everything below stops at `dailyTokenCap` and fits inside `maxConcurrentInstances` minus the
+1. **Triage**, one run per open alert, severity then age. It ignores working hours, the overnight
+   policy, and the concurrency limit, and stops only at `triageAllowance`.
+2. **Pages** for open, unanswered alerts outside attended hours, on the re-page interval. A page runs
+   no model and takes no slot, so neither the token cap nor the concurrency limit holds it back.
+3. Everything below stops at `dailyTokenCap` and fits inside `maxConcurrentInstances` minus the
    shifts already running, one run per instance per tick.
-3. **Meeting preparation** for meetings inside `PREP_LEAD_HOURS` (one working hour).
-4. **Work shifts** for daily tasks with no unfinished dependency and no work shift today, ordered
-   findings-first and then by nearest deadline. Outside working hours these run only when the
-   overnight policy is `cheap`, on the instance's overnight model.
-5. **Review shifts** for waiting tasks, once per working day.
-6. **Curation** for the janitor: nightly, or immediately for each batch of
+4. **Meeting preparation** for meetings inside `PREP_LEAD_HOURS` (one working hour).
+5. **Work shifts** for daily tasks with no unfinished dependency and no work shift today, ordered
+   findings-first and then by nearest deadline.
+6. **Review shifts** for waiting tasks, once per working day.
+7. **Curation** for the janitor: nightly, or immediately for each batch of
    `CURATION_THRESHOLD` (20) proposed claims.
-7. **Audits** outside working hours, in the night's own task.
+8. **Audits** outside working hours, in the night's own task.
 
-Each planned job carries a `uniqueKey` (`shift:<task>:<date>`, `triage:<alert>`,
+Outside working hours `overnightPolicy` decides what runs at all: `off` runs nothing but triage and
+its pages, `audits_only` adds the reserved nights (the audit pass and nightly curation), and `cheap`
+adds work shifts on each instance's overnight model. `auditPolicy` decides what an instance with open
+findings may do: under `soft` the findings lead its day and nothing else is held back; under `hard` it
+runs only the shift that clears them, takes no other run that day, and `startTask` refuses it new work
+until the findings are addressed (reserved staff are exempt, or a finding could never be cleared).
+
+Each planned job carries a `uniqueKey` (`shift:<task>:<date>`, `triage:<alert>`, `page:<alert>:<n>`,
 `meeting_prep:<meeting>:<employee>`, and so on), and `insertJob` returns the existing job for a key
-it has seen, so a repeated tick enqueues nothing twice. `JOB_KINDS` maps the planner's six planned
-kinds onto the worker's queue kinds.
+it has seen, so a repeated tick enqueues nothing twice. `JOB_KINDS` maps each planned kind onto a
+queue kind from `lib/jobs.ts`.
 
 ### Job kinds
 
-`services/types.ts` names every queue kind; `services/worker/turns/index.ts` maps the ones that run a
-model turn. The first four predate the schedule and live in `services/worker/jobs.ts`.
+`lib/jobs.ts` names every queue kind, once, for the planner and the worker both; `services/types.ts`
+re-exports the type and `services/worker/turns/index.ts` maps the kinds the worker dispatches itself.
+The first four predate the schedule and live in `services/worker/jobs.ts`.
 
 | Kind             | Enqueued by                                | What the turn does                                                           |
 | ---------------- | ------------------------------------------ | ---------------------------------------------------------------------------- |
@@ -211,7 +242,8 @@ model turn. The first four predate the schedule and live in `services/worker/job
 | `meeting_wrapup` | `meetings:close`                           | Proposes outcomes as JSON a person confirms                                  |
 | `curation_run`   | Planner (janitor)                          | Merge, contest, archive, promote through `astra_janitor`                     |
 | `audit_run`      | Planner (auditor, after hours)             | `read_reports`, `read_journal`, then `submit_findings`                       |
-| `triage_run`     | Planner, one per open alert                | Reproduce, fix, `resolve_alert`                                              |
+| `triage_run`     | Planner, one per open alert                | Reproduce, fix, `resolve_alert`, and `file_incident_report` after emergency use |
+| `page_alert`     | Planner, outside attended hours            | Records and delivers one page; no model turn                                 |
 | `email_classify` | `services/inbox:ingestInbox` on Gmail mail | Classifies mail into alerts; no tools at all                                 |
 | `plan_project`   | `projects:create` and `projects:replan`    | Proposes a roadmap; creates nothing                                          |
 
@@ -233,7 +265,7 @@ be refused for.
 | `astra_shift`   | `submit_report`, `submit_summary`                                                                 | worker                    |
 | `astra_audit`   | `read_reports`, `read_journal`, `read_artifact`, `read_memory`, `read_channel`, `submit_findings` | auditor only              |
 | `astra_janitor` | `merge`, `contest`, `archive`, `promote`, `read_memory`                                           | janitor only              |
-| `astra_triage`  | `report_reproduction`, `resolve_alert`, plus the admitted provider tools                          | triage only               |
+| `astra_triage`  | `report_reproduction`, `resolve_alert`, `file_incident_report`, plus the admitted provider tools   | triage only               |
 
 `serversFor(employeeKind, taskKind)` is the whole rule: an auditor sees `audit` and nothing else; a
 janitor sees `janitor` and `memory`; triage sees `triage`, `memory`, and its floor; a worker sees
@@ -348,10 +380,11 @@ navigation and render a placeholder (page lands with phase four), as do the per-
    triage rule, or the classifier turn marks a message an incident. `ingestAlert` deduplicates on
    fingerprint: a repeat bumps the count, a new one opens a triage task on the Triage floor and posts
    the notice to triage and to every affected floor.
-2. **The page.** A new `high` or `critical` alert records one notification attempt per reachable
-   person and delivers it.
+2. **The pages.** Outside attended hours the tick plans a `page_alert` for the incident, and another
+   every seven minutes until three delivered attempts stand unanswered. The worker records each
+   attempt and delivers it — Web Push where a person has subscribed, the in-app row otherwise.
 3. **The run.** The next tick plans a `triage_run`, whatever the hour, bounded only by the triage
-   allowance. Outside attended hours with no delivered page yet, the worker pages a person first.
+   allowance. The turn is told how far the ledger has run and whether the emergency list is open.
 4. **Reproduce and fix.** The turn calls `report_reproduction`, which posts to the triage channel and
    the affected floors. It then works the fix. `astra_triage` advertises the workspace's
    `triageAllowList` tools, so opening a pull request executes without a proposal; every gate is
@@ -359,42 +392,31 @@ navigation and render a placeholder (page lands with phase four), as do the per-
    still reviews it as a write, and the resource restriction still holds.
 5. **Attended hours.** Merging and deploying are on the emergency list, which stays shut while a
    person can answer. The tool is refused with `policy_denied` and the reason says so.
-6. **The emergency rule.** Outside attended hours, once three delivered pages for that alert sit
-   unacknowledged in the last twenty minutes, the emergency tools appear, described as what they
-   are. Executing one returns the instruction to verify the fix and file the incident report: the
-   issue, the reproduction, the fix, why it acted without permission, and the knock-on risks. The
-   call is journaled with started and terminal outcomes against the connection it used.
+6. **The emergency rule.** Outside attended hours, once three delivered pages for that alert stand
+   unacknowledged and the first is twenty minutes old, the emergency tools appear, described as what
+   they are. Executing one returns the instruction to verify the fix and call `file_incident_report`
+   in the same run: the issue, the reproduction, the fix, why it acted without permission, the side
+   effects, and the knock-on risks. The call is journaled with started and terminal outcomes against
+   the connection it used. `closeRun` then checks the report exists, and files a placeholder marked
+   `missing` with an escalation to the workspace channel when it does not.
 7. **Close.** `resolve_alert` posts the post-mortem — cause, fix, prevention, regression test — to
    triage and the affected floors, proposes the prevention as a workspace memory claim, and marks the
    alert `fixed`. A person closes the incident; the tool result says so plainly.
 
 ## Known gaps
 
-- **The emergency rule cannot be reached in production.** `triageRun` pages only when the unanswered
-  count is zero, and the count only holds for twenty minutes, so it oscillates between zero and one.
-  Nothing re-pages on a schedule. The three-page path is exercised only because the runtime harness
-  sends the second and third pages itself.
-- **Only the in-app channel delivers.** `push`, `slack`, and `email` in `lib/server/notify.ts` log
-  that they are not configured and report no delivery. Push subscriptions are stored but there is no
-  VAPID key or `web-push` dependency.
+- **Slack and email deliver nothing.** `lib/server/notify.ts` sends `in_app` and `push`; the two
+  connector channels log that they are not configured and report no delivery.
 - **The v4 interface is not built yet.** Projects, Calendar, Records, Audit, and Triage are
   placeholders, and every per-domain action file except `core.ts` is an empty stub, so nothing in the
   browser yet edits the schedule, the policies, a roadmap, a meeting, or memory.
 - **The office activity model is unchanged.** `components/office/activity.ts` still has the nine
   original activities; none of the v4 states (`waiting`, `auditing`, `triaging`, `off_shift`, and the
   rest) exist, and replay covers no memory, meeting, audit, or triage event.
-- **Two job-kind lists.** `convex/lib/schedule.ts` names the planner's six; `services/types.ts` names
-  all fourteen. They are kept in step by hand.
-- **`auditPolicy` is stored and never read.** `soft` is the behaviour either way; `hard` does
-  nothing.
-- **`overnightPolicy: 'off'` still audits.** `planTick` distinguishes `cheap` from everything else
-  for shifts, but the audit branch runs whenever the clock is outside working hours, so `off` and
-  `audits_only` behave the same.
 - **`capacity.instances` counts reserved instances** (`convex/plan.ts`) while the hiring cap counts
   worker instances only (`convex/lib/marketplace.ts`), so the projection and the cap disagree by
   three.
 - **No calendar or transcript export route.** The plan names both; `lib/api/routes.ts` has neither.
-- **The `lobby` reserved floor is only a schema value.** Nothing creates one; a task without a floor
-  is simply floorless.
-- **The `task` memory scope is unreachable from a tool.** `remember` accepts `self`, `floor`, and
-  `project` only.
+- **A task-scoped claim is not injected.** `remember` accepts the `task` scope and `recall` searches
+  it, but `compileInputs` builds the Working memory block from the workspace, project, floor, and
+  agent scopes only, so a task claim has to be recalled rather than read.

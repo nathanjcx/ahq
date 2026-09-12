@@ -733,7 +733,30 @@ it('lets a triage turn open a pull request under the allow-list and nothing more
   scripts.delete('triage_run');
 });
 
-it('opens the emergency allow-list only after three delivered, unacknowledged pages', async () => {
+/** The notifications this workspace has recorded for one alert, oldest first. */
+async function ledger(alertId: string) {
+  return (
+    await t.run(async (ctx) =>
+      ctx.db
+        .query('notifications')
+        .filter((q) => q.eq(q.field('alertId'), alertId))
+        .collect(),
+    )
+  ).sort((a, b) => a.sentAt - b.sentAt);
+}
+
+function triageAuthority(runToken: string) {
+  return t.query(api.services.triage.authority, { secret, runToken });
+}
+
+async function runTokenFor(taskId: string) {
+  return String(await t.run(async (ctx) => (await ctx.db.get(taskId as Id<'tasks'>))?.runToken));
+}
+
+it('re-pages an unanswered incident on the scheduler’s own clock until three attempts stand', async () => {
+  // Outside attended hours, so only the notification ledger stands between the incident and a merge.
+  const firstPageAt = WEDNESDAY_22 + 2 * 3_600_000;
+  vi.setSystemTime(firstPageAt);
   const alert = await t.mutation(api.services.triage.ingest, {
     secret,
     workspaceId: workspaceId as Id<'workspaces'>,
@@ -743,66 +766,149 @@ it('opens the emergency allow-list only after three delivered, unacknowledged pa
     title: 'Payments are down',
     detail: 'Every charge has failed for eleven minutes.',
   });
-  // Outside attended hours, so only the notification ledger stands between the incident and a merge.
-  vi.setSystemTime(WEDNESDAY_22 + 2 * 3_600_000);
+  if (!alert.taskId) throw new Error('Expected a triage task');
+  const runToken = await runTokenFor(String(alert.taskId));
 
-  const attempts: string[] = [];
-  scripts.set('triage_run', async ({ call, list }) => {
-    // The worker's own page is the first attempt; two more are needed.
-    expect(await list('triage')).not.toContain('merge_pull_request');
-    await expect(call('triage', 'merge_pull_request', { number: 41 })).rejects.toThrow(/policy_denied/);
-    for (let page = 0; page < 2; page++) {
-      const rowsOut = await t.mutation(api.services.notifications.attempt, {
-        secret,
-        workspaceId: workspaceId as Id<'workspaces'>,
-        kind: 'triage',
-        title: 'Payments are down',
-        text: 'Nobody has answered. The next attempt opens the emergency allow-list.',
-        alertId: alert.alertId,
-      });
-      for (const row of rowsOut) {
-        await t.mutation(api.services.notifications.markDelivered, {
-          secret,
-          id: row.id,
-          channel: 'in_app',
-        });
-        attempts.push(row.id);
-      }
-    }
+  // The tick sends the first page, and the worker is what delivers it.
+  await runQueue(['page_alert']);
+  expect((await ledger(alert.alertId)).map((row) => [row.attempt, row.deliveredChannel])).toEqual([
+    [1, 'in_app'],
+  ]);
+  // Nothing pages again inside the re-page interval.
+  vi.setSystemTime(firstPageAt + 5 * 60_000);
+  await runQueue(['page_alert']);
+  expect(await ledger(alert.alertId)).toHaveLength(1);
+  vi.setSystemTime(firstPageAt + 8 * 60_000);
+  await runQueue(['page_alert']);
+  vi.setSystemTime(firstPageAt + 16 * 60_000);
+  await runQueue(['page_alert']);
+  expect((await ledger(alert.alertId)).map((row) => row.attempt)).toEqual([1, 2, 3]);
+  // Three is the whole ledger; a fourth tick adds nothing.
+  vi.setSystemTime(firstPageAt + 24 * 60_000);
+  await runQueue(['page_alert']);
+  expect(await ledger(alert.alertId)).toHaveLength(3);
+
+  // The gate waits for the first attempt to be twenty minutes old, not merely for three attempts.
+  vi.setSystemTime(firstPageAt + 16 * 60_000);
+  expect(await triageAuthority(runToken)).toMatchObject({ unattendedAttempts: 3, emergency: false });
+  vi.setSystemTime(firstPageAt + 24 * 60_000);
+  expect(await triageAuthority(runToken)).toMatchObject({ unattendedAttempts: 3, emergency: true });
+
+  // Inside attended hours the same ledger opens nothing.
+  vi.setSystemTime(THURSDAY_10);
+  expect(await triageAuthority(runToken)).toMatchObject({ attended: true, emergency: false });
+  // And nobody is paged while a person is expected to be watching.
+  await runQueue(['page_alert']);
+  expect(await ledger(alert.alertId)).toHaveLength(3);
+
+  // An acknowledgement spends every page sent before it and shuts the gate again.
+  vi.setSystemTime(firstPageAt + 30 * 60_000);
+  await t.mutation(api.services.notifications.acknowledgeForSubject, {
+    secret,
+    subject,
+    id: (await ledger(alert.alertId))[0]._id,
+  });
+  expect(await triageAuthority(runToken)).toMatchObject({ unattendedAttempts: 0, emergency: false });
+  // An answered incident is not paged again: a person is on it.
+  await runQueue(['page_alert']);
+  expect((await ledger(alert.alertId)).map((row) => row.attempt)).toEqual([1, 2, 3]);
+  // The incident leaves the board, so later scenarios plan their own alerts and nothing else.
+  await t.withIdentity(identity(subject)).mutation(api.triage.dismiss, { alertId: alert.alertId });
+});
+
+it('merges under the emergency rule and files the incident report the rule requires', async () => {
+  const openedAt = THURSDAY_10 + 12 * 3_600_000;
+  vi.setSystemTime(openedAt);
+  const alert = await t.mutation(api.services.triage.ingest, {
+    secret,
+    workspaceId: workspaceId as Id<'workspaces'>,
+    source: 'webhook',
+    fingerprint: 'uptime:checkout-total',
+    severity: 'critical',
+    title: 'Order totals are wrong',
+    detail: 'Every order since the deploy is short by the discount.',
+  });
+  if (!alert.taskId) throw new Error('Expected a triage task');
+  const runToken = await runTokenFor(String(alert.taskId));
+  for (let page = 0; page < 3; page++) {
+    vi.setSystemTime(openedAt + page * 8 * 60_000);
+    await runQueue(['page_alert']);
+  }
+  vi.setSystemTime(openedAt + 25 * 60_000);
+  expect(await triageAuthority(runToken)).toMatchObject({ emergency: true });
+
+  scripts.set('triage_run', async ({ call, list, input, job }) => {
+    // A settled incident from an earlier scenario may still have a run queued; this one is ours.
+    if (job.payload.alertId !== alert.alertId) return 'Not this incident.';
+    expect(input).toContain('the emergency allow-list is open');
     expect(await list('triage')).toContain('merge_pull_request');
     const merged = (await call('triage', 'merge_pull_request', { number: 41 })) as {
-      executed: boolean;
       emergency: boolean;
       instruction?: string;
     };
     expect(merged).toMatchObject({ executed: true, emergency: true });
-    expect(merged.instruction).toContain('file the incident report');
-    return 'Merged under the emergency rule; incident report to follow.';
+    expect(merged.instruction).toContain('file_incident_report');
+    await call('triage', 'file_incident_report', {
+      issue: 'Totals were short by the discount after the deploy.',
+      reproduction: 'Any order with a discount code since 21:40.',
+      fix: 'Reverted the discount change and merged the revert.',
+      reason: 'Three pages went unanswered and money was being lost on every order.',
+      sideEffects: 'The discount feature is off until the change is reworked.',
+      risks: 'Orders placed in the window are still wrong and need a backfill.',
+    });
+    return 'Merged the revert under the emergency rule and filed the report.';
   });
   await runQueue(['triage_run']);
 
-  expect(attempts.length).toBeGreaterThanOrEqual(2);
-  expect(provider.calls.some((call) => call.tool === 'merge_pull_request')).toBe(true);
-  const calls = await rows<{ tool: string; outcome: string }>('toolCalls');
+  const reports = await t.withIdentity(identity(subject)).query(api.triage.incidentReports, {});
+  const filed = reports.find((report) => report.alertId === alert.alertId);
+  expect(filed).toMatchObject({ emergency: true, missing: false });
+  expect(filed?.text).toContain('Why it acted without permission');
   expect(
-    calls.filter((row) => row.tool === 'merge_pull_request' && row.outcome === 'succeeded'),
-  ).toHaveLength(1);
+    (await posts()).find((post) => post.flag === 'incident' && post.taskId === alert.taskId),
+  ).toBeTruthy();
+  await t.withIdentity(identity(subject)).mutation(api.triage.dismiss, { alertId: alert.alertId });
+  scripts.delete('triage_run');
+});
 
-  // An acknowledgement closes it again, mid-incident.
-  await t.mutation(api.services.notifications.acknowledgeForSubject, {
-    secret,
-    subject,
-    id: attempts[0] as Id<'notifications'>,
-  });
-  const authority = await t.mutation(api.services.notifications.attempt, {
+it('files the missing report itself and escalates when an emergency run writes none', async () => {
+  const openedAt = THURSDAY_10 + 14 * 3_600_000;
+  vi.setSystemTime(openedAt);
+  const alert = await t.mutation(api.services.triage.ingest, {
     secret,
     workspaceId: workspaceId as Id<'workspaces'>,
-    kind: 'triage',
-    title: 'x',
-    text: 'y',
-    alertId: alert.alertId,
+    source: 'webhook',
+    fingerprint: 'uptime:sessions',
+    severity: 'critical',
+    title: 'Sessions are dropping',
+    detail: 'Every signed-in request has failed for four minutes.',
   });
-  expect(authority.length).toBeGreaterThan(0);
+  if (!alert.taskId) throw new Error('Expected a triage task');
+  for (let page = 0; page < 3; page++) {
+    vi.setSystemTime(openedAt + page * 8 * 60_000);
+    await runQueue(['page_alert']);
+  }
+  vi.setSystemTime(openedAt + 25 * 60_000);
+
+  scripts.set('triage_run', async ({ call, job }) => {
+    if (job.payload.alertId !== alert.alertId) return 'Not this incident.';
+    await call('triage', 'merge_pull_request', { number: 41 });
+    return 'Merged and said nothing about it.';
+  });
+  await runQueue(['triage_run']);
+
+  const placeholder = (
+    await t.withIdentity(identity(subject)).query(api.triage.incidentReports, {})
+  ).find(
+    (report) => report.alertId === alert.alertId,
+  );
+  expect(placeholder).toMatchObject({ emergency: true, missing: true });
+  expect(placeholder?.text).toContain('filed no incident report');
+  const escalation = (await posts()).find(
+    (post) => post.kind === 'system' && post.text.startsWith('Escalation:'),
+  );
+  expect(escalation?.text).toContain('filed no incident report');
+  await t.withIdentity(identity(subject)).mutation(api.triage.dismiss, { alertId: alert.alertId });
   scripts.delete('triage_run');
 });
 

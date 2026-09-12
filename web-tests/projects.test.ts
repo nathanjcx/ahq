@@ -442,6 +442,39 @@ describe('planner inputs', () => {
     ]);
   });
 
+  it('keeps the project deadline as a field and prompts on milestones planned past it', async () => {
+    const { t, user, floorId, employeeId } = await setup();
+    const { projectId } = await user.mutation(api.projects.create, {
+      name: 'Ledger',
+      brief: 'Move invoicing onto the new ledger.',
+      floorIds: [floorId],
+      deadlineAt: 8 * DAY,
+    });
+    expect((await user.query(api.projects.get, { projectId })).deadlineAt).toBe(8 * DAY);
+    // The planner reads the field rather than the brief, and the brief says nothing about a date.
+    expect(
+      (await t.query(api.services.projects.plannerInputs, { secret, projectId })).project,
+    ).toMatchObject({ deadlineAt: 8 * DAY });
+
+    await t.mutation(api.services.projects.recordProposal, {
+      secret,
+      projectId,
+      proposal: roadmap(floorId, employeeId),
+    });
+    expect((await user.query(api.projects.get, { projectId })).proposal?.prompts).toContainEqual({
+      kind: 'deadline',
+      text: 'Milestone "Copy" is due after the project itself. Move it, or move the project deadline.',
+    });
+
+    await user.mutation(api.projects.update, {
+      projectId,
+      name: 'Ledger',
+      brief: 'Move invoicing onto the new ledger.',
+      floorIds: [floorId],
+    });
+    expect((await user.query(api.projects.get, { projectId })).deadlineAt).toBeUndefined();
+  });
+
   it('carries the roadmap’s fields onto the dashboard’s tasks', async () => {
     const { user, floorId, employeeId, projectId } = await setup();
     const { taskIds, milestoneIds } = await user.mutation(api.projects.confirmProposal, {

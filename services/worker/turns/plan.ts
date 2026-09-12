@@ -46,7 +46,7 @@ export async function planProject(runtime: WorkerRuntime, job: Job) {
       untrustedJson(inputs),
       'Estimate from the history you were given. Where there is none, use what you know of the model and say so in the estimate’s confidence. Raise a prompt wherever the plan is tight rather than quietly assuming it works: one instance carrying parallel tasks due the same week, a deadline the hours do not fit, an order that forces work to wait.',
       `Reply with one JSON object of exactly this shape:\n${SHAPE}`,
-      'Every task’s `dependsOn` names task keys from this proposal, and every milestone’s names milestone keys. Deadlines are epoch milliseconds.',
+      'Every task’s `dependsOn` names task keys from this proposal, and every milestone’s names milestone keys. Deadlines are epoch milliseconds. When the project carries a `deadlineAt`, every milestone lands on or before it; if the work does not fit, say so in a prompt rather than planning past it.',
     ],
   });
   const proposal = parseJsonAnswer<RoadmapProposal>(result.text);

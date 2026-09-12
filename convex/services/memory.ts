@@ -120,7 +120,7 @@ export const remember = mutation({
   args: {
     secret: v.string(),
     runToken: v.string(),
-    scope: v.union(v.literal('self'), v.literal('floor'), v.literal('project')),
+    scope: v.union(v.literal('task'), v.literal('self'), v.literal('floor'), v.literal('project')),
     kind: memoryKind,
     text: v.string(),
     tags: v.optional(v.array(v.string())),
@@ -137,11 +137,12 @@ export const remember = mutation({
     if (args.scope === 'floor' && !task.floorId) throw new Error('This task is not on a floor');
     if (args.scope === 'project' && !task.projectId) throw new Error('This task is not on a project');
     const scope = args.scope === 'self' ? 'agent' : args.scope;
-    const scopeId =
-      args.scope === 'self'
-        ? String(task.employeeId)
-        : String(args.scope === 'floor' ? task.floorId : task.projectId);
-    const status = scope === 'agent' ? ('active' as const) : ('proposed' as const);
+    const scopeId = String(
+      { task: task._id, agent: task.employeeId, floor: task.floorId, project: task.projectId }[scope],
+    );
+    // Its own notes take effect at once, whether they are for this task or for every task it runs;
+    // a floor or project claim is a proposal the janitor or a person decides.
+    const status = scope === 'agent' || scope === 'task' ? ('active' as const) : ('proposed' as const);
     const now = Date.now();
     const memoryId = await ctx.db.insert('memories', {
       workspaceId: task.workspaceId,
@@ -444,6 +445,8 @@ export const contest = mutation({
     await insertPost(ctx, {
       channel: await channelFor(ctx, task.workspaceId, ...contestedChannel(entry)),
       kind: 'decision',
+      // The flag is what says this is a contest; nothing has to read the first line to find out.
+      flag: 'contested',
       authorEmployeeId: task.employeeId,
       authorName: task.employeeName,
       text: [

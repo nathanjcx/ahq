@@ -222,6 +222,10 @@ export const hire = mutation({
         listingId: listing._id,
         floorId: args.floorId,
         count,
+        // The names and the overnight model the member asked for ride with the request, so approving
+        // it creates the instances they described rather than numbered defaults on the base model.
+        ...(args.names ? { names: args.names } : {}),
+        ...(args.overnightModel ? { overnightModel: args.overnightModel } : {}),
         requestedBy: actor.subject,
         requestedByName: actor.name,
         status: 'pending',
@@ -259,6 +263,8 @@ export const hireRequests = query({
           listingName: version?.name ?? 'Retired listing',
           floorId: request.floorId,
           count: request.count,
+          names: request.names,
+          overnightModel: request.overnightModel,
           requestedBy: request.requestedBy,
           requestedByName: request.requestedByName,
           status: request.status,
@@ -288,6 +294,8 @@ export const decideHire = mutation({
     const employeeIds = await createInstances(ctx, workspace, listing, request.requestedBy, {
       floorId: request.floorId,
       count: request.count,
+      names: request.names,
+      overnightModel: request.overnightModel,
     });
     return { employeeIds };
   },

@@ -50,41 +50,18 @@ export async function ensureTriageStaff(ctx: MutationCtx, workspace: Doc<'worksp
   return { floor, installation, version };
 }
 
-/**
- * The emergency rule in numbers, shared by the authority query, the gateway, and the interface:
- * attempts stop counting past this window, so an old unanswered page cannot authorize anything, and
- * fewer than this many delivered, unanswered pages leaves the emergency allow-list shut.
- */
-export const ATTEMPT_WINDOW_MS = 20 * 60 * 1_000;
-export const EMERGENCY_ATTEMPTS = 3;
-
 /** An alert is still live until it is closed or dismissed. A settled alert pages nobody. */
 export function isOpenAlert(alert: Doc<'alerts'>) {
   return alert.status === 'open' || alert.status === 'triaging' || alert.status === 'fixed';
 }
 
 /**
- * How far the emergency rule has run for one alert: delivered pages nobody answered inside the
- * window, and when the allow-list opens. Three pages are spaced across the window, so an unanswered
- * incident reaches the third at roughly a window after the first; that is the deadline a person is
- * shown while the pages are still going out.
+ * The tools only the emergency allow-list admits: the ones whose use means triage acted without
+ * permission, and so owes an incident report. A tool on both lists was authorized either way.
  */
-export function pagingState(notifications: Doc<'notifications'>[], now: number) {
-  const live = notifications.filter((row) => row.sentAt >= now - ATTEMPT_WINDOW_MS);
-  const unanswered = live.filter((row) => row.deliveredAt !== undefined && !row.acknowledgedAt);
-  const sentAt = unanswered.map((row) => row.sentAt).sort((a, b) => a - b);
-  const firstAttemptAt = sentAt[0];
-  return {
-    attempts: unanswered.length,
-    required: EMERGENCY_ATTEMPTS,
-    firstAttemptAt,
-    lastAttemptAt: sentAt[sentAt.length - 1],
-    opensAt:
-      sentAt.length >= EMERGENCY_ATTEMPTS
-        ? sentAt[EMERGENCY_ATTEMPTS - 1]
-        : firstAttemptAt === undefined
-          ? undefined
-          : firstAttemptAt + ATTEMPT_WINDOW_MS,
-    acknowledged: live.some((row) => row.acknowledgedAt !== undefined),
-  };
+export function emergencyOnlyTools(settings: {
+  triageAllowList: string[];
+  emergencyAllowList: string[];
+}) {
+  return new Set(settings.emergencyAllowList.filter((tool) => !settings.triageAllowList.includes(tool)));
 }

@@ -1,9 +1,10 @@
 import { v } from 'convex/values';
+import { pagingState } from '../lib/paging';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import { findChannel, recentPosts } from './lib/posts';
 import { ensureSettings, settingsFor } from './lib/schedule';
-import { ensureTriageStaff, isOpenAlert, pagingState } from './lib/triage';
+import { emergencyOnlyTools, ensureTriageStaff, isOpenAlert } from './lib/triage';
 import { cleanText, requireWorkspace, type Ctx } from './shared';
 
 const MAX_RULES = 50;
@@ -196,9 +197,7 @@ export const timeline = query({
     const { workspace } = await requireWorkspace(ctx);
     const alert = await requireAlert(ctx, workspace._id, args.alertId);
     const settings = await settingsFor(ctx, workspace._id);
-    const emergencyOnly = new Set(
-      settings.emergencyAllowList.filter((tool) => !settings.triageAllowList.includes(tool)),
-    );
+    const emergencyOnly = emergencyOnlyTools(settings);
     const entries: {
       id: string;
       at: number;
@@ -284,16 +283,15 @@ export const timeline = query({
 
 /**
  * The post-mortems and incident reports the triage floor has filed, newest first. They are findings
- * in the triage channel; one is an emergency report when its run reached the emergency allow-list.
+ * in the triage channel; one is an emergency report when its run reached the emergency allow-list,
+ * and one is `missing` when the platform filed the placeholder because the run never wrote its own.
  */
 export const incidentReports = query({
   args: {},
   handler: async (ctx) => {
     const { workspace } = await requireWorkspace(ctx);
     const settings = await settingsFor(ctx, workspace._id);
-    const emergencyOnly = new Set(
-      settings.emergencyAllowList.filter((tool) => !settings.triageAllowList.includes(tool)),
-    );
+    const emergencyOnly = emergencyOnlyTools(settings);
     const channel = await findChannel(ctx, workspace._id, 'triage', '');
     if (!channel) return [];
     const posts = await ctx.db
@@ -327,6 +325,7 @@ export const incidentReports = query({
           emergency: calls.some(
             (call) => emergencyOnly.has(call.tool) && call.outcome === 'succeeded',
           ),
+          missing: post.flag === 'missing',
           createdAt: post._creationTime,
         };
       }),
@@ -335,13 +334,15 @@ export const incidentReports = query({
 });
 
 /**
- * How alerts get in: the signed endpoint's readiness, the GitHub rules, and whether mail is being
- * classified. The signing secret itself is never returned — it is written once and only sealed.
+ * How alerts get in: whether the signed endpoint has a secret and when it last changed, the GitHub
+ * rules, and whether mail is being classified. The secret itself is never returned; it is written
+ * sealed and read back only by the web service that verifies a signature.
  */
 export const intake = query({
   args: {},
   returns: v.object({
     signedEndpointReady: v.boolean(),
+    secretUpdatedAt: v.optional(v.number()),
     rules: v.array(v.string()),
     github: v.array(v.string()),
     emailClassification: v.boolean(),
@@ -360,6 +361,8 @@ export const intake = query({
     const connected = connections.filter((row) => row.status === 'connected');
     return {
       signedEndpointReady: Boolean(stored?.alertSecretCiphertext),
+      // When it last changed, which is the only thing about the secret a person may read back.
+      secretUpdatedAt: stored?.alertSecretUpdatedAt,
       rules: settings.triageRules ?? [],
       github: connected
         .filter((row) => row.provider === 'github')

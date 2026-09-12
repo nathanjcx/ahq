@@ -11,6 +11,7 @@ import {
 } from '../shared';
 import { assertAcyclic, dependentsOf, readyToStart } from './dependencies';
 import { systemPost } from './posts';
+import { settingsFor } from './schedule';
 
 /** Task fields the roadmap and the dependency graph add to plain task creation. */
 export type TaskPlan = {
@@ -88,6 +89,33 @@ export async function assertTokenCap(ctx: Ctx, workspace: Doc<'workspaces'>) {
   const rows = await periodUsage(ctx, workspace._id);
   const used = rows.reduce((total, row) => total + row.input + row.output, 0);
   if (used >= workspace.monthlyTokenCap) throw new Error('Monthly token cap reached');
+}
+
+/**
+ * Under a `hard` audit policy an instance with open findings runs nothing else until they are
+ * addressed, so it takes no new work either: the planner holds its day and this holds its queue.
+ * Reserved staff are exempt, because the audit, curation, and triage runs are how a finding is
+ * addressed at all, and a workspace that blocked those could never clear one.
+ */
+export async function assertFindingsCleared(
+  ctx: Ctx,
+  workspace: Doc<'workspaces'>,
+  employeeId: Id<'installations'>,
+) {
+  const settings = await settingsFor(ctx, workspace._id);
+  if (settings.auditPolicy !== 'hard') return;
+  const installation = await ctx.db.get(employeeId);
+  if (!installation || (installation.kind ?? 'worker') !== 'worker') return;
+  for (const status of ['open', 'escalated'] as const) {
+    const finding = await ctx.db
+      .query('auditFindings')
+      .withIndex('by_employee_status', (q) => q.eq('employeeId', employeeId).eq('status', status))
+      .first();
+    if (finding)
+      throw new Error(
+        'This instance has audit findings to address, and this workspace’s audit policy holds its other work until they are',
+      );
+  }
 }
 
 export async function insertJob(
@@ -243,6 +271,7 @@ export async function startTask(
     jobPayload?: Record<string, unknown>;
   } & TaskPlan,
 ) {
+  await assertFindingsCleared(ctx, input.workspace, input.employeeId);
   const now = Date.now();
   const title = cleanText(input.title, 'Title', 200);
   const prompt = cleanText(input.prompt, 'Prompt', 50_000);

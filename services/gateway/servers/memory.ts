@@ -26,7 +26,11 @@ const remember: InternalTool = {
   description:
     'File one atomic claim a later shift would be wrong without. Your own notes take effect at once; a floor or project claim is a proposal a person or the janitor decides. Never record a credential or anything told in confidence.',
   properties: {
-    scope: { type: 'string', description: 'self, floor, or project.' },
+    scope: {
+      type: 'string',
+      description:
+        'task for this task alone, self for every task you run, floor, or project. A task claim is searchable with recall; a self claim is compiled into your working memory.',
+    },
     kind: { type: 'string', description: `One of ${KINDS.join(', ')}.` },
     text: { type: 'string', description: 'The claim, in one or two sentences.' },
     tags: { type: 'array', description: 'Search tags.', items: { type: 'string' } },
@@ -36,8 +40,8 @@ const remember: InternalTool = {
   required: ['scope', 'kind', 'text'],
   async run(request, _context, args) {
     const scope = requireString(args, 'scope');
-    if (!['self', 'floor', 'project'].includes(scope))
-      throw new GatewayError('invalid_arguments', 'scope must be self, floor, or project.');
+    if (!['task', 'self', 'floor', 'project'].includes(scope))
+      throw new GatewayError('invalid_arguments', 'scope must be task, self, floor, or project.');
     return request.backend.mutate<Record<string, unknown>>('services/memory:remember', {
       runToken: request.runToken,
       scope,

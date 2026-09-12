@@ -272,11 +272,26 @@ describe('hiring policy', () => {
     });
     await saveSettings(owner, { hiringPolicy: 'approval' });
 
-    const requested = await member.mutation(api.marketplace.hire, { listingId, floorId, count: 2 });
+    const requested = await member.mutation(api.marketplace.hire, {
+      listingId,
+      floorId,
+      count: 2,
+      names: ['Ada on Launch', 'Ada on Copy'],
+      overnightModel: 'gpt-5.6-luna',
+    });
     expect(requested.employeeIds).toEqual([]);
     expect(await owner.query(api.workspace.dashboard, {})).toMatchObject({ employees: [] });
+    // The names and the overnight model wait with the request, so approving it hires what was asked for.
     expect(await member.query(api.marketplace.hireRequests, {})).toMatchObject([
-      { listingName: 'Ada', count: 2, status: 'pending', requestedBy: 'member', floorId },
+      {
+        listingName: 'Ada',
+        count: 2,
+        status: 'pending',
+        requestedBy: 'member',
+        floorId,
+        names: ['Ada on Launch', 'Ada on Copy'],
+        overnightModel: 'gpt-5.6-luna',
+      },
     ]);
     const [request] = await owner.query(api.marketplace.hireRequests, {});
     await expect(
@@ -288,6 +303,13 @@ describe('hiring policy', () => {
       approved: true,
     });
     expect(decided.employeeIds).toHaveLength(2);
+    expect((await owner.query(api.workspace.dashboard, {})).employees.map((one) => one.name)).toEqual([
+      'Ada on Launch',
+      'Ada on Copy',
+    ]);
+    expect(
+      (await owner.query(api.marketplace.instanceStatus, {})).map((one) => one.overnightModel),
+    ).toEqual(['gpt-5.6-luna', 'gpt-5.6-luna']);
     expect((await owner.query(api.workspace.dashboard, {})).floors[0]?.employeeIds).toEqual(
       decided.employeeIds,
     );

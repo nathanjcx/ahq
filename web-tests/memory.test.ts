@@ -79,6 +79,31 @@ describe('workspace memory', () => {
     ).toEqual(expect.objectContaining({ active: 1, proposed: 0, contested: 0, budget: 4_000 }));
   });
 
+  it('files a claim for this task alone, active at once and found by recall', async () => {
+    const t = harness();
+    const { runToken, taskId } = await tower(t);
+
+    const { memoryId, status } = await t.mutation(
+      api.services.memory.remember,
+      claim(runToken, 'The staging database for this migration is the one named shadow.', {
+        scope: 'task',
+        kind: 'fact',
+        tags: ['migration'],
+      }),
+    );
+    expect(status).toBe('active');
+    expect(await t.run(async (ctx) => ctx.db.get(memoryId))).toMatchObject({
+      scope: 'task',
+      scopeId: taskId,
+      status: 'active',
+    });
+    expect(
+      (await t.query(api.services.memory.recall, { secret, runToken, query: 'shadow' })).map(
+        (entry) => entry.scope,
+      ),
+    ).toEqual(['task']);
+  });
+
   it('supersedes a replaced claim and keeps the notebook inside its budget', async () => {
     const t = harness();
     const { owner, runToken, employeeId } = await tower(t);
@@ -205,7 +230,8 @@ describe('workspace memory', () => {
     const [question] = (await owner.query(api.channels.posts, { channelId })).filter(
       (post) => post.kind === 'decision',
     );
-    expect(question).toMatchObject({ authorName: 'The Janitor' });
+    // The flag is what marks a contest, so nothing has to read the post's first line to know.
+    expect(question).toMatchObject({ authorName: 'The Janitor', flag: 'contested' });
     expect(question.text).toContain('Contested: We ship on Thursday.');
     expect(question.text).toContain('Against: We ship on Friday.');
     expect(question.text).toContain('Reason: Two ship dates.');
