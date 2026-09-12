@@ -17,3 +17,16 @@ Branch `platform-v4`, commit `f99ef34`.
 ## Phase 2: backend (in progress)
 
 Five Opus agents in isolated worktrees: memory and janitor; schedule, calendar, plan; projects, roadmap, dependencies; meetings and audit findings; channels, alerts, notifications, triage. Known reconciliation points at integration: `ensureReservedInstance` (memory, meetings, channels each carry a copy), `isAttendedTime` (schedule owns `lib/time.ts`; triage carries a private copy), `Dashboard` contract additions from the schedule workstream, additive schema changes reported by each agent.
+
+### Merged so far
+
+- `agent/memory` (commit `6fc05cd`): memory tables, people and janitor operations, the working memory compiler, 11 new tests. Follow-up in flight: `contest` names the competing entry.
+- `agent/meetings` (commit `ee8e5b3`): meetings engine on hidden per-attendee session tasks, audit findings lifecycle, `ensureReservedInstance`. Job kinds for the worker: `meeting_prep`, `meeting_answer`, `meeting_wrapup`, `audit_run`.
+
+### Reconciliation list for the end of phase 2
+
+- `tasks.kind` field (`work | meeting | audit | curation | triage`) so the dashboard hides session-only tasks; one shared "session task without a start job" helper in `convex/lib/tasks.ts` for meetings, audits, curation, and triage.
+- Janitor creation onto `ensureReservedInstance` (convex/lib/audit.ts); triage's private copy too.
+- Marketplace list must exclude reserved versions (`category: 'Reserved'`).
+- Findings and escalations posted to channels once the channels module lands; the calendar must consume `confirmOutcome`'s `meetingRequest`.
+- The scheduler must call `ensureMeeting` at the prep lead, `ensureAuditRun` after hours, `ensureJanitor` per workspace, and order shifts with `openFindingsFor`.
