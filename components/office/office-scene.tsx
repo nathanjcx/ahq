@@ -329,8 +329,8 @@ export function OfficeScene({
   // A boardroom only holds the meeting's attendees, in the order they were invited.
   const present = useMemo(() => {
     if (room !== 'boardroom') return active;
-    const ids = meeting?.attendeeIds ?? [];
-    return ids.flatMap((id) => active.filter((employee) => employee.id === id));
+    const byId = new Map(active.map((employee) => [employee.id, employee]));
+    return (meeting?.attendeeIds ?? []).flatMap((id) => byId.get(id) ?? []);
   }, [room, active, meeting]);
   const desks = useMemo(() => deskGrid(present.length), [present.length]);
   const people: Placed[] = useMemo(() => {

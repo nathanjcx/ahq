@@ -145,7 +145,7 @@ function RecordsShelf({ shelf, onSelectProp }: { shelf: ShelfPlacement; onSelect
                 <Box
                   p={[-0.55, y + 0.14, 0.35]}
                   s={[0.42, 0.1, 0.02]}
-                  color={row * 9 < filled ? color : '#dcd8c4'}
+                  color={row * SHELF_SLOTS < filled ? color : '#dcd8c4'}
                 />
               </group>
             ) : doors && row > 1 ? (
