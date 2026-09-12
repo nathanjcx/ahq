@@ -60,7 +60,7 @@ leave the hours inconsistent, and only a workspace owner or admin may call it.
 | `triageAllowance`                       | 500,000                                                                   | Today's triage tokens; triage stops here and nowhere else   |
 | `memoryBudgets`                         | workspace 2,000, project 3,000, floor 4,000, agent 1,500, summaries 1,500 | Estimated tokens per section                                |
 | `hiringPolicy`                          | `anyone`                                                                  | `anyone`, `admins`, or `approval`                           |
-| `auditPolicy`                           | `soft`                                                                    | Stored; nothing reads it today                              |
+| `auditPolicy`                           | `soft`                                                                    | `soft` leads the day with findings; `hard` holds other work  |
 | `triageRules`                           | empty                                                                     | GitHub labels or keywords that make a delivery an alert     |
 | `triageAllowList`                       | empty                                                                     | Tools a triage run executes without a proposal              |
 | `emergencyAllowList`                    | empty                                                                     | Tools the emergency rule admits                             |
@@ -76,8 +76,17 @@ whether a person is expected to be reachable, which is the gate on the emergency
 pure and take the zone explicitly (`lib/time.ts`), so the planner, Convex, and the browser answer the
 same question the same way; DST is resolved in two passes so an hour lands on the real instant.
 
-**Overnight.** `cheap` lets work shifts run outside hours on each instance's `overnightModel`.
-`audits_only` and `off` both stop work shifts; today they also both still run the nightly audit.
+**Overnight.** Outside working hours the policy decides what runs at all. `off` runs nothing: no
+shifts, no nightly audit, no curation. `audits_only` runs the reserved nights — the audit pass and the
+janitor's curation — and no work. `cheap` adds work shifts on each instance's `overnightModel`. An
+incident is exempt from all three: triage and its pages run whatever the hour, because that is what a
+night is for.
+
+**Findings.** Under `soft`, an instance with open findings takes them first that day and its other
+work follows. Under `hard` it runs only the shift that clears them: no second task, no review shift,
+no preparation turn, and `tasks:create` refuses it new work until the findings are addressed, with
+"audit policy holds its other work". Reserved staff are exempt, or the audit and triage runs that
+clear a finding could never run.
 
 **Caps.** `dailyTokenCap` stops everything except triage on the next tick. `triageAllowance` stops
 triage. The workspace's older `monthlyTokenCap` still refuses new task creation, follow-up messages,
@@ -103,8 +112,11 @@ narrow what triage may do. Lists hold at most 50 entries.
 Three ways an alert reaches a workspace. All three go through `ingestAlert`, which deduplicates on
 fingerprint: a repeat bumps `occurrences` on the open alert and changes nothing else.
 
-**Signed webhook.** A platform administrator sets the workspace's alert secret through
-`/api/admin/alert-secret`. Senders post to `/api/alerts` with:
+**Signed webhook.** A workspace owner or administrator sets the workspace's alert secret. The web
+route seals the plaintext and calls `services/triage:setAlertSecretForActor`, which decides the role
+from the caller's own Clerk claims; passing no ciphertext clears the secret and closes the endpoint.
+`triage:intake` reports whether a secret is set and when it last changed, and never the secret itself.
+Senders post to `/api/alerts` with:
 
 ```text
 POST https://your-web-origin.example.com/api/alerts
@@ -116,8 +128,8 @@ x-astra-signature: hex(HMAC_SHA256(secret, timestamp + "." + rawBody))
 The body is `{ source, fingerprint, severity, title, detail, url?, floorIds? }`; `severity` is `low`,
 `medium`, `high`, or `critical`, `url` must be HTTPS, and `detail` is capped at 10,000 characters.
 The timestamp must be within five minutes, the body at most 100 KB, and the rate limit is 120 per
-workspace per window. A new `high` or `critical` alert records and delivers one notification attempt
-per reachable person. The response is `{ accepted: true, alertId, duplicate }`.
+workspace per window. A new `high` or `critical` alert records and delivers one notification
+attempt per reachable person; outside attended hours the scheduler keeps paging from there. The response is `{ accepted: true, alertId, duplicate }`.
 
 **GitHub.** The existing native webhook at `/api/webhooks/native/github` also feeds triage: the
 delivery is matched against each following workspace's `triageRules`, case-insensitively, against the
@@ -136,9 +148,19 @@ the caller delivers them. Reachable means the owner of a personal workspace plus
 a floor or a project here; Convex has no membership list of its own.
 
 An attempt counts only once a channel reports delivery, and the first channel that lands marks the
-row. Today only `in_app` delivers: `push`, `slack`, and `email` log that they are not configured and
-report nothing. Push subscriptions are stored sealed, so enabling push is a dependency and a VAPID
-key pair rather than a migration.
+row. Channels are tried in the order `push`, `slack`, `email`, `in_app`, whatever order the workspace
+listed them, so a real transport is tried before the database row that always lands.
+
+`push` is Web Push through the `web-push` package. It needs three environment variables on the worker
+and the web service — `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` (a `mailto:`
+address or your origin, which is how a push service reaches you about your own notifications).
+Generate the pair once with `npx web-push generate-vapid-keys` and keep the private key out of the
+browser. Without all three, push is off and says so in the log. Subscriptions are stored with their
+keys sealed; an endpoint that answers 404 or 410 is deleted rather than retried.
+
+`slack` and `email` deliver nothing: they are connector stubs that log that they are not configured
+and report no delivery. A workspace that lists only those channels never records a delivered
+attempt, which means the emergency rule never opens for it.
 
 Acknowledging a notification — `/api/notifications/<id>/ack` or `notifications:acknowledge` — is what
 the emergency rule counts as an answer.
@@ -148,19 +170,23 @@ the emergency rule counts as an answer.
 A triage run's provider tools are decided per call by the gateway from `services/triage:authority`:
 
 - The **triage allow-list** is always open to a triage task. Those tools execute without a proposal.
-- The **emergency allow-list** opens only when the clock is outside attended hours _and_ at least
-  three delivered, unacknowledged notification attempts for that alert sit in the last twenty
-  minutes. Attempts older than twenty minutes stop counting, so an old unanswered page cannot
-  authorize anything.
+- The **emergency allow-list** opens only when the clock is outside attended hours _and_ three
+  delivered, unacknowledged notification attempts for that alert stand _and_ the first of them is at
+  least twenty minutes old. Attempts count from the first page that still stands, not over a rolling
+  window, so the count grows while nobody answers and never oscillates.
 - Both are recomputed on every call. A person acknowledging a page between discovery and use closes
-  the emergency list again mid-incident.
+  the emergency list again mid-incident: every page sent before the answer is spent, the count starts
+  again from zero, and the scheduler stops paging that incident.
 - Every emergency call is journaled with started and terminal outcomes against the connection it
-  used, and the tool result instructs the agent to verify the fix and file the incident report.
+  used, and the tool result instructs the agent to verify the fix and call `file_incident_report`
+  before the run ends.
+- A run that used the emergency list and filed no report gets one filed for it: `closeRun` writes a
+  placeholder marked `missing` in the instance's name and posts an escalation to the workspace
+  channel. Watch the workspace channel for `Escalation:` lines.
 
-Today nothing in production sends the second and third page: the worker pages once, when the
-unanswered count is zero, and no cron re-pages. Treat the emergency path as unreachable without an
-operator sending further attempts. Merging and deploying inside attended hours need a person, as
-ordinary proposals.
+The pages are the scheduler's, not the worker's: outside attended hours each five-minute tick plans a
+`page_alert` for every open, unanswered incident, re-paging every seven minutes until three delivered
+attempts stand. Merging and deploying inside attended hours need a person, as ordinary proposals.
 
 ## The crons
 
@@ -301,13 +327,8 @@ functions first, then the three services on the same commit.
 
 ## Known gaps
 
-- The emergency notification path stops at one page in production; see
-  [Triage authority](#triage-authority).
-- Only the in-app notification channel delivers.
-- `auditPolicy` is stored and never read; `overnightPolicy: 'off'` still runs the nightly audit.
+- Slack and email notification channels deliver nothing; see [Notifications](#notifications).
 - There is no interface yet for the schedule, the policies, the allow-lists, the standards text, or
   memory administration: `schedule:updateSettings`, `memory:*`, `triage:setRules`, and the rest exist
   as Convex functions with no page behind them (page lands with phase four). Until then they are set
   through the Convex dashboard or a script.
-- The alert secret is written through `/api/admin/alert-secret`, which requires a _platform_
-  administrator, not a workspace administrator.
