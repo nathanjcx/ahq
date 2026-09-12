@@ -53,12 +53,14 @@ function publicTask(task: Doc<'tasks'>) {
     prompt: task.prompt,
     status: task.status,
     kind: task.kind ?? 'work',
+    cadence: task.cadence,
     projectId: task.projectId,
     sessionId: task.sessionId,
     model: task.model,
     createdBy: task.createdBy,
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
+    usage: task.usage,
   };
 }
 

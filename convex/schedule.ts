@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
 import type { ModelRate, WorkspaceSettings } from '../lib/contracts';
+import { PAGING_TRANSPORTS } from '../lib/paging';
 import { isValidTimezone } from '../lib/time';
 import { mutation, query } from './_generated/server';
 import { scheduleSummaryFor, settingsFor } from './lib/schedule';
@@ -8,7 +9,7 @@ import { hiringPolicy, model, overnightPolicy } from './schema';
 import { cleanText, requireWorkspace, type DbCtx } from './shared';
 
 /** Ways a person can be reached; the triage workstream delivers them. */
-const NOTIFICATION_CHANNELS = ['in_app', 'push', 'slack', 'email'];
+const NOTIFICATION_CHANNELS = ['in_app', ...PAGING_TRANSPORTS];
 const MAX_LIST_ENTRIES = 50;
 
 function wholeHour(value: number, field: string) {
@@ -63,8 +64,19 @@ async function validate(ctx: DbCtx, input: Omit<WorkspaceSettings, 'updatedAt'>)
   if (attendedStartHour < startHour || attendedEndHour > endHour)
     throw new Error('Attended hours must sit inside working hours');
   if (input.maxConcurrentInstances < 1) throw new Error('A workspace needs at least one concurrent instance');
-  for (const channel of input.notificationChannels)
+  const notificationChannels = [...new Set(input.notificationChannels)];
+  for (const channel of notificationChannels)
     if (!NOTIFICATION_CHANNELS.includes(channel)) throw new Error(`Unknown notification channel: ${channel}`);
+  // The emergency rule counts pages a channel delivered, and the in-app row always lands whether or
+  // not anybody looked at it. A workspace that names emergency tools has to have a channel that leaves
+  // the building, or merge and deploy would open on three database writes nobody read.
+  if (
+    input.emergencyAllowList.length &&
+    !notificationChannels.some((channel) => PAGING_TRANSPORTS.includes(channel))
+  )
+    throw new Error(
+      'The emergency allow-list needs a notification channel that reaches a person away from the app: add push, slack, or email',
+    );
   await assertToolNames(ctx, input.triageAllowList, 'The triage allow-list');
   await assertToolNames(ctx, input.emergencyAllowList, 'The emergency allow-list');
   assertRates(input.rates);
@@ -90,7 +102,7 @@ async function validate(ctx: DbCtx, input: Omit<WorkspaceSettings, 'updatedAt'>)
     auditPolicy: input.auditPolicy,
     triageAllowList: input.triageAllowList,
     emergencyAllowList: input.emergencyAllowList,
-    notificationChannels: [...new Set(input.notificationChannels)],
+    notificationChannels,
     plan: input.plan,
     monthlyAllowance: nonNegative(input.monthlyAllowance, 'The monthly allowance'),
     maxConcurrentInstances: nonNegative(input.maxConcurrentInstances, 'Concurrent instances'),

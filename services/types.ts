@@ -1,4 +1,5 @@
 import type {
+  Cadence,
   Capability,
   CorrectionDescriptor,
   EmployeeKind,
@@ -57,11 +58,17 @@ export interface TaskContext {
     prompt: string;
     status: TaskStatus;
     kind: TaskKind;
+    cadence?: Cadence;
     projectId?: string;
     sessionId?: string;
     model: ModelId;
     createdBy: string;
     createdAt: number;
+    /**
+     * Session tokens recorded before this turn. A session's reported usage is cumulative, so a turn
+     * that wants its own cost subtracts this from what the session reports afterwards.
+     */
+    usage?: { input: number; cached: number; output: number };
   };
   employee: { id: string; name: string; kind: EmployeeKind };
   employeeVersion: {

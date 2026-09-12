@@ -62,7 +62,9 @@ function meetingPrompt(entry: Doc<'calendarEntries'>) {
   const lines = [
     `You are attending the meeting "${entry.title}".`,
     entry.purpose ? `Purpose: ${entry.purpose}` : '',
-    entry.agenda.length ? `Agenda:\n${entry.agenda.map((item) => `- ${item}`).join('\n')}` : '',
+    // Agenda items are suggested from the work, escalated from audit findings, or typed by a person.
+    // Fenced here because this prompt is written in Convex and reaches the model unchanged.
+    entry.agenda.length ? `Agenda:\n${untrustedBlock(entry.agenda.join('\n'))}` : '',
     entry.attendees.length ? `Attendees: ${entry.attendees.map((one) => one.name).join(', ')}.` : '',
     'This session carries your preparation, your answers, and your wrap-up for this meeting.',
   ];

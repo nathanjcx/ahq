@@ -1,9 +1,10 @@
 import { mutate, query } from '../../../lib/server/backend';
-import { untrustedJson } from '../../../lib/server/untrusted';
+import { untrustedBlock, untrustedJson } from '../../../lib/server/untrusted';
 import { GatewayError } from '../../gateway/errors';
-import type { Job } from '../../types';
+import type { Job, TaskContext } from '../../types';
 import type { WorkerRuntime } from '../state';
 import { parseJsonAnswer, payload, runTurn, taskContext } from './context';
+import type { TurnResult } from './runner';
 
 /**
  * Fields `services/meetings:*Inputs` already fenced inside Convex. They arrive wrapped and are
@@ -32,6 +33,25 @@ interface Outcome {
 
 const OUTCOME_KINDS = ['task', 'deadline', 'meeting', 'note'];
 
+/**
+ * What this turn cost, out of a session total that counts every turn before it.
+ *
+ * An attendee prepares, answers each question, and wraps up on one session, and the session reports
+ * its tokens cumulatively. Recording that figure as the answer's own cost would charge the second
+ * answer for the preparation and the first answer as well, and the meeting's total would compound it.
+ * The task carries what has already been recorded, so the difference is this turn's share.
+ */
+function turnUsage(context: TaskContext, result: TurnResult) {
+  if (!result.usage) return undefined;
+  const before = context.task.usage ?? { input: 0, cached: 0, output: 0 };
+  const usage = {
+    input: Math.max(0, result.usage.input - before.input),
+    cached: Math.max(0, result.usage.cached - before.cached),
+    output: Math.max(0, result.usage.output - before.output),
+  };
+  return usage.input || usage.cached || usage.output ? usage : undefined;
+}
+
 function requireMeeting(job: Job) {
   const input = payload(job);
   if (!input.meetingId || !input.employeeId)
@@ -46,7 +66,9 @@ function meetingSection(inputs: MeetingInputs) {
     lines: [
       `- ${inputs.entry.title} at ${new Date(inputs.entry.startsAt).toISOString().slice(0, 16)}`,
       `- Purpose: ${inputs.entry.purpose}`,
-      ...inputs.entry.agenda.map((item) => `- Agenda: ${item}`),
+      // Agenda lines come from suggestions, from escalated audit findings, and from whoever edited
+      // them. They are material to prepare against, never instruction.
+      ...(inputs.entry.agenda.length ? ['- Agenda:', untrustedBlock(inputs.entry.agenda.join('\n'))] : []),
       `- Attending: ${inputs.attendees.map((one) => one.name).join(', ')}`,
     ],
   };
@@ -74,8 +96,8 @@ export async function meetingPrep(runtime: WorkerRuntime, job: Job) {
     employeeId: input.employeeId,
     text: result.text || 'No preparation report was produced before the turn ended.',
   });
-  if (result.usage)
-    await mutate('services/meetings:meetingUsage', { meetingId: input.meetingId, usage: result.usage });
+  const usage = turnUsage(context, result);
+  if (usage) await mutate('services/meetings:meetingUsage', { meetingId: input.meetingId, usage });
 }
 
 /** One answer to one question. A question put to everyone gets a short answer. */
@@ -103,12 +125,13 @@ export async function meetingAnswer(runtime: WorkerRuntime, job: Job) {
       'Reply with the answer itself and nothing else.',
     ],
   });
+  const usage = turnUsage(context, result);
   await mutate('services/meetings:recordAnswer', {
     meetingId: input.meetingId,
     turnId: input.turnId,
     employeeId: input.employeeId,
     text: result.text || 'No answer was produced before the turn ended.',
-    ...(result.usage ? { usage: result.usage } : {}),
+    ...(usage ? { usage } : {}),
   });
 }
 
@@ -158,6 +181,6 @@ export async function meetingWrapup(runtime: WorkerRuntime, job: Job) {
     employeeId: input.employeeId,
     outcomes: parseOutcomes(result.text),
   });
-  if (result.usage)
-    await mutate('services/meetings:meetingUsage', { meetingId: input.meetingId, usage: result.usage });
+  const usage = turnUsage(context, result);
+  if (usage) await mutate('services/meetings:meetingUsage', { meetingId: input.meetingId, usage });
 }
