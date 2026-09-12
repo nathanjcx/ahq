@@ -7,6 +7,7 @@ import type { CanvasProps } from '@react-three/fiber';
 import * as THREE from 'three';
 import { OfficeScene, isActiveEmployee } from './office-scene';
 import type { OfficeEmployee, OfficeProvider } from './office-scene';
+import type { LabelMode } from './office-labels';
 import './office-view.css';
 import './office.css';
 
@@ -35,6 +36,8 @@ export type OfficeViewProps = {
   lightBudget?: number;
   /** Local hour, 0 to 24, for day and night. Defaults to the viewer's clock. */
   hour?: number;
+  /** What the legend's Labels control is set to. */
+  labels?: LabelMode;
 };
 
 const ZOOM_MIN = 0.55;
@@ -135,8 +138,10 @@ export default function OfficeView({
   note,
   lightBudget,
   hour,
+  labels = 'names',
 }: OfficeViewProps) {
   const [eventSource, setEventSource] = useState<HTMLDivElement | null>(null);
+  const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
   const [zoom, setZoom] = useState(1);
   const [angle, setAngle] = useState(0);
   const [resetKey, setResetKey] = useState(0);
@@ -171,7 +176,12 @@ export default function OfficeView({
   }, [supported]);
 
   const motion = !reducedMotion && !archived;
-  const fallback = <Fallback employees={employees} onSelect={onSelect} emptyMessage={emptyMessage} />;
+  // The office remembers who was picked, so that figure keeps its label in a crowd.
+  const select = (id: string) => {
+    setSelectedId(id);
+    onSelect?.(id);
+  };
+  const fallback = <Fallback employees={employees} onSelect={select} emptyMessage={emptyMessage} />;
 
   return (
     <div
@@ -308,7 +318,9 @@ export default function OfficeView({
           >
             <OfficeScene
               employees={employees}
-              onSelect={onSelect}
+              onSelect={select}
+              selectedId={selectedId}
+              labels={labels}
               motion={motion}
               zoom={zoom}
               angle={angle}

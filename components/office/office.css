@@ -1,24 +1,100 @@
 /* The live office: speech bubbles, attention pips, and the sound toggle. */
 
-/* One stack above each head: the bubble sits over the label, never across it. */
-.office-stack {
-  display: grid;
-  justify-items: center;
-  gap: 5px;
+/* Every figure's overlay hangs off a zero-size anchor at head height, so the
+   declutter pass can place the pill and the bubble in screen space. */
+.office-anchor {
+  position: relative;
+  width: 0;
+  height: 0;
 }
 
-.office-bubble {
-  position: relative;
+/* One pill per figure: a status dot, a first name, the person's colour. */
+.office-pill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, calc(-50% + var(--label-lift, 0px)));
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 5px;
-  width: max-content;
-  max-width: 196px;
-  min-width: 96px;
   margin: 0;
-  padding: 7px 9px 8px;
+  padding: 4px 9px 4px 7px;
+  border: 1px solid #ffffff2e;
+  border-left: 3px solid var(--person-color, #7fb069);
+  border-radius: 999px;
+  background: #19342fe6;
+  color: #f0f1df;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px #07161240;
+  cursor: pointer;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+/* Covered by four other pills: gone, until it is hovered, focused or picked. */
+.office-pill[data-covered='true'] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.office-pill:focus-visible {
+  outline: 2px solid #d8b576;
+  outline-offset: 2px;
+}
+
+.office-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #9fae9b;
+}
+
+.office-pill[data-status='working'] .office-pill-dot {
+  background: #8ec87f;
+  box-shadow: 0 0 7px #8ec87f80;
+}
+
+.office-pill[data-status='attention'] .office-pill-dot {
+  background: #e0b262;
+  box-shadow: 0 0 7px #e0b26290;
+  animation: office-attention-pulse 1.6s ease-in-out infinite;
+}
+
+/* One line, on the side of the figure that has room for it. */
+.office-bubble {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: max-content;
+  max-width: 200px;
+  transform: translate(15px, -50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.45s ease;
+}
+
+.office-bubble[data-side='left'] {
+  transform: translate(calc(-100% - 15px), -50%);
+}
+
+.office-bubble[data-visible='true'] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.office-bubble > button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  margin: 0;
+  padding: 7px 9px 8px 10px;
   border: 1px solid #d7e0d1;
-  border-bottom-color: var(--bubble-color, #9cb094);
+  border-left: 3px solid var(--bubble-color, #9cb094);
   border-radius: 9px;
   background: #fffdf4f2;
   color: #33473c;
@@ -29,38 +105,17 @@
   text-align: left;
   box-shadow: 0 4px 14px #1c2f2418;
   cursor: pointer;
-  opacity: 0;
-  transform: translateY(3px);
-  transition:
-    opacity 0.45s ease,
-    transform 0.45s ease;
 }
 
-.office-bubble:not([data-visible='true']) {
-  pointer-events: none;
+.office-bubble strong {
+  color: #6d8468;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
-.office-bubble[data-visible='true'] {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-/* The tail takes the provider's colour while a tool is being called. */
-.office-bubble::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  bottom: -5px;
-  width: 9px;
-  height: 9px;
-  translate: -50% 0;
-  rotate: 45deg;
-  border-right: 1px solid var(--bubble-color, #9cb094);
-  border-bottom: 1px solid var(--bubble-color, #9cb094);
-  background: #fffdf4;
-}
-
-.office-bubble > span {
+.office-bubble span {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -68,30 +123,56 @@
   overflow: hidden;
 }
 
-.office-bubble-icon {
-  flex: 0 0 auto;
-  margin-top: 1px;
-  color: var(--bubble-color, #7d9476);
+/* The tail points back at the figure the line belongs to. */
+.office-bubble::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -5px;
+  width: 9px;
+  height: 9px;
+  margin-top: -4px;
+  rotate: 45deg;
+  border-left: 1px solid var(--bubble-color, #9cb094);
+  border-bottom: 1px solid var(--bubble-color, #9cb094);
+  background: #fffdf4;
 }
 
-.office-bubble:focus-visible {
+.office-bubble[data-side='left']::after {
+  left: auto;
+  right: -5px;
+  border: 0;
+  border-right: 1px solid var(--bubble-color, #9cb094);
+  border-top: 1px solid var(--bubble-color, #9cb094);
+}
+
+.office-bubble > button:focus-visible {
   outline: 2px solid #d8b576;
   outline-offset: 2px;
 }
 
-/* Something on this floor needs a person. */
-.office-attention {
-  width: 8px;
-  height: 8px;
-  margin-left: 2px;
-  border-radius: 2px;
-  background: #e0b262;
-  box-shadow: 0 0 7px #e0b26290;
+/* How much is waiting for a decision, on the lectern tray rather than the floor. */
+.office-tray-count {
+  display: grid;
+  place-items: center;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 6px;
+  border: 1px solid #e8c184;
+  border-radius: 999px;
+  background: #2b2417f0;
+  color: #ffd79a;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 12px #e8a54f4d;
+  cursor: pointer;
 }
 
-.office-attention-stuck {
-  background: #d2764c;
-  box-shadow: 0 0 7px #d2764c90;
+.office-tray-count[data-stuck='true'] {
+  border-color: #d2764c;
+  color: #ffc3a0;
   animation: office-attention-pulse 1.6s ease-in-out infinite;
 }
 
@@ -108,7 +189,7 @@
 
 .office-view[data-office-archived='true'] .office-bubble,
 .office-view[data-office-archived='true'] .office-note,
-.office-view[data-office-archived='true'] .office-attention {
+.office-view[data-office-archived='true'] .office-tray-count {
   display: none;
 }
 
@@ -141,10 +222,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .office-bubble {
+  .office-bubble,
+  .office-pill {
     transition: none;
   }
-  .office-attention-stuck {
+  .office-pill[data-status='attention'] .office-pill-dot,
+  .office-tray-count[data-stuck='true'] {
     animation: none;
   }
 }

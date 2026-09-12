@@ -456,15 +456,23 @@
   }
 }
 
-/* Replay: the toggle sits in the office toolbar, its bar overlays the stage. */
+/* Replay docks under the canvas, so nothing covers the room it is replaying. */
 .floor-canvas {
   position: relative;
+}
+.office-dock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  background: #fbfcf6;
 }
 .floor-replay-toggle {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  margin-right: 10px;
   padding: 3px 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -490,23 +498,10 @@
   cursor: default;
 }
 .floor-replay {
-  /* Sits over the stage; the office's own controls step up to make room. */
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 44px;
-  z-index: 42;
+  flex: 1 1 260px;
   display: grid;
   gap: 6px;
-  padding: 9px 11px;
-  border: 1px solid #dce4d4;
-  border-radius: 8px;
-  background: #fbfcf6f2;
-  backdrop-filter: blur(6px);
-  box-shadow: 0 4px 14px #4b645514;
-}
-.floor-canvas:has(.floor-replay) .office-view-controls {
-  bottom: 106px;
+  min-width: 0;
 }
 .floor-replay-controls {
   display: flex;
@@ -540,14 +535,31 @@
   line-clamp: 2;
 }
 @media (max-width: 720px) {
-  /* A narrow stage cannot hold both; replay is a mode you leave to zoom. */
-  .floor-canvas:has(.floor-replay) .office-view-controls {
-    display: none;
-  }
+  /* The dock wraps onto as many rows as it needs rather than squeezing. */
   .floor-replay-controls {
     flex-wrap: wrap;
   }
   .floor-replay-controls select {
     flex: 1 1 100%;
+  }
+}
+
+@media (max-width: 620px) {
+  /* A phone gets the whole width and a 4:3 stage, so the room has room. */
+  .floor-canvas .floor-stage {
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 4 / 3;
+  }
+  .office-toolbar {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 8px 12px;
+  }
+  .office-legend {
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    padding: 8px 12px;
   }
 }
