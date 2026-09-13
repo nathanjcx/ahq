@@ -375,17 +375,22 @@ under the fixture route, so a page can be photographed without a deployment. `/q
 `QA_FIXTURE=1`; every other build answers 404 there. `/office-lab` is guarded the same way and
 renders deterministic office scenes for the pixel baselines.
 
-Every page in the plan is built. Alongside the original Office, Inbox, Employees, Tasks, Files,
-Activity, Marketplace, Integrations, Marketplace admin, and Operations pages: **Projects**
-(`components/projects/`) is the roadmap — a list, a new-project sheet, a proposal review that answers
-the planner's bottleneck questions, and a timeline with floor lanes and dependency strings.
-**Calendar** (`components/calendar/`, rendering `components/meetings/`) is the week and day board with
-instance and tower rows, the scheduling sheet, and the boardroom behind a meeting. **Records**
-(`components/records/`) is the basement: scope shelves, the conflicts queue, chains, budgets, and the
-janitor log. **Audit** (`components/audit/`) is the nightly documents per instance with their statuses
-and escalations. **Triage** (`components/triage/`) is the alert inbox, the paging timeline, incident
-reports, and intake setup, with the incident strip above every page. Settings is a panel over any
-page, in five sections. Every per-domain action file under `components/app/actions/` is wired.
+The interface has six destinations, declared once in `components/app/nav.ts` with the sections each
+carries: **Work** (Threads, Inbox, Incidents), **Office**, **Team** (Employees, Hire), **Plan**
+(Projects, Calendar), **Records** (Files, Activity, Memory, Audit), and **Integrations**, plus
+**Platform admin** (Marketplace, Operations) for platform administrators and Settings as a panel. The
+hash is `destination/section`; the page ids the interface used to have (`tasks`, `employees`,
+`marketplace`, …) still resolve, so a link inside a page or a notification keeps working. The shell
+draws one 52px bar per page with the title and a segmented control for the sections; a page shows
+one line and its primary action, never an intro block.
+
+**Work** (`components/work/`) is the default page: every thread in motion beside the open one.
+`buildThreads` in `lib/work.ts` is pure and orders the stream by what it needs from a person (pending
+approvals, a last message that asks a question, pending handoffs from `work.pendingHandoffs`, open
+alerts), then running, waiting or blocked, and done today; hidden session tasks never appear. The
+open thread is the task detail (conversation, actions, audit); a handoff or an incident opens as its
+own pane with its decision. Team and Files are tables on the shared `.data-table` primitive that open
+a full detail page with a back link.
 
 **The building** (`components/office/`) is not a page; it is the 3D office the pages mount, and every
 room derives from the data its page already holds. `deriveScene` turns one dashboard, one floor board
