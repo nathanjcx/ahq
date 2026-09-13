@@ -245,3 +245,21 @@
   font-size: var(--text-lg);
   font-weight: 600;
 }
+/* The thread's header, slim: the floor and employee read as a line under the title. */
+.work-layout .conversation-head .eyebrow {
+  margin: 2px 0 0;
+  order: 2;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.work-layout .conversation-head > div:first-child {
+  display: flex;
+  flex-direction: column;
+}
+.work-layout .task-usage {
+  padding-top: 6px;
+  font-size: var(--text-xs);
+}

@@ -993,3 +993,119 @@
     width: auto;
   }
 }
+
+/* === components/app/command-palette.tsx === */
+.palette-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  border: 0;
+  background: rgba(15, 23, 42, 0.32);
+}
+.palette {
+  position: fixed;
+  top: 12vh;
+  left: 50%;
+  z-index: 81;
+  width: min(600px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+.palette-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+.palette-input input {
+  flex: 1;
+  height: 46px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: var(--text-lg);
+  color: var(--ink);
+}
+.palette-input kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: 11px var(--font);
+  color: var(--muted);
+}
+.palette-list {
+  max-height: 380px;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+}
+.palette-list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+}
+.palette-list li[aria-selected='true'] button {
+  background: var(--slate-100);
+}
+.palette-list b {
+  display: block;
+  color: var(--ink);
+  font-weight: 500;
+}
+.palette-list small {
+  display: block;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.palette-list .employee-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 0;
+  box-shadow: none;
+}
+.palette-empty {
+  padding: 14px 12px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.topbar-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: #94a3b8;
+  font-size: var(--text-sm);
+}
+.topbar-search:hover {
+  color: var(--ink);
+}
+.topbar-search kbd {
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: 11px var(--font);
+}
+@media (max-width: 640px) {
+  .topbar-search span {
+    display: none;
+  }
+}

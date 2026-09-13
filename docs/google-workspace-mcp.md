@@ -15,7 +15,7 @@ gcloud services enable \
   --project=PROJECT_ID
 ```
 
-Configure Google Auth Platform branding and consent. Use an internal audience when the Workspace is internal. Gmail and Drive scopes are restricted: an external audience requires Google OAuth verification and a security assessment. Until that completes, only listed test users can connect and they see an unverified-app warning. A Workspace administrator can also block third-party apps. Request only the product scopes required for the reviewed tools. Google lists the scope choices in its [MCP setup guide](https://developers.google.com/workspace/guides/configure-mcp-servers), including Gmail read and compose, Drive read and file, and product-specific Docs, Sheets, Slides, and Calendar scopes.
+Configure Google Auth Platform branding and consent. Use an internal audience when the Workspace is internal: an Internal app needs no verification and shows no warning, but only accounts in that Workspace can connect. An External app in production that asks for restricted scopes without verification shows "This app is blocked" to everyone. Gmail and Drive scopes are restricted: an external audience requires Google OAuth verification and a security assessment. Until that completes, only listed test users can connect and they see an unverified-app warning. A Workspace administrator can also block third-party apps. Request only the product scopes required for the reviewed tools. Google lists the scope choices in its [MCP setup guide](https://developers.google.com/workspace/guides/configure-mcp-servers), including Gmail read and compose, Drive read and file, and product-specific Docs, Sheets, Slides, and Calendar scopes.
 
 ## Register the OAuth client
 

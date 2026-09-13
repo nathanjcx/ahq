@@ -1,10 +1,9 @@
 'use client';
 
-import { ClipboardCheck, ShieldAlert, Siren } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ClipboardCheck, ShieldAlert, Siren } from 'lucide-react';
 import { useState } from 'react';
 import type { PageProps } from '../app/page-props';
 import { EmptyPane, EmptySection } from '../shared/empty';
-import { MasterDetail, useMasterDetail } from '../shared/master-detail';
 import { PageIntro } from '../shared/page-intro';
 import { useUiQuery } from '../shared/use-ui-query';
 import { AuditDocument } from './audit-document';
@@ -34,18 +33,10 @@ function nightLabel(date: string) {
   });
 }
 
-export function AuditPage({
-  dashboard,
-  actions,
-  canManageWorkspace,
-  run,
-  onSelectTask,
-  go,
-}: PageProps) {
+export function AuditPage({ dashboard, actions, canManageWorkspace, run, onSelectTask, go }: PageProps) {
   const [floorFilter, setFloorFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<FindingStatus | 'all'>('all');
   const [chosenDate, setChosenDate] = useState<string | null>(null);
-  const { open, openDetail, closeDetail } = useMasterDetail();
 
   const findings: AuditFinding[] = useUiQuery(uiApi.auditFindings, {}) ?? [];
   const settings = useUiQuery(uiApi.workspaceSettings, {});
@@ -71,11 +62,14 @@ export function AuditPage({
   const escalated = findings.filter((finding) => finding.status === 'escalated' && onFloor(finding));
 
   const nights = [...new Set(shown.map((finding) => finding.auditDate))].sort().reverse();
-  const date = chosenDate && nights.includes(chosenDate) ? chosenDate : nights[0];
+  const date = chosenDate && nights.includes(chosenDate) ? chosenDate : null;
   const nightFindings = shown.filter((finding) => finding.auditDate === date);
 
   // One document per instance, the shape the auditor files and the employee reads.
-  const byInstance = new Map<string, { employeeId: string; employeeName: string; findings: AuditFinding[] }>();
+  const byInstance = new Map<
+    string,
+    { employeeId: string; employeeName: string; findings: AuditFinding[] }
+  >();
   for (const finding of nightFindings) {
     const document = byInstance.get(finding.employeeId) ?? {
       employeeId: finding.employeeId,
@@ -122,13 +116,7 @@ export function AuditPage({
                   <strong>{finding.employeeName}</strong>
                   <p>{finding.claim}</p>
                 </div>
-                <button
-                  className="text-button"
-                  onClick={() => {
-                    setChosenDate(finding.auditDate);
-                    openDetail();
-                  }}
-                >
+                <button className="text-button" onClick={() => setChosenDate(finding.auditDate)}>
                   {nightLabel(finding.auditDate)}
                 </button>
               </li>
@@ -164,84 +152,98 @@ export function AuditPage({
       </div>
 
       {findings.length ? (
-        <MasterDetail
-          className="audit-layout card"
-          open={open}
-          backLabel="Nights"
-          onBack={closeDetail}
-          list={
-            <div className="night-list">
-              <div className="pane-toolbar">
-                <strong>{pluralize(nights.length, 'night')}</strong>
-              </div>
-              {nights.map((night) => {
-                const nightly = shown.filter((finding) => finding.auditDate === night);
-                const instances = new Set(nightly.map((finding) => finding.employeeId)).size;
-                const outstanding = nightly.filter(isOutstanding).length;
-                return (
-                  <button
-                    key={night}
-                    data-active={night === date}
-                    onClick={() => {
-                      setChosenDate(night);
-                      openDetail();
-                    }}
-                  >
-                    <strong>{nightLabel(night)}</strong>
-                    <small>
-                      {pluralize(instances, 'instance')} · {pluralize(nightly.length, 'finding')}
-                    </small>
-                    {outstanding > 0 && <span className="night-open">{outstanding} outstanding</span>}
-                  </button>
-                );
-              })}
-              {!nights.length && (
-                <EmptyPane
-                  icon={<ClipboardCheck size={22} />}
-                  title="Nothing matches"
-                  text="No night has a finding on this floor with that status."
-                />
-              )}
+        date ? (
+          <div className="detail-page audit-night card">
+            <button className="detail-back" onClick={() => setChosenDate(null)}>
+              <ChevronLeft size={16} /> Nights
+            </button>
+            <div className="night-head">
+              <h2>{nightLabel(date)}</h2>
+              <p>
+                {pluralize(documents.length, 'document')} · {pluralize(nightFindings.length, 'finding')}
+              </p>
             </div>
-          }
-          detail={
-            date ? (
-              <div className="audit-night">
-                <div className="night-head">
-                  <span className="eyebrow">AUDIT OF {date}</span>
-                  <h2>{nightLabel(date)}</h2>
-                  <p>
-                    {pluralize(documents.length, 'document')} · {pluralize(nightFindings.length, 'finding')}
-                  </p>
-                </div>
-                {documents.map((document) => (
-                  <AuditDocument
-                    key={document.employeeId}
-                    employeeName={document.employeeName}
-                    floorName={
-                      dashboard.floors.find((floor) => floor.id === floorOf.get(document.employeeId))?.name ??
-                      'Lobby'
-                    }
-                    findings={document.findings}
-                    hardPolicy={hardPolicy}
-                    taskTitles={taskTitles}
-                    canDecide={canDecide}
-                    canEscalate={canManageWorkspace}
-                    onOpenTask={openTask}
-                    onAddress={address}
-                    onEscalate={escalate}
-                  />
-                ))}
-              </div>
-            ) : (
-              <EmptyPane
-                icon={<ShieldAlert size={24} />}
-                title="Choose a night"
-                text="Each night's documents, one per instance, appear here."
+            {documents.map((document) => (
+              <AuditDocument
+                key={document.employeeId}
+                employeeName={document.employeeName}
+                floorName={
+                  dashboard.floors.find((floor) => floor.id === floorOf.get(document.employeeId))?.name ??
+                  'Lobby'
+                }
+                findings={document.findings}
+                hardPolicy={hardPolicy}
+                taskTitles={taskTitles}
+                canDecide={canDecide}
+                canEscalate={canManageWorkspace}
+                onOpenTask={openTask}
+                onAddress={address}
+                onEscalate={escalate}
               />
-            )
-          }
-        />
+            ))}
+          </div>
+        ) : (
+          <div className="card data-table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Night</th>
+                  <th className="num">Instances</th>
+                  <th className="num">Findings</th>
+                  <th className="num">Outstanding</th>
+                  <th aria-hidden="true" />
+                </tr>
+              </thead>
+              <tbody>
+                {nights.map((night) => {
+                  const nightly = shown.filter((finding) => finding.auditDate === night);
+                  const instances = new Set(nightly.map((finding) => finding.employeeId)).size;
+                  const outstanding = nightly.filter(isOutstanding).length;
+                  return (
+                    <tr
+                      key={night}
+                      className="row-link"
+                      tabIndex={0}
+                      onClick={() => setChosenDate(night)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          setChosenDate(night);
+                        }
+                      }}
+                    >
+                      <td>
+                        <b>{nightLabel(night)}</b>
+                      </td>
+                      <td className="num dim">{instances}</td>
+                      <td className="num dim">{nightly.length}</td>
+                      <td className="num">
+                        {outstanding ? (
+                          <span className="work-status" data-tone="need">
+                            <i />
+                            {outstanding}
+                          </span>
+                        ) : (
+                          <span className="dim">0</span>
+                        )}
+                      </td>
+                      <td className="chev">
+                        <ChevronRight size={16} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {!nights.length && (
+              <EmptyPane
+                icon={<ClipboardCheck size={22} />}
+                title="Nothing matches"
+                text="No night has a finding on this floor with that status."
+              />
+            )}
+          </div>
+        )
       ) : (
         <EmptySection
           icon={<ShieldAlert size={28} />}

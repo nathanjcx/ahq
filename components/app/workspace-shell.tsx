@@ -5,6 +5,7 @@ import type { EditorDraft } from '../admin/draft-issues';
 import { FloorPanel } from '../floors/floor-panel';
 import { WorkspaceReadyContext } from '../shared/use-ui-query';
 import type { Actions } from './actions';
+import { CommandPalette } from './command-palette';
 import { IncidentStrip } from './incident-strip';
 import { pageTabs, pageTitle, resolveRoute, routeHash, type Destination, type Route } from './nav';
 import { NewTaskPanel } from './new-task-panel';
@@ -55,6 +56,7 @@ export function WorkspaceShell({
     return () => window.removeEventListener('hashchange', sync);
   }, [dashboard.isPlatformAdmin]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [floorEditor, setFloorEditor] = useState<Floor | 'new' | null>(null);
@@ -74,6 +76,17 @@ export function WorkspaceShell({
     const timer = window.setTimeout(() => setNotice(null), 3600);
     return () => window.clearTimeout(timer);
   }, [notice]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setSearchOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   function go(next: Destination, nextTab?: string) {
     const resolved = resolveRoute(nextTab ? `${next}/${nextTab}` : next);
@@ -147,6 +160,7 @@ export function WorkspaceShell({
             canCreateTask={Boolean(workspace) && hasReadyEmployee}
             onOpenNavigation={() => setSidebarOpen(true)}
             onNewTask={() => openNewTask()}
+            onSearch={() => setSearchOpen(true)}
             onReview={(taskId) => {
               setSelectedTask(taskId);
               go('tasks');
@@ -154,7 +168,6 @@ export function WorkspaceShell({
             notificationActions={actions}
             onOpen={go}
           />
-
 
           <IncidentStrip dashboard={dashboard} actions={actions} run={run} go={go} />
 
@@ -258,6 +271,16 @@ export function WorkspaceShell({
                 setFloorEditor(null);
               }
             }}
+          />
+        )}
+        {searchOpen && workspace && (
+          <CommandPalette
+            dashboard={dashboard}
+            onClose={() => setSearchOpen(false)}
+            go={go}
+            onSelectEmployee={setSelectedEmployee}
+            onSelectTask={setSelectedTask}
+            onSelectFloor={setSelectedFloorId}
           />
         )}
         {notice && <Toast text={notice} onDismiss={() => setNotice(null)} />}

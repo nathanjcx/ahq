@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUpRight, Bell, Check, CheckCheck, Menu, Plus } from 'lucide-react';
+import { ArrowUpRight, Bell, Check, CheckCheck, Menu, Plus, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { relativeTime } from '../shared/time';
 import { useUiQuery } from '../shared/use-ui-query';
@@ -28,6 +28,7 @@ export function Topbar({
   notificationActions,
   onOpenNavigation,
   onNewTask,
+  onSearch,
   onReview,
   onOpen,
 }: {
@@ -43,6 +44,7 @@ export function Topbar({
   notificationActions: Pick<TriageActions, 'acknowledgeNotification' | 'acknowledgeNotifications'>;
   onOpenNavigation: () => void;
   onNewTask: () => void;
+  onSearch: () => void;
   onReview: (taskId: string) => void;
   /** Navigates to what a notification is about. */
   onOpen: (page: Destination) => void;
@@ -59,12 +61,7 @@ export function Topbar({
         {tabs.length > 0 && (
           <div className="segmented" role="tablist" aria-label={`${title} sections`}>
             {tabs.map((item) => (
-              <button
-                key={item.id}
-                role="tab"
-                aria-selected={tab === item.id}
-                onClick={() => onTab(item.id)}
-              >
+              <button key={item.id} role="tab" aria-selected={tab === item.id} onClick={() => onTab(item.id)}>
                 {item.label}
               </button>
             ))}
@@ -72,6 +69,13 @@ export function Topbar({
         )}
       </div>
       <div className="topbar-actions">
+        {configured && (
+          <button className="topbar-search" onClick={onSearch} aria-label="Search">
+            <Search size={14} />
+            <span>Search</span>
+            <kbd>⌘K</kbd>
+          </button>
+        )}
         {configured ? (
           <LiveNotificationBell
             pending={pending}

@@ -1,20 +1,21 @@
 'use client';
 
-import { FolderKanban, Plus, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FolderKanban, Plus, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import type { PageProps } from '../app/page-props';
 import { EmptyPane, EmptySection } from '../shared/empty';
 import { HireSheet, hireContext } from '../shared/hire-sheet';
-import { MasterDetail, useMasterDetail } from '../shared/master-detail';
 import { PageIntro } from '../shared/page-intro';
 import { SkeletonList } from '../shared/skeleton';
+import { shortDate } from '../shared/time';
 import { useUiQuery } from '../shared/use-ui-query';
 import { NewProjectSheet } from './new-project-sheet';
-import { ProjectCard } from './project-card';
+import { ProjectStatusPill } from './project-card';
 import { ProjectDetail } from './project-detail';
 import { ProjectionNote } from './projection-note';
 import type { HireSuggestion } from './proposal-questions';
 import { ProposalReview } from './proposal-review';
+import { nextDeadline } from './roadmap';
 import { pluralize } from '@/lib/text';
 import { asId, uiApi } from '@/lib/ui-api';
 import './projects.css';
@@ -53,13 +54,12 @@ export function ProjectsPage({
   const [composing, setComposing] = useState(false);
   const [hiring, setHiring] = useState<HireSuggestion | null>(null);
   const [busy, setBusy] = useState(false);
-  const { open, openDetail, closeDetail } = useMasterDetail();
 
   const projects = useUiQuery(uiApi.projects, {});
   const shown = (projects ?? []).filter((project) => filter === 'all' || OPEN.includes(project.status));
-  const selectedId = shown.some((project) => project.id === selectedProject)
+  const selectedId = (projects ?? []).some((project) => project.id === selectedProject)
     ? selectedProject
-    : (shown[0]?.id ?? null);
+    : null;
   const projectArgs = selectedId ? { projectId: asId<'projects'>(selectedId) } : 'skip';
   const project = useUiQuery(uiApi.project, projectArgs);
   const tasks = useUiQuery(uiApi.projectTasks, projectArgs);
@@ -86,10 +86,7 @@ export function ProjectsPage({
     setBusy(true);
     try {
       const created = await actions.createProject(name, brief, floorIds, deadlineAt);
-      if (created) {
-        onSelectProject(created.projectId);
-        openDetail();
-      }
+      if (created) onSelectProject(created.projectId);
       setComposing(false);
     } finally {
       setBusy(false);
@@ -120,122 +117,154 @@ export function ProjectsPage({
           text="Describe an outcome and the floors that can reach it. The planner proposes the roadmap; you confirm it."
           action={newProject}
         />
+      ) : selectedId && project ? (
+        <div className="detail-page">
+          <button className="detail-back" onClick={() => onSelectProject(null)}>
+            <ChevronLeft size={16} /> Projects
+          </button>
+          {project.proposal ? (
+            <ProposalReview
+              key={project.id}
+              project={project}
+              proposal={project.proposal}
+              floors={dashboard.floors}
+              employees={dashboard.employees}
+              listings={listings ?? []}
+              projection={projection}
+              busy={busy}
+              onSave={(proposal) =>
+                perform(() => actions.saveRoadmapProposal(project.id, proposal), 'Roadmap edits saved.')
+              }
+              onConfirm={(proposal) =>
+                perform(
+                  () => actions.confirmRoadmap(project.id, proposal),
+                  'Roadmap confirmed. The work is on the calendar.',
+                )
+              }
+              onHire={setHiring}
+            />
+          ) : project.status === 'planning' ? (
+            <PlannerWorking name={project.name} />
+          ) : (
+            <ProjectDetail
+              project={project}
+              tasks={tasks ?? []}
+              floors={dashboard.floors}
+              actions={actions}
+              busy={busy}
+              onOpenTask={openTask}
+              onReplan={() => perform(() => actions.replanProject(project.id), 'Replanning this project.')}
+              onArchive={() => perform(() => actions.archiveProject(project.id), 'Project archived.')}
+              onFinish={() =>
+                perform(() => actions.setProjectStatus(project.id, 'done'), 'Project marked finished.')
+              }
+              onProjectDeadline={(deadlineAt) =>
+                perform(
+                  () =>
+                    actions.updateProject(
+                      project.id,
+                      project.name,
+                      project.brief,
+                      project.floorIds,
+                      deadlineAt,
+                    ),
+                  deadlineAt ? 'Deadline set.' : 'Deadline cleared.',
+                )
+              }
+              onDeadline={(taskId, deadlineAt) =>
+                perform(() => actions.setTaskDeadline(taskId, deadlineAt), 'Deadline changed.')
+              }
+              onCadence={(taskId, cadence) =>
+                perform(() => actions.setTaskCadence(taskId, cadence), 'Cadence changed.')
+              }
+              onUnblock={(taskId) => perform(() => actions.unblockTask(taskId), 'Task released.')}
+            />
+          )}
+        </div>
       ) : (
-        <MasterDetail
-          className="project-layout card"
-          open={open}
-          backLabel="Projects"
-          onBack={closeDetail}
-          list={
-            <div className="project-list">
-              <div className="pane-toolbar">
-                <strong>{pluralize(shown.length, 'project')}</strong>
-                <div className="segmented">
-                  <button data-active={filter === 'open'} onClick={() => setFilter('open')}>
-                    Open
-                  </button>
-                  <button data-active={filter === 'all'} onClick={() => setFilter('all')}>
-                    All
-                  </button>
-                </div>
-              </div>
-              <ProjectionNote projection={projection} />
-              {projects ? (
-                shown.map((entry) => (
-                  <ProjectCard
-                    key={entry.id}
-                    project={entry}
-                    floors={dashboard.floors}
-                    active={entry.id === selectedId}
-                    onSelect={() => {
-                      onSelectProject(entry.id);
-                      openDetail();
-                    }}
-                  />
-                ))
-              ) : (
-                <SkeletonList kind="entry" rows={3} label="Loading projects" />
-              )}
-              {projects && !shown.length && (
-                <EmptyPane
-                  icon={<FolderKanban size={22} />}
-                  title="Nothing open"
-                  text="Every project here is finished or archived. Switch to All to see them."
-                />
-              )}
+        <div className="card data-table-wrap">
+          <div className="table-toolbar">
+            <strong>{pluralize(shown.length, 'project')}</strong>
+            <div className="segmented">
+              <button aria-selected={filter === 'open'} onClick={() => setFilter('open')}>
+                Open
+              </button>
+              <button aria-selected={filter === 'all'} onClick={() => setFilter('all')}>
+                All
+              </button>
             </div>
-          }
-          detail={
-            project ? (
-              project.proposal ? (
-                <ProposalReview
-                  key={project.id}
-                  project={project}
-                  proposal={project.proposal}
-                  floors={dashboard.floors}
-                  employees={dashboard.employees}
-                  listings={listings ?? []}
-                  projection={projection}
-                  busy={busy}
-                  onSave={(proposal) =>
-                    perform(() => actions.saveRoadmapProposal(project.id, proposal), 'Roadmap edits saved.')
-                  }
-                  onConfirm={(proposal) =>
-                    perform(
-                      () => actions.confirmRoadmap(project.id, proposal),
-                      'Roadmap confirmed. The work is on the calendar.',
-                    )
-                  }
-                  onHire={setHiring}
-                />
-              ) : project.status === 'planning' ? (
-                <PlannerWorking name={project.name} />
-              ) : (
-                <ProjectDetail
-                  project={project}
-                  tasks={tasks ?? []}
-                  floors={dashboard.floors}
-                  actions={actions}
-                  busy={busy}
-                  onOpenTask={openTask}
-                  onReplan={() =>
-                    perform(() => actions.replanProject(project.id), 'Replanning this project.')
-                  }
-                  onArchive={() => perform(() => actions.archiveProject(project.id), 'Project archived.')}
-                  onFinish={() =>
-                    perform(() => actions.setProjectStatus(project.id, 'done'), 'Project marked finished.')
-                  }
-                  onProjectDeadline={(deadlineAt) =>
-                    perform(
-                      () =>
-                        actions.updateProject(
-                          project.id,
-                          project.name,
-                          project.brief,
-                          project.floorIds,
-                          deadlineAt,
-                        ),
-                      deadlineAt ? 'Deadline set.' : 'Deadline cleared.',
-                    )
-                  }
-                  onDeadline={(taskId, deadlineAt) =>
-                    perform(() => actions.setTaskDeadline(taskId, deadlineAt), 'Deadline changed.')
-                  }
-                  onCadence={(taskId, cadence) =>
-                    perform(() => actions.setTaskCadence(taskId, cadence), 'Cadence changed.')
-                  }
-                  onUnblock={(taskId) => perform(() => actions.unblockTask(taskId), 'Task released.')}
-                />
-              )
-            ) : (
-              <EmptyPane
-                icon={<FolderKanban size={22} />}
-                title="No project selected"
-                text="Choose a project to see its roadmap, its milestones, and its channel."
-              />
-            )
-          }
-        />
+          </div>
+          <ProjectionNote projection={projection} />
+          {projects ? (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Project</th>
+                  <th>Floors</th>
+                  <th>Milestones</th>
+                  <th className="num">Open tasks</th>
+                  <th>Deadline</th>
+                  <th>Status</th>
+                  <th aria-hidden="true" />
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((entry) => {
+                  const done = entry.milestones.filter((milestone) => milestone.status === 'done').length;
+                  const deadline = nextDeadline(entry);
+                  const names = entry.floorIds
+                    .map((id) => dashboard.floors.find((floor) => floor.id === id)?.name)
+                    .filter((name): name is string => Boolean(name));
+                  return (
+                    <tr
+                      key={entry.id}
+                      className="row-link"
+                      tabIndex={0}
+                      onClick={() => onSelectProject(entry.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          onSelectProject(entry.id);
+                        }
+                      }}
+                    >
+                      <td>
+                        <span className="who">
+                          <span>
+                            <b>{entry.name}</b>
+                            <small>{entry.brief}</small>
+                          </span>
+                        </span>
+                      </td>
+                      <td className={names.length ? undefined : 'dim'}>{names.join(', ') || 'No floors'}</td>
+                      <td className="dim">
+                        {done}/{entry.milestones.length}
+                        {entry.behindMilestones ? ` · ${entry.behindMilestones} behind` : ''}
+                      </td>
+                      <td className="num dim">{entry.openTasks}</td>
+                      <td className="dim">{deadline ? shortDate(deadline) : '—'}</td>
+                      <td>
+                        <ProjectStatusPill status={entry.status} />
+                      </td>
+                      <td className="chev">
+                        <ChevronRight size={16} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <SkeletonList kind="entry" rows={3} label="Loading projects" />
+          )}
+          {projects && !shown.length && (
+            <EmptyPane
+              icon={<FolderKanban size={22} />}
+              title="Nothing open"
+              text="Every project here is finished or archived. Switch to All to see them."
+            />
+          )}
+        </div>
       )}
       {hiring && hiringListing && (
         <HireSheet

@@ -12,6 +12,7 @@ import { EmployeeEditor } from './employee-editor';
 import { MarketplaceStudioPreview } from './marketplace-studio-preview';
 import { groupRegistryTools } from './registry';
 import type { Listing, RegistryTool } from '@/lib/contracts';
+import { pluralize } from '@/lib/text';
 import './admin.css';
 
 export function MarketplaceStudioPage({
@@ -63,48 +64,67 @@ export function MarketplaceStudioPage({
       </div>
       <section className="admin-section">
         <div className="section-title">
-          <div>
-            <span className="eyebrow">WORK IN PROGRESS</span>
-            <h2>Drafts</h2>
-          </div>
+          <h2>Drafts</h2>
         </div>
         {drafts.length ? (
-          <div className="admin-list">
-            {drafts.map((draft) => {
-              const issues = draftPublishIssues(draft, registry);
-              return (
-                <article className="card" key={draft.id}>
-                  <span className="draft-avatar" style={{ background: draft.color }}>
-                    <Bot size={18} />
-                  </span>
-                  <div>
-                    <h3>{draft.name || 'Untitled employee'}</h3>
-                    <p>
-                      {draft.role || 'Role not set'} · Updated {relativeTime(draft.updatedAt)}
-                    </p>
-                  </div>
-                  <span className="model-pill">{modelName(draft.model)}</span>
-                  <div className="draft-actions">
-                    <button className="secondary-button" onClick={() => setPreviewing(draft)}>
-                      <Eye size={15} />
-                      Preview
-                    </button>
-                    <button className="secondary-button" onClick={() => setEditing(draft)}>
-                      Edit
-                    </button>
-                    <button
-                      className="primary-button"
-                      disabled={issues.length > 0}
-                      title={issues.join(' ')}
-                      onClick={() => onPublish(draft.id)}
-                    >
-                      <BadgeCheck size={15} />
-                      {issues.length ? 'Not ready' : 'Publish'}
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
+          <div className="card data-table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Draft</th>
+                  <th>Model</th>
+                  <th>Updated</th>
+                  <th>Ready</th>
+                  <th aria-hidden="true" />
+                </tr>
+              </thead>
+              <tbody>
+                {drafts.map((draft) => {
+                  const issues = draftPublishIssues(draft, registry);
+                  return (
+                    <tr key={draft.id} className="row-link" onClick={() => setEditing(draft)}>
+                      <td>
+                        <span className="who">
+                          <span className="draft-avatar" style={{ background: draft.color }}>
+                            <Bot size={14} />
+                          </span>
+                          <span>
+                            <b>{draft.name || 'Untitled employee'}</b>
+                            <small>{draft.role || 'Role not set'}</small>
+                          </span>
+                        </span>
+                      </td>
+                      <td className="dim">{modelName(draft.model)}</td>
+                      <td className="dim">{relativeTime(draft.updatedAt)}</td>
+                      <td>
+                        <span
+                          className="work-status"
+                          data-tone={issues.length ? 'need' : 'run'}
+                          title={issues.join(' ')}
+                        >
+                          <i />
+                          {issues.length ? pluralize(issues.length, 'issue') : 'Ready to publish'}
+                        </span>
+                      </td>
+                      <td className="chev table-actions" onClick={(event) => event.stopPropagation()}>
+                        <button className="secondary-button compact" onClick={() => setPreviewing(draft)}>
+                          <Eye size={14} />
+                          Preview
+                        </button>
+                        <button
+                          className="primary-button compact"
+                          disabled={issues.length > 0}
+                          onClick={() => onPublish(draft.id)}
+                        >
+                          <BadgeCheck size={14} />
+                          Publish
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         ) : (
           <EmptyMini
@@ -116,32 +136,51 @@ export function MarketplaceStudioPage({
       </section>
       <section className="admin-section">
         <div className="section-title">
-          <div>
-            <span className="eyebrow">CUSTOMER CATALOG</span>
-            <h2>Published</h2>
-          </div>
+          <h2>Published</h2>
         </div>
         {listings.length ? (
-          <div className="admin-list">
-            {listings.map((listing) => (
-              <article className="card" key={listing.versionId}>
-                <span className="draft-avatar" style={{ background: listing.color }}>
-                  <Bot size={18} />
-                </span>
-                <div>
-                  <h3>{listing.name}</h3>
-                  <p>
-                    {listing.role} · Published {relativeTime(listing.publishedAt)}
-                  </p>
-                </div>
-                <span className="model-pill">{modelName(listing.model)}</span>
-                <div className="draft-actions">
-                  <button className="secondary-button danger" onClick={() => onRetire(listing.versionId)}>
-                    Retire version
-                  </button>
-                </div>
-              </article>
-            ))}
+          <div className="card data-table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Model</th>
+                  <th className="num">Hires</th>
+                  <th>Published</th>
+                  <th aria-hidden="true" />
+                </tr>
+              </thead>
+              <tbody>
+                {listings.map((listing) => (
+                  <tr key={listing.versionId}>
+                    <td>
+                      <span className="who">
+                        <span className="draft-avatar" style={{ background: listing.color }}>
+                          <Bot size={14} />
+                        </span>
+                        <span>
+                          <b>{listing.name}</b>
+                          <small>
+                            {listing.role} · v{listing.currentVersion}
+                          </small>
+                        </span>
+                      </span>
+                    </td>
+                    <td className="dim">{modelName(listing.model)}</td>
+                    <td className="num dim">{listing.hires}</td>
+                    <td className="dim">{relativeTime(listing.publishedAt)}</td>
+                    <td className="chev table-actions">
+                      <button
+                        className="secondary-button compact danger"
+                        onClick={() => onRetire(listing.versionId)}
+                      >
+                        Retire version
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : (
           <EmptyMini
@@ -151,9 +190,7 @@ export function MarketplaceStudioPage({
           />
         )}
       </section>
-      {previewing && (
-        <MarketplaceStudioPreview draft={previewing} onClose={() => setPreviewing(null)} />
-      )}
+      {previewing && <MarketplaceStudioPreview draft={previewing} onClose={() => setPreviewing(null)} />}
       {editing && (
         <EmployeeEditor
           draft={editing === 'new' ? undefined : editing}

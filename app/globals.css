@@ -1162,3 +1162,33 @@ p {
   font: 10px var(--mono);
   text-transform: uppercase;
 }
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.table-toolbar strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.data-table td.table-actions {
+  width: auto;
+  white-space: nowrap;
+}
+.data-table td.table-actions button + button {
+  margin-left: 6px;
+}
+.data-table .draft-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: #fff;
+  display: inline-grid;
+  place-items: center;
+}
