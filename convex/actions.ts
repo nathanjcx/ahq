@@ -4,6 +4,7 @@ import { mutation } from './_generated/server';
 import type { MutationCtx } from './_generated/server';
 import { startTask } from './lib/tasks';
 import { canDecide, requireWorkspace, sha256, type WorkspaceRole } from './shared';
+import { settleTaskPages } from './services/notifications';
 
 async function decidable(
   ctx: MutationCtx,
@@ -51,6 +52,7 @@ export const decide = mutation({
       approvedByName: actor.name,
       approvedAt: now,
     });
+    await settleTaskPages(ctx, task._id);
     if (args.approved) {
       const uniqueKey = `action:${proposal._id}`;
       const existing = await ctx.db

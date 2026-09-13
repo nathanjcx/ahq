@@ -9,6 +9,8 @@ import { finalAssistantMessage, releaseDependents } from '../lib/tasks';
 import { taskStatus, tokenUsage } from '../schema';
 import { requireService, usagePeriod } from '../shared';
 import { activeTaskContext, isTerminal, privateConnection, taskForRunToken, taskInputState } from './context';
+import { recordAttempts, taskPages } from './notifications';
+import { pagingState } from '../../lib/paging';
 
 export const taskContext = query({
   args: { secret: v.string(), taskId: v.id('tasks') },
@@ -380,5 +382,34 @@ export const askQuestion = mutation({
     if (!text) throw new Error('A question needs text');
     await ctx.db.patch(task._id, { question: { text, askedAt: Date.now() }, updatedAt: Date.now() });
     return null;
+  },
+});
+
+/**
+ * One page for a task waiting on a person, recorded and handed back for delivery. The planner
+ * decides when it is due from the same ledger the incident pages use; a task that has moved on or
+ * whose owner already answered pages nobody.
+ */
+export const pageTask = mutation({
+  args: { secret: v.string(), taskId: v.id('tasks') },
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new Error('Task not found');
+    const workspace = await ctx.db.get(task.workspaceId);
+    if (!workspace) throw new Error('Workspace not found');
+    if (task.status !== 'needs_input' && task.status !== 'awaiting_approval') return [];
+    const paging = pagingState(await taskPages(ctx, task._id), Date.now());
+    if (paging.acknowledged || paging.nextAttemptAt === undefined) return [];
+    const question = task.status === 'needs_input' && task.question;
+    return recordAttempts(ctx, workspace, {
+      kind: 'task',
+      title: question
+        ? `${task.employeeName} has a question: ${task.title}`
+        : `${task.employeeName} is waiting on an approval: ${task.title}`,
+      text: question ? question.text : 'An external change is proposed and holds until you decide.',
+      taskId: task._id,
+      subjects: [task.createdBy],
+    });
   },
 });

@@ -1,6 +1,7 @@
 import { v, type Infer } from 'convex/values';
 import type { WorkspaceSettings } from '../../lib/contracts';
 import { pagingState } from '../../lib/paging';
+import { taskPages } from './notifications';
 import { internal } from '../_generated/api';
 import type { Doc, Id } from '../_generated/dataModel';
 import { internalMutation, mutation, query, type MutationCtx } from '../_generated/server';
@@ -221,6 +222,16 @@ async function planWorkspace(ctx: MutationCtx, workspace: Doc<'workspaces'>, now
       lastShiftDate: ranToday.has(task._id) ? date : undefined,
       lastReviewDate: reviewedToday.has(task._id) ? date : undefined,
     }));
+  for (const task of plannerTasks) {
+    if (task.status !== 'needs_input' && task.status !== 'awaiting_approval') continue;
+    const row = tasks.find((doc) => doc._id === task.taskId)!;
+    const pages = await taskPages(ctx, row._id);
+    task.waiting = {
+      since: row.question?.askedAt ?? row.updatedAt,
+      paging: pagingState(pages, now),
+      pagesSent: new Set(pages.map((page) => page.sentAt)).size,
+    };
+  }
 
   const instances: PlannerInstance[] = [];
   const findings: PlannerFinding[] = [];

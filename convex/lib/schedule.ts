@@ -10,7 +10,7 @@ import {
 } from '../../lib/contracts';
 import type { AlertPaging } from '../../lib/contracts/triage';
 import type { JobKind } from '../../lib/jobs';
-import { PAGING_SEVERITIES, emergencyOpen } from '../../lib/paging';
+import { PAGING_SEVERITIES, WAIT_PAGE_DELAY_MS, emergencyOpen } from '../../lib/paging';
 import type { Id } from '../_generated/dataModel';
 import type { MutationCtx } from '../_generated/server';
 import type { Ctx } from '../shared';
@@ -174,6 +174,8 @@ export interface PlannerTask {
   lastShiftDate?: string;
   /** Workspace-zone date of the last review shift. */
   lastReviewDate?: string;
+  /** Set while the task waits on a person: since when, and how far its pages have run. */
+  waiting?: { since: number; paging: AlertPaging; pagesSent: number };
 }
 /** One hired instance. Reserved kinds run their turns in a standing task rather than project tasks. */
 export interface PlannerInstance {
@@ -379,6 +381,25 @@ export function planTick(input: PlannerInput): PlannedJob[] {
         reason: `page ${alert.pagesSent + 1}: nobody has answered`,
       });
     }
+
+  // A task waiting on a person is paged the same way, on any hour: the wait itself is the emergency.
+  // The delay gives the app's own bell a chance first; answering or deciding settles the ledger.
+  for (const task of input.tasks) {
+    const wait = task.waiting;
+    if (!wait || now - wait.since < WAIT_PAGE_DELAY_MS) continue;
+    const { paging } = wait;
+    if (paging.acknowledged || paging.nextAttemptAt === undefined || paging.nextAttemptAt > now) continue;
+    planned.push({
+      kind: 'page',
+      taskId: task.taskId,
+      employeeId: task.employeeId,
+      uniqueKey: `page:${task.taskId}:${wait.pagesSent + 1}`,
+      date,
+      model: task.model,
+      findingIds: [],
+      reason: `page ${wait.pagesSent + 1}: ${task.status === 'needs_input' ? 'a question' : 'an approval'} is waiting on a person`,
+    });
+  }
 
   if (capReached(settings, input.usageToday)) return planned;
 

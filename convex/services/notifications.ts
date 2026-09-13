@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
 import type { Doc, Id } from '../_generated/dataModel';
-import { mutation, query, type MutationCtx } from '../_generated/server';
+import { mutation, query, type MutationCtx, type QueryCtx } from '../_generated/server';
 import { settingsFor } from '../lib/schedule';
 import { publicNotification } from '../notifications';
 import { cleanText, requireService, type Ctx } from '../shared';
@@ -11,6 +11,7 @@ const notificationKind = v.union(
   v.literal('meeting'),
   v.literal('finding'),
   v.literal('general'),
+  v.literal('task'),
 );
 
 /**
@@ -52,6 +53,7 @@ export async function recordAttempts(
     title: string;
     text: string;
     alertId?: Id<'alerts'>;
+    taskId?: Id<'tasks'>;
     subjects?: string[];
   },
 ) {
@@ -62,17 +64,21 @@ export async function recordAttempts(
   const title = cleanText(input.title.slice(0, 200), 'Notification title', 200);
   const text = cleanText(input.text.slice(0, 2_000), 'Notification text', 2_000);
   const sentAt = Date.now();
-  const alertId = input.alertId;
+  const { alertId, taskId } = input;
+  const ledger = alertId
+    ? await ctx.db
+        .query('notifications')
+        .withIndex('by_alert', (q) => q.eq('alertId', alertId))
+        .collect()
+    : taskId
+      ? await ctx.db
+          .query('notifications')
+          .withIndex('by_task', (q) => q.eq('taskId', taskId))
+          .collect()
+      : [];
   const rows = [];
   for (const subject of subjects) {
-    const prior = alertId
-      ? (
-          await ctx.db
-            .query('notifications')
-            .withIndex('by_alert', (q) => q.eq('alertId', alertId))
-            .collect()
-        ).filter((row) => row.subject === subject)
-      : [];
+    const prior = ledger.filter((row) => row.subject === subject);
     const attempt = prior.length + 1;
     const id = await ctx.db.insert('notifications', {
       workspaceId: workspace._id,
@@ -81,6 +87,7 @@ export async function recordAttempts(
       title,
       text,
       alertId,
+      taskId,
       channels: settings.notificationChannels,
       attempt,
       sentAt,
@@ -235,3 +242,18 @@ export const pushTargets = query({
     }));
   },
 });
+
+/** The pages a task sent, the way the planner and the page read them. */
+export function taskPages(ctx: MutationCtx | QueryCtx, taskId: Id<'tasks'>) {
+  return ctx.db
+    .query('notifications')
+    .withIndex('by_task', (q) => q.eq('taskId', taskId))
+    .collect();
+}
+
+/** The person answered or decided: every page this task sent is spent. */
+export async function settleTaskPages(ctx: MutationCtx, taskId: Id<'tasks'>) {
+  const now = Date.now();
+  for (const row of await taskPages(ctx, taskId))
+    if (!row.acknowledgedAt) await ctx.db.patch(row._id, { acknowledgedAt: now });
+}

@@ -12,6 +12,11 @@ import type { AlertPaging } from './contracts/triage';
 export const EMERGENCY_ATTEMPTS = 3;
 export const REPAGE_INTERVAL_MS = 7 * 60_000;
 export const EMERGENCY_DELAY_MS = 20 * 60_000;
+/**
+ * A task waiting on a person, for a question or an approval, is paged once it has waited this long,
+ * then on the re-page interval up to the same ceiling of three. Answering or deciding settles it.
+ */
+export const WAIT_PAGE_DELAY_MS = 15 * 60_000;
 /** Severities worth waking a person for. A low or medium incident waits for the morning. */
 export const PAGING_SEVERITIES = ['high', 'critical'];
 /**
@@ -52,8 +57,7 @@ export function livePages(rows: PageAttempt[]) {
   const delivered = new Map<number, boolean>();
   for (const row of rows) {
     if (row.acknowledgedAt !== undefined || row.sentAt <= (answeredAt ?? 0)) continue;
-    const away =
-      row.deliveredAt !== undefined && PAGING_TRANSPORTS.includes(row.deliveredChannel ?? '');
+    const away = row.deliveredAt !== undefined && PAGING_TRANSPORTS.includes(row.deliveredChannel ?? '');
     delivered.set(row.sentAt, (delivered.get(row.sentAt) ?? false) || away);
   }
   const pages: LivePage[] = [...delivered]

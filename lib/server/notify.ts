@@ -9,7 +9,7 @@ import { safeError, unseal } from './secrets';
 export interface NotificationAttempt {
   id: string;
   subject: string;
-  kind: 'triage' | 'meeting' | 'finding' | 'general';
+  kind: 'triage' | 'meeting' | 'finding' | 'general' | 'task';
   title: string;
   text: string;
   alertId?: string;
@@ -90,9 +90,7 @@ async function sendPush(attempt: NotificationAttempt) {
         await mutate('services/notifications:unsubscribePush', {
           authSubject: attempt.subject,
           endpoint: target.endpoint,
-        }).catch((failure: unknown) =>
-          console.error(`push prune failed reason=${safeError(failure)}`),
-        );
+        }).catch((failure: unknown) => console.error(`push prune failed reason=${safeError(failure)}`));
         continue;
       }
       console.error(`push delivery failed reason=${safeError(error)}`);

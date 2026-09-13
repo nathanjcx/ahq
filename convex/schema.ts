@@ -814,10 +814,18 @@ export default defineSchema({
   notifications: defineTable({
     workspaceId: v.id('workspaces'),
     subject: v.string(),
-    kind: v.union(v.literal('triage'), v.literal('meeting'), v.literal('finding'), v.literal('general')),
+    kind: v.union(
+      v.literal('triage'),
+      v.literal('meeting'),
+      v.literal('finding'),
+      v.literal('general'),
+      v.literal('task'),
+    ),
     title: v.string(),
     text: v.string(),
     alertId: v.optional(v.id('alerts')),
+    /** The task this page is about: an employee waiting on a question or an approval. */
+    taskId: v.optional(v.id('tasks')),
     channels: v.array(v.string()),
     attempt: v.number(),
     sentAt: v.number(),
@@ -827,7 +835,8 @@ export default defineSchema({
     acknowledgedAt: v.optional(v.number()),
   })
     .index('by_subject', ['subject', 'sentAt'])
-    .index('by_alert', ['alertId']),
+    .index('by_alert', ['alertId'])
+    .index('by_task', ['taskId']),
   pushSubscriptions: defineTable({
     workspaceId: v.id('workspaces'),
     subject: v.string(),

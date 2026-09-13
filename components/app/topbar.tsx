@@ -15,6 +15,7 @@ const TARGET: Record<Notification['kind'], Destination> = {
   meeting: 'calendar',
   finding: 'audit',
   general: 'activity',
+  task: 'work',
 };
 
 export function Topbar({
@@ -222,7 +223,10 @@ function NotificationPanel({
                 </header>
                 <p>{row.text}</p>
                 <footer>
-                  <button className="text-button" onClick={() => onOpen(TARGET[row.kind])}>
+                  <button
+                    className="text-button"
+                    onClick={() => (row.taskId ? onReview(row.taskId) : onOpen(TARGET[row.kind]))}
+                  >
                     Open <ArrowUpRight size={13} />
                   </button>
                   {!row.acknowledgedAt && (

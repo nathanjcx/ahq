@@ -1128,8 +1128,8 @@ it('stops a task on a question until the person answers it', async () => {
   // The worker delivered the first message before the turn; the session then goes idle after the
   // ask and the monitor reports the turn complete.
   await t.run(async (ctx) => {
-    for await (const job of ctx.db.query('jobs').withIndex('by_task_state', (q) => q.eq('taskId', taskId)))
-      await ctx.db.patch(job._id, { state: 'completed' });
+    for (const job of await ctx.db.query('jobs').collect())
+      if (job.taskId === taskId) await ctx.db.patch(job._id, { state: 'completed' });
   });
   await completeSession(String(taskId));
   const asked = await t.run(async (ctx) => ctx.db.get(taskId));

@@ -72,10 +72,11 @@ export interface TriageIntake {
 }
 export interface Notification {
   id: string;
-  kind: 'triage' | 'meeting' | 'finding' | 'general';
+  kind: 'triage' | 'meeting' | 'finding' | 'general' | 'task';
   title: string;
   text: string;
   alertId?: string;
+  taskId?: string;
   attempt: number;
   sentAt: number;
   acknowledgedAt?: number;

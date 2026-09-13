@@ -11,6 +11,7 @@ export function publicNotification(row: Doc<'notifications'>) {
     title: row.title,
     text: row.text,
     alertId: row.alertId,
+    taskId: row.taskId,
     attempt: row.attempt,
     sentAt: row.sentAt,
     acknowledgedAt: row.acknowledgedAt,

@@ -15,6 +15,7 @@ import {
   taskTimeline,
 } from './lib/tasks';
 import { cadence, taskVisibility } from './schema';
+import { settleTaskPages } from './services/notifications';
 import { canSeeTask, cleanText, randomToken, requireWorkspace } from './shared';
 
 const messageRole = v.union(v.literal('user'), v.literal('assistant'), v.literal('system'));
@@ -195,6 +196,7 @@ export const send = mutation({
       payload: JSON.stringify({ messageId, text }),
     });
     await ctx.db.patch(task._id, { status: 'queued', updatedAt: now, error: undefined, question: undefined });
+    await settleTaskPages(ctx, task._id);
     return null;
   },
 });
@@ -209,6 +211,7 @@ export const cancel = mutation({
       throw new Error('Task not found');
     if (task.status === 'cancelled') return null;
     const now = Date.now();
+    await settleTaskPages(ctx, task._id);
     const queued = await ctx.db
       .query('jobs')
       .withIndex('by_task_state', (q) => q.eq('taskId', task._id).eq('state', 'queued'))
