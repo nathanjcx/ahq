@@ -177,6 +177,20 @@ it('builds an isolated hosted session with only the employee/tool grant intersec
   expect(studio.environment).toMatchObject({ packages: { python: ['reportlab', 'pillow'] } });
   expect(studio.agent?.instructions).toContain('reportlab (PDF documents)');
   expect(studio.agent?.instructions).toContain('call generate_image');
+  // Libraries alone add no studio server, but the employee still learns where a deliverable goes.
+  const bench = sessionConfiguration({
+    ...context,
+    employeeVersion: {
+      ...context.employeeVersion,
+      workshop: { tools: [], libraries: ['openpyxl'], deliverables: ['spreadsheet'] },
+    },
+  });
+  expect(
+    bench.agent?.tools?.some((tool) => 'server_label' in tool && tool.server_label === 'astra_studio'),
+  ).toBe(false);
+  expect(bench.environment).toMatchObject({ packages: { python: ['openpyxl'] } });
+  expect(bench.agent?.instructions).toContain('/workspace/outputs');
+  expect(bench.agent?.instructions).toContain('openpyxl (spreadsheets as .xlsx)');
   expect(
     sessionConfiguration({ ...context, floor: undefined }).agent?.tools?.some(
       (tool) => 'server_label' in tool && tool.server_label === 'astra_floor',

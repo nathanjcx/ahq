@@ -164,7 +164,7 @@ export function sessionConfiguration(
     PACING_RULES,
     ...(internal.includes('memory') ? [MEMORY_RULES] : []),
     ...(internal.includes('floor') ? [FLOOR_RULES] : []),
-    ...(internal.includes('studio') ? deliverableRules(workshop) : []),
+    ...deliverableRules(workshop),
     ...(internal.includes('triage') ? [TRIAGE_RULES] : []),
   ];
   return {

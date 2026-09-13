@@ -29,7 +29,7 @@ export function deliverableRules(workshop: Workshop | undefined): string[] {
     'A deliverable is a file in /workspace/outputs, never only a message.',
     ...(workshop.libraries.length
       ? [
-          `Python has ${workshop.libraries.map((name) => `${name} (${WORKSHOP_LIBRARIES[name]})`).join(', ')}. Build a PDF or deck from real content with a clear type hierarchy, generous margins, one accent colour, and charts drawn from the numbers, never a screenshot of text.`,
+          `Python has ${workshop.libraries.map((name) => `${name} (${WORKSHOP_LIBRARIES[name]})`).join(', ')}. Build each file from real content; a document or deck gets a clear type hierarchy, generous margins, one accent colour, and charts drawn from the numbers, never a screenshot of text.`,
         ]
       : []),
     ...(workshop.tools.includes('generate_image')
