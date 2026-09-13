@@ -1017,3 +1017,33 @@ p {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* === app/legal.tsx === */
+.legal-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 24px 64px;
+  line-height: 1.6;
+}
+.legal-page h1 {
+  margin: 4px 0 4px;
+  font-size: 32px;
+}
+.legal-page h2 {
+  margin: 28px 0 8px;
+  font-size: 18px;
+}
+.legal-page ul {
+  padding-left: 20px;
+}
+.legal-page li {
+  margin-bottom: 8px;
+}
+.legal-updated,
+.legal-footer {
+  color: var(--muted);
+  font-size: 14px;
+}
+.legal-footer {
+  margin-top: 40px;
+}
