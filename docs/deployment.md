@@ -29,13 +29,13 @@ Generate `AHQ_SERVICE_SECRET` and `CREDENTIAL_ENCRYPTION_KEY` independently. The
 
 ## 2. Railway services
 
-One project, three services, one Dockerfile image, the same commit. Railway injects `PORT` and each process listens on it. `railway.json` supplies the shared build and the `/health` healthcheck default; set the start command and healthcheck on each service.
+One project, three services, three Dockerfiles, the same commit. Railway injects `PORT` and each process listens on it. `railway.json` supplies the healthcheck default; each service picks its image through the `RAILWAY_DOCKERFILE_PATH` variable and runs the image's own `CMD`, so leave the Railway start command empty.
 
-| Service   | Start command     | Healthcheck | Public access                                          |
-| --------- | ----------------- | ----------- | ------------------------------------------------------ |
-| `web`     | `npm start`       | `/health`   | Application domain over HTTPS                          |
-| `worker`  | `npm run worker`  | `/health`   | Keep private                                           |
-| `gateway` | `npm run gateway` | `/health`   | HTTPS domain; every `/mcp/*` request needs a run token |
+| Service   | Dockerfile           | Process (image `CMD`)     | Healthcheck | Public access                                          |
+| --------- | -------------------- | ------------------------- | ----------- | ------------------------------------------------------ |
+| `web`     | `Dockerfile`         | `next start`              | `/health`   | Application domain over HTTPS                          |
+| `worker`  | `Dockerfile.worker`  | `tsx services/worker.ts`  | `/health`   | Keep private                                           |
+| `gateway` | `Dockerfile.gateway` | `tsx services/gateway.ts` | `/health`   | HTTPS domain; every `/mcp/*` request needs a run token |
 
 The hosted Agents session connects to the gateway from OpenAI's side, so `MCP_GATEWAY_URL` must be a public HTTPS origin, not a private Railway address.
 
