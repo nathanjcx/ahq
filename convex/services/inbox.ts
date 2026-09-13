@@ -66,10 +66,10 @@ async function insertInboxItems(ctx: MutationCtx, connection: Doc<'connections'>
  * New mail may report an incident, and a routed connection's mail needs a decision before an
  * employee spends a session on it. Both are the classifier's, so it runs whenever either applies.
  */
-async function classifyNewItems(ctx: MutationCtx, connection: Doc<'connections'>) {
+async function classifyNewItems(ctx: MutationCtx, connection: Doc<'connections'>, first: Id<'inbox'>) {
   if (connection.provider !== 'google-workspace' && !connection.inboxRoute) return;
   const workspace = await ctx.db.get(connection.workspaceId);
-  if (workspace) await enqueueEmailClassificationFor(ctx, workspace);
+  if (workspace) await enqueueEmailClassificationFor(ctx, workspace, first);
 }
 
 export const ingestInbox = mutation({
@@ -85,7 +85,7 @@ export const ingestInbox = mutation({
     const connection = await ctx.db.get(args.connectionId);
     if (!connection || connection.status !== 'connected') throw new Error('Connection is inactive');
     const inserted = await insertInboxItems(ctx, connection, args.items);
-    if (inserted.length) await classifyNewItems(ctx, connection);
+    if (inserted.length) await classifyNewItems(ctx, connection, inserted[0]);
     await ctx.db.patch(connection._id, {
       inboxMode: 'push',
       cursor: args.cursor === undefined ? connection.cursor : args.cursor,
@@ -111,7 +111,7 @@ export const ingestInboxByResource = mutation({
       if (!connection.inboxResources.some((resource) => args.resourceIds.includes(resource))) continue;
       const inserted = await insertInboxItems(ctx, connection, args.items);
       delivered += inserted.length;
-      if (inserted.length) await classifyNewItems(ctx, connection);
+      if (inserted.length) await classifyNewItems(ctx, connection, inserted[0]);
       if (connection.inboxMode !== 'push')
         await ctx.db.patch(connection._id, { inboxMode: 'push', lastCheckedAt: Date.now() });
     }

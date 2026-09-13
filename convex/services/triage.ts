@@ -617,8 +617,16 @@ export const writeConnections = query({
  * Opens the classifier turn over the workspace's unchecked email. The triage instance's standing
  * session runs it, because a classification is triage work with no incident of its own yet.
  */
-/** Opens the email classifier turn in the triage standing session. Idempotent per minute, so a push is answered promptly and a burst is one run. */
-export async function enqueueEmailClassificationFor(ctx: MutationCtx, workspace: Doc<'workspaces'>) {
+/**
+ * Opens the email classifier turn in the triage standing session. The key is the caller's: a delivery
+ * keys it by its first new item, so every batch gets a run and a run that finds nothing unchecked
+ * returns at once. A clock-based key let a second batch inside the same minute go unclassified.
+ */
+export async function enqueueEmailClassificationFor(
+  ctx: MutationCtx,
+  workspace: Doc<'workspaces'>,
+  key: string,
+) {
   const { floor, installation, version } = await ensureTriageStaff(ctx, workspace, 'system');
   const taskId = await openSessionTask(ctx, {
     workspace,
@@ -633,7 +641,7 @@ export async function enqueueEmailClassificationFor(ctx: MutationCtx, workspace:
   const jobId = await insertJob(ctx, {
     workspaceId: workspace._id,
     taskId,
-    uniqueKey: `email_classify:${workspace._id}:${Math.floor(Date.now() / 60_000)}`,
+    uniqueKey: `email_classify:${workspace._id}:${key}`,
     kind: 'email_classify',
     payload: JSON.stringify({ workspaceId: workspace._id, model: version.model }),
   });
@@ -647,7 +655,7 @@ export const enqueueEmailClassification = mutation({
     requireService(args.secret);
     const workspace = await ctx.db.get(args.workspaceId);
     if (!workspace) throw new Error('Workspace not found');
-    return enqueueEmailClassificationFor(ctx, workspace);
+    return enqueueEmailClassificationFor(ctx, workspace, String(Date.now()));
   },
 });
 

@@ -20,6 +20,8 @@ import type * as integrations from "../integrations.js";
 import type * as lib_audit from "../lib/audit.js";
 import type * as lib_calendar from "../lib/calendar.js";
 import type * as lib_dependencies from "../lib/dependencies.js";
+import type * as lib_handoffs from "../lib/handoffs.js";
+import type * as lib_inbox from "../lib/inbox.js";
 import type * as lib_marketplace from "../lib/marketplace.js";
 import type * as lib_meetings from "../lib/meetings.js";
 import type * as lib_memory from "../lib/memory.js";
@@ -83,6 +85,8 @@ declare const fullApi: ApiFromModules<{
   "lib/audit": typeof lib_audit;
   "lib/calendar": typeof lib_calendar;
   "lib/dependencies": typeof lib_dependencies;
+  "lib/handoffs": typeof lib_handoffs;
+  "lib/inbox": typeof lib_inbox;
   "lib/marketplace": typeof lib_marketplace;
   "lib/meetings": typeof lib_meetings;
   "lib/memory": typeof lib_memory;

@@ -70,9 +70,17 @@ async function sessionFor(runtime: WorkerRuntime, request: TurnRequest) {
   return sessionId;
 }
 
+/** The newest turn on a session, or none on a session that has never run one. */
+async function newestTurn(runtime: WorkerRuntime, sessionId: string) {
+  return (await runtime.api.beta.agents.sessions.turns.list(sessionId, { order: 'desc', limit: 1 })).data[0];
+}
+
 const openAiTurnRunner: TurnRunner = {
   async run(runtime, request) {
     const sessionId = await sessionFor(runtime, request);
+    // The turn this input opens is the first one newer than what the session had. Polling the newest
+    // turn alone read the previous, already finished turn and its answer as this one's.
+    const previous = (await newestTurn(runtime, sessionId))?.id;
     await runtime.api.beta.agents.sessions.events.create(sessionId, {
       events: [
         {
@@ -84,14 +92,13 @@ const openAiTurnRunner: TurnRunner = {
     });
     const deadline = Date.now() + request.maxMs;
     let status: TurnResult['status'] = 'timed_out';
+    let turnId: string | undefined;
     while (Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-      const turns = await runtime.api.beta.agents.sessions.turns.list(sessionId, {
-        order: 'desc',
-        limit: 1,
-      });
-      const turn = turns.data[0];
-      if (turn && (TERMINAL as readonly string[]).includes(turn.status)) {
+      const turn = await newestTurn(runtime, sessionId);
+      if (!turn || turn.id === previous) continue;
+      turnId = turn.id;
+      if ((TERMINAL as readonly string[]).includes(turn.status)) {
         status = turn.status as TurnResult['status'];
         break;
       }
@@ -104,11 +111,13 @@ const openAiTurnRunner: TurnRunner = {
         })
         .catch((error: unknown) => console.error('Turn cancellation failed:', safeError(error)));
     let text = '';
-    for await (const item of runtime.api.beta.agents.sessions.items.list(sessionId, { order: 'desc' })) {
-      if (item.type !== 'message' || item.role !== 'assistant') continue;
-      text = item.content.flatMap((part) => ('text' in part ? [part.text] : [])).join('\n');
-      break;
-    }
+    if (turnId)
+      for await (const item of runtime.api.beta.agents.sessions.items.list(sessionId, { order: 'desc' })) {
+        if (item.type !== 'message' || item.role !== 'assistant') continue;
+        if (item.turn_id !== turnId) break;
+        text = item.content.flatMap((part) => ('text' in part ? [part.text] : [])).join('\n');
+        break;
+      }
     const session = await runtime.api.beta.agents.sessions.retrieve(sessionId);
     return { text, status, ...(session.usage ? { usage: sessionUsage(session.usage) } : {}) };
   },
