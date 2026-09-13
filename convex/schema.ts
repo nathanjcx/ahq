@@ -374,6 +374,8 @@ export default defineSchema({
       ),
     ),
     allowedTools: v.array(v.string()),
+    /** The reviewed tools this server offered when it was last connected; a reconnect keeps only a narrowing of these. */
+    reviewedTools: v.optional(v.array(v.string())),
     resourceScope: v.string(),
     inboxResources: v.array(v.string()),
     inboxMode: v.union(v.literal('push'), v.literal('on-demand'), v.literal('unsupported')),

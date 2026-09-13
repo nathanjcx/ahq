@@ -74,6 +74,33 @@ describe('integration grants and inbox routing', () => {
     expect(connection.tools).toEqual(['issue_read', 'create_issue']);
   });
 
+  it('grants a tool reviewed since the owner last connected without undoing a narrowing', async () => {
+    const t = harness();
+    await githubWorkspace(t);
+    const a = t.withIdentity(identity('user-a'));
+    await a.mutation(api.workspace.bootstrap, { name: 'Acme' });
+    const { connectionId } = await connect(t, 'user-a', ['issue_read', 'create_issue', 'comment_issue']);
+    await a.mutation(api.integrations.updateAccess, {
+      connectionId,
+      allowedTools: ['issue_read'],
+      resourceScope: '',
+      inboxResources: '',
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.insert('registryTools', {
+        provider: 'github',
+        name: 'comment_issue',
+        description: 'Comment on an issue.',
+        mode: 'write',
+        updatedBy: 'platform-admin',
+        updatedAt: 2,
+      });
+    });
+    await connect(t, 'user-a', ['issue_read', 'create_issue', 'comment_issue']);
+    const [connection] = (await a.query(api.workspace.dashboard, {})).connections;
+    expect(connection.allowedTools).toEqual(['issue_read', 'comment_issue']);
+  });
+
   it('delivers a provider event only to connections following that resource', async () => {
     const t = harness();
     await githubWorkspace(t);

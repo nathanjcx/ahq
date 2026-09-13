@@ -64,6 +64,7 @@ export const connectIntegration = mutation({
       tools,
       toolAnnotations: args.toolAnnotations,
       allowedTools,
+      reviewedTools: allowedTools,
       serverUrl: args.serverUrl,
       credentialCiphertext: args.credentialCiphertext,
       credentialKeyVersion: args.credentialKeyVersion,
@@ -71,8 +72,10 @@ export const connectIntegration = mutation({
       error: undefined,
     };
     if (existing) {
-      // Reconnecting refreshes the credential; it must not silently widen a list the owner narrowed.
-      const kept = allowedTools.filter((tool) => existing.allowedTools.includes(tool));
+      // Reconnecting refreshes the credential. It keeps a narrowing the owner made and grants the
+      // tools reviewed since, so a grown registry reaches the connection without a manual visit.
+      const narrowed = (existing.reviewedTools ?? []).filter((tool) => !existing.allowedTools.includes(tool));
+      const kept = allowedTools.filter((tool) => !narrowed.includes(tool));
       await ctx.db.patch(existing._id, {
         ...values,
         allowedTools: kept.length ? kept : allowedTools,
