@@ -8,7 +8,8 @@
   height: 0;
 }
 
-/* One pill per figure: a status dot, a first name, the person's colour. */
+/* One pill per figure: a status dot, a first name, the person's colour. The dot's
+   colour is the same one the figure's floor disc uses; it arrives as --person-status. */
 .office-pill {
   position: absolute;
   left: 0;
@@ -20,16 +21,16 @@
   margin: 0;
   padding: 4px 9px 4px 7px;
   border: 1px solid #ffffff2e;
-  border-left: 3px solid var(--person-color, #7fb069);
+  border-left: 3px solid var(--person-color, var(--accent));
   border-radius: 999px;
-  background: #19342fe6;
-  color: #f0f1df;
+  background: color-mix(in srgb, var(--ink) 90%, transparent);
+  color: var(--paper);
   font: inherit;
   font-size: 10.5px;
   font-weight: 650;
   line-height: 1;
   white-space: nowrap;
-  box-shadow: 0 2px 8px #07161240;
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
   /* Only the fade is animated: the transform follows the figure 20 times a second. */
   transition: opacity 0.18s ease;
@@ -43,7 +44,7 @@
 }
 
 .office-pill:focus-visible {
-  outline: 2px solid #d8b576;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -51,17 +52,15 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #9fae9b;
+  background: var(--person-status);
 }
 
-.office-pill[data-status='working'] .office-pill-dot {
-  background: #8ec87f;
-  box-shadow: 0 0 7px #8ec87f80;
+.office-pill[data-status='working'] .office-pill-dot,
+.office-pill[data-status='attention'] .office-pill-dot {
+  box-shadow: 0 0 7px color-mix(in srgb, var(--person-status) 55%, transparent);
 }
 
 .office-pill[data-status='attention'] .office-pill-dot {
-  background: #e0b262;
-  box-shadow: 0 0 7px #e0b26290;
   animation: office-attention-pulse 1.6s ease-in-out infinite;
 }
 
@@ -96,22 +95,22 @@
   width: 100%;
   margin: 0;
   padding: 7px 9px 8px 10px;
-  border: 1px solid #d7e0d1;
-  border-left: 3px solid var(--bubble-color, #9cb094);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--bubble-color, var(--accent));
   border-radius: 9px;
-  background: #fffdf4f2;
-  color: #33473c;
+  background: color-mix(in srgb, var(--paper) 95%, transparent);
+  color: var(--ink);
   font: inherit;
   font-size: 11px;
   font-weight: 550;
   line-height: 1.32;
   text-align: left;
-  box-shadow: 0 4px 14px #1c2f2418;
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
 }
 
 .office-bubble strong {
-  color: #6d8468;
+  color: var(--muted);
   font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -137,46 +136,45 @@
   height: 9px;
   margin-top: -4px;
   rotate: 45deg;
-  border-left: 1px solid var(--bubble-color, #9cb094);
-  border-bottom: 1px solid var(--bubble-color, #9cb094);
-  background: #fffdf4;
+  border-left: 1px solid var(--bubble-color, var(--accent));
+  border-bottom: 1px solid var(--bubble-color, var(--accent));
+  background: var(--paper);
 }
 
 .office-bubble[data-side='left']::after {
   left: auto;
   right: -5px;
   border: 0;
-  border-right: 1px solid var(--bubble-color, #9cb094);
-  border-top: 1px solid var(--bubble-color, #9cb094);
+  border-right: 1px solid var(--bubble-color, var(--accent));
+  border-top: 1px solid var(--bubble-color, var(--accent));
 }
 
 .office-bubble > button:focus-visible {
-  outline: 2px solid #d8b576;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-/* How much is waiting for a decision, on the lectern tray rather than the floor. */
+/* How much is waiting for a decision, on the lectern tray rather than the floor. The
+   lectern hands it --tray: amber while it waits, red once it has waited too long. */
 .office-tray-count {
   display: grid;
   place-items: center;
   min-width: 21px;
   height: 21px;
   padding: 0 6px;
-  border: 1px solid #e8c184;
+  border: 1px solid var(--tray);
   border-radius: 999px;
-  background: #2b2417f0;
-  color: #ffd79a;
+  background: color-mix(in srgb, var(--ink) 94%, transparent);
+  color: var(--tray);
   font: inherit;
   font-size: 10.5px;
   font-weight: 700;
   line-height: 1;
-  box-shadow: 0 0 12px #e8a54f4d;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--tray) 30%, transparent);
   cursor: pointer;
 }
 
 .office-tray-count[data-stuck='true'] {
-  border-color: #d2764c;
-  color: #ffc3a0;
   animation: office-attention-pulse 1.6s ease-in-out infinite;
 }
 
@@ -211,7 +209,7 @@
   border: 1px solid var(--line);
   border-radius: 6px;
   background: transparent;
-  color: #829080;
+  color: var(--muted);
   font: inherit;
   font-size: 9px;
   letter-spacing: 0.04em;
@@ -220,15 +218,15 @@
 
 .office-sound:hover,
 .office-labels:hover {
-  border-color: #b8c8a8;
-  color: #5d7050;
+  border-color: var(--slate-200);
+  color: var(--ink-soft);
 }
 
 .office-sound[aria-pressed='true'],
 .office-labels[data-mode='names'] {
-  border-color: #aec1a2;
-  background: #eef3e8;
-  color: #4f6644;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -248,10 +246,10 @@
   max-width: 210px;
   max-height: 62px;
   padding: 7px 9px;
-  border: 1px solid #b8b098;
+  border: 1px solid var(--line);
   border-radius: 6px;
-  background: #f4efdd;
-  color: #3d4a42;
+  background: var(--slate-50);
+  color: var(--ink);
   font-size: 11px;
   line-height: 1.35;
   overflow: hidden;
@@ -298,10 +296,10 @@
   width: max-content;
   max-width: 172px;
   padding: 6px 7px 7px;
-  border: 1px solid #b8b098;
+  border: 1px solid var(--line);
   border-radius: 7px;
-  background: #f4efdd;
-  color: #3d4a42;
+  background: var(--slate-50);
+  color: var(--ink);
   font-size: 10px;
   line-height: 1.25;
 }
@@ -314,7 +312,7 @@
 .office-board h3,
 .office-calendar h3 {
   margin: 0 0 4px;
-  color: #6d8468;
+  color: var(--muted);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.07em;
@@ -335,11 +333,11 @@
   width: 100%;
   margin: 0;
   padding: 2px 5px 3px;
-  border: 1px solid #ddd6bd;
-  border-left: 4px solid var(--card-status, #9fae9b);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--card-status, var(--muted));
   border-radius: 4px;
-  background: #fffdf4;
-  color: #33473c;
+  background: var(--paper);
+  color: var(--ink);
   font: inherit;
   font-weight: 600;
   text-align: left;
@@ -350,8 +348,8 @@
 }
 
 .office-board button[data-status='done'] {
-  background: #ece7d4;
-  color: #74836f;
+  background: var(--canvas-deep);
+  color: var(--muted);
 }
 
 .office-calendar li {
@@ -362,7 +360,7 @@
 }
 
 .office-calendar li span:first-child {
-  color: #8a7a44;
+  color: var(--ink-soft);
   font-weight: 700;
 }
 
@@ -380,7 +378,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: #7d8b7c;
+  color: var(--muted);
   font: inherit;
   cursor: pointer;
 }

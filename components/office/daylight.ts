@@ -1,21 +1,13 @@
 import type { Point } from './office-primitives';
+import { sky, type SkyStop } from './palette';
 
 /** Light for one hour of the day. The scene blends between two of these. */
-export interface Daylight {
-  background: string;
-  ground: string;
-  /** The site grid outside the room. */
-  grid: string;
-  ambient: string;
+export interface Daylight extends SkyStop {
   ambientIntensity: number;
   hemisphere: number;
-  sun: string;
   sunIntensity: number;
   sunPosition: Point;
-  fill: string;
   fillIntensity: number;
-  /** The sun or moon seen through the window wall. */
-  disc: string;
   skyHeight: number;
   /** How hard the room's own lamps work, 0 at midday and 1 in the small hours. */
   interior: number;
@@ -28,73 +20,48 @@ type Keyframe = Daylight & { hour: number };
 const KEYFRAMES: Keyframe[] = [
   {
     hour: 2,
-    background: '#151d2a',
-    ground: '#1e2634',
-    grid: '#2e3a4d',
-    // Warm lamplight inside, cool moonlight through the glazing.
-    ambient: '#ffd6a2',
+    ...sky.night,
     ambientIntensity: 0.62,
     hemisphere: 0.22,
-    sun: '#8fa9de',
     sunIntensity: 1.15,
     sunPosition: [-13, 11, 5],
-    fill: '#5d7ba8',
     fillIntensity: 0.45,
-    disc: '#eef3ff',
     skyHeight: 5.4,
     interior: 1,
     night: true,
   },
   {
     hour: 8,
-    background: '#eef1e9',
-    ground: '#f6f7ef',
-    grid: '#b3c1ae',
-    ambient: '#e3dcc9',
+    ...sky.morning,
     ambientIntensity: 0.36,
     hemisphere: 0.66,
-    sun: '#ffd9a8',
     sunIntensity: 3.1,
     sunPosition: [-14, 8, 7],
-    fill: '#a9c9cd',
     fillIntensity: 1,
-    disc: '#ffe3b0',
     skyHeight: 2.4,
     interior: 0.16,
     night: false,
   },
   {
     hour: 13,
-    background: '#f1f4ee',
-    ground: '#ffffff',
-    grid: '#a7b6a3',
-    ambient: '#ffffff',
+    ...sky.noon,
     ambientIntensity: 0.38,
     hemisphere: 0.72,
-    sun: '#ffe6ba',
     sunIntensity: 3.8,
     sunPosition: [-12, 14, 9],
-    fill: '#a9c9cd',
     fillIntensity: 1.1,
-    disc: '#fff6dd',
     skyHeight: 6.2,
     interior: 0,
     night: false,
   },
   {
     hour: 20,
-    background: '#e7e3da',
-    ground: '#efe7db',
-    grid: '#b5a996',
-    ambient: '#f0cfa6',
+    ...sky.evening,
     ambientIntensity: 0.34,
     hemisphere: 0.52,
-    sun: '#ffb072',
     sunIntensity: 2.4,
     sunPosition: [-15, 4.5, 4],
-    fill: '#8fa6b5',
     fillIntensity: 0.8,
-    disc: '#ffb478',
     skyHeight: 1.5,
     interior: 0.5,
     night: false,
@@ -102,18 +69,12 @@ const KEYFRAMES: Keyframe[] = [
   {
     // Dusk: the sky has gone cold and the room is running on its own lamps.
     hour: 21,
-    background: '#222c3c',
-    ground: '#2a3342',
-    grid: '#3b4759',
-    ambient: '#ffcf9a',
+    ...sky.dusk,
     ambientIntensity: 0.58,
     hemisphere: 0.28,
-    sun: '#7f9bd0',
     sunIntensity: 1.35,
     sunPosition: [-14, 7, 5],
-    fill: '#5f7ca6',
     fillIntensity: 0.5,
-    disc: '#e4ecff',
     skyHeight: 3.4,
     interior: 0.88,
     night: true,
@@ -201,15 +162,10 @@ export function afterHours(light: Daylight): Daylight {
 export function windowless(light: Daylight): Daylight {
   return {
     ...light,
-    background: '#1b2321',
-    ground: '#232b29',
-    grid: '#333d3a',
-    ambient: '#ffe0ba',
+    ...sky.windowless,
     ambientIntensity: 0.92,
     hemisphere: 0.3,
-    sun: '#b7c3b8',
     sunIntensity: 0.45,
-    fill: '#8f9a94',
     fillIntensity: 0.4,
     interior: 1,
     night: true,

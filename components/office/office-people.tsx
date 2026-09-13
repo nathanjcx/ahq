@@ -9,10 +9,11 @@ import type { Activity, EmployeeActivity } from './activity';
 import { labelPriority, shortName, type LabelMode } from './office-labels';
 import { Static } from './office-merge';
 import { useOverlayLabel, useOverlayRelayout } from './office-overlay';
-import { Box, C, Cylinder, Round } from './office-primitives';
+import { Box, Cylinder, Round } from './office-primitives';
 import { JanitorCart } from './office-props';
 import type { OfficeEmployee } from './office-scene';
 import type { Station } from './office-stations';
+import { C } from './palette';
 
 type Appearance = {
   gender: 'neutral' | 'feminine' | 'masculine';
@@ -23,12 +24,9 @@ type Appearance = {
   glasses: boolean;
 };
 
-const SKIN_TONES = ['#b98261', '#e2b48e', '#885e48', '#ce9a76', '#bc815e', '#e6bea0'];
-const HAIR_COLORS = ['#3d3029', '#76533b', '#272f2b', '#3c3029', '#9c7653', '#3b3431'];
 
 /** The reserved kinds the workspace creates itself, each with its own kit. */
 export type EmployeeKind = 'worker' | 'janitor' | 'auditor' | 'triage';
-const COAT = '#2f3740';
 
 /** Activities that happen in the chair rather than on the person's feet. */
 const SEATED: Activity[] = [
@@ -66,8 +64,8 @@ function appearanceFor(id: string): Appearance {
     (Math.imul(seed + offset * 2654435761, 40503) >>> 0) % modulus;
   return {
     gender: (['neutral', 'feminine', 'masculine'] as const)[next(1, 3)],
-    skin: SKIN_TONES[next(2, SKIN_TONES.length)],
-    hair: HAIR_COLORS[next(3, HAIR_COLORS.length)],
+    skin: C.skinTones[next(2, C.skinTones.length)],
+    hair: C.hairColors[next(3, C.hairColors.length)],
     hairstyle: (['short', 'long', 'bald'] as const)[next(4, 3)],
     hat: (['none', 'none', 'none', 'cap', 'beanie'] as const)[next(5, 5)],
     glasses: next(6, 10) < 3,
@@ -368,10 +366,10 @@ function Figure({
   });
   const headY = seated ? 1.31 : 1.62;
   const shoulderY = seated ? 1.01 : 1.29;
-  const trouser = kind === 'auditor' ? '#39414a' : index % 2 ? '#5e6259' : '#3d4b51';
+  const trouser = kind === 'auditor' ? C.trouserDark : C.trousers[index % C.trousers.length];
   // The coat, the vest and the cap are the kit; the person's own colour stays as
   // a collar, so a janitor is still recognisably that janitor.
-  const suit = kind === 'auditor' ? COAT : color;
+  const suit = kind === 'auditor' ? C.coat : color;
   const hat = kind === 'janitor' ? 'cap' : appearance.hat;
   // A figure is two dozen little boxes hung off eight joints. The boxes inside
   // any one joint never move relative to each other, so each joint is merged
@@ -399,24 +397,24 @@ function Figure({
         {kind === 'auditor' && (
           <group>
             {/* A long dark coat, and the clipboard the findings are written on. */}
-            <Round p={[0, seated ? 0.72 : 0.84, 0]} s={[0.53, 0.36, 0.33]} color={COAT} radius={0.06} />
+            <Round p={[0, seated ? 0.72 : 0.84, 0]} s={[0.53, 0.36, 0.33]} color={C.coat} radius={0.06} />
             <group position={[0.2, seated ? 1.0 : 1.28, 0.24]} rotation={[-0.5, 0.2, 0]}>
-              <Round s={[0.3, 0.38, 0.02]} color="#7d6a4c" radius={0.01} />
-              <Box p={[0, -0.02, 0.014]} s={[0.26, 0.3, 0.006]} color="#f1ead6" />
-              <Box p={[0, 0.17, 0.018]} s={[0.12, 0.035, 0.012]} color={C.brass} />
+              <Round s={[0.3, 0.38, 0.02]} color={C.wood} radius={0.01} />
+              <Box p={[0, -0.02, 0.014]} s={[0.26, 0.3, 0.006]} color={C.paper} />
+              <Box p={[0, 0.17, 0.018]} s={[0.12, 0.035, 0.012]} color={C.metal} />
             </group>
           </group>
         )}
         {kind === 'triage' && (
           <group>
             {/* A high-visibility vest over the shirt, with two reflective bands. */}
-            <Round p={[0, seated ? 0.95 : 1.16, 0.01]} s={[0.5, 0.48, 0.33]} color="#e0cc4b" radius={0.08} />
+            <Round p={[0, seated ? 0.95 : 1.16, 0.01]} s={[0.5, 0.48, 0.33]} color={C.vest} radius={0.08} />
             {[-0.09, 0.07].map((y) => (
               <Box
                 key={y}
                 p={[0, (seated ? 0.95 : 1.16) + y, 0.17]}
                 s={[0.46, 0.045, 0.02]}
-                color="#c9ced2"
+                color={C.vestBand}
               />
             ))}
           </group>
@@ -433,7 +431,7 @@ function Figure({
             <Round p={[0, -0.22, 0]} s={[0.175, 0.47, 0.195]} color={trouser} radius={0.035} />
             <group position={[0, -0.43, 0]} rotation={[seated ? Math.PI / 2 : 0, 0, 0]}>
               <Round p={[0, -0.18, 0]} s={[0.16, 0.37, 0.17]} color={trouser} radius={0.03} />
-              <Round p={[0, -0.35, 0.06]} s={[0.19, 0.12, 0.31]} color="#e0ddce" radius={0.035} />
+              <Round p={[0, -0.35, 0.06]} s={[0.19, 0.12, 0.31]} color={C.shoe} radius={0.035} />
             </group>
           </group>
         ))}
@@ -466,10 +464,10 @@ function Figure({
             <group key={side}>
               <mesh position={[side * 0.087, 0.005, 0.167]}>
                 <sphereGeometry args={[0.016, 6, 6]} />
-                <meshStandardMaterial color="#32392e" />
+                <meshStandardMaterial color={C.ink} />
               </mesh>
               {appearance.glasses && (
-                <Box p={[side * 0.087, 0.012, 0.175]} s={[0.13, 0.075, 0.018]} color="#454d46" />
+                <Box p={[side * 0.087, 0.012, 0.175]} s={[0.13, 0.075, 0.018]} color={C.metalDark} />
               )}
             </group>
           ))}
@@ -516,7 +514,7 @@ function statusOf(state: EmployeeActivity): 'attention' | 'working' | 'idle' {
   return state.activity === 'idle' ? 'idle' : 'working';
 }
 
-const STATUS_COLOR = { attention: '#e0b262', working: '#7fb069', idle: '#9fae9b' };
+const STATUS_COLOR = { attention: C.amber, working: C.working, idle: C.idle };
 
 export function EmployeeAvatar({
   employee,
@@ -553,7 +551,7 @@ export function EmployeeAvatar({
   const [focused, setFocused] = useState(false);
   const walking = useRef(false);
   const placed = useRef(false);
-  const color = employee.color || C.sage;
+  const color = employee.color || C.seatSoft;
   const traits = useMemo(() => employee.traits ?? [], [employee.traits]);
   const appearance = useMemo(() => appearanceFor(employee.id), [employee.id]);
   const activity = state.activity;
@@ -683,7 +681,9 @@ export function EmployeeAvatar({
             type="button"
             className="office-pill"
             data-status={status}
-            style={{ '--person-color': color } as CSSProperties}
+            style={
+              { '--person-color': color, '--person-status': STATUS_COLOR[status] } as CSSProperties
+            }
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             onPointerEnter={() => setHovered(true)}
@@ -738,7 +738,7 @@ function AttentionRing({ stuck, motion }: { stuck: boolean; motion: boolean }) {
     <mesh ref={ring} position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
       <ringGeometry args={[0.44, 0.62, 48]} />
       <meshBasicMaterial
-        color={stuck ? '#d2764c' : '#e0b262'}
+        color={stuck ? C.red : C.amber}
         transparent
         opacity={0.8}
         depthWrite={false}
