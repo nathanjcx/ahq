@@ -395,6 +395,17 @@ describe('the scheduler tick', () => {
     expect(await jobsOfKind(t, 'triage_run')).toHaveLength(1);
     // The cap is spent, so the ordinary shift does not start.
     expect(await jobsOfKind(t, 'start_shift')).toHaveLength(0);
+
+    // A spent cap looks exactly like an idle deployment from the outside, so the tick says so once —
+    // and only once, however many ticks find the cap still spent.
+    const notices = async () =>
+      (await t.run((ctx) => ctx.db.query('posts').collect())).filter((post) =>
+        post.text.startsWith('Escalation: the daily token cap is spent.'),
+      );
+    expect(await notices()).toHaveLength(1);
+    expect((await notices())[0]).toMatchObject({ kind: 'system', authorName: 'Scheduler' });
+    await tick(t);
+    expect(await notices()).toHaveLength(1);
   });
 });
 

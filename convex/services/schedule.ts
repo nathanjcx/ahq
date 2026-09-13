@@ -6,16 +6,18 @@ import type { Doc, Id } from '../_generated/dataModel';
 import { internalMutation, mutation, query, type MutationCtx } from '../_generated/server';
 import { ensureAuditRun, ensureAuditor, openFindings } from '../lib/audit';
 import { attendeeEmployees, ensureMeeting, meetingTaskFor } from '../lib/meetings';
-import { postShiftReport } from '../lib/posts';
+import { channelFor, insertPost, postShiftReport } from '../lib/posts';
 import type { ReservedKind } from '../lib/reserved';
 import {
   JOB_KINDS,
   PREP_LEAD_HOURS,
+  capReached,
   dailyUsageFor,
   pacingFrom,
   planTick,
   settingsFor,
   shiftDate,
+  shiftDayStart,
   type PlannerAlert,
   type PlannerFinding,
   type PlannerInstance,
@@ -113,6 +115,41 @@ async function meetingsInLead(
   return meetings;
 }
 
+/** The first words of the cap escalation, and how the same day's notice is found again. */
+const CAP_NOTICE = 'Escalation: the daily token cap is spent.';
+
+/**
+ * The one line an operator gets when the cap holds the day's work.
+ *
+ * A spent cap looks exactly like an idle deployment from the outside: the planner stops enqueuing and
+ * nothing anywhere says why. So the tick posts the escalation the workspace channel already carries
+ * for the things a person has to decide about, and logs it for the function logs. Once per workspace
+ * per day: the notice is found again by scanning back over today's system posts, so a tick five
+ * minutes later adds nothing.
+ */
+async function reportCapHold(
+  ctx: MutationCtx,
+  workspace: Doc<'workspaces'>,
+  settings: WorkspaceSettings,
+  now: number,
+  usageToday: number,
+) {
+  const channel = await channelFor(ctx, workspace._id, 'workspace', '');
+  const since = shiftDayStart(now, settings);
+  for await (const post of ctx.db
+    .query('posts')
+    .withIndex('by_channel_kind', (q) => q.eq('channelId', channel._id).eq('kind', 'system'))
+    .order('desc')) {
+    if (post.createdAt < since) break;
+    if (post.text.startsWith(CAP_NOTICE)) return;
+  }
+  const text = `${CAP_NOTICE} ${usageToday.toLocaleString('en-US')} of ${settings.dailyTokenCap.toLocaleString('en-US')} tokens are recorded today, so no further shift, meeting preparation, curation, or audit is scheduled until tomorrow. Incidents still run. Raise the cap in Settings to release the day's work.`;
+  console.warn(
+    `Daily token cap spent workspace=${workspace._id} used=${usageToday} cap=${settings.dailyTokenCap}`,
+  );
+  await insertPost(ctx, { channel, kind: 'system', authorName: 'Scheduler', text });
+}
+
 /** Reads one workspace's scheduling inputs, runs the planner, and enqueues what it returns. */
 async function planWorkspace(ctx: MutationCtx, workspace: Doc<'workspaces'>, now: number) {
   const settings = await settingsFor(ctx, workspace._id);
@@ -208,6 +245,8 @@ async function planWorkspace(ctx: MutationCtx, workspace: Doc<'workspaces'>, now
   const meetings = await meetingsInLead(ctx, entries, settings, now);
 
   const { usage, tokensByTask } = await dailyUsageFor(ctx, workspace._id, settings, now);
+  const usageToday = usage.input + usage.output;
+  if (capReached(settings, usageToday)) await reportCapHold(ctx, workspace, settings, now, usageToday);
   const triageEmployees = new Set(
     instances.filter((instance) => instance.kind === 'triage').map((instance) => instance.employeeId),
   );
@@ -256,7 +295,7 @@ async function planWorkspace(ctx: MutationCtx, workspace: Doc<'workspaces'>, now
     alerts: plannerAlerts,
     findings,
     proposedMemories: proposed.length,
-    usageToday: usage.input + usage.output,
+    usageToday,
     triageUsageToday,
     freeSlots: settings.maxConcurrentInstances - running.length,
     busyEmployeeIds: running.map((shift) => shift.employeeId),

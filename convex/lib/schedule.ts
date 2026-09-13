@@ -111,7 +111,7 @@ export async function dailyUsageFor(
   settings: WorkspaceSettings,
   now: number,
 ) {
-  const since = startOfDay(shiftDayAnchor(now, settings), settings.timezone);
+  const since = shiftDayStart(now, settings);
   const usage = { input: 0, cached: 0, output: 0 };
   const tokensByTask = new Map<string, number>();
   for (const row of await ctx.db
@@ -124,6 +124,11 @@ export async function dailyUsageFor(
     tokensByTask.set(row.taskId, (tokensByTask.get(row.taskId) ?? 0) + row.input + row.output);
   }
   return { usage, tokensByTask };
+}
+
+/** The instant the working day a run belongs to opened, which is the window every daily count uses. */
+export function shiftDayStart(now: number, settings: WorkspaceSettings) {
+  return startOfDay(shiftDayAnchor(now, settings), settings.timezone);
 }
 
 /**
@@ -264,6 +269,15 @@ export interface PlannedJob {
 const SEVERITY_ORDER: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
 /**
+ * Whether today's recorded tokens have spent the workspace's cap. Triage and its pages run on past
+ * this; everything else the planner would have scheduled waits for tomorrow, which is why the tick
+ * says so in the workspace channel rather than leaving the queue quietly empty.
+ */
+export function capReached(settings: WorkspaceSettings, usageToday: number) {
+  return settings.dailyTokenCap > 0 && usageToday >= settings.dailyTokenCap;
+}
+
+/**
  * The scheduler, as one pure function over the workspace's clock, caps, and open work.
  *
  * Priority runs triage, preparation, work shifts (findings first, then the earliest deadline),
@@ -350,8 +364,7 @@ export function planTick(input: PlannerInput): PlannedJob[] {
       // No next page is due once three have been sent, answered or not: `nextAttemptAt` is the whole
       // cadence, so a workspace whose channels deliver nothing stops at three rather than paging on
       // every tick until the incident closes.
-      if (paging.acknowledged || paging.nextAttemptAt === undefined || paging.nextAttemptAt > now)
-        continue;
+      if (paging.acknowledged || paging.nextAttemptAt === undefined || paging.nextAttemptAt > now) continue;
       const taskId = pager.standingTaskId ?? alert.triageTaskId;
       if (!taskId) continue;
       planned.push({
@@ -367,7 +380,7 @@ export function planTick(input: PlannerInput): PlannedJob[] {
       });
     }
 
-  if (settings.dailyTokenCap > 0 && input.usageToday >= settings.dailyTokenCap) return planned;
+  if (capReached(settings, input.usageToday)) return planned;
 
   const candidates: PlannedJob[] = [];
   const meetings = runsWork ? [...input.meetings].sort((a, b) => a.startsAt - b.startsAt) : [];
