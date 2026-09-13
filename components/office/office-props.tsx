@@ -14,7 +14,8 @@ import {
   type BoardStatus,
   type CalendarEntry,
 } from './office-layout';
-import { Box, C, Cylinder, GlowBar, Halo, Round, type Point } from './office-primitives';
+import { Box, Cylinder, GlowBar, Halo, Round, type Point } from './office-primitives';
+import { C } from './palette';
 
 /**
  * The paper the workspace runs on: memory binders and notebooks, the contested
@@ -37,10 +38,6 @@ export type OfficePropKind =
   | 'notice';
 
 export type SelectProp = (kind: OfficePropKind, id?: string) => void;
-
-const AMBER = '#e8a54f';
-const RED = '#c2543f';
-const PAPER = '#f1ead6';
 
 const PICKABLE = { interactive: true };
 
@@ -102,7 +99,7 @@ function Pages({ fill, width, depth, most }: { fill: number; width: number; dept
           key={i}
           p={[0, 0.03 + i * SHEET, 0]}
           s={[width * 0.94, SHEET * 0.8, depth * 0.94]}
-          color={i % 2 ? '#e8e0c8' : PAPER}
+          color={i % 2 ? C.paperShade : C.paper}
         />
       ))}
       <Box p={[0, 0.04 + sheets * SHEET, 0]} s={[width, 0.018, depth]} color={C.walnut} />
@@ -126,9 +123,9 @@ export function MemoryBinder({
   return (
     <Pickable kind="binder" onSelectProp={onSelectProp}>
       <group position={position}>
-        <Box p={[0, 0.014, 0]} s={[0.54, 0.028, 0.44]} color="#4a5f52" />
+        <Box p={[0, 0.014, 0]} s={[0.54, 0.028, 0.44]} color={C.cabinetDeep} />
         <Pages fill={fill} width={0.5} depth={0.4} most={9} />
-        <Box p={[-0.21, 0.06, 0]} s={[0.045, 0.09, 0.42]} color={C.brass} metalness={0.6} roughness={0.35} />
+        <Box p={[-0.21, 0.06, 0]} s={[0.045, 0.09, 0.42]} color={C.metal} metalness={0.6} roughness={0.35} />
       </group>
     </Pickable>
   );
@@ -171,11 +168,11 @@ export function ContestedFolder({
   return (
     <Pickable kind="contested" onSelectProp={onSelectProp}>
       <group position={position}>
-        <Box p={[0, 0.011, 0]} s={[0.34, 0.022, 0.25]} color="#c8ab74" />
-        <Box p={[0, 0.028, 0]} s={[0.31, 0.012, 0.22]} color={PAPER} />
-        <Box p={[0, 0.042, 0]} s={[0.34, 0.016, 0.25]} color="#d3b881" />
+        <Box p={[0, 0.011, 0]} s={[0.34, 0.022, 0.25]} color={C.paperDim} />
+        <Box p={[0, 0.028, 0]} s={[0.31, 0.012, 0.22]} color={C.paper} />
+        <Box p={[0, 0.042, 0]} s={[0.34, 0.016, 0.25]} color={C.cushion} />
         {Array.from({ length: Math.min(3, Math.max(1, count)) }, (_, i) => (
-          <Box key={i} p={[0.09 - i * 0.09, 0.052, 0.115]} s={[0.075, 0.01, 0.05]} color={RED} />
+          <Box key={i} p={[0.09 - i * 0.09, 0.052, 0.115]} s={[0.075, 0.01, 0.05]} color={C.red} />
         ))}
       </group>
     </Pickable>
@@ -197,10 +194,10 @@ export function FindingsFolder({
   return (
     <Pickable kind="findings" id={employeeId} onSelectProp={onSelectProp}>
       <group position={position} rotation={[0, -0.3, 0]}>
-        <Box p={[0, 0.012, 0]} s={[0.33, 0.024, 0.26]} color="#a8552f" />
-        <Box p={[0, 0.03, 0.005]} s={[0.3, 0.014, 0.23]} color={PAPER} />
+        <Box p={[0, 0.012, 0]} s={[0.33, 0.024, 0.26]} color={C.degraded} />
+        <Box p={[0, 0.03, 0.005]} s={[0.3, 0.014, 0.23]} color={C.paper} />
         {Array.from({ length: Math.min(3, Math.max(1, count)) }, (_, i) => (
-          <Box key={i} p={[-0.09 + i * 0.09, 0.044, -0.12]} s={[0.075, 0.012, 0.05]} color={AMBER} />
+          <Box key={i} p={[-0.09 + i * 0.09, 0.044, -0.12]} s={[0.075, 0.012, 0.05]} color={C.amber} />
         ))}
       </group>
     </Pickable>
@@ -208,10 +205,10 @@ export function FindingsFolder({
 }
 
 export const STATUS_COLOR: Record<BoardStatus, string> = {
-  active: '#6f9e5c',
-  waiting: '#e0b262',
-  blocked: '#c2543f',
-  done: '#97a696',
+  active: C.working,
+  waiting: C.amber,
+  blocked: C.red,
+  done: C.done,
 };
 
 /**
@@ -247,7 +244,7 @@ export function TaskBoard({
       ))}
       <group position={[0, BOARD_FACE_Y, 0]}>
         <Round s={[BOARD_WIDTH + 0.14, BOARD_HEIGHT + 0.14, 0.07]} color={C.walnut} radius={0.03} />
-        <Box p={[0, 0, 0.04]} s={[BOARD_WIDTH, BOARD_HEIGHT, 0.012]} color="#3c4a40" />
+        <Box p={[0, 0, 0.04]} s={[BOARD_WIDTH, BOARD_HEIGHT, 0.012]} color={C.mullion} />
         {board.strings.map((string) => {
           const from = centers.get(string.from)!;
           const to = centers.get(string.to)!;
@@ -258,7 +255,7 @@ export function TaskBoard({
               key={`${string.from} ${string.to}`}
               p={[from.x + dx / 2, from.y + dy / 2, 0.052]}
               s={[Math.hypot(dx, dy), 0.016, 0.006]}
-              color="#e0c68a"
+              color={C.inkFaint}
               rotation={[0, 0, Math.atan2(dy, dx)]}
             />
           );
@@ -270,7 +267,7 @@ export function TaskBoard({
               <group position={[x, y, 0.058]}>
                 <Box
                   s={[CARD_TILE[0], CARD_TILE[1], 0.012]}
-                  color={card.status === 'done' ? '#ded9c3' : PAPER}
+                  color={card.status === 'done' ? C.paperDone : C.paper}
                 />
                 <Box
                   p={[-CARD_TILE[0] / 2 + 0.035, 0, 0.008]}
@@ -282,7 +279,7 @@ export function TaskBoard({
                     key={line}
                     p={[0.03 - i * 0.04, line, 0.008]}
                     s={[0.5 - i * 0.08, 0.028, 0.006]}
-                    color="#a9ac96"
+                    color={C.inkSoft}
                   />
                 ))}
                 {/* A pin at the card's centre, where its strings meet. */}
@@ -290,7 +287,7 @@ export function TaskBoard({
                   p={[0, 0, 0.02]}
                   radius={0.022}
                   height={0.03}
-                  color={C.brass}
+                  color={C.metal}
                   rotation={[Math.PI / 2, 0, 0]}
                 />
               </group>
@@ -313,15 +310,15 @@ export function IncidentLamp({
   return (
     <Pickable kind="lamp" id="incident" onSelectProp={onSelectProp}>
       <group position={position}>
-        <Cylinder p={[0, 0.045, 0]} radius={0.26} height={0.09} color="#3e4a42" />
-        <Cylinder p={[0, 0.76, 0]} radius={0.045} height={1.45} color="#4b5a4f" />
-        <Cylinder p={[0, 1.53, 0]} radius={0.17} height={0.06} color="#3e4a42" />
+        <Cylinder p={[0, 0.045, 0]} radius={0.26} height={0.09} color={C.metalDark} />
+        <Cylinder p={[0, 0.76, 0]} radius={0.045} height={1.45} color={C.metalDeep} />
+        <Cylinder p={[0, 1.53, 0]} radius={0.17} height={0.06} color={C.metalDark} />
         <mesh position={[0, 1.62, 0]}>
           <sphereGeometry args={[0.16, 20, 14]} />
-          <meshStandardMaterial color={AMBER} emissive={AMBER} emissiveIntensity={1.5} roughness={0.35} />
+          <meshStandardMaterial color={C.amber} emissive={C.amber} emissiveIntensity={1.5} roughness={0.35} />
         </mesh>
-        <Halo p={[0, 1.62, 0]} size={[1.9, 1.9]} color="#ffb347" opacity={0.62} />
-        <pointLight position={[0, 1.66, 0]} color="#ffb347" intensity={2.4} distance={5} decay={2} />
+        <Halo p={[0, 1.62, 0]} size={[1.9, 1.9]} color={C.amberLit} opacity={0.62} />
+        <pointLight position={[0, 1.66, 0]} color={C.amberLit} intensity={2.4} distance={5} decay={2} />
       </group>
     </Pickable>
   );
@@ -342,19 +339,19 @@ export function AlertBoard({
   return (
     <Pickable kind="alerts" onSelectProp={onSelectProp}>
       <group position={position} rotation={[0, Math.PI / 2, 0]}>
-        <Round s={[1.08, 2.3, 0.09]} color="#2f3d36" radius={0.035} />
-        <Box p={[0, 0.98, 0.055]} s={[0.84, 0.1, 0.012]} color="#546256" />
+        <Round s={[1.08, 2.3, 0.09]} color={C.mullion} radius={0.035} />
+        <Box p={[0, 0.98, 0.055]} s={[0.84, 0.1, 0.012]} color={C.metalDeep} />
         {Array.from({ length: lamps }, (_, i) => (
           <group key={i} position={[0, 0.68 - i * 0.35, 0.06]}>
-            <Box p={[-0.31, 0, 0]} s={[0.18, 0.2, 0.02]} color={i < lit ? RED : '#3b4740'} />
+            <Box p={[-0.31, 0, 0]} s={[0.18, 0.2, 0.02]} color={i < lit ? C.red : C.metalDark} />
             <mesh position={[-0.31, 0, 0.021]}>
               <circleGeometry args={[0.072, 16]} />
-              <meshBasicMaterial color={i < lit ? '#ff9c6a' : '#46534c'} toneMapped={false} />
+              <meshBasicMaterial color={i < lit ? C.beacon : C.metalDeep} toneMapped={false} />
             </mesh>
-            <Box p={[0.1, 0, 0.012]} s={[0.56, 0.09, 0.012]} color={i < lit ? '#d8cfb2' : '#46534c'} />
+            <Box p={[0.1, 0, 0.012]} s={[0.56, 0.09, 0.012]} color={i < lit ? C.paperDim : C.metalDeep} />
           </group>
         ))}
-        {lit > 0 && <Halo p={[-0.31, 0.22, 0.16]} size={[2, 2.4]} color="#ff8e63" opacity={0.42} />}
+        {lit > 0 && <Halo p={[-0.31, 0.22, 0.16]} size={[2, 2.4]} color={C.beacon} opacity={0.42} />}
       </group>
     </Pickable>
   );
@@ -373,11 +370,11 @@ export function StatusLamp({
   alert: boolean;
   onSelectProp?: SelectProp;
 }): JSX.Element {
-  const color = alert ? AMBER : '#7fb069';
+  const color = alert ? C.amber : C.working;
   return (
     <Pickable kind="lamp" id="status" onSelectProp={onSelectProp}>
       <group position={position} rotation={rotation}>
-        <Box p={[0, 0.42, -0.06]} s={[0.82, 0.14, 0.2]} color="#33423a" />
+        <Box p={[0, 0.42, -0.06]} s={[0.82, 0.14, 0.2]} color={C.mullion} />
         <mesh position={[0, 0.06, 0]}>
           <sphereGeometry args={[0.38, 24, 16]} />
           <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.6} roughness={0.4} />
@@ -406,16 +403,16 @@ export function CalendarWall({
   return (
     <Pickable kind="calendar" onSelectProp={onSelectProp}>
       <group position={position}>
-        <Round s={[2.3, 1.62, 0.08]} color="#2c3b33" radius={0.035} />
-        <Box p={[0, 0, 0.045]} s={[2.16, 1.48, 0.014]} color="#f3eeda" />
-        <Box p={[0, 0.58, 0.055]} s={[1.9, 0.075, 0.01]} color="#8a9a86" />
+        <Round s={[2.3, 1.62, 0.08]} color={C.mullion} radius={0.035} />
+        <Box p={[0, 0, 0.045]} s={[2.16, 1.48, 0.014]} color={C.paper} />
+        <Box p={[0, 0.58, 0.055]} s={[1.9, 0.075, 0.01]} color={C.inkSoft} />
         {Array.from({ length: rows }, (_, i) => (
           <group key={i} position={[0, 0.36 - i * 0.21, 0.055]}>
-            <Box p={[-0.83, 0, 0]} s={[0.36, 0.055, 0.01]} color="#b3a06a" />
-            <Box p={[0.22, 0, 0]} s={[1.36, 0.045, 0.01]} color="#9aa894" />
+            <Box p={[-0.83, 0, 0]} s={[0.36, 0.055, 0.01]} color={C.amber} />
+            <Box p={[0.22, 0, 0]} s={[1.36, 0.045, 0.01]} color={C.inkSoft} />
           </group>
         ))}
-        <GlowBar p={[0, -0.83, 0.02]} s={[2, 0.016, 0.02]} color="#d9c48f" />
+        <GlowBar p={[0, -0.83, 0.02]} s={[2, 0.016, 0.02]} />
       </group>
     </Pickable>
   );
@@ -432,15 +429,15 @@ export function LiftDoor({
   return (
     <Pickable kind="lift" onSelectProp={onSelectProp}>
       <group position={position}>
-        <Box p={[0, 1.12, 0]} s={[1.16, 2.32, 0.07]} color={C.brass} metalness={0.55} roughness={0.34} />
+        <Box p={[0, 1.12, 0]} s={[1.16, 2.32, 0.07]} color={C.metal} metalness={0.55} roughness={0.34} />
         {[-1, 1].map((side) => (
-          <Box key={side} p={[side * 0.26, 1.08, 0.05]} s={[0.5, 2.12, 0.03]} color="#44574d" />
+          <Box key={side} p={[side * 0.26, 1.08, 0.05]} s={[0.5, 2.12, 0.03]} color={C.metalDeep} />
         ))}
-        <Box p={[0, 1.08, 0.07]} s={[0.022, 2.12, 0.016]} color="#2a3830" />
-        <Box p={[0, 2.38, 0.04]} s={[0.62, 0.2, 0.05]} color="#2f3d35" />
-        <GlowBar p={[0, 2.38, 0.07]} s={[0.4, 0.08, 0.012]} color="#e8c98d" />
-        <Box p={[0.72, 1.15, 0.05]} s={[0.12, 0.2, 0.03]} color="#2f3d35" />
-        <GlowBar p={[0.72, 1.15, 0.068]} s={[0.06, 0.06, 0.01]} color="#ffd79a" />
+        <Box p={[0, 1.08, 0.07]} s={[0.022, 2.12, 0.016]} color={C.mullion} />
+        <Box p={[0, 2.38, 0.04]} s={[0.62, 0.2, 0.05]} color={C.mullion} />
+        <GlowBar p={[0, 2.38, 0.07]} s={[0.4, 0.08, 0.012]} />
+        <Box p={[0.72, 1.15, 0.05]} s={[0.12, 0.2, 0.03]} color={C.mullion} />
+        <GlowBar p={[0.72, 1.15, 0.068]} s={[0.06, 0.06, 0.01]} />
       </group>
     </Pickable>
   );
@@ -466,28 +463,28 @@ export function JanitorCart({
             p={[side * 0.36, 0.07, end * 0.22]}
             radius={0.07}
             height={0.05}
-            color="#2f3a34"
+            color={C.metalDark}
             rotation={[0, 0, Math.PI / 2]}
           />
         )),
       )}
-      <Box p={[0, 0.32, 0]} s={[0.92, 0.05, 0.58]} color="#7d8c7e" />
-      <Box p={[0, 0.78, 0]} s={[0.92, 0.05, 0.58]} color="#7d8c7e" />
+      <Box p={[0, 0.32, 0]} s={[0.92, 0.05, 0.58]} color={C.cabinet} />
+      <Box p={[0, 0.78, 0]} s={[0.92, 0.05, 0.58]} color={C.cabinet} />
       {[-1, 1].map((side) => (
-        <Box key={side} p={[side * 0.44, 0.55, -0.25]} s={[0.05, 0.95, 0.05]} color="#63715f" />
+        <Box key={side} p={[side * 0.44, 0.55, -0.25]} s={[0.05, 0.95, 0.05]} color={C.cabinetDeep} />
       ))}
-      <Box p={[0, 1.04, -0.25]} s={[0.96, 0.05, 0.05]} color="#63715f" />
+      <Box p={[0, 1.04, -0.25]} s={[0.96, 0.05, 0.05]} color={C.cabinetDeep} />
       {[0, 1, 2, 3, 4].map((i) => (
         <Box
           key={i}
           p={[-0.3 + i * 0.16, 0.98, 0.03]}
           s={[0.13, 0.35, 0.46]}
-          color={[C.terra, C.sage, C.navy, '#d2c5a3', '#8a7a2b'][i]}
+          color={C.books[i % C.books.length]}
         />
       ))}
-      <Round p={[0, 0.5, 0.05]} s={[0.6, 0.3, 0.45]} color="#4f5f55" radius={0.1} />
-      <Cylinder p={[0.5, 0.82, 0.24]} radius={0.02} height={1.5} color="#9a7c4f" rotation={[0.18, 0, 0.2]} />
-      <Round p={[0.66, 1.5, 0.32]} s={[0.22, 0.26, 0.16]} color="#b9b193" radius={0.06} />
+      <Round p={[0, 0.5, 0.05]} s={[0.6, 0.3, 0.45]} color={C.cushionSoft} radius={0.1} />
+      <Cylinder p={[0.5, 0.82, 0.24]} radius={0.02} height={1.5} color={C.wood} rotation={[0.18, 0, 0.2]} />
+      <Round p={[0.66, 1.5, 0.32]} s={[0.22, 0.26, 0.16]} color={C.paperDim} radius={0.06} />
     </group>
   );
 }
@@ -517,7 +514,7 @@ export function WaitingString({
     >
       <Box s={[length, 0.028, 0.028]} color={color} roughness={0.9} />
       {/* The tag hangs at the waiting end, where the figure can see it. */}
-      <Box p={[-length / 2 + 0.2, -0.1, 0]} s={[0.3, 0.18, 0.012]} color={PAPER} />
+      <Box p={[-length / 2 + 0.2, -0.1, 0]} s={[0.3, 0.18, 0.012]} color={C.paper} />
       <Box p={[-length / 2 + 0.2, -0.1, 0.009]} s={[0.08, 0.18, 0.008]} color={color} />
     </group>
   );
@@ -538,18 +535,18 @@ export function EmergencyNotice({
   return (
     <Pickable kind="notice" onSelectProp={onSelectProp}>
       <group position={position}>
-        <Box s={[0.78, 1.04, 0.03]} color="#2f3d35" />
-        <Box p={[0, 0, 0.022]} s={[0.7, 0.94, 0.012]} color={PAPER} />
+        <Box s={[0.78, 1.04, 0.03]} color={C.mullion} />
+        <Box p={[0, 0, 0.022]} s={[0.7, 0.94, 0.012]} color={C.paper} />
         {[0.3, 0.19, -0.22, -0.31, -0.4].map((y) => (
-          <Box key={y} p={[-0.02, y, 0.03]} s={[0.52, 0.032, 0.006]} color="#a9ac96" />
+          <Box key={y} p={[-0.02, y, 0.03]} s={[0.52, 0.032, 0.006]} color={C.inkSoft} />
         ))}
         {/* The stamp, struck across the sheet at an angle. */}
         <group position={[0, -0.02, 0.034]} rotation={[0, 0, 0.18]}>
-          <Box s={[0.62, 0.22, 0.006]} color={RED} />
-          <Box s={[0.58, 0.15, 0.008]} color={PAPER} />
-          <Box s={[0.5, 0.05, 0.01]} color={RED} />
+          <Box s={[0.62, 0.22, 0.006]} color={C.red} />
+          <Box s={[0.58, 0.15, 0.008]} color={C.paper} />
+          <Box s={[0.5, 0.05, 0.01]} color={C.red} />
         </group>
-        <GlowBar p={[0, 0.54, 0.032]} s={[0.66, 0.02, 0.01]} color="#ff9c6a" />
+        <GlowBar p={[0, 0.54, 0.032]} s={[0.66, 0.02, 0.01]} color={C.beacon} />
       </group>
     </Pickable>
   );

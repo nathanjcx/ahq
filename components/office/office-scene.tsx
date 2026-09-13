@@ -20,7 +20,7 @@ import { Static } from './office-merge';
 import { OfficeOverlay } from './office-overlay';
 import { useOfficePan } from './office-pan';
 import { EmployeeAvatar, isSeated, type EmployeeKind } from './office-people';
-import { C, Halo, SurfaceContext, useSurfaceTextures, type Point } from './office-primitives';
+import { Halo, SurfaceContext, useSurfaceTextures, type Point } from './office-primitives';
 import {
   AlertBoard,
   CalendarWall,
@@ -59,6 +59,7 @@ import {
   layoutStations,
   type Station,
 } from './office-stations';
+import { C } from './palette';
 
 /** The one employee shape this component understands. */
 export type OfficeEmployee = {
@@ -282,8 +283,8 @@ function Lighting({ light, budget, sky = true }: { light: Daylight; budget: numb
       <ambientLight ref={ambient} intensity={light.ambientIntensity * dim} color={light.ambient} />
       <hemisphereLight
         args={[
-          light.night ? '#8ea6c8' : '#dce7df',
-          light.night ? '#2a3340' : '#3e4631',
+          light.night ? C.hemiSkyNight : C.hemiSky,
+          light.night ? C.hemiGroundNight : C.hemiGround,
           light.hemisphere * dim,
         ]}
       />
@@ -621,7 +622,7 @@ function FloorDressing({
               <DeskNotebook
                 position={NOTEBOOK}
                 fill={fill}
-                color={person.employee.color ?? C.sage}
+                color={person.employee.color ?? C.seatSoft}
                 employeeId={person.employee.id}
                 onSelectProp={onSelectProp}
               />

@@ -9,6 +9,7 @@ import { boardCards, type CalendarEntry, type MemoryFill } from './office-layout
 import type { SelectProp } from './office-props';
 import type { OfficeDressing, OfficeEmployee, OfficeProvider, OfficeRoom } from './office-scene';
 import type { RenderStats } from './office-view';
+import { C } from './palette';
 import { useActivityCues } from './sound';
 import { useDayQueries, useNow, useWeekCalendar } from './use-day';
 import { useFloorMemory } from './use-memory';
@@ -104,7 +105,7 @@ export function deriveScene({
     providers.push({
       id: connection.provider,
       name: providerCatalog.find((item) => item.id === connection.provider)?.name ?? connection.provider,
-      color: providerCatalog.find((item) => item.id === connection.provider)?.color ?? '#607565',
+      color: providerCatalog.find((item) => item.id === connection.provider)?.color ?? C.metalDeep,
       degraded: dashboard.connections.some(
         (other) => other.provider === connection.provider && DEGRADED.has(other.status),
       ),

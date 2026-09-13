@@ -3,23 +3,9 @@
 import { RoundedBox } from '@react-three/drei';
 import { createContext, useContext, useEffect, useMemo } from 'react';
 import * as THREE from 'three';
+import { C } from './palette';
 
 export type Point = [number, number, number];
-
-export const C = {
-  wall: '#ddd7c7',
-  trim: '#ece6d6',
-  wood: '#a98051',
-  walnut: '#553d2b',
-  desk: '#c3a475',
-  ink: '#243c38',
-  navy: '#315461',
-  sage: '#738c65',
-  terra: '#a35e42',
-  brass: '#be9650',
-  plant: '#315d3b',
-  rug: '#81907a',
-};
 
 /** The two fixed furniture positions the scene and its people share. */
 export const storagePosition: Point = [0.43, 0, -5.23];
@@ -99,7 +85,7 @@ export const SHADOW_MIN = 0.3;
 
 const casts = (size: Point) => Math.max(size[0], size[1], size[2]) >= SHADOW_MIN;
 
-export function GlowBar({ p, s, color = '#ffe1a0' }: { p: Point; s: Point; color?: string }) {
+export function GlowBar({ p, s, color = C.lamp }: { p: Point; s: Point; color?: string }) {
   return (
     <mesh position={p}>
       <boxGeometry args={s} />
@@ -128,7 +114,7 @@ export function Box({
 }) {
   const surfaces = useContext(SurfaceContext);
   const surface =
-    color === C.desk || color === C.walnut
+    color === C.wood || color === C.walnut
       ? surfaces?.wood
       : color === C.wall
         ? surfaces?.plaster
@@ -155,7 +141,7 @@ export function Round({
   rotation?: Point;
 }) {
   const surfaces = useContext(SurfaceContext);
-  const isWood = color === C.desk || color === C.walnut;
+  const isWood = color === C.wood || color === C.walnut;
   return (
     <RoundedBox
       position={p}
@@ -208,7 +194,7 @@ export function Cylinder({
 export function Halo({
   p,
   size,
-  color = '#ffdca4',
+  color = C.lampHalo,
   opacity,
   rotation,
 }: {
