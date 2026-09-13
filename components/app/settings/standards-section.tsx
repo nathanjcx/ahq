@@ -28,8 +28,8 @@ export function StandardsSection({ settings, canManage, save }: SectionProps) {
           onChange={(event) => setStandards(event.target.value)}
         />
         <small>
-          The auditors quote this back at an employee when its work misses it, so write it as rules somebody
-          could fail.
+          The auditors quote this back at an employee when its work misses it, so write it as rules
+          somebody could fail.
         </small>
       </label>
       {!canManage && <LockedNote what="Standards" />}

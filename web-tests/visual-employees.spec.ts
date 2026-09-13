@@ -42,7 +42,9 @@ async function shoot(page: Page, viewport: string, name: string) {
 
 /** A listing's card, found by the name it shows: a phone leaves the cover image out. */
 function listingCard(page: Page, name: string) {
-  return page.locator('.listing-card').filter({ has: page.getByRole('heading', { name, exact: true }) });
+  return page
+    .locator('.listing-card')
+    .filter({ has: page.getByRole('heading', { name, exact: true }) });
 }
 
 async function go(page: Page, label: string, mobile: boolean) {
@@ -93,7 +95,10 @@ for (const viewport of viewports) {
     if (mobile) await page.locator('.md-back').click();
 
     // The hire sheet: a count, the names it would give, and what it adds to capacity and spend.
-    await page.getByRole('button', { name: 'Hire more' }).first().click();
+    await page
+      .getByRole('button', { name: 'Hire more' })
+      .first()
+      .click();
     await expect(page.getByRole('dialog', { name: /^Hire 1 instance of / })).toBeVisible();
     await shoot(page, viewport.name, 'hire-sheet');
     await page.getByRole('button', { name: 'One more' }).click();
@@ -107,17 +112,13 @@ for (const viewport of viewports) {
     await shoot(page, viewport.name, 'marketplace');
     await page.getByRole('button', { name: 'Installed', exact: true }).click();
     await shoot(page, viewport.name, 'marketplace-installed');
-    await listingCard(page, 'Bruno')
-      .getByRole('button', { name: /View details/ })
-      .click();
+    await listingCard(page, 'Bruno').getByRole('button', { name: /View details/ }).click();
     await expect(page.getByRole('dialog', { name: 'Bruno' })).toBeVisible();
     await shoot(page, viewport.name, 'marketplace-detail');
     await page.keyboard.press('Escape');
 
     await page.getByRole('button', { name: 'All', exact: true }).click();
-    await listingCard(page, 'Ada')
-      .getByRole('button', { name: /View details/ })
-      .click();
+    await listingCard(page, 'Ada').getByRole('button', { name: /View details/ }).click();
     await expect(page.getByRole('dialog', { name: 'Ada' })).toBeVisible();
     // Evidence, versions, and the upgrade prompt sit below the gallery inside the sheet's own scroll.
     await page.locator('.sheet-body').evaluate((body) => body.scrollTo(0, body.scrollHeight));

@@ -82,11 +82,7 @@ describe('boardCards', () => {
   });
 
   it('leaves work the floor is no longer carrying off the board', () => {
-    const cards = boardCards([
-      task('tsk_a', 'failed'),
-      task('tsk_b', 'cancelled'),
-      task('tsk_c', 'completed'),
-    ]);
+    const cards = boardCards([task('tsk_a', 'failed'), task('tsk_b', 'cancelled'), task('tsk_c', 'completed')]);
     expect(cards.map((entry) => [entry.id, entry.status])).toEqual([['tsk_c', 'done']]);
   });
 });

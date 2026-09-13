@@ -152,8 +152,8 @@ export function ScheduleSection({ settings, canManage, save }: SectionProps) {
         </label>
       </div>
       <p className="field-hint">
-        Attended hours sit inside working hours. Merges, deploys, and anything else that needs a person wait
-        for them.
+        Attended hours sit inside working hours. Merges, deploys, and anything else that needs a person
+        wait for them.
       </p>
 
       <div className="settings-field">
@@ -173,8 +173,8 @@ export function ScheduleSection({ settings, canManage, save }: SectionProps) {
           ))}
         </div>
         <small>
-          The model a cheap overnight shift runs on belongs to the instance, not the workspace: set it on the
-          employee.
+          The model a cheap overnight shift runs on belongs to the instance, not the workspace: set it on
+          the employee.
         </small>
       </div>
       {!canManage && <LockedNote what="Working hours" />}

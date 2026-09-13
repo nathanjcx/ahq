@@ -59,6 +59,9 @@ export function isOpenAlert(alert: Doc<'alerts'>) {
  * The tools only the emergency allow-list admits: the ones whose use means triage acted without
  * permission, and so owes an incident report. A tool on both lists was authorized either way.
  */
-export function emergencyOnlyTools(settings: { triageAllowList: string[]; emergencyAllowList: string[] }) {
+export function emergencyOnlyTools(settings: {
+  triageAllowList: string[];
+  emergencyAllowList: string[];
+}) {
   return new Set(settings.emergencyAllowList.filter((tool) => !settings.triageAllowList.includes(tool)));
 }

@@ -151,7 +151,9 @@ describe('notification delivery', () => {
     expect(await deliverNotifications(rows)).toEqual({ delivered: 1, undelivered: 0 });
     expect(sent.map((row) => row.endpoint)).toEqual(['https://push.example/live']);
     expect(
-      (await t.run(async (ctx) => ctx.db.query('pushSubscriptions').collect())).map((row) => row.endpoint),
+      (await t.run(async (ctx) => ctx.db.query('pushSubscriptions').collect())).map(
+        (row) => row.endpoint,
+      ),
     ).toEqual(['https://push.example/live']);
   });
 

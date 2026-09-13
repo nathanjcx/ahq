@@ -6,13 +6,13 @@ in [architecture](architecture.md).
 
 ## Service map
 
-| Component            | Role                                                                                         | Check                                          |
-| -------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| Convex               | Every table, the job queue, the journal, the schedule, the crons, subscriptions              | Convex dashboard deployment and function logs  |
+| Component            | Role                                                                                        | Check                                          |
+| -------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Convex               | Every table, the job queue, the journal, the schedule, the crons, subscriptions             | Convex dashboard deployment and function logs  |
 | web                  | WorkOS sessions, the UI, API routes, OAuth callback, webhooks, alert intake, sealing secrets | Railway web deployment and `/health`           |
-| worker               | Queue jobs and turns, Agents sessions, session monitoring, artifact archive                  | Railway worker `/health`                       |
-| gateway              | The only MCP server an agent can reach                                                       | Railway gateway `/health`                      |
-| S3-compatible bucket | Private artifact archive                                                                     | Bucket metrics and an authorized file download |
+| worker               | Queue jobs and turns, Agents sessions, session monitoring, artifact archive                 | Railway worker `/health`                       |
+| gateway              | The only MCP server an agent can reach                                                      | Railway gateway `/health`                      |
+| S3-compatible bucket | Private artifact archive                                                                    | Bucket metrics and an authorized file download |
 
 Sessions run in an OpenAI hosted environment with network access disabled,
 `connection_origin: "service"` MCP transports, and `multi_agent.enabled: false`.
@@ -60,7 +60,7 @@ leave the hours inconsistent, and only a workspace owner or admin may call it.
 | `triageAllowance`                       | 500,000                                                                   | Today's triage tokens; triage stops here and nowhere else   |
 | `memoryBudgets`                         | workspace 2,000, project 3,000, floor 4,000, agent 1,500, summaries 1,500 | Estimated tokens per section                                |
 | `hiringPolicy`                          | `anyone`                                                                  | `anyone`, `admins`, or `approval`                           |
-| `auditPolicy`                           | `soft`                                                                    | `soft` leads the day with findings; `hard` holds other work |
+| `auditPolicy`                           | `soft`                                                                    | `soft` leads the day with findings; `hard` holds other work  |
 | `triageRules`                           | empty                                                                     | GitHub labels or keywords that make a delivery an alert     |
 | `triageAllowList`                       | empty                                                                     | Tools a triage run executes without a proposal              |
 | `emergencyAllowList`                    | empty                                                                     | Tools the emergency rule admits                             |

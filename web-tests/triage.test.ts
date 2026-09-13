@@ -252,7 +252,9 @@ describe('triage authority', () => {
       channel: 'in_app',
     });
     expect((await authority()).unattendedAttempts).toBe(0);
-    await t.run(async (ctx) => ctx.db.patch(attempts[0].id, { deliveredChannel: 'push' }));
+    await t.run(async (ctx) =>
+      ctx.db.patch(attempts[0].id, { deliveredChannel: 'push' }),
+    );
     expect((await authority()).unattendedAttempts).toBe(1);
 
     // Acknowledging is an answer: the count drops back and the emergency path closes.

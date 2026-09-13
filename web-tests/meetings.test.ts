@@ -136,7 +136,9 @@ describe('meetings', () => {
     const meeting = await owner.query(api.meetings.get, { calendarEntryId });
     expect(meeting?.usage).toEqual({ input: 200, cached: 10, output: 40 });
     // Each answer also carries what it cost, so the boardroom prices the question rather than the day.
-    expect(meeting?.turns.filter((turn) => turn.kind === 'answer').map((turn) => turn.usage)).toEqual([
+    expect(
+      meeting?.turns.filter((turn) => turn.kind === 'answer').map((turn) => turn.usage),
+    ).toEqual([
       { input: 100, cached: 10, output: 20 },
       { input: 50, cached: 0, output: 10 },
       { input: 50, cached: 0, output: 10 },

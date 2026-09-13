@@ -93,7 +93,11 @@ export function MarketplacePage({ listings, ...props }: Props) {
         </label>
         <div className="segmented" role="group" aria-label="Filter by what you have hired">
           {SHELVES.map((entry) => (
-            <button key={entry.id} data-active={shelf === entry.id} onClick={() => setShelf(entry.id)}>
+            <button
+              key={entry.id}
+              data-active={shelf === entry.id}
+              onClick={() => setShelf(entry.id)}
+            >
               {entry.label}
             </button>
           ))}

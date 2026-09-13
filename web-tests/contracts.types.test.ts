@@ -30,9 +30,8 @@ test('every Convex query the interface reads satisfies its UI contract', () => {
   expectTypeOf<FunctionReturnType<typeof api.marketplace.list>>().toExtend<Listing[]>();
   expectTypeOf<FunctionReturnType<typeof api.marketplace.hireRequests>>().toExtend<HireRequest[]>();
   expectTypeOf<FunctionReturnType<typeof api.marketplace.instanceStatus>>().toExtend<InstanceStatus[]>();
-  expectTypeOf<
-    FunctionReturnType<typeof api.marketplace.instanceUpgrade>
-  >().toExtend<InstanceUpgrade | null>();
+  expectTypeOf<FunctionReturnType<typeof api.marketplace.instanceUpgrade>>()
+    .toExtend<InstanceUpgrade | null>();
   expectTypeOf<FunctionReturnType<typeof api.marketplace.listingVersions>>().toExtend<VersionChange[]>();
   expectTypeOf<FunctionReturnType<typeof api.floors.board>>().toExtend<FloorPost[]>();
   expectTypeOf<FunctionReturnType<typeof api.integrations.readiness>>().toExtend<ProviderReadiness[]>();

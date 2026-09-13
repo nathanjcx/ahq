@@ -152,7 +152,9 @@ export function MarketplaceStudioPage({
           />
         )}
       </section>
-      {previewing && <MarketplaceStudioPreview draft={previewing} onClose={() => setPreviewing(null)} />}
+      {previewing && (
+        <MarketplaceStudioPreview draft={previewing} onClose={() => setPreviewing(null)} />
+      )}
       {editing && (
         <EmployeeEditor
           draft={editing === 'new' ? undefined : editing}

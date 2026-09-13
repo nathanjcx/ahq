@@ -56,12 +56,7 @@ export function SettingsPanel({
       onClose={onClose}
       footer={
         !workspace ? (
-          <button
-            className="primary-button full"
-            type="submit"
-            form={formId('workspace')}
-            disabled={!configured}
-          >
+          <button className="primary-button full" type="submit" form={formId('workspace')} disabled={!configured}>
             Create workspace
           </button>
         ) : canManageWorkspace && (section.id === 'workspace' || props) ? (

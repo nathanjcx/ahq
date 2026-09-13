@@ -307,10 +307,9 @@ describe('hiring policy', () => {
       'Ada on Launch',
       'Ada on Copy',
     ]);
-    expect((await owner.query(api.marketplace.instanceStatus, {})).map((one) => one.overnightModel)).toEqual([
-      'gpt-5.6-luna',
-      'gpt-5.6-luna',
-    ]);
+    expect(
+      (await owner.query(api.marketplace.instanceStatus, {})).map((one) => one.overnightModel),
+    ).toEqual(['gpt-5.6-luna', 'gpt-5.6-luna']);
     expect((await owner.query(api.workspace.dashboard, {})).floors[0]?.employeeIds).toEqual(
       decided.employeeIds,
     );

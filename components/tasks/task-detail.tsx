@@ -95,7 +95,9 @@ export function TaskDetail({
           {notice}
         </p>
       )}
-      {usage && <p className="task-usage">{usageLine(usage)}</p>}
+      {usage && (
+        <p className="task-usage">{usageLine(usage)}</p>
+      )}
       <div className="task-tabs" role="tablist" aria-label="Task detail">
         {TABS.map((entry) => (
           <button

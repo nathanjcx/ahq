@@ -11,9 +11,9 @@ Create a Convex project with a production deployment, and a WorkOS production en
 In the WorkOS dashboard, for the production environment:
 
 1. Copy the `client_...` client id and the `sk_live_...` API key from **Get started → Quick start**.
-2. Under **Redirects**, add `https://<your web origin>/callback` as a redirect URI and set the sign-in and sign-out redirects to `https://<your web origin>/`. That origin is `APP_URL`, and the callback is `NEXT_PUBLIC_WORKOS_REDIRECT_URI`.
+2. Under **Redirects**, add `https://<your web origin>/callback` as a redirect URI and point the sign-in and sign-out redirects at `https://<your web origin>/`. That origin is `APP_URL`, and the callback is `NEXT_PUBLIC_WORKOS_REDIRECT_URI`.
 3. Under **Authentication**, enable the sign-in methods this deployment allows, and enable organizations. A workspace is keyed by organization when the session has one, and by user otherwise. The organization role decides workspace owner, admin, or member: the `admin` role slug administers the workspace and every other slug is a member. Keep the shipped `admin` and `member` roles.
-4. Under **Authentication → Features → JWT template**, add the person's name and email to the access token, so shared views can name who did what. Convex reads these claims and falls back to "Member" without them.
+4. Under **Authentication → Features → JWT template**, add the person's name and email to the access token so shared views can name who did what. Convex reads these claims and falls back to "Member" without them.
 
    ```json
    {
