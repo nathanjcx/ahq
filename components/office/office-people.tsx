@@ -3,7 +3,7 @@
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, RefObject } from 'react';
 import * as THREE from 'three';
 import type { Activity, EmployeeActivity } from './activity';
 import { labelPriority, shortName, type LabelMode } from './office-labels';
@@ -52,6 +52,8 @@ const SEATED: Activity[] = [
 const CELEBRATION_MS = 3_000;
 /** Every walk across the floor takes the same time, however far it is. */
 const WALK_SECONDS = 1.2;
+/** Articulated limbs move at twenty poses a second, which reads as motion and costs little. */
+const POSE_SECONDS = 0.05;
 
 /** A stable per-person look derived from the id; the office invents nothing per session. */
 function appearanceFor(id: string): Appearance {
@@ -74,7 +76,6 @@ function appearanceFor(id: string): Appearance {
 
 /** Every joint the office animates. Left is index 0, right is index 1. */
 type Pose = {
-  seated: boolean;
   shoulder: [number, number];
   elbow: [number, number];
   roll: [number, number];
@@ -86,7 +87,6 @@ type Pose = {
 };
 
 const REST: Pose = {
-  seated: false,
   shoulder: [-0.1, -0.1],
   elbow: [-0.15, -0.15],
   roll: [-0.07, 0.07],
@@ -98,10 +98,33 @@ const REST: Pose = {
 };
 const SEATED_REST: Pose = {
   ...REST,
-  seated: true,
   shoulder: [-0.77, -0.77],
   elbow: [-0.85, -0.85],
 };
+
+/**
+ * The joints a pose is written to. A pose changes many times a second, so it is
+ * applied to these objects in the frame loop rather than re-rendered: React only
+ * hears about a figure when its build, its colour or its activity changes.
+ */
+type Joints = {
+  body: THREE.Group | null;
+  head: THREE.Group | null;
+  shoulder: (THREE.Group | null)[];
+  elbow: (THREE.Group | null)[];
+};
+
+function applyPose(joints: Joints, pose: Pose) {
+  if (joints.body) {
+    joints.body.position.y = pose.hop;
+    joints.body.rotation.set(0, pose.spin, pose.lean);
+  }
+  joints.head?.rotation.set(pose.headPitch, pose.headYaw, 0);
+  for (let side = 0; side < 2; side++) {
+    joints.shoulder[side]?.rotation.set(pose.shoulder[side], 0, pose.roll[side]);
+    joints.elbow[side]?.rotation.set(pose.elbow[side], 0, 0);
+  }
+}
 
 /**
  * One pose for one moment.
@@ -287,20 +310,61 @@ function poseFor(activity: Activity, time: number, age: number, traits: string[]
   }
 }
 
+/**
+ * One person, posed. The joints are written to in the frame loop at 20 poses a
+ * second, so a figure only re-renders when its build, its colour or what it is
+ * doing changes.
+ */
 function Figure({
   color,
   index,
-  pose,
+  activity,
+  traits,
+  since,
+  motion,
+  walking,
   appearance,
   kind = 'worker',
 }: {
   appearance: Appearance;
   color: string;
   index: number;
-  pose: Pose;
+  activity: Activity;
+  traits: string[];
+  /** When this activity started, so an animation that plays once can end. */
+  since: number;
+  motion: boolean;
+  /** Set while the figure is crossing the floor: it walks instead of posing. */
+  walking: RefObject<boolean>;
   kind?: EmployeeKind;
 }) {
-  const { seated } = pose;
+  const joints = useRef<Joints>({ body: null, head: null, shoulder: [null, null], elbow: [null, null] });
+  const seated = SEATED.includes(activity);
+  // Reduced motion still changes pose, it just never tweens between them. This is
+  // also the pose a figure holds until its first frame.
+  const still = useMemo(() => poseFor(activity, 0, 0, traits), [activity, traits]);
+  useLayoutEffect(() => {
+    applyPose(joints.current, still);
+  }, [still]);
+  const clock = useRef(index * 7.3 + 7);
+  const posed = useRef(-1);
+  /** The scene clock this activity began on, so its age costs no call to the wall clock. */
+  const began = useRef(0);
+  useEffect(() => {
+    began.current = clock.current;
+  }, [activity, since]);
+  useFrame((_, delta) => {
+    if (!motion) return;
+    clock.current += Math.min(delta, 0.05);
+    if (clock.current - posed.current <= POSE_SECONDS) return;
+    posed.current = clock.current;
+    applyPose(
+      joints.current,
+      walking.current
+        ? REST
+        : poseFor(activity, clock.current, clock.current - began.current, traits),
+    );
+  });
   const headY = seated ? 1.31 : 1.62;
   const shoulderY = seated ? 1.01 : 1.29;
   const trouser = kind === 'auditor' ? '#39414a' : index % 2 ? '#5e6259' : '#3d4b51';
@@ -314,7 +378,11 @@ function Figure({
   const kit = `${kind} ${suit} ${color} ${trouser} ${appearance.skin} ${appearance.gender} ${seated}`;
   const face = `${hat} ${appearance.hairstyle} ${appearance.glasses} ${appearance.skin} ${appearance.hair} ${suit}`;
   return (
-    <group position={[0, pose.hop, 0]} rotation={[0, pose.spin, pose.lean]}>
+    <group
+      ref={(group) => {
+        joints.current.body = group;
+      }}
+    >
       <Static revision={kit}>
         <Round
           p={[0, seated ? 0.91 : 1.12, 0]}
@@ -369,7 +437,12 @@ function Figure({
           </group>
         ))}
       </Static>
-      <group position={[0, headY, 0]} rotation={[pose.headPitch, pose.headYaw, 0]}>
+      <group
+        position={[0, headY, 0]}
+        ref={(group) => {
+          joints.current.head = group;
+        }}
+      >
         <Static revision={face}>
           {hat !== 'none' && (
             <group>
@@ -403,9 +476,19 @@ function Figure({
       </group>
       {[-1, 1].map((side, i) => (
         <group key={side}>
-          <group position={[side * 0.27, shoulderY, 0]} rotation={[pose.shoulder[i], 0, pose.roll[i]]}>
+          <group
+            position={[side * 0.27, shoulderY, 0]}
+            ref={(group) => {
+              joints.current.shoulder[i] = group;
+            }}
+          >
             <Round p={[0, -0.15, 0]} s={[0.16, 0.31, 0.18]} color={suit} radius={0.045} />
-            <group position={[0, -0.29, 0]} rotation={[pose.elbow[i], 0, 0]}>
+            <group
+              position={[0, -0.29, 0]}
+              ref={(group) => {
+                joints.current.elbow[i] = group;
+              }}
+            >
               <Static revision={appearance.skin}>
                 <Round p={[0, -0.11, 0]} s={[0.13, 0.25, 0.14]} color={appearance.skin} radius={0.04} />
                 <Round p={[0, -0.245, 0.02]} s={[0.13, 0.12, 0.135]} color={appearance.skin} radius={0.04} />
@@ -462,10 +545,7 @@ export function EmployeeAvatar({
   const walk = useRef({ from: new THREE.Vector3(), to: new THREE.Vector3(), t: 1 });
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
-  /** The frame loop's pose. Null until the first frame, and ignored without motion. */
-  const [animated, setAnimated] = useState<Pose | null>(null);
-  const elapsed = useRef(index * 7.3 + 7);
-  const lastPoseUpdate = useRef(-1);
+  const walking = useRef(false);
   const placed = useRef(false);
   const color = employee.color || C.sage;
   const traits = useMemo(() => employee.traits ?? [], [employee.traits]);
@@ -476,9 +556,6 @@ export function EmployeeAvatar({
   const label = useOverlayLabel(employee.id);
   const relayout = useOverlayRelayout();
   const headroom = seated ? 1.95 : 2.24;
-  // Reduced motion still changes pose, it just never tweens between them.
-  const still = useMemo(() => poseFor(activity, 0, 0, traits), [activity, traits]);
-  const pose = motion ? (animated ?? still) : still;
   const [homeX, homeY, homeZ] = station.at;
   const facing = station.facing;
 
@@ -525,7 +602,6 @@ export function EmployeeAvatar({
     if (!figure) return;
     if (motion) {
       const step = Math.min(delta, 0.05);
-      elapsed.current += step;
       const journey = walk.current;
       if (journey.t < 1) {
         journey.t = Math.min(1, journey.t + step / WALK_SECONDS);
@@ -542,16 +618,7 @@ export function EmployeeAvatar({
       } else {
         figure.rotation.y = turnToward(figure.rotation.y, facing, step * 4.5);
       }
-      // Articulated limbs update at 20fps. A figure crossing the floor walks
-      // rather than carrying its desk pose with it.
-      if (elapsed.current - lastPoseUpdate.current > 0.05) {
-        lastPoseUpdate.current = elapsed.current;
-        setAnimated(
-          journey.t < 1
-            ? REST
-            : poseFor(activity, elapsed.current, (Date.now() - state.since) / 1000, traits),
-        );
-      }
+      walking.current = journey.t < 1;
     }
     label?.anchor.set(figure.position.x, headroom, figure.position.z);
   });
@@ -570,7 +637,17 @@ export function EmployeeAvatar({
         }}
         onPointerOut={() => setHovered(false)}
       >
-        <Figure color={color} appearance={appearance} index={index} pose={pose} kind={employee.kind} />
+        <Figure
+          color={color}
+          appearance={appearance}
+          index={index}
+          activity={activity}
+          traits={traits}
+          since={state.since}
+          motion={motion}
+          walking={walking}
+          kind={employee.kind}
+        />
         {/* The janitor brings the cart with them, parked at their side, and leaves it to sit down. */}
         {employee.kind === 'janitor' && !seated && (
           <JanitorCart position={[0.85, 0, -0.22]} rotation={-0.55} />

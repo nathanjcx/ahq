@@ -4,7 +4,16 @@ import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { Box, C, Cylinder, GlowBar, Halo, Round, type Point } from './office-primitives';
 
-export function ArchitecturalDetails({ desks, interior }: { desks: Point[]; interior: number }) {
+export function ArchitecturalDetails({
+  desks,
+  interior,
+  lamps,
+}: {
+  desks: Point[];
+  interior: number;
+  /** The desks whose lamps are lit. Every desk when absent, which is the working day. */
+  lamps?: number[];
+}) {
   return (
     <group>
       {/* A layered, chamfered architectural model rather than a floating floor. */}
@@ -74,30 +83,38 @@ export function ArchitecturalDetails({ desks, interior }: { desks: Point[]; inte
       ))}
       <Cylinder p={[1.43, 1.25, -2.95]} radius={0.022} height={0.31} color={C.brass} />
       {/* Every workstation has a practical lamp and a small personal object. */}
-      {desks.map((p, i) => (
-        <group key={i} position={[p[0] + 0.92, 0.985, p[2] - 0.32]}>
-          <Cylinder p={[0, 0.019, 0]} radius={0.12} height={0.038} color="#555b48" />
-          <Cylinder p={[0, 0.23, 0]} radius={0.014} height={0.43} color={C.brass} />
-          <Box p={[-0.075, 0.44, 0]} s={[0.18, 0.035, 0.035]} color={C.brass} metalness={0.6} />
-          <mesh position={[-0.16, 0.4, 0]} castShadow>
-            <coneGeometry args={[0.115, 0.12, 20, 1, true]} />
-            <meshStandardMaterial
-              color={i % 2 ? '#ad8750' : '#445a42'}
-              side={THREE.DoubleSide}
-              roughness={0.5}
-            />
-          </mesh>
-          <GlowBar p={[-0.16, 0.343, 0]} s={[0.15, 0.012, 0.1]} color="#ffe2a2" />
-          <Halo p={[-0.16, 0.3, 0]} size={[1.5, 1.5]} opacity={interior * 0.5} />
-          <pointLight
-            position={[-0.16, 0.32, 0]}
-            color="#ffdd9b"
-            intensity={0.16 + interior * 2.6}
-            distance={2.6}
-            decay={2}
-          />
-        </group>
-      ))}
+      {desks.map((p, i) => {
+        // An unlit fitting is still a lamp on the desk; it just is not switched on.
+        const lit = !lamps || lamps.includes(i);
+        return (
+          <group key={i} position={[p[0] + 0.92, 0.985, p[2] - 0.32]}>
+            <Cylinder p={[0, 0.019, 0]} radius={0.12} height={0.038} color="#555b48" />
+            <Cylinder p={[0, 0.23, 0]} radius={0.014} height={0.43} color={C.brass} />
+            <Box p={[-0.075, 0.44, 0]} s={[0.18, 0.035, 0.035]} color={C.brass} metalness={0.6} />
+            <mesh position={[-0.16, 0.4, 0]} castShadow>
+              <coneGeometry args={[0.115, 0.12, 20, 1, true]} />
+              <meshStandardMaterial
+                color={i % 2 ? '#ad8750' : '#445a42'}
+                side={THREE.DoubleSide}
+                roughness={0.5}
+              />
+            </mesh>
+            {lit && (
+              <group>
+                <GlowBar p={[-0.16, 0.343, 0]} s={[0.15, 0.012, 0.1]} color="#ffe2a2" />
+                <Halo p={[-0.16, 0.3, 0]} size={[1.5, 1.5]} opacity={interior * 0.5} />
+                <pointLight
+                  position={[-0.16, 0.32, 0]}
+                  color="#ffdd9b"
+                  intensity={0.16 + interior * 2.6}
+                  distance={2.6}
+                  decay={2}
+                />
+              </group>
+            )}
+          </group>
+        );
+      })}
       {[1, 3].map((index) => (
         <group key={index} position={[desks[index][0], 0.985, desks[index][2] - 0.34]}>
           <Round p={[0, 0.022, 0]} s={[0.37, 0.04, 0.25]} color="#3e4d45" radius={0.02} />

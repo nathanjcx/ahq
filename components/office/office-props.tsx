@@ -493,20 +493,6 @@ export function JanitorCart({
 }
 
 /**
- * The desk lamp of someone on a cheap overnight shift: the same fitting the room
- * already has, lit, while the rest of the floor is dark.
- */
-export function OvernightLamp({ position }: { position: Point }): JSX.Element {
-  return (
-    <group position={position}>
-      <GlowBar p={[0, 0, 0]} s={[0.17, 0.016, 0.12]} color="#fff0cb" />
-      <Halo p={[0, -0.05, 0]} size={[3.2, 3.2]} opacity={0.8} />
-      <pointLight position={[0, -0.02, 0]} color="#ffdd9b" intensity={5} distance={5} decay={2} />
-    </group>
-  );
-}
-
-/**
  * The string a waiting task lives on: taut from whoever is waiting to the card
  * they are waiting for, with a tag at the near end. Amber for waiting, red for
  * blocked, the same two colours the board's cards use.
@@ -544,16 +530,14 @@ export function WaitingString({
  */
 export function EmergencyNotice({
   position,
-  rotation,
   onSelectProp,
 }: {
   position: Point;
-  rotation?: Point;
   onSelectProp?: SelectProp;
 }): JSX.Element {
   return (
     <Pickable kind="notice" onSelectProp={onSelectProp}>
-      <group position={position} rotation={rotation}>
+      <group position={position}>
         <Box s={[0.78, 1.04, 0.03]} color="#2f3d35" />
         <Box p={[0, 0, 0.022]} s={[0.7, 0.94, 0.012]} color={PAPER} />
         {[0.3, 0.19, -0.22, -0.31, -0.4].map((y) => (
