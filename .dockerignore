@@ -3,7 +3,9 @@
 node_modules
 .next
 dist
+dist-desktop
 release
+assets
 .env
 .env.*
 !.env.example
