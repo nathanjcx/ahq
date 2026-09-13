@@ -30,6 +30,42 @@ export interface Capability {
   tools: string[];
   optional: boolean;
 }
+/** The platform's own production tools, served by the gateway's studio server. */
+export const STUDIO_TOOLS = { generate_image: 'renders an image from a brief' } as const;
+export type StudioTool = keyof typeof STUDIO_TOOLS;
+/** Libraries a session's environment may install, each with what an employee reaches for it for. */
+export const WORKSHOP_LIBRARIES = {
+  reportlab: 'PDF documents',
+  'python-pptx': 'slide decks as .pptx',
+  'python-docx': 'documents as .docx',
+  openpyxl: 'spreadsheets as .xlsx',
+  matplotlib: 'charts, saved as PNG or embedded',
+  pillow: 'image composition and resizing',
+  pypdf: 'reading, splitting, and merging PDFs',
+  pandas: 'tabular analysis',
+  markdown: 'Markdown to HTML',
+} as const;
+export type WorkshopLibrary = keyof typeof WORKSHOP_LIBRARIES;
+/** The kinds of file an employee produces, as the listing promises them. */
+export const DELIVERABLES = {
+  pdf: 'PDF',
+  deck: 'slide deck',
+  document: 'document',
+  spreadsheet: 'spreadsheet',
+  chart: 'chart',
+  image: 'image',
+} as const;
+export type Deliverable = keyof typeof DELIVERABLES;
+/**
+ * What an employee can make on its own, apart from any integration: the studio tools it may call,
+ * the libraries installed in its environment, and the deliverables its listing promises. Absent
+ * means none, which is right for an engineer whose deliverable is a pull request.
+ */
+export interface Workshop {
+  tools: StudioTool[];
+  libraries: WorkshopLibrary[];
+  deliverables: Deliverable[];
+}
 /** Public character of an employee. Carried into the model's operating rules and into the office scene. */
 export interface Persona {
   /** One or two sentences on how this employee speaks and works. */
@@ -63,6 +99,7 @@ export interface Listing {
   strengths: string[];
   limitations: string[];
   capabilities: Capability[];
+  workshop?: Workshop;
   model: ModelId;
   color: string;
   media: { url: string; type: 'image' | 'video'; alt: string }[];

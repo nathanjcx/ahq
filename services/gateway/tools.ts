@@ -14,6 +14,7 @@ import { janitorTools } from './servers/janitor';
 import { memoryTools } from './servers/memory';
 import { internalServer, jsonResult } from './servers/shared';
 import { shiftTools } from './servers/shift';
+import { studioTools } from './servers/studio';
 import { dispatchTriageWrite, triageProviderTools, triageTools } from './servers/triage';
 
 export interface GatewayRequest {
@@ -206,6 +207,7 @@ export function internalMcp(request: GatewayRequest, server: InternalServer): Se
   if (server === 'floor') return internalServer(request, 'floor', floorTools);
   if (server === 'memory') return internalServer(request, 'memory', memoryTools);
   if (server === 'shift') return internalServer(request, 'shift', shiftTools);
+  if (server === 'studio') return internalServer(request, 'studio', studioTools);
   if (server === 'audit') return internalServer(request, 'audit', auditTools);
   if (server === 'janitor') return internalServer(request, 'janitor', janitorTools);
   return internalServer(request, 'triage', triageTools, {

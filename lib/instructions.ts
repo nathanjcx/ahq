@@ -1,4 +1,4 @@
-import type { Persona } from './contracts/core';
+import { WORKSHOP_LIBRARIES, type Persona, type Workshop } from './contracts/core';
 import { personaInstructions } from './personas';
 
 /**
@@ -19,6 +19,29 @@ export const FLOOR_RULES = `This task is on a floor: post a short note on the bo
 export const TRIAGE_RULES = `You answer this workspace’s incidents. Reproduce before you fix, post what you reproduced to the affected floors, and fix as a pull request. Tools on the triage allow-list execute without a proposal; everything else needs a person. Outside attended hours, when three pages have been delivered and nobody has answered, the emergency allow-list opens and you may merge and deploy to stop the bleeding. That authority carries one obligation you cannot defer: verify the fix, then call file_incident_report in the same run with the issue, the reproduction, the fix, why you acted without permission, the side effects, and the knock-on risks. The report is mandatory. A run that used the emergency allow-list and filed none has a placeholder recorded in its place and an escalation posted to the workspace channel, and the next meeting opens with it.`;
 
 /** What a worker on a floor is told, the way the studio previews it. */
+/**
+ * What this employee makes on its own, from its workshop: the libraries installed in its environment
+ * and the studio tools it may call. Nothing is named that the session does not have.
+ */
+export function deliverableRules(workshop: Workshop | undefined): string[] {
+  if (!workshop || (!workshop.libraries.length && !workshop.tools.length)) return [];
+  const lines = [
+    'A deliverable is a file in /workspace/outputs, never only a message.',
+    ...(workshop.libraries.length
+      ? [
+          `Python has ${workshop.libraries.map((name) => `${name} (${WORKSHOP_LIBRARIES[name]})`).join(', ')}. Build a PDF or deck from real content with a clear type hierarchy, generous margins, one accent colour, and charts drawn from the numbers, never a screenshot of text.`,
+        ]
+      : []),
+    ...(workshop.tools.includes('generate_image')
+      ? [
+          'For a photograph, illustration, hero image, or social visual, call generate_image with a specific brief: subject, composition, palette, and any words exactly as they must appear. It is archived as a file of this task and does not land in your environment, so compose around it rather than embedding it.',
+        ]
+      : []),
+    'A connected Google Workspace is the right place for a document, sheet, or deck the person will keep editing; a file in /workspace/outputs is right for a finished piece.',
+  ];
+  return [lines.join(' ')];
+}
+
 export const WORKER_ROLE_RULES = [PACING_RULES, MEMORY_RULES, FLOOR_RULES];
 
 /** Where the compiled Working memory block lands, shown in the studio in place of real memory. */

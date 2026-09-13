@@ -654,3 +654,18 @@
     flex-wrap: wrap;
   }
 }
+
+/* Workshop rows on the detail: label and value, no provider mark. */
+.market-workshop > div:not(.capability-empty) {
+  grid-template-columns: 105px minmax(0, 1fr);
+}
+.workshop-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.capability-row > span.deliverable-pill {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft, #e8f0fb);
+  color: var(--accent, #2e5fb8);
+}

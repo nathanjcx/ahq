@@ -1,6 +1,15 @@
 'use client';
 
-import { ArrowRight, Bot, LockKeyhole, Search, ShieldCheck, SlidersHorizontal, Users } from 'lucide-react';
+import {
+  ArrowRight,
+  Bot,
+  FileOutput,
+  LockKeyhole,
+  Search,
+  ShieldCheck,
+  SlidersHorizontal,
+  Users,
+} from 'lucide-react';
 import { useState, type CSSProperties } from 'react';
 import type { PageProps } from '../app/page-props';
 import { providerName } from '../shared/format';
@@ -9,7 +18,7 @@ import { ProviderMark } from '../shared/marks';
 import { PageIntro } from '../shared/page-intro';
 import { missingRequiredCapabilities } from './capabilities';
 import { MarketplaceDetail } from './marketplace-detail';
-import type { Employee, Listing } from '@/lib/contracts';
+import { DELIVERABLES, type Employee, type Listing } from '@/lib/contracts';
 import { pluralize } from '@/lib/text';
 import './marketplace.css';
 
@@ -93,11 +102,7 @@ export function MarketplacePage({ listings, ...props }: Props) {
         </label>
         <div className="segmented" role="group" aria-label="Filter by what you have hired">
           {SHELVES.map((entry) => (
-            <button
-              key={entry.id}
-              data-active={shelf === entry.id}
-              onClick={() => setShelf(entry.id)}
-            >
+            <button key={entry.id} data-active={shelf === entry.id} onClick={() => setShelf(entry.id)}>
               {entry.label}
             </button>
           ))}
@@ -146,6 +151,12 @@ export function MarketplacePage({ listings, ...props }: Props) {
                       <span key={capability.provider}>
                         <ProviderMark provider={capability.provider} small />
                         {providerName(capability.provider)}
+                      </span>
+                    ))}
+                    {listing.workshop?.deliverables.map((kind) => (
+                      <span key={kind} className="deliverable-pill">
+                        <FileOutput size={11} />
+                        {DELIVERABLES[kind]}
                       </span>
                     ))}
                   </div>

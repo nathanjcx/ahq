@@ -18,7 +18,7 @@ import { ProviderMark } from '../shared/marks';
 import { Sheet } from '../shared/sheet';
 import { relativeTime } from '../shared/time';
 import { useUiQuery } from '../shared/use-ui-query';
-import type { Employee, Listing, ProviderId } from '@/lib/contracts';
+import { DELIVERABLES, type Employee, type Listing, type ProviderId } from '@/lib/contracts';
 import { pluralize } from '@/lib/text';
 import { asId, uiApi } from '@/lib/ui-api';
 
@@ -198,6 +198,26 @@ export function MarketplaceDetail({
               <div className="capability-empty">No integrations required</div>
             )}
           </section>
+          {listing.workshop && (
+            <section className="market-capabilities market-workshop">
+              <h3>Produces on its own</h3>
+              <p>Files this employee makes without an integration, archived with the task.</p>
+              <div>
+                <span className="workshop-label">Deliverables</span>
+                <code>
+                  {listing.workshop.deliverables.map((kind) => DELIVERABLES[kind]).join(', ') || 'None'}
+                </code>
+              </div>
+              <div>
+                <span className="workshop-label">Environment</span>
+                <code>{listing.workshop.libraries.join(', ') || 'No libraries'}</code>
+              </div>
+              <div>
+                <span className="workshop-label">Studio</span>
+                <code>{listing.workshop.tools.join(', ') || 'No studio tools'}</code>
+              </div>
+            </section>
+          )}
           {behind.length > 0 && (
             <section className="upgrade-prompt">
               <ArrowUpCircle size={18} />
@@ -206,8 +226,8 @@ export function MarketplaceDetail({
                   Version {listing.currentVersion} is available to {pluralize(behind.length, 'instance')}
                 </strong>
                 <small>
-                  An upgrade re-checks the connections this employee needs. If one is missing, nothing
-                  changes and the instance stays where it is.
+                  An upgrade re-checks the connections this employee needs. If one is missing, nothing changes
+                  and the instance stays where it is.
                 </small>
                 <div className="upgrade-instances">
                   {behind.map((instance) => (

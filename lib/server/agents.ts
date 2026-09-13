@@ -4,7 +4,14 @@ import type { TokenUsage } from 'openai/resources/beta/agents/agents';
 import type { SessionCreateParamsNonStreaming } from 'openai/resources/beta/agents/sessions/sessions';
 import type { TaskContext } from '../../services/types';
 import type { EmployeeKind, ModelId, TaskKind } from '../contracts';
-import { FLOOR_RULES, MEMORY_RULES, PACING_RULES, TRIAGE_RULES, composeInstructions } from '../instructions';
+import {
+  FLOOR_RULES,
+  MEMORY_RULES,
+  PACING_RULES,
+  TRIAGE_RULES,
+  composeInstructions,
+  deliverableRules,
+} from '../instructions';
 import { query, mutate } from './backend';
 import { compileWorkingMemory, type WorkingMemory, type WorkingMemoryInputs } from './memory';
 import { requiredEnv } from './secrets';
@@ -17,7 +24,7 @@ export function agentsClient() {
 }
 
 /** The internal tool servers the gateway serves, one path segment each under `/mcp/`. */
-const INTERNAL_SERVERS = ['floor', 'memory', 'shift', 'audit', 'triage', 'janitor'] as const;
+const INTERNAL_SERVERS = ['floor', 'memory', 'shift', 'studio', 'audit', 'triage', 'janitor'] as const;
 export type InternalServer = (typeof INTERNAL_SERVERS)[number];
 
 export function isInternalServer(value: string): value is InternalServer {
@@ -28,6 +35,7 @@ const SERVER_LABELS: Record<InternalServer, string> = {
   floor: 'astra_floor',
   memory: 'astra_memory',
   shift: 'astra_shift',
+  studio: 'astra_studio',
   audit: 'astra_audit',
   triage: 'astra_triage',
   janitor: 'astra_janitor',
@@ -43,6 +51,7 @@ const SERVER_TOOLS: Record<InternalServer, string[]> = {
   floor: ['floor_post', 'floor_handoff'],
   memory: ['remember', 'recall', 'read_memory', 'read_board'],
   shift: ['submit_report', 'submit_summary'],
+  studio: ['generate_image'],
   audit: ['read_reports', 'read_journal', 'read_artifact', 'read_memory', 'read_channel', 'submit_findings'],
   triage: ['report_reproduction', 'resolve_alert', 'file_incident_report'],
   janitor: ['merge', 'contest', 'archive', 'promote', 'read_memory'],
@@ -68,8 +77,10 @@ export function serversFor(employeeKind: EmployeeKind, taskKind: TaskKind): Inte
   if (employeeKind === 'janitor') return ['janitor', 'memory'];
   if (employeeKind === 'triage') return ['triage', 'memory', 'floor'];
   // A worker's meeting and wrap-up turns are the same instance on a hidden session, so they keep the
-  // same reach; `shift` is where a report and a task summary are filed.
-  return taskKind === 'work' || taskKind === 'meeting' ? ['memory', 'floor', 'shift'] : ['memory', 'shift'];
+  // same reach; `shift` is where a report and a task summary are filed, `studio` renders images.
+  return taskKind === 'work' || taskKind === 'meeting'
+    ? ['memory', 'floor', 'shift', 'studio']
+    : ['memory', 'shift'];
 }
 
 /** Provider integrations are for hired employees. A reserved kind reaches a provider only through triage. */
@@ -104,8 +115,9 @@ export function sessionConfiguration(
     );
   });
   const gateway = requiredEnv('MCP_GATEWAY_URL').replace(/\/$/, '');
+  const workshop = version.workshop;
   const internal = (options.servers ?? serversFor(employee.kind, task.kind)).filter(
-    (server) => server !== 'floor' || context.floor,
+    (server) => (server !== 'floor' || context.floor) && (server !== 'studio' || workshop?.tools.length),
   );
   const mcpServer = (label: string, allowed: string[], target: string, required: boolean) => ({
     type: 'mcp' as const,
@@ -140,11 +152,19 @@ export function sessionConfiguration(
     : [];
   // Internal servers are ours: no provider, no policy row, no proposal.
   for (const server of internal)
-    tools.push(mcpServer(SERVER_LABELS[server], SERVER_TOOLS[server], server, false));
+    tools.push(
+      mcpServer(
+        SERVER_LABELS[server],
+        server === 'studio' ? (workshop?.tools ?? []) : SERVER_TOOLS[server],
+        server,
+        false,
+      ),
+    );
   const roleRules = [
     PACING_RULES,
     ...(internal.includes('memory') ? [MEMORY_RULES] : []),
     ...(internal.includes('floor') ? [FLOOR_RULES] : []),
+    ...(internal.includes('studio') ? deliverableRules(workshop) : []),
     ...(internal.includes('triage') ? [TRIAGE_RULES] : []),
   ];
   return {
@@ -161,6 +181,7 @@ export function sessionConfiguration(
     environment: {
       type: 'openai_hosted',
       network: { access: 'disabled' },
+      ...(workshop?.libraries.length ? { packages: { python: workshop.libraries } } : {}),
       plugins: version.skills.length
         ? [
             {

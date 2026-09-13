@@ -9,6 +9,7 @@ import type {
   TaskKind,
   TaskStatus,
   ToolMode,
+  Workshop,
 } from '../lib/contracts';
 import type { JobKind } from '../lib/jobs';
 
@@ -34,7 +35,6 @@ export interface PrivateConnection {
   credentialCiphertext: string;
   credentialKeyVersion?: string;
 }
-
 
 /** Queue kinds the worker runs, named once in `lib/jobs.ts` and shared with the planner. */
 export type { JobKind };
@@ -77,6 +77,7 @@ export interface TaskContext {
     instructions: string;
     skills: { name: string; description?: string; content: string }[];
     capabilities: Capability[];
+    workshop?: Workshop;
     persona?: Persona;
   };
   connections: PrivateConnection[];
@@ -98,7 +99,7 @@ export interface GatewayContext {
   };
   /** The instance the run belongs to. Its kind is what the gateway's role check turns on. */
   employee: { id: string; name: string; kind: EmployeeKind };
-  employeeVersion: { id: string; capabilities: Capability[] };
+  employeeVersion: { id: string; capabilities: Capability[]; workshop?: Workshop };
   connections: PrivateConnection[];
   policies: ToolPolicy[];
 }

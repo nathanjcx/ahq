@@ -1,4 +1,5 @@
 import { v } from 'convex/values';
+import type { Workshop } from '../../lib/contracts';
 import type { Doc } from '../_generated/dataModel';
 import { mutation, query } from '../_generated/server';
 import type { MutationCtx } from '../_generated/server';
@@ -36,6 +37,7 @@ export const taskContext = query({
         instructions: version.instructions,
         skills: version.skills,
         capabilities: version.capabilities,
+        workshop: version.workshop as Workshop | undefined,
         persona: version.persona,
       },
       connections: connections.map(privateConnection),

@@ -10,7 +10,8 @@ import { editorRowId, sha256, type EditorDraft } from './draft-issues';
 import { MediaRows, type MediaRow } from './media-rows';
 import type { RegistryByProvider } from './registry';
 import { SkillRows, type SkillRow } from './skill-rows';
-import type { ModelId, Persona } from '@/lib/contracts';
+import { WorkshopPicker } from './workshop-picker';
+import type { ModelId, Persona, Workshop } from '@/lib/contracts';
 import { PERSONA_LIMITS, PERSONA_TRAITS, type PersonaTrait } from '@/lib/personas';
 
 export function EmployeeEditor({
@@ -35,6 +36,9 @@ export function EmployeeEditor({
   const [limitations, setLimitations] = useState(draft?.limitations.join('\n') ?? '');
   const [capabilities, setCapabilities] = useState<CapabilityRow[]>(() =>
     (draft?.capabilities ?? []).map((item) => ({ ...item, rowId: editorRowId() })),
+  );
+  const [workshop, setWorkshop] = useState<Workshop>(
+    () => draft?.workshop ?? { tools: [], libraries: [], deliverables: [] },
   );
   const [skills, setSkills] = useState<SkillRow[]>(() =>
     (draft?.skills ?? []).map((item) => ({ ...item, rowId: editorRowId() })),
@@ -118,6 +122,7 @@ export function EmployeeEditor({
         strengths: lines(strengths),
         limitations: lines(limitations),
         capabilities: capabilities.map(({ rowId: _rowId, ...capability }) => capability),
+        workshop,
         media: media.map(({ rowId: _rowId, ...item }) => item),
         skills: hashedSkills,
         persona: persona(),
@@ -299,6 +304,16 @@ export function EmployeeEditor({
         <section>
           <span className="editor-step">05</span>
           <div>
+            <h3>Workshop</h3>
+            <p>
+              What the employee makes on its own: the files it promises, its libraries, and its studio tools.
+            </p>
+          </div>
+        </section>
+        <WorkshopPicker workshop={workshop} onChange={setWorkshop} />
+        <section>
+          <span className="editor-step">06</span>
+          <div>
             <h3>Private skills</h3>
             <p>Add versioned skill files that the employee needs at runtime.</p>
           </div>
@@ -318,7 +333,7 @@ export function EmployeeEditor({
         </section>
         <SkillRows skills={skills} onChange={setSkills} />
         <section>
-          <span className="editor-step">06</span>
+          <span className="editor-step">07</span>
           <div>
             <h3>Marketplace gallery</h3>
             <p>Add up to ten images or videos. Customers can view every item.</p>

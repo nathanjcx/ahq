@@ -1,4 +1,5 @@
 import { v } from 'convex/values';
+import type { Workshop } from '../../lib/contracts';
 import type { Doc, Id } from '../_generated/dataModel';
 import { mutation, query, type MutationCtx, type QueryCtx } from '../_generated/server';
 import { settingsFor } from '../lib/schedule';
@@ -38,7 +39,11 @@ export const gatewayContext = query({
         name: task.employeeName,
         kind: installation?.kind ?? 'worker',
       },
-      employeeVersion: { id: version._id, capabilities: version.capabilities },
+      employeeVersion: {
+        id: version._id,
+        capabilities: version.capabilities,
+        workshop: version.workshop as Workshop | undefined,
+      },
       connections: connections.map(privateConnection),
       policies,
     };

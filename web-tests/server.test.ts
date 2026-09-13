@@ -122,6 +122,28 @@ it('builds an isolated hosted session with only the employee/tool grant intersec
     transport: { server_url: 'https://gateway.example/mcp/floor' },
   });
   expect(config.agent?.instructions).toContain('never claim a handoff was accepted');
+  expect(config.agent?.instructions).not.toContain('generate_image');
+  expect(config.environment).not.toHaveProperty('packages');
+  // A workshop adds the studio server with only the tools it names, installs its libraries, and
+  // tells the employee what it can make.
+  const studio = sessionConfiguration({
+    ...context,
+    employeeVersion: {
+      ...context.employeeVersion,
+      workshop: {
+        tools: ['generate_image'],
+        libraries: ['reportlab', 'pillow'],
+        deliverables: ['pdf', 'image'],
+      },
+    },
+  });
+  expect(studio.agent?.tools?.flatMap((tool) => ('server_label' in tool ? [tool.server_label] : []))).toEqual(
+    ['github_connection1', 'astra_memory', 'astra_floor', 'astra_shift', 'astra_studio'],
+  );
+  expect(studio.agent?.tools?.[4]).toMatchObject({ allowed_tools: ['generate_image'], required: false });
+  expect(studio.environment).toMatchObject({ packages: { python: ['reportlab', 'pillow'] } });
+  expect(studio.agent?.instructions).toContain('reportlab (PDF documents)');
+  expect(studio.agent?.instructions).toContain('call generate_image');
   expect(
     sessionConfiguration({ ...context, floor: undefined }).agent?.tools?.some(
       (tool) => 'server_label' in tool && tool.server_label === 'astra_floor',

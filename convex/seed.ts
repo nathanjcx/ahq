@@ -18,6 +18,7 @@ function profile(entry: CatalogEmployee) {
     strengths: entry.strengths,
     limitations: entry.limitations,
     capabilities: entry.capabilities,
+    workshop: entry.workshop,
     model: entry.model,
     color: entry.color,
     media: [] as { url: string; type: 'image' | 'video'; alt: string }[],
@@ -143,6 +144,7 @@ function pick(version: {
   strengths: string[];
   limitations: string[];
   capabilities: CatalogEmployee['capabilities'];
+  workshop?: { tools: string[]; libraries: string[]; deliverables: string[] };
   model: CatalogEmployee['model'];
   color: string;
   instructions: string;
@@ -156,6 +158,7 @@ function pick(version: {
     strengths: version.strengths,
     limitations: version.limitations,
     capabilities: version.capabilities,
+    workshop: version.workshop as CatalogEmployee['workshop'],
     model: version.model,
     color: version.color,
     instructions: version.instructions,

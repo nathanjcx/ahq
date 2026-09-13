@@ -1,4 +1,4 @@
-import type { ModelId, Persona, ProviderId } from './contracts/core';
+import type { ModelId, Persona, ProviderId, Workshop } from './contracts/core';
 
 /**
  * The core marketplace: the employees Staff AI ships with. `convex/seed.ts` publishes them as
@@ -28,6 +28,7 @@ export type CatalogEmployee = {
   strengths: string[];
   limitations: string[];
   capabilities: CatalogCapability[];
+  workshop?: Workshop;
   model: ModelId;
   color: string;
   instructions: string;
@@ -790,6 +791,11 @@ Anything that touches production is a proposal with the exact commands or diff, 
       ]),
       cap('google-workspace', docs, true),
     ],
+    workshop: {
+      tools: [],
+      libraries: ['reportlab', 'python-docx', 'markdown'],
+      deliverables: ['pdf', 'document'],
+    },
     model: 'gpt-5.6-terra',
     color: '#6b5fc7',
     instructions: `You are Sana, a technical writer. You make software understandable to the people who have to use, run, or change it.
@@ -867,6 +873,11 @@ When the bug spans systems you cannot see, say precisely which system and which 
       'Statistical modelling beyond descriptive analysis is out of scope',
     ],
     capabilities: [cap('github', [...github.read, ...github.write]), cap('google-workspace', sheets, true)],
+    workshop: {
+      tools: [],
+      libraries: ['pandas', 'matplotlib', 'openpyxl'],
+      deliverables: ['chart', 'spreadsheet'],
+    },
     model: 'gpt-6-astra',
     color: '#0f7c8c',
     instructions: `You are Yuki, a data engineer. You make data correct, available, and understood.
@@ -908,6 +919,11 @@ Never present a number you did not compute from data you can cite. When the data
       cap('google-workspace', docs, true),
       cap('slack', slack.read, true),
     ],
+    workshop: {
+      tools: [],
+      libraries: ['reportlab', 'python-docx', 'python-pptx'],
+      deliverables: ['document', 'deck', 'pdf'],
+    },
     model: 'gpt-6-astra',
     color: '#7a4fc9',
     instructions: `You are Omar, a product manager. You make sure the team builds the right thing, in the right order, with a shared understanding of done.
@@ -944,6 +960,11 @@ You recommend; a person decides. Make the recommendation and its alternatives ex
       'Cannot promise pricing or terms',
     ],
     capabilities: [cap('google-workspace', [...gmail, ...sheets, ...docs])],
+    workshop: {
+      tools: [],
+      libraries: ['openpyxl', 'python-docx'],
+      deliverables: ['spreadsheet', 'document'],
+    },
     model: 'gpt-5.6-terra',
     color: '#d97a2b',
     instructions: `You are Camila, an outbound sales development representative. You find the right people and open conversations with them.
@@ -984,6 +1005,11 @@ Tell the person when a prospect is a poor fit, when the list you were given is t
       cap('google-workspace', [...gmail, ...calendar, ...docs, ...sheets, ...slides]),
       cap('slack', slack.read, true),
     ],
+    workshop: {
+      tools: [],
+      libraries: ['python-pptx', 'reportlab', 'python-docx'],
+      deliverables: ['deck', 'pdf', 'document'],
+    },
     model: 'gpt-5.6-terra',
     color: '#b8621f',
     instructions: `You are Jonas, an account executive's right hand. You make every deal conversation prepared, followed up, and moved forward.
@@ -1021,6 +1047,11 @@ Pricing, discounts, and contractual commitments come from a person. Draft around
       'Does not contact customers',
     ],
     capabilities: [cap('google-workspace', [...sheets, ...docs]), cap('slack', slack.read, true)],
+    workshop: {
+      tools: [],
+      libraries: ['pandas', 'openpyxl', 'matplotlib'],
+      deliverables: ['spreadsheet', 'chart'],
+    },
     model: 'gpt-5.6-terra',
     color: '#9a6b2a',
     instructions: `You are Aisha, sales operations. You make the numbers the sales team runs on trustworthy.
@@ -1053,12 +1084,17 @@ Report what changed in the data, what you fixed, what needs a person, and what t
     limitations: [
       'Claims about the product come from your materials, not imagination',
       'Cannot interview customers; works from what you share',
-      'Images are described or made only with a design tool you connect',
+      'Renders images and lays out PDFs herself; a connected design tool is only needed for your brand templates',
     ],
     capabilities: [
       cap('google-workspace', docs),
       cap('canva', ['search_designs', 'create_design', 'export_design'], true),
     ],
+    workshop: {
+      tools: ['generate_image'],
+      libraries: ['reportlab', 'pillow', 'python-docx', 'markdown'],
+      deliverables: ['document', 'pdf', 'image'],
+    },
     model: 'gpt-5.6-terra',
     color: '#c2508a',
     instructions: `You are Elena, a content marketer. You write things people choose to read and that leave them wanting the product.
@@ -1070,8 +1106,9 @@ How you work:
 - Structure: a title that promises something specific, an opening that earns the next paragraph, headings that summarise, short paragraphs, one clear next step at the end.
 - Formats: blog posts, newsletters, guides, launch posts, case studies. Each has its own length and rhythm; do not stretch a short idea.
 - Editing: deliver a draft, then a tightened version. Cut a third if you can.
+- Visuals: when a piece needs a hero image, an illustration, or a social card, write the brief (subject, composition, palette, any words on it) and render it with generate_image; ask for high quality only for the final asset. A lead magnet, a one-pager, or a printable guide is a PDF built with reportlab: a title page, a clear type hierarchy, generous margins, one accent colour, and charts drawn from the numbers.
 
-Deliver in a document with a suggested title, meta description, and the three strongest lines pulled out for social use. Say what you assumed about the audience.`,
+Deliver in a document with a suggested title, meta description, and the three strongest lines pulled out for social use, plus any rendered images or PDFs as files of the task. Say what you assumed about the audience.`,
     persona: {
       voice: 'Lively and clear. Prefers a concrete example to an adjective.',
       traits: ['playful', 'curious', 'warm'],
@@ -1095,6 +1132,11 @@ Deliver in a document with a suggested title, meta description, and the three st
       'Paid acquisition strategy is outside scope',
     ],
     capabilities: [cap('google-workspace', [...sheets, ...docs]), cap('github', github.read, true)],
+    workshop: {
+      tools: [],
+      libraries: ['pandas', 'openpyxl', 'matplotlib', 'python-docx'],
+      deliverables: ['spreadsheet', 'chart', 'document'],
+    },
     model: 'gpt-5.6-terra',
     color: '#2b8a5e',
     instructions: `You are Ravi, an SEO and growth analyst. You find where demand is and make the product easy to find and to start.
@@ -1126,7 +1168,7 @@ Prioritise everything by expected impact with the reasoning shown. Never report 
     ],
     limitations: [
       'Pricing and packaging are recommended, not set',
-      'Visual assets need a connected design tool or a designer',
+      'Renders launch visuals and one-pagers herself; a designer is needed only for your brand system',
       'Market data is from what you give, not surveyed',
     ],
     capabilities: [
@@ -1135,6 +1177,11 @@ Prioritise everything by expected impact with the reasoning shown. Never report 
       cap('canva', ['search_designs', 'create_design', 'export_design'], true),
       cap('linear', linear.read, true),
     ],
+    workshop: {
+      tools: ['generate_image'],
+      libraries: ['reportlab', 'python-pptx', 'pillow', 'python-docx'],
+      deliverables: ['pdf', 'deck', 'image', 'document'],
+    },
     model: 'gpt-5.6-terra',
     color: '#a04ac2',
     instructions: `You are Mia, a product marketer. You connect what the team built to why anyone should care.
@@ -1145,8 +1192,9 @@ How you work:
 - Release announcements: lead with the customer outcome, show the feature, say how to get it, and link the docs. Short.
 - Enablement: a one-pager per feature for sales and support: what it is, who asks for it, how to demo it, the three objections and their answers.
 - Consistency: keep a single source for names, taglines, and claims, and point out when a page or a deck drifts from it.
+- Assets: a one-pager or battlecard is a PDF built with reportlab; a launch deck goes to Google Slides when it is connected and otherwise to a python-pptx file; a launch hero, feature illustration, or social card is rendered with generate_image from a brief that names the subject, composition, palette, and the exact words on it.
 
-Deliver documents and drafts; post to channels only when asked and only through an approved message. Say what you assumed about the audience and the launch date.`,
+Deliver documents, drafts, and the rendered files of the task; post to channels only when asked and only through an approved message. Say what you assumed about the audience and the launch date.`,
     persona: {
       voice: 'Confident and customer-first. Avoids jargon unless the customer uses it.',
       traits: ['fast', 'warm', 'playful'],
@@ -1175,6 +1223,7 @@ Deliver documents and drafts; post to channels only when asked and only through 
       cap('linear', [...linear.read, 'create_issue', 'create_comment'], true),
       cap('github', ['list_issues', 'get_issue', 'search_code', 'get_file_contents'], true),
     ],
+    workshop: { tools: [], libraries: ['python-docx'], deliverables: ['document'] },
     model: 'gpt-5.6-terra',
     color: '#2f7fb3',
     instructions: `You are Daniel, a support agent. You help customers get unstuck and make sure real problems reach the people who can fix them.
@@ -1219,6 +1268,11 @@ Refunds, credits, exceptions, and timelines are a person's call. Draft the reply
       ),
       cap('slack', slack.read, true),
     ],
+    workshop: {
+      tools: [],
+      libraries: ['python-docx', 'markdown', 'reportlab'],
+      deliverables: ['document', 'pdf'],
+    },
     model: 'gpt-5.6-terra',
     color: '#5c8f3a',
     instructions: `You are Noor, a knowledge base curator. You make sure the answer exists, is findable, and is right.
@@ -1255,6 +1309,11 @@ Deliver articles as documents ready to publish, with a change log of what you ad
       'Does not make the decision the model informs',
     ],
     capabilities: [cap('google-workspace', [...sheets, ...docs])],
+    workshop: {
+      tools: [],
+      libraries: ['openpyxl', 'pandas', 'matplotlib', 'reportlab'],
+      deliverables: ['spreadsheet', 'chart', 'pdf'],
+    },
     model: 'gpt-6-astra',
     color: '#1f6f5c',
     instructions: `You are Victor, a financial modeller. You build models people can trust and read.
@@ -1291,6 +1350,11 @@ Never present a projection as a fact. State the assumptions that carry it, and m
       'Forecasts are models with stated assumptions, not predictions',
     ],
     capabilities: [cap('google-workspace', [...sheets, ...docs, ...slides])],
+    workshop: {
+      tools: [],
+      libraries: ['openpyxl', 'pandas', 'matplotlib', 'reportlab', 'python-pptx'],
+      deliverables: ['spreadsheet', 'chart', 'pdf', 'deck'],
+    },
     model: 'gpt-6-astra',
     color: '#3a5f9e',
     instructions: `You are Grace, a financial planning and analysis analyst. You tell the company what its numbers mean and what is coming.
@@ -1299,7 +1363,7 @@ How you work:
 - Close: from the actuals export, update the actuals sheet, reconcile totals to the source, and compute variance to budget and to the last forecast by line and by department.
 - Variances: for each material variance, one line: what moved, by how much, why, and whether it repeats. Distinguish timing from real change.
 - Forecast: roll the forecast forward with the drivers (headcount plan, pipeline, pricing, churn, spend commitments) visible and changeable. Show runway and the date cash falls below the threshold you are given.
-- Metrics pack: revenue, growth, gross margin, burn, runway, headcount, and the two or three metrics that matter most to this business, each with the definition, the trend, and one sentence of commentary. Build it in the team's slides or sheet template.
+- Metrics pack: revenue, growth, gross margin, burn, runway, headcount, and the two or three metrics that matter most to this business, each with the definition, the trend, and one sentence of commentary. Build it in the team's slides or sheet template when one is connected; otherwise produce a board-ready PDF with reportlab, charts drawn with matplotlib from the actual numbers, one chart per page with its one-line takeaway.
 - Hygiene: consistent categories across budget, forecast, and actuals; a mapping sheet for anything renamed.
 
 Report the headline, the variances that matter, the forecast change, and the decisions leadership should look at, in that order. Every number is traceable to its cell.`,
@@ -1326,6 +1390,11 @@ Report the headline, the variances that matter, the forecast change, and the dec
       'Recommends; a person decides',
     ],
     capabilities: [cap('google-workspace', [...docs, ...sheets, ...slides]), cap('slack', slack.read, true)],
+    workshop: {
+      tools: [],
+      libraries: ['reportlab', 'python-docx', 'matplotlib', 'python-pptx'],
+      deliverables: ['pdf', 'document', 'deck'],
+    },
     model: 'gpt-6-astra',
     color: '#5b4c9c',
     instructions: `You are Ken, a strategy analyst. You help leadership decide with a clear head.

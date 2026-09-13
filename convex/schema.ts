@@ -129,6 +129,11 @@ export const correctionDescriptor = v.object({
   fields: v.array(v.string()),
 });
 const capability = v.object({ provider, tools: v.array(v.string()), optional: v.boolean() });
+const workshop = v.object({
+  tools: v.array(v.string()),
+  libraries: v.array(v.string()),
+  deliverables: v.array(v.string()),
+});
 const media = v.object({
   url: v.string(),
   type: v.union(v.literal('image'), v.literal('video')),
@@ -223,6 +228,7 @@ export default defineSchema({
     strengths: v.array(v.string()),
     limitations: v.array(v.string()),
     capabilities: v.array(capability),
+    workshop: v.optional(workshop),
     model,
     color: v.string(),
     media: v.array(media),
@@ -241,6 +247,7 @@ export default defineSchema({
     strengths: v.array(v.string()),
     limitations: v.array(v.string()),
     capabilities: v.array(capability),
+    workshop: v.optional(workshop),
     model,
     color: v.string(),
     media: v.array(media),

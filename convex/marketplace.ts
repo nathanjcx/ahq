@@ -1,13 +1,22 @@
 import { v } from 'convex/values';
-import type {
-  InstanceStatus,
-  InstanceUpgrade,
-  Persona,
-  ProviderId,
-  TaskStatus,
-  VersionChange,
+import {
+  DELIVERABLES,
+  STUDIO_TOOLS,
+  WORKSHOP_LIBRARIES,
+  type InstanceStatus,
+  type InstanceUpgrade,
+  type Persona,
+  type ProviderId,
+  type TaskStatus,
+  type VersionChange,
+  type Workshop,
 } from '../lib/contracts';
-import { MEMORY_PLACEHOLDER, WORKER_ROLE_RULES, composeInstructions } from '../lib/instructions';
+import {
+  MEMORY_PLACEHOLDER,
+  WORKER_ROLE_RULES,
+  composeInstructions,
+  deliverableRules,
+} from '../lib/instructions';
 import { PERSONA_LIMITS, isPersonaTrait } from '../lib/personas';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
@@ -45,12 +54,32 @@ const model = v.union(
   v.literal('gpt-6-astra'),
 );
 const capability = v.object({ provider, tools: v.array(v.string()), optional: v.boolean() });
+const workshopValidator = v.object({
+  tools: v.array(v.string()),
+  libraries: v.array(v.string()),
+  deliverables: v.array(v.string()),
+});
 const media = v.object({
   url: v.string(),
   type: v.union(v.literal('image'), v.literal('video')),
   alt: v.string(),
 });
 const skill = v.object({ name: v.string(), version: v.string(), sha256: v.string(), content: v.string() });
+/** A workshop names only what the platform serves; an empty one is stored as none. */
+export function normalizeWorkshop(value: Workshop | undefined): Workshop | undefined {
+  if (!value) return undefined;
+  const check = (items: string[], known: Record<string, string>, what: string) => {
+    if (new Set(items).size !== items.length) throw new Error(`Workshop ${what} repeat`);
+    for (const item of items)
+      if (!(item in known)) throw new Error(`${item} is not a workshop ${what.slice(0, -1)}`);
+  };
+  check(value.tools, STUDIO_TOOLS, 'tools');
+  check(value.libraries, WORKSHOP_LIBRARIES, 'libraries');
+  check(value.deliverables, DELIVERABLES, 'deliverables');
+  if (!value.tools.length && !value.libraries.length && !value.deliverables.length) return undefined;
+  return { tools: value.tools, libraries: value.libraries, deliverables: value.deliverables };
+}
+
 async function validateCapabilities(
   ctx: Ctx,
   capabilities: Array<{ provider: ProviderId; tools: string[]; optional: boolean }>,
@@ -110,6 +139,7 @@ const draftFields = {
   strengths: v.array(v.string()),
   limitations: v.array(v.string()),
   capabilities: v.array(capability),
+  workshop: v.optional(workshopValidator),
   model,
   color: v.string(),
   media: v.array(media),
@@ -152,6 +182,7 @@ function publicListing(listing: Doc<'listings'>, version: Doc<'employeeVersions'
     strengths: version.strengths,
     limitations: version.limitations,
     capabilities: version.capabilities,
+    workshop: version.workshop as Workshop | undefined,
     model: version.model,
     color: version.color,
     media: version.media,
@@ -502,6 +533,7 @@ export const adminList = query({
         strengths: draft.strengths,
         limitations: draft.limitations,
         capabilities: draft.capabilities,
+        workshop: draft.workshop as Workshop | undefined,
         model: draft.model,
         color: draft.color,
         media: draft.media,
@@ -536,6 +568,7 @@ export const saveDraft = mutation({
       strengths: args.strengths.map((item) => cleanText(item, 'Strength', 200)),
       limitations: args.limitations.map((item) => cleanText(item, 'Limitation', 300)),
       capabilities: args.capabilities,
+      workshop: normalizeWorkshop(args.workshop as Workshop | undefined),
       model: args.model,
       color: cleanText(args.color, 'Color', 40),
       media: args.media,
@@ -582,6 +615,7 @@ export const publish = mutation({
       strengths: draft.strengths,
       limitations: draft.limitations,
       capabilities: draft.capabilities,
+      workshop: draft.workshop,
       model: draft.model,
       color: draft.color,
       media: draft.media,
@@ -651,7 +685,7 @@ export const previewInstructions = query({
     const draft = await ctx.db.get(args.draftId);
     if (!draft) throw new Error('Draft not found');
     return composeInstructions({
-      roleRules: WORKER_ROLE_RULES,
+      roleRules: [...WORKER_ROLE_RULES, ...deliverableRules(draft.workshop as Workshop | undefined)],
       memory: MEMORY_PLACEHOLDER,
       persona: draft.persona,
       instructions: draft.instructions,

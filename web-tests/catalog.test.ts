@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { api, internal } from '../convex/_generated/api';
 import { CATALOG, CATALOG_TOOLS } from '../lib/catalog';
+import { DELIVERABLES, STUDIO_TOOLS, WORKSHOP_LIBRARIES } from '../lib/contracts/core';
 import { MODEL_IDS } from '../lib/contracts/core';
 import { PERSONA_LIMITS, isPersonaTrait } from '../lib/personas';
 import { harness, identity } from './support';
@@ -26,6 +27,12 @@ describe('the core catalog', () => {
       for (const c of e.capabilities) {
         expect(c.tools.length).toBeGreaterThan(0);
         for (const tool of c.tools) expect(registered.has(`${c.provider}.${tool}`)).toBe(true);
+      }
+      if (e.workshop) {
+        for (const tool of e.workshop.tools) expect(tool in STUDIO_TOOLS).toBe(true);
+        for (const library of e.workshop.libraries) expect(library in WORKSHOP_LIBRARIES).toBe(true);
+        for (const kind of e.workshop.deliverables) expect(kind in DELIVERABLES).toBe(true);
+        expect(e.workshop.deliverables.length).toBeGreaterThan(0);
       }
     }
   });
