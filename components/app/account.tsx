@@ -140,7 +140,7 @@ export function WorkspaceSwitcher() {
                   aria-label="New workspace name"
                   onChange={(event) => setName(event.target.value)}
                 />
-                <button className="primary-button" disabled={!name.trim()}>
+                <button className="primary-button compact" disabled={!name.trim()}>
                   Create
                 </button>
               </form>

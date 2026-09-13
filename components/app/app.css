@@ -411,7 +411,7 @@
   right: 0;
   z-index: 41;
   display: grid;
-  width: 232px;
+  width: 248px;
   gap: 2px;
   padding: var(--space-1);
   border: 1px solid var(--line);
@@ -443,6 +443,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+.account-panel button {
+  justify-content: flex-start;
   padding: 0 10px;
   text-align: left;
   border: 0;
@@ -476,11 +479,17 @@
   gap: 6px;
   border-top: 1px solid var(--line);
   margin-top: 2px;
-  padding-top: 6px;
+  padding: 6px 2px 2px;
 }
 .workspace-create input {
   min-width: 0;
   flex: 1;
+  padding: 0 9px;
+  border: 1px solid #d5ddd0;
+  border-radius: 7px;
+  outline: 0;
+  background: #fffef9;
+  font-size: var(--text-sm);
 }
 .workspace-button {
   display: flex;
