@@ -24,10 +24,12 @@ const viewer = 'viewer-user';
 const author = 'author-user';
 const alertSecret = 'alert-signing-secret-that-is-long-enough';
 
-vi.mock('@clerk/nextjs/server', () => ({
-  auth: async () => ({ userId: viewer }),
-  clerkClient: async () => ({ users: { getUser: async () => ({ fullName: 'Viewer' }) } }),
-  clerkMiddleware: () => () => undefined,
+/** The sealed AuthKit session a route reads through `withAuth()`, without a WorkOS environment. */
+vi.mock('@workos-inc/authkit-nextjs', () => ({
+  withAuth: async () => ({ user: { id: viewer, name: 'Viewer', email: 'viewer@example.com' } }),
+  getWorkOS: () => {
+    throw new Error('The WorkOS API is not reachable in tests');
+  },
 }));
 
 /** Routes the service call names a route makes into convex-test, the way runtime.test.ts does. */
@@ -48,8 +50,10 @@ function testBackend(t: Harness): Backend {
 
 beforeEach(() => {
   process.env.APP_URL = appUrl;
-  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = 'pk_test_key';
-  process.env.CLERK_SECRET_KEY = 'sk_test_key';
+  process.env.WORKOS_CLIENT_ID = 'client_test';
+  process.env.WORKOS_API_KEY = 'sk_test_key';
+  process.env.WORKOS_COOKIE_PASSWORD = 'a'.repeat(32);
+  process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI = `${appUrl}/callback`;
   process.env.CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
   resetRateLimits();
 });

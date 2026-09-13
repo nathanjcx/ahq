@@ -132,12 +132,12 @@ describe('Convex data boundaries', () => {
     ).rejects.toThrow('Required linear access is unavailable');
   });
 
-  it('does not treat membership in the same Clerk organization as source-data access', async () => {
+  it('does not treat membership in the same WorkOS organization as source-data access', async () => {
     const t = harness();
     await linearWorkspace(t);
     const { listingId } = await publishEmployee(t);
     const owner = t.withIdentity(identity('org-user-a', 'org-acme'));
-    const colleague = t.withIdentity(identity('org-user-b', 'org-acme', 'org:admin'));
+    const colleague = t.withIdentity(identity('org-user-b', 'org-acme', 'admin'));
     await owner.mutation(api.workspace.bootstrap, { name: 'Acme organization' });
     const { connectionId } = await connectLinear(t, {
       subject: 'org-user-a',
@@ -161,27 +161,30 @@ describe('Convex data boundaries', () => {
     );
   });
 
-  it('reads Clerk JWT v2 organization claims without granting colleagues access to private data', async () => {
+  it('reads WorkOS organization claims without granting colleagues access to private data', async () => {
     const t = harness();
     const owner = t.withIdentity({
-      subject: 'jwt-v2-owner',
-      tokenIdentifier: 'test|jwt-v2-owner',
+      subject: 'workos-owner',
+      tokenIdentifier: 'test|workos-owner',
       issuer: 'test',
-      o: { id: 'org-v2', rol: 'member' },
+      org_id: 'org-acme',
+      role: 'member',
     });
+    // A JWT template can name the person in any of the ways `claimName` accepts.
     const admin = t.withIdentity({
-      subject: 'jwt-v2-admin',
-      tokenIdentifier: 'test|jwt-v2-admin',
+      subject: 'workos-admin',
+      tokenIdentifier: 'test|workos-admin',
       issuer: 'test',
       given_name: 'Ada',
       family_name: 'Byron',
-      o: { id: 'org-v2', rol: 'admin' },
+      org_id: 'org-acme',
+      role: 'admin',
     });
-    await owner.mutation(api.workspace.bootstrap, { name: 'JWT v2 company' });
+    await owner.mutation(api.workspace.bootstrap, { name: 'Acme company' });
     await admin.mutation(api.workspace.setTokenCap, { monthlyTokenCap: 250_000 });
     const dashboard = await admin.query(api.workspace.dashboard, {});
     expect(dashboard.workspace).toMatchObject({
-      name: 'JWT v2 company',
+      name: 'Acme company',
       role: 'admin',
       monthlyTokenCap: 250_000,
     });
@@ -189,7 +192,7 @@ describe('Convex data boundaries', () => {
     expect(dashboard.tasks).toEqual([]);
     const workspaces = await t.run((ctx) => ctx.db.query('workspaces').collect());
     expect(workspaces).toHaveLength(1);
-    expect(workspaces[0].authKey).toBe('org:org-v2');
+    expect(workspaces[0].authKey).toBe('org:org-acme');
   });
 
   it('keeps session monitoring available after grants and the employee version are retired', async () => {

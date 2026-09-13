@@ -124,7 +124,7 @@ describe('token usage', () => {
   it('lets only a workspace owner or admin set the cap', async () => {
     const t = harness();
     const member = t.withIdentity(identity('member', 'acme'));
-    await t.withIdentity(identity('owner', 'acme', 'org:admin')).mutation(api.workspace.bootstrap, {
+    await t.withIdentity(identity('owner', 'acme', 'admin')).mutation(api.workspace.bootstrap, {
       name: 'Acme',
     });
     await expect(member.mutation(api.workspace.setTokenCap, { monthlyTokenCap: 10 })).rejects.toThrow(

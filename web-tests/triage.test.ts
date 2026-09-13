@@ -22,10 +22,12 @@ const alertSecret = 'alert-signing-secret-that-is-long-enough';
 const attendedNow = Date.UTC(2026, 8, 16, 12);
 const unattendedNow = Date.UTC(2026, 8, 16, 3);
 
-vi.mock('@clerk/nextjs/server', () => ({
-  auth: async () => ({ userId: 'platform-admin' }),
-  clerkClient: async () => ({ users: { getUser: async () => ({ fullName: 'Admin' }) } }),
-  clerkMiddleware: () => () => undefined,
+/** The sealed AuthKit session a route reads through `withAuth()`, without a WorkOS environment. */
+vi.mock('@workos-inc/authkit-nextjs', () => ({
+  withAuth: async () => ({ user: { id: 'platform-admin', name: 'Admin', email: 'admin@example.com' } }),
+  getWorkOS: () => {
+    throw new Error('The WorkOS API is not reachable in tests');
+  },
 }));
 
 type Harness = ReturnType<typeof harness>;
@@ -50,7 +52,7 @@ async function workspace() {
   const t = harness();
   await linearWorkspace(t);
   const { listingId } = await publishEmployee(t);
-  const user = t.withIdentity(orgIdentity('owner', 'acme', 'org:admin'));
+  const user = t.withIdentity(orgIdentity('owner', 'acme', 'admin'));
   const { workspaceId } = await user.mutation(api.workspace.bootstrap, { name: 'Acme' });
   const { employeeId } = await hireOne(user, listingId);
   const { floorId } = await user.mutation(api.floors.create, {
@@ -72,8 +74,10 @@ const incident = {
 
 beforeEach(() => {
   process.env.APP_URL = appUrl;
-  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = 'pk_test_key';
-  process.env.CLERK_SECRET_KEY = 'sk_test_key';
+  process.env.WORKOS_CLIENT_ID = 'client_test';
+  process.env.WORKOS_API_KEY = 'sk_test_key';
+  process.env.WORKOS_COOKIE_PASSWORD = 'a'.repeat(32);
+  process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI = `${appUrl}/callback`;
   process.env.CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
   resetRateLimits();
 });
@@ -300,7 +304,7 @@ describe('triage authority', () => {
     const { t, user, workspaceId, employeeId } = await workspace();
     // Three people the workspace can reach: `workspaceSubjects` is everyone who opened a floor here.
     for (const person of ['alice', 'bob']) {
-      const colleague = t.withIdentity(orgIdentity(person, 'acme', 'org:admin'));
+      const colleague = t.withIdentity(orgIdentity(person, 'acme', 'admin'));
       await colleague.mutation(api.floors.create, {
         name: `${person}'s floor`,
         brief: 'Somewhere to work.',
@@ -547,7 +551,7 @@ describe('the signed alert route', () => {
       secret,
       authSubject: 'owner',
       authOrgId: 'acme',
-      authOrgRole: 'org:admin',
+      authOrgRole: 'admin',
       alertSecretCiphertext: seal(alertSecret),
     });
 
@@ -743,7 +747,7 @@ describe('what the Triage page reads', () => {
       secret,
       authSubject: 'owner',
       authOrgId: 'acme',
-      authOrgRole: 'org:admin',
+      authOrgRole: 'admin',
       alertSecretCiphertext: seal(alertSecret),
     });
     const intake = await user.query(api.triage.intake, {});
@@ -766,12 +770,12 @@ describe('what the Triage page reads', () => {
         ...(ciphertext ? { alertSecretCiphertext: ciphertext } : {}),
       });
 
-    await expect(rotate('member', 'org:member', seal(alertSecret))).rejects.toThrow(
+    await expect(rotate('member', 'member', seal(alertSecret))).rejects.toThrow(
       'administrator access required',
     );
     expect(await user.query(api.triage.intake, {})).toMatchObject({ signedEndpointReady: false });
 
-    const { updatedAt } = await rotate('owner', 'org:admin', seal(alertSecret));
+    const { updatedAt } = await rotate('owner', 'admin', seal(alertSecret));
     expect(await user.query(api.triage.intake, {})).toMatchObject({
       signedEndpointReady: true,
       secretUpdatedAt: updatedAt,
@@ -785,7 +789,7 @@ describe('what the Triage page reads', () => {
     ).toContain('.');
 
     // Writing no ciphertext clears it, which closes the signed endpoint.
-    await rotate('owner', 'org:admin');
+    await rotate('owner', 'admin');
     expect(await user.query(api.triage.intake, {})).toMatchObject({ signedEndpointReady: false });
   });
 });

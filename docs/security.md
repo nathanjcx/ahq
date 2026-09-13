@@ -5,15 +5,15 @@ this and the code disagree, fix the code or update this document in the same cha
 
 ## Trust boundaries
 
-| Boundary                    | Who is on the far side                          | What crosses it                                                 |
-| --------------------------- | ----------------------------------------------- | --------------------------------------------------------------- |
-| Browser → web               | A signed-in person, or anyone at all            | Clerk session cookie, JSON bodies, webhook and alert deliveries |
-| Web/worker/gateway → Convex | Our own processes                               | `AHQ_SERVICE_SECRET` on every service function argument         |
-| Browser → Convex            | A signed-in person                              | A Clerk JWT Convex validates against `CLERK_JWT_ISSUER_DOMAIN`  |
-| Agent → gateway             | A hosted model running attacker-influenced text | The task run token as a bearer token                            |
-| Gateway/worker → provider   | A third party                                   | OAuth-bearing MCP calls through `safeFetch` only                |
-| Provider → web              | A third party, or anyone spoofing one           | Signed webhook deliveries and signed alert bodies               |
-| Agent → agent               | Another model's words                           | Channel posts, reports, findings, memory claims — always fenced |
+| Boundary                    | Who is on the far side                          | What crosses it                                                   |
+| --------------------------- | ----------------------------------------------- | ----------------------------------------------------------------- |
+| Browser → web               | A signed-in person, or anyone at all            | AuthKit session cookie, JSON bodies, webhook and alert deliveries |
+| Web/worker/gateway → Convex | Our own processes                               | `AHQ_SERVICE_SECRET` on every service function argument           |
+| Browser → Convex            | A signed-in person                              | A WorkOS access token Convex validates against the WorkOS JWKS    |
+| Agent → gateway             | A hosted model running attacker-influenced text | The task run token as a bearer token                              |
+| Gateway/worker → provider   | A third party                                   | OAuth-bearing MCP calls through `safeFetch` only                  |
+| Provider → web              | A third party, or anyone spoofing one           | Signed webhook deliveries and signed alert bodies                 |
+| Agent → agent               | Another model's words                           | Channel posts, reports, findings, memory claims — always fenced   |
 
 Three assumptions run through everything. The agent is not trusted: it reads text written by people
 who are not our users, and it may be induced to try anything its grant allows. Another agent's output
@@ -23,14 +23,14 @@ Convex compromise yields ciphertext.
 ## Authentication and authorization
 
 Every browser route calls `actor()` or `platformAdmin()` (`lib/server/http.ts`), which refuses before
-Clerk is consulted when Clerk is unconfigured. Every Convex user function starts at
+the session is read when WorkOS is unconfigured. Every Convex user function starts at
 `requireWorkspace` or `requirePlatformAdmin`; every Convex service function starts at
 `requireService`, a constant-time comparison against `AHQ_SERVICE_SECRET`. The gateway resolves a run
 token to a task on every request and fails closed when the authorization service is unreachable.
 Webhooks authenticate the delivery, not the caller: HMAC over the exact body, timing-safe compare,
 and a freshness window.
 
-A workspace is a Clerk user or organization (`authKey`). Every record read or written is checked
+A workspace is a WorkOS user or organization (`authKey`). Every record read or written is checked
 against the caller's workspace and then against `canSeeTask`, `canSeeConnection`, or `canDecide`.
 
 ## The gateway and the role matrix
@@ -169,7 +169,7 @@ The one place an agent's write reaches a provider unattended. Its guardrails:
 
 `/api/alerts` requires an `x-astra-workspace` header, a workspace alert secret set by that
 workspace's own owner or administrator (`services/triage:setAlertSecretForActor`, which decides the
-role from the caller's Clerk claims), and an HMAC over `timestamp + "." + rawBody`. The
+role from the caller's WorkOS claims), and an HMAC over `timestamp + "." + rawBody`. The
 signature covers the timestamp, so a replayed body with a fresh timestamp does not verify and a stale
 timestamp is refused outright; the window is five minutes, and an exact replay inside it is answered
 from the first result rather than opening a second incident somebody has closed. Bodies are capped at
@@ -187,7 +187,7 @@ turn that reads it should not also be able to act on it.
 
 An attempt is recorded before anything is sent and counts only once a channel reports delivery.
 Acknowledgement is what the emergency rule counts as an answer, and only the subject may acknowledge:
-both `notifications:acknowledge` (Clerk identity) and
+both `notifications:acknowledge` (WorkOS identity) and
 `services/notifications:acknowledgeForSubject` check the row's subject. Push subscription keys are
 sealed by the web route before Convex stores them; Convex holds ciphertext and the endpoint.
 `services/notifications:pushTargets` hands sealed keys back only to a service holding the secret, and
@@ -223,8 +223,8 @@ deduplicated per employee and claim per day, so re-running an audit adds nothing
 `x-requested-with` header a cross-site form cannot set. The browser client sends both.
 
 **Content Security Policy.** `proxy.ts` mints a nonce per request and serves the policy from
-`lib/server/csp.ts` in development and production. `script-src` carries the nonce and the Clerk
-origins and nothing else. `style-src` keeps `'unsafe-inline'`: inline style attributes are outside a
+`lib/server/csp.ts` in development and production. `script-src` carries the nonce and nothing else:
+signing in is a top-level redirect to WorkOS, so no identity provider origin has to be allowed. `style-src` keeps `'unsafe-inline'`: inline style attributes are outside a
 nonce's reach and the app renders them from the error boundary, several components, and drei's
 `<Html>` office overlays. The root layout forces dynamic rendering, because a prerendered page would
 carry a build-time nonce no request could match.

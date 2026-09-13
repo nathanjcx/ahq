@@ -15,13 +15,14 @@ export type Harness = ReturnType<typeof convexTest>;
 /** A harness or one of its identities: everything tests hire through. */
 type Actor = Pick<Harness, 'mutation'>;
 
-export function identity(subject: string, orgId?: string, orgRole = 'org:member') {
+/** The claims a WorkOS access token carries: the subject, and the organization the session is on. */
+export function identity(subject: string, orgId?: string, orgRole = 'member') {
   return {
     subject,
     tokenIdentifier: `test|${subject}`,
     issuer: 'test',
     name: subject,
-    ...(orgId ? { org_id: orgId, org_role: orgRole } : {}),
+    ...(orgId ? { org_id: orgId, role: orgRole } : {}),
   } as never;
 }
 

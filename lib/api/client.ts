@@ -7,6 +7,8 @@ import {
   errorResponse,
   membersResponse,
   notificationsResponse,
+  organizationsResponse,
+  organizationSchema,
   relaySecretResponse,
   removedResponse,
   savedResponse,
@@ -14,6 +16,7 @@ import {
   type AlertSecretRequest,
   type ClearInboxSecretRequest,
   type ConnectRequest,
+  type CreateOrganizationRequest,
   type InboxSecretRequest,
   type OAuthClientRequest,
   type PushSubscribeRequest,
@@ -76,6 +79,12 @@ export const webClient = {
   connect: (input: ConnectRequest) =>
     request({ path: webApi.connect, schema: connectResponse, method: 'POST', body: input }),
   members: (signal?: AbortSignal) => request({ path: webApi.members, schema: membersResponse, signal }),
+  organizations: {
+    list: (signal?: AbortSignal) =>
+      request({ path: webApi.organizations, schema: organizationsResponse, signal }),
+    create: (input: CreateOrganizationRequest) =>
+      request({ path: webApi.organizations, schema: organizationSchema, method: 'POST', body: input }),
+  },
   audit: (taskId: string, signal?: AbortSignal) =>
     request({ path: webApi.audit(taskId), schema: auditResponse, signal }),
   relaySecret: {

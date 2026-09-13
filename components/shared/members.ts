@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { webClient } from '@/lib/api/client';
 import type { Member } from '@/lib/contracts';
 
-/** Workspace members from Clerk, for sharing pickers. */
+/** Workspace members from WorkOS, for sharing pickers. */
 export function useMembers() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);

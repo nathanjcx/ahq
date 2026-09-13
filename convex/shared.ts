@@ -34,7 +34,11 @@ function claimString(claims: Record<string, unknown>, name: string) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-/** Display name from Clerk claims, captured at write time for shared views. */
+/**
+ * Display name from the access token's claims, captured at write time for shared views. A WorkOS
+ * access token carries only identity and authorization claims by default, so `name` and `email` come
+ * from the environment's JWT template; without one, shared views read "Member".
+ */
 function claimName(claims: Record<string, unknown>) {
   const given = [claimString(claims, 'given_name'), claimString(claims, 'family_name')]
     .filter(Boolean)
@@ -46,20 +50,11 @@ export async function identity(ctx: Ctx): Promise<Actor> {
   const value = await ctx.auth.getUserIdentity();
   if (!value) throw new Error('Authentication required');
   const claims = value as unknown as Record<string, unknown>;
-  const organization =
-    claims.o && typeof claims.o === 'object' && !Array.isArray(claims.o)
-      ? (claims.o as Record<string, unknown>)
-      : undefined;
-  const orgId =
-    claimString(organization || {}, 'id') || claimString(claims, 'org_id') || claimString(claims, 'orgId');
-  const orgRole =
-    claimString(organization || {}, 'rol') ||
-    claimString(claims, 'org_role') ||
-    claimString(claims, 'orgRole');
   return {
     subject: value.subject,
-    orgId,
-    orgRole,
+    // WorkOS puts the organization the session is open on, and the role in it, on every token.
+    orgId: claimString(claims, 'org_id'),
+    orgRole: claimString(claims, 'role'),
     name: claimName(claims),
     email: claimString(claims, 'email'),
   };
@@ -69,9 +64,13 @@ export function authKey(subject: string, orgId?: string) {
   return orgId ? `org:${orgId}` : `user:${subject}`;
 }
 
-export function clerkRole(orgId: string | undefined, orgRole: string | undefined): WorkspaceRole {
+/**
+ * A personal workspace has one person, who owns it. An organization workspace takes its role from the
+ * WorkOS organization role: the `admin` slug administers the workspace, every other slug is a member.
+ */
+export function workspaceRole(orgId: string | undefined, orgRole: string | undefined): WorkspaceRole {
   if (!orgId) return 'owner';
-  return orgRole === 'org:admin' || orgRole === 'admin' ? 'admin' : 'member';
+  return orgRole === 'admin' ? 'admin' : 'member';
 }
 
 export async function workspaceForIdentity(
@@ -83,7 +82,7 @@ export async function workspaceForIdentity(
     .withIndex('by_auth_key', (q) => q.eq('authKey', authKey(actor.subject, actor.orgId)))
     .unique();
   if (!workspace) return null;
-  return { workspace, role: clerkRole(actor.orgId, actor.orgRole) };
+  return { workspace, role: workspaceRole(actor.orgId, actor.orgRole) };
 }
 
 export async function requireWorkspace(

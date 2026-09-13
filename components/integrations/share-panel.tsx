@@ -69,7 +69,7 @@ export function SharePanel({
           ) : error ? (
             <p className="field-hint">{error}</p>
           ) : candidates.length === 0 ? (
-            <p className="field-hint">Invite people by creating an organization in Clerk.</p>
+            <p className="field-hint">Create a shared workspace to invite people into it.</p>
           ) : (
             <div className="tool-checklist share-members">
               {candidates.map((member) => {

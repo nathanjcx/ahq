@@ -1,8 +1,9 @@
-import { auth, clerkClient } from '@clerk/nextjs/server';
+import { withAuth } from '@workos-inc/authkit-nextjs';
 import { NextResponse } from 'next/server';
 import type { z } from 'zod';
 import { REQUESTED_WITH } from '../api/routes';
 import { safeError } from './secrets';
+import { authConfigured } from './workos';
 
 export class HttpError extends Error {
   constructor(
@@ -37,23 +38,33 @@ export function failure(error: unknown) {
  * code: the Origin has to match, and a cross-site form post cannot set `x-requested-with` at all.
  */
 export async function actor(request?: Request) {
-  if (!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || !process.env.CLERK_SECRET_KEY)
-    throw new HttpError(503, 'Sign-in has not been configured yet.', 'not_configured');
+  if (!authConfigured()) throw new HttpError(503, 'Sign-in has not been configured yet.', 'not_configured');
   if (request && request.method !== 'GET') {
     const origin = request.headers.get('origin');
     const expected = new URL(process.env.APP_URL || request.url).origin;
     if (!origin || origin !== expected || request.headers.get(REQUESTED_WITH.header) !== REQUESTED_WITH.value)
       throw new HttpError(403, 'Request origin does not match this application.', 'bad_origin');
   }
-  const identity = await auth();
-  if (!identity.userId) throw new HttpError(401, 'Sign in to continue.', 'unauthenticated');
+  const { user, organizationId, role } = await withAuth();
+  if (!user) throw new HttpError(401, 'Sign in to continue.', 'unauthenticated');
   // The organization role travels with the actor, so a route can hand Convex what it needs to decide
-  // workspace administration instead of falling back to the platform-administrator list.
+  // workspace administration instead of falling back to the platform-administrator list. The display
+  // name comes out of the sealed session, so naming the caller costs no WorkOS round trip.
   return {
-    authSubject: identity.userId,
-    ...(identity.orgId ? { authOrgId: identity.orgId } : {}),
-    ...(identity.orgRole ? { authOrgRole: identity.orgRole } : {}),
+    authSubject: user.id,
+    authName: user.name || [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email,
+    ...(organizationId ? { authOrgId: organizationId } : {}),
+    ...(role ? { authOrgRole: role } : {}),
   };
+}
+
+/**
+ * The claims a Convex service function takes to resolve the caller's workspace. Convex rejects an
+ * argument its validator does not declare, so a route hands over exactly these rather than spreading
+ * the whole actor, which also carries the display name and, for some functions, an unwanted role.
+ */
+export function workspaceClaims(identity: { authSubject: string; authOrgId?: string }) {
+  return { authSubject: identity.authSubject, authOrgId: identity.authOrgId };
 }
 
 /** Platform administrators are trusted by bootstrap environment, the same list Convex reads. */
@@ -70,11 +81,6 @@ export async function platformAdmin(request?: Request) {
   if (!isPlatformAdmin(identity.authSubject))
     throw new HttpError(403, 'Platform administrator access required.', 'forbidden');
   return identity;
-}
-
-export async function displayName(subject: string) {
-  const user = await (await clerkClient()).users.getUser(subject);
-  return user.fullName || user.primaryEmailAddress?.emailAddress || 'Member';
 }
 
 export async function rawBody(request: Request, max = 1_000_000) {

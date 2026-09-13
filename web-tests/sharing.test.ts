@@ -12,7 +12,7 @@ import {
 
 const alice = identity('alice', 'acme');
 const bob = identity('bob', 'acme');
-const carol = identity('carol', 'acme', 'org:admin');
+const carol = identity('carol', 'acme', 'admin');
 
 /** One organization workspace where Alice owns a shared Linear connection. */
 async function sharedWorkspace(t: Harness, visibleToSubjects: string[] = ['bob']) {

@@ -370,9 +370,148 @@
 .incident-strip button {
   flex: 0 0 auto;
 }
-.clerk-user {
+/* === components/app/account.tsx: the signed-in person and their workspace === */
+.account-menu,
+.workspace-switcher {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.popover-scrim {
+  position: fixed;
+  z-index: 40;
+  border: 0;
+  background: transparent;
+  inset: 0;
+}
+.account-button {
   display: grid;
-  margin-left: 2px;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--sage-100);
+  color: var(--sage-800);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+.account-button img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.account-panel,
+.workspace-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 41;
+  display: grid;
+  width: 248px;
+  gap: 2px;
+  padding: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: var(--shadow-sm);
+}
+.account-who {
+  display: grid;
+  gap: 1px;
+  padding: 7px 10px 9px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 2px;
+}
+.account-who strong {
+  font-size: var(--text-md);
+}
+.account-who small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-base);
+  text-overflow: ellipsis;
+}
+.account-panel button,
+.workspace-panel > button {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.account-panel button {
+  justify-content: flex-start;
+  padding: 0 10px;
+  text-align: left;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--text-md);
+  font-weight: 620;
+}
+.account-panel button:hover:not(:disabled),
+.workspace-panel > button:hover:not(:disabled) {
+  background: var(--sage-50);
+}
+.workspace-panel > button.is-current {
+  color: var(--ink);
+  opacity: 1;
+}
+.workspace-panel > button.workspace-new {
+  justify-content: flex-start;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  margin-top: 2px;
+  padding-top: 4px;
+  color: var(--sage-600);
+}
+.workspace-panel .field-hint {
+  padding: 2px 10px 6px;
+}
+.workspace-create {
+  display: flex;
+  gap: 6px;
+  border-top: 1px solid var(--line);
+  margin-top: 2px;
+  padding: 6px 2px 2px;
+}
+.workspace-create input {
+  min-width: 0;
+  flex: 1;
+  padding: 0 9px;
+  border: 1px solid #d5ddd0;
+  border-radius: 7px;
+  outline: 0;
+  background: #fffef9;
+  font-size: var(--text-sm);
+}
+.workspace-button {
+  display: flex;
+  max-width: 190px;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink-soft);
+  font-size: var(--text-md);
+  font-weight: 620;
+}
+.workspace-button span {
+  overflow: hidden;
+  max-width: 120px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-button:hover {
+  background: var(--sage-50);
 }
 /* === components/app/notices.tsx: preview banner === */
 .setup-banner {
@@ -715,10 +854,6 @@
   text-transform: uppercase;
   letter-spacing: 0.4px;
 }
-.clerk-organization {
-  display: flex;
-  align-items: center;
-}
 .toast {
   position: fixed;
   z-index: 100;
@@ -853,11 +988,16 @@
   .setup-banner-icon {
     flex: 0 0 auto;
   }
-  .clerk-user {
+  .account-menu {
     display: none;
   }
-  .clerk-organization {
-    max-width: 150px;
+  .workspace-button span {
+    max-width: 90px;
+  }
+  .workspace-panel {
+    right: 8px;
+    left: 8px;
+    width: auto;
   }
 }
 /* === components/app/review-bar.tsx === */

@@ -1,7 +1,13 @@
 'use client';
 
-import { SignedIn, SignedOut } from '@clerk/nextjs';
-import { ConvexProvider, ConvexReactClient, useConvexAuth, useQuery } from 'convex/react';
+import {
+  Authenticated,
+  ConvexProvider,
+  ConvexReactClient,
+  Unauthenticated,
+  useConvexAuth,
+  useQuery,
+} from 'convex/react';
 import { FixtureQueriesContext } from '../shared/use-ui-query';
 import { offlineActions, useWorkspaceActions } from './actions';
 import { CenteredLoader, SignInScreen } from './status-screens';
@@ -58,10 +64,10 @@ function ConnectedAstraHq() {
 
   return (
     <>
-      <SignedOut>
+      <Unauthenticated>
         <SignInScreen />
-      </SignedOut>
-      <SignedIn>
+      </Unauthenticated>
+      <Authenticated>
         {dashboard === undefined || listings === undefined ? (
           <CenteredLoader label="Loading your workspace" />
         ) : (
@@ -76,7 +82,7 @@ function ConnectedAstraHq() {
             actions={actions}
           />
         )}
-      </SignedIn>
+      </Authenticated>
     </>
   );
 }

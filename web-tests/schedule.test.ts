@@ -30,7 +30,7 @@ function afterHours(extra: Partial<SettingsArgs> = {}): SettingsArgs {
 
 async function workspace(t: Harness, settings: SettingsArgs = alwaysWorking) {
   const { versionId, listingId } = await publishEmployee(t);
-  const owner = t.withIdentity(orgIdentity('owner', 'acme', 'org:admin'));
+  const owner = t.withIdentity(orgIdentity('owner', 'acme', 'admin'));
   await owner.mutation(api.workspace.bootstrap, { name: 'Acme' });
   const { employeeId } = await hireOne(owner, listingId);
   const colleagueVersion = await publishEmployee(t, { name: 'Copy editor' });
@@ -77,7 +77,7 @@ async function jobsOfKind(t: Harness, kind: string) {
 describe('workspace settings', () => {
   it('answers with the defaults before anybody saves them, then with what was saved', async () => {
     const t = harness();
-    const owner = t.withIdentity(orgIdentity('owner', 'acme', 'org:admin'));
+    const owner = t.withIdentity(orgIdentity('owner', 'acme', 'admin'));
     await owner.mutation(api.workspace.bootstrap, { name: 'Acme' });
     expect(await owner.query(api.schedule.settings, {})).toMatchObject({
       timezone: 'UTC',
@@ -104,7 +104,7 @@ describe('workspace settings', () => {
 
   it('refuses hours, zones, and rates that do not make sense', async () => {
     const t = harness();
-    const owner = t.withIdentity(orgIdentity('owner', 'acme', 'org:admin'));
+    const owner = t.withIdentity(orgIdentity('owner', 'acme', 'admin'));
     await owner.mutation(api.workspace.bootstrap, { name: 'Acme' });
     const save = (patch: Partial<SettingsArgs>) =>
       owner.mutation(api.schedule.updateSettings, {
@@ -128,7 +128,7 @@ describe('workspace settings', () => {
 
   it('refuses an emergency allow-list with no channel that reaches a person', async () => {
     const t = harness();
-    const owner = t.withIdentity(orgIdentity('owner', 'acme', 'org:admin'));
+    const owner = t.withIdentity(orgIdentity('owner', 'acme', 'admin'));
     await owner.mutation(api.workspace.bootstrap, { name: 'Acme' });
     await t.run(async (ctx) =>
       ctx.db.insert('registryTools', {
@@ -162,7 +162,7 @@ describe('workspace settings', () => {
 
   it('lets only an owner or an administrator save them', async () => {
     const t = harness();
-    const owner = t.withIdentity(orgIdentity('owner', 'acme', 'org:admin'));
+    const owner = t.withIdentity(orgIdentity('owner', 'acme', 'admin'));
     await owner.mutation(api.workspace.bootstrap, { name: 'Acme' });
     const colleague = t.withIdentity(orgIdentity('colleague', 'acme'));
     await expect(
@@ -234,7 +234,7 @@ describe('the scheduler tick', () => {
     const t = harness();
     const first = await workspace(t);
     const firstTask = await dailyTask(t, first.owner, first.employeeId, 'Ship the launch page');
-    const other = t.withIdentity(orgIdentity('other-owner', 'globex', 'org:admin'));
+    const other = t.withIdentity(orgIdentity('other-owner', 'globex', 'admin'));
     await other.mutation(api.workspace.bootstrap, { name: 'Globex' });
     const { listingId } = await publishEmployee(t, { name: 'Second analyst' });
     const { employeeId } = await hireOne(other, listingId);

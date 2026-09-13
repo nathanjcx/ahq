@@ -1,6 +1,5 @@
 'use client';
 
-import { SignInButton } from '@clerk/nextjs';
 import { ArrowRight, LoaderCircle, ShieldCheck, Sparkles } from 'lucide-react';
 import './app.css';
 
@@ -14,11 +13,11 @@ export function SignInScreen() {
         <span className="eyebrow">ASTRA HQ</span>
         <h1>Come into the office</h1>
         <p>Sign in to see your employees, connected work, and action reviews.</p>
-        <SignInButton mode="modal">
-          <button className="primary-button full">
-            Sign in <ArrowRight size={16} />
-          </button>
-        </SignInButton>
+        {/* A plain link: minting the sign-in URL sets a single-use verifier cookie, which only the
+            server can do, so no script is involved in starting the flow. */}
+        <a className="primary-button full" href="/sign-in">
+          Sign in <ArrowRight size={16} />
+        </a>
         <small>
           <ShieldCheck size={13} />
           Workspace access is checked on every request.

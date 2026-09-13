@@ -4,7 +4,7 @@ import { slug } from '../lib/text';
 /**
  * Photographs the calendar and the boardroom against the /qa fixture at both viewports, and checks
  * the two things a screenshot cannot show: that nothing overflows horizontally, and that no page
- * error was thrown. Clerk cannot reach its fake instance here, so its own failures are ignored.
+ * error was thrown. The fixture route carries its own identity, so no page error is expected.
  */
 const viewports = [
   { name: 'desktop', width: 1280, height: 1000 },
@@ -17,7 +17,7 @@ test.skip(!fixtureEnabled, 'Set QA_FIXTURE=1 to build the fixture route and run 
 function watchErrors(page: Page) {
   const errors: string[] = [];
   page.on('pageerror', (error) => {
-    if (!/clerk/i.test(error.message)) errors.push(error.message);
+    errors.push(error.message);
   });
   return errors;
 }

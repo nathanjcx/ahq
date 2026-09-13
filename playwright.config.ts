@@ -26,7 +26,7 @@ export default defineConfig({
         reuseExistingServer: !process.env.CI,
         // The visual suite needs the fixture route; the smoke suite deliberately runs without it.
         env: {
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: '',
+          WORKOS_CLIENT_ID: '',
           NEXT_PUBLIC_CONVEX_URL: '',
           QA_FIXTURE: process.env.QA_FIXTURE ?? '',
         },

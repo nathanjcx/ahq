@@ -37,7 +37,7 @@ export const meetingArgs = {
   purpose: v.optional(v.string()),
 };
 
-/** Checked meeting fields. Attendees must be real instances; people are named by their Clerk subject. */
+/** Checked meeting fields. Attendees must be real instances; people are named by their WorkOS user id. */
 export async function meetingFields(ctx: Ctx, workspaceId: Id<'workspaces'>, input: MeetingRequest) {
   const now = Date.now();
   if (!Number.isFinite(input.startsAt) || !Number.isFinite(input.endsAt))

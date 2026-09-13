@@ -66,6 +66,15 @@ export const memberSchema = z.object({
 });
 export const membersResponse = z.array(memberSchema);
 
+// Workspace organizations, for the switcher and the create-workspace action.
+export const organizationSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  role: z.enum(['admin', 'member']),
+});
+export const organizationsResponse = z.array(organizationSchema);
+export const createOrganizationRequest = z.object({ name: z.string().trim().min(1).max(80) });
+
 // Audit timeline.
 const transition = z.object({
   from: z.string().optional(),
@@ -202,6 +211,8 @@ export type ConnectRequest = z.infer<typeof connectRequest>;
 export type ConnectResponse = z.infer<typeof connectResponse>;
 export type RelaySecretResponse = z.infer<typeof relaySecretResponse>;
 export type MembersResponse = z.infer<typeof membersResponse>;
+export type OrganizationsResponse = z.infer<typeof organizationsResponse>;
+export type CreateOrganizationRequest = z.infer<typeof createOrganizationRequest>;
 export type AuditResponse = z.infer<typeof auditResponse>;
 export type OAuthClientRequest = z.infer<typeof oauthClientRequest>;
 export type RemoveOAuthClientRequest = z.infer<typeof removeOAuthClientRequest>;

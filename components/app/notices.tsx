@@ -9,7 +9,7 @@ export function SetupBanner({ onSetup }: { onSetup: () => void }) {
         <Cloud size={16} />
       </span>
       <span>
-        <strong>Preview mode</strong> Add Clerk and Convex environment variables to connect this interface to
+        <strong>Preview mode</strong> Add WorkOS and Convex environment variables to connect this interface to
         your workspace.
       </span>
       <button className="setup-link" onClick={onSetup}>

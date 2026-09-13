@@ -1,10 +1,10 @@
 'use client';
 
-import { OrganizationSwitcher, UserButton } from '@clerk/nextjs';
 import { ArrowUpRight, Bell, Check, CheckCheck, Menu, Plus, Settings } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { relativeTime } from '../shared/time';
 import { useUiQuery } from '../shared/use-ui-query';
+import { AccountMenu, WorkspaceSwitcher } from './account';
 import type { TriageActions } from './actions/triage';
 import type { Page } from './nav';
 import type { ActionProposal, Notification } from '@/lib/contracts';
@@ -74,11 +74,7 @@ export function Topbar({
           <Plus size={16} />
           New task
         </button>
-        {configured && (
-          <div className="clerk-organization">
-            <OrganizationSwitcher afterSelectOrganizationUrl="/" />
-          </div>
-        )}
+        {configured && <WorkspaceSwitcher />}
         <button
           className="icon-button topbar-settings"
           aria-label="Settings"
@@ -87,11 +83,7 @@ export function Topbar({
         >
           <Settings size={18} />
         </button>
-        {configured && (
-          <div className="clerk-user">
-            <UserButton />
-          </div>
-        )}
+        {configured && <AccountMenu />}
       </div>
     </header>
   );

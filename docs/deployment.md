@@ -4,28 +4,39 @@ Deploying Astra HQ is two jobs. First a platform administrator brings up the fou
 
 This document does not claim that any account exists, that a provider has been connected, or that a deployment has completed.
 
-## 1. Convex and Clerk
+## 1. Convex and WorkOS
 
-Create a Convex project with a production deployment, and a Clerk production application.
+Create a Convex project with a production deployment, and a WorkOS production environment.
 
-In Clerk:
+In the WorkOS dashboard, for the production environment:
 
-1. Copy the `pk_live_` publishable key and the `sk_live_` secret key.
-2. Activate Clerk's Convex integration, then enable Organizations. A workspace is keyed by organization when the signed-in session has one, and by user otherwise. Organization role decides workspace owner, admin, or member.
-3. Copy the production Frontend API URL. It becomes `CLERK_JWT_ISSUER_DOMAIN` in Convex. `convex/auth.config.ts` uses `applicationID: "convex"`.
-4. Add the final web origin to Clerk's allowed origins and redirect URLs. That origin is `APP_URL`.
-5. Record the Clerk user IDs of the platform administrators.
+1. Copy the `client_...` client id and the `sk_live_...` API key from **Get started → Quick start**.
+2. Under **Redirects**, add `https://<your web origin>/callback` as a redirect URI and point the sign-in and sign-out redirects at `https://<your web origin>/`. That origin is `APP_URL`, and the callback is `NEXT_PUBLIC_WORKOS_REDIRECT_URI`.
+3. Under **Authentication**, enable the sign-in methods this deployment allows, and enable organizations. A workspace is keyed by organization when the session has one, and by user otherwise. The organization role decides workspace owner, admin, or member: the `admin` role slug administers the workspace and every other slug is a member. Keep the shipped `admin` and `member` roles.
+4. Under **Authentication → Features → JWT template**, add the person's name and email to the access token so shared views can name who did what. Convex reads these claims and falls back to "Member" without them.
 
-Set the Convex deployment variables. Convex stores variables per deployment, and `npx convex deploy` does not copy them from the web host.
+   ```json
+   {
+     "name": "{{ user.first_name || '' }} {{ user.last_name || '' }}",
+     "email": {{ user.email }}
+   }
+   ```
+
+5. Record the WorkOS user IDs of the platform administrators.
+
+WorkOS needs no CORS entry: the browser never calls the WorkOS API. Signing in is a top-level redirect and the session is read on the server.
+
+Set the Convex deployment variables. Convex stores variables per deployment, and `npx convex deploy` does not copy them from the web host. Convex validates access tokens against the environment's public keys, so it needs the client id; `convex/auth.config.ts` builds both WorkOS issuers from it.
 
 ```sh
-npx convex env set --prod CLERK_JWT_ISSUER_DOMAIN 'https://your-production-clerk-frontend-api.example.com'
+npx convex env set --prod WORKOS_CLIENT_ID 'client_...'
+npx convex env set --prod WORKOS_API_KEY 'sk_live_...'
 npx convex env set --prod AHQ_SERVICE_SECRET 'generate-a-separate-random-secret'
 npx convex env set --prod PLATFORM_ADMIN_USER_IDS 'user_...'
 npx convex deploy
 ```
 
-Generate `AHQ_SERVICE_SECRET` and `CREDENTIAL_ENCRYPTION_KEY` independently. The encryption key is 32 random bytes in base64, for example `openssl rand -base64 32`; web, worker, and gateway validate it as an AES-256-GCM key. Copy the deployment's `https://...convex.cloud` URL for `NEXT_PUBLIC_CONVEX_URL`.
+Generate `AHQ_SERVICE_SECRET`, `CREDENTIAL_ENCRYPTION_KEY`, and `WORKOS_COOKIE_PASSWORD` independently; the cookie password is at least 32 characters, for example `openssl rand -base64 32`. The encryption key is 32 random bytes in base64, for example `openssl rand -base64 32`; web, worker, and gateway validate it as an AES-256-GCM key. Copy the deployment's `https://...convex.cloud` URL for `NEXT_PUBLIC_CONVEX_URL`.
 
 ## 2. Railway services
 
@@ -43,31 +54,32 @@ The hosted Agents session connects to the gateway from OpenAI's side, so `MCP_GA
 
 This is the complete list the code reads. Everything else that used to live here is now Convex data, edited on the Operations page.
 
-| Variable                            | Where                        | Required               | Purpose                                               |
-| ----------------------------------- | ---------------------------- | ---------------------- | ----------------------------------------------------- |
-| `NEXT_PUBLIC_CONVEX_URL`            | web, worker, gateway         | yes                    | Convex URL, browser and server fallback               |
-| `CONVEX_URL`                        | web, worker, gateway         | no                     | Server-side Convex URL override                       |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | web                          | yes                    | Clerk browser SDK                                     |
-| `CLERK_SECRET_KEY`                  | web                          | yes                    | Clerk server SDK                                      |
-| `CLERK_JWT_ISSUER_DOMAIN`           | Convex                       | yes                    | Issuer Convex validates                               |
-| `APP_URL`                           | web                          | yes                    | Origin checks, OAuth callback, relay URL              |
-| `AHQ_SERVICE_SECRET`                | web, worker, gateway, Convex | yes                    | Authenticates service functions                       |
-| `CREDENTIAL_ENCRYPTION_KEY`         | web, worker, gateway         | yes for integrations   | Seals and unseals every stored secret                 |
-| `OPENAI_API_KEY`                    | worker                       | yes for tasks          | Agents API                                            |
-| `MCP_GATEWAY_URL`                   | worker                       | yes for tasks          | Gateway origin written into session tools             |
-| `S3_ENDPOINT`                       | web, worker                  | yes for archived files | S3-compatible endpoint                                |
-| `S3_BUCKET`                         | web, worker                  | yes for archived files | Artifact bucket                                       |
-| `S3_ACCESS_KEY_ID`                  | web, worker                  | yes for archived files | Bucket access key                                     |
-| `S3_SECRET_ACCESS_KEY`              | web, worker                  | yes for archived files | Bucket secret                                         |
-| `S3_REGION`                         | web, worker                  | no                     | Defaults to `auto`                                    |
-| `S3_FORCE_PATH_STYLE`               | web, worker                  | no                     | Defaults to `false`                                   |
-| `PLATFORM_ADMIN_USER_IDS`           | web, Convex                  | yes for configuration  | Clerk user IDs allowed on Operations                  |
-| `VAPID_PUBLIC_KEY`                  | web, worker                  | yes for push           | Web Push application key                              |
-| `VAPID_PRIVATE_KEY`                 | web, worker                  | yes for push           | Web Push signing key                                  |
-| `VAPID_SUBJECT`                     | web, worker                  | yes for push           | `mailto:` address or origin the push service contacts |
-| `WORKER_CONCURRENCY`                | worker                       | no                     | Job slots, default 4, bounded 1 to 16                 |
-| `WORKER_MONITORS`                   | worker                       | no                     | Monitor slots, default 16, bounded 1 to 64            |
-| `MAX_TURN_SECONDS`                  | worker                       | no                     | Run time limit, default 900, bounded 60 to 3600       |
+| Variable                          | Where                        | Required               | Purpose                                               |
+| --------------------------------- | ---------------------------- | ---------------------- | ----------------------------------------------------- |
+| `NEXT_PUBLIC_CONVEX_URL`          | web, worker, gateway         | yes                    | Convex URL, browser and server fallback               |
+| `CONVEX_URL`                      | web, worker, gateway         | no                     | Server-side Convex URL override                       |
+| `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | web                          | yes                    | `<APP_URL>/callback`, also set in WorkOS              |
+| `WORKOS_CLIENT_ID`                | web, Convex                  | yes                    | WorkOS environment; Convex validates tokens           |
+| `WORKOS_API_KEY`                  | web, Convex                  | yes                    | WorkOS server API                                     |
+| `WORKOS_COOKIE_PASSWORD`          | web                          | yes                    | Seals the session cookie, 32+ characters              |
+| `APP_URL`                         | web                          | yes                    | Origin checks, OAuth callback, relay URL              |
+| `AHQ_SERVICE_SECRET`              | web, worker, gateway, Convex | yes                    | Authenticates service functions                       |
+| `CREDENTIAL_ENCRYPTION_KEY`       | web, worker, gateway         | yes for integrations   | Seals and unseals every stored secret                 |
+| `OPENAI_API_KEY`                  | worker                       | yes for tasks          | Agents API                                            |
+| `MCP_GATEWAY_URL`                 | worker                       | yes for tasks          | Gateway origin written into session tools             |
+| `S3_ENDPOINT`                     | web, worker                  | yes for archived files | S3-compatible endpoint                                |
+| `S3_BUCKET`                       | web, worker                  | yes for archived files | Artifact bucket                                       |
+| `S3_ACCESS_KEY_ID`                | web, worker                  | yes for archived files | Bucket access key                                     |
+| `S3_SECRET_ACCESS_KEY`            | web, worker                  | yes for archived files | Bucket secret                                         |
+| `S3_REGION`                       | web, worker                  | no                     | Defaults to `auto`                                    |
+| `S3_FORCE_PATH_STYLE`             | web, worker                  | no                     | Defaults to `false`                                   |
+| `PLATFORM_ADMIN_USER_IDS`         | web, Convex                  | yes for configuration  | WorkOS user IDs allowed on Operations                 |
+| `VAPID_PUBLIC_KEY`                | web, worker                  | yes for push           | Web Push application key                              |
+| `VAPID_PRIVATE_KEY`               | web, worker                  | yes for push           | Web Push signing key                                  |
+| `VAPID_SUBJECT`                   | web, worker                  | yes for push           | `mailto:` address or origin the push service contacts |
+| `WORKER_CONCURRENCY`              | worker                       | no                     | Job slots, default 4, bounded 1 to 16                 |
+| `WORKER_MONITORS`                 | worker                       | no                     | Monitor slots, default 16, bounded 1 to 64            |
+| `MAX_TURN_SECONDS`                | worker                       | no                     | Run time limit, default 900, bounded 60 to 3600       |
 
 Without the three `VAPID_*` variables push notifications are off and say so in the log; the other
 channels still deliver. Generate the pair once with `npx web-push generate-vapid-keys`.
@@ -76,7 +88,7 @@ channels still deliver. Generate the pair once with `npx web-push generate-vapid
 without them starts, serves `/health` with them named in `missingConfig`, logs the same line, and
 fails each job it claims with that reason rather than crash-looping out of the deployment.
 
-Keep `CLERK_SECRET_KEY` on web only and `OPENAI_API_KEY` on worker only. `PLATFORM_ADMIN_USER_IDS` must hold the same list in Convex and on the web service, because Convex guards the configuration functions and the web service guards the routes that seal secrets. Leave `PORT` unset. `ALLOW_INSECURE_MCP_FOR_TESTS` exists for the test suite and only has an effect when `NODE_ENV=test`; never set it on a deployed service.
+Keep `WORKOS_API_KEY` and `WORKOS_COOKIE_PASSWORD` off the browser and `OPENAI_API_KEY` on worker only. Nothing WorkOS needs is public: `NEXT_PUBLIC_WORKOS_REDIRECT_URI` is a URL on this application's own origin. `PLATFORM_ADMIN_USER_IDS` must hold the same list in Convex and on the web service, because Convex guards the configuration functions and the web service guards the routes that seal secrets. Leave `PORT` unset. `ALLOW_INSECURE_MCP_FOR_TESTS` exists for the test suite and only has an effect when `NODE_ENV=test`; never set it on a deployed service.
 
 ## 4. Artifact storage
 
@@ -84,7 +96,7 @@ The worker downloads completed session files and writes them to the bucket; the 
 
 ## 5. Configure providers on the Operations page
 
-Sign in as a user whose Clerk ID is in `PLATFORM_ADMIN_USER_IDS` and open Operations. Every service reads this configuration, so a change takes effect on the next agent call and the next sign-in. Nothing here is redeployed.
+Sign in as a user whose WorkOS ID is in `PLATFORM_ADMIN_USER_IDS` and open Operations. Every service reads this configuration, so a change takes effect on the next agent call and the next sign-in. Nothing here is redeployed.
 
 The page has a readiness card per provider that names the next missing item, a configuration card per provider, and the tool registry.
 
@@ -132,7 +144,7 @@ Connecting an MCP server does not create any subscription. GitHub, Linear, and S
 
 ## 8. Acceptance steps
 
-Run these with a test Clerk organization and test provider records, and record the results. Until then the deployment is not proven.
+Run these with a test WorkOS organization and test provider records, and record the results. Until then the deployment is not proven.
 
 1. **Configure providers.** On Operations, enable the servers, add an OAuth client per provider, set the native inbox secrets, then import and review tools until each provider's readiness card reports everything configured. Confirm the page never redisplays a secret.
 2. **Connect.** As an ordinary user, open Integrations and connect one provider. Confirm the connection lists only reviewed tools, and that a provider with no reviewed tool refuses to start sign-in.
@@ -146,7 +158,8 @@ Run these with a test Clerk organization and test provider records, and record t
 
 ## References
 
-- [Convex with Clerk](https://docs.convex.dev/auth/clerk)
+- [Convex with WorkOS AuthKit](https://docs.convex.dev/auth/authkit)
+- [WorkOS AuthKit for Next.js](https://workos.com/docs/authkit/nextjs)
 - [Convex environment variables](https://docs.convex.dev/production/environment-variables)
 - [Convex `npx convex deploy`](https://docs.convex.dev/cli/reference/deploy)
 - [Railway Dockerfiles](https://docs.railway.com/builds/dockerfiles)
@@ -172,6 +185,6 @@ What exists, created from this machine's CLI logins (Railway and Cloudflare as `
 | Custom domain     | `app.trystaff.ai` on `web`: CNAME `app` → `vr13r0en.up.railway.app`, TXT `_railway-verify.app` → the token `railway domain status` prints |
 | Cloudflare        | account `efcd9eb4fb3e9ac231414a8867b3babe`; no zone and R2 not enabled yet                                                                |
 
-Variables already set: Convex production has `AHQ_SERVICE_SECRET` and `CLERK_JWT_ISSUER_DOMAIN=https://clerk.trystaff.ai`; every Railway service has `NEXT_PUBLIC_CONVEX_URL`, `AHQ_SERVICE_SECRET`, `CREDENTIAL_ENCRYPTION_KEY`; `web` has `APP_URL` (the Railway domain until DNS moves), `worker` has `MCP_GATEWAY_URL` and `WORKER_CONCURRENCY`. The generated secrets live only in `~/.config/trystaff/deploy.env` on the machine that ran the setup, and in the services.
+Variables already set: Convex production has `AHQ_SERVICE_SECRET`; every Railway service has `NEXT_PUBLIC_CONVEX_URL`, `AHQ_SERVICE_SECRET`, `CREDENTIAL_ENCRYPTION_KEY`; `web` has `APP_URL` (the Railway domain until DNS moves), `worker` has `MCP_GATEWAY_URL` and `WORKER_CONCURRENCY`. The generated secrets live only in `~/.config/trystaff/deploy.env` on the machine that ran the setup, and in the services.
 
-Still to set, in order: the two DNS records above (at GoDaddy, or in Cloudflare once the zone's nameservers are live); Clerk production keys (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` on `web`; `PLATFORM_ADMIN_USER_IDS` on `web` and Convex; confirm `CLERK_JWT_ISSUER_DOMAIN`); `OPENAI_API_KEY` on `worker`; R2 (`S3_*` on `web` and `worker`) once R2 is enabled; then `APP_URL=https://app.trystaff.ai` and a redeploy of `web`.
+Still to set, in order: the two DNS records above (at GoDaddy, or in Cloudflare once the zone's nameservers are live); WorkOS production values (`WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `WORKOS_COOKIE_PASSWORD`, `NEXT_PUBLIC_WORKOS_REDIRECT_URI` on `web`; `WORKOS_CLIENT_ID` and `WORKOS_API_KEY` on Convex; `PLATFORM_ADMIN_USER_IDS` on `web` and Convex; the `/callback` redirect URI and the JWT template in the WorkOS dashboard); `OPENAI_API_KEY` on `worker`; R2 (`S3_*` on `web` and `worker`) once R2 is enabled; then `APP_URL=https://app.trystaff.ai` and a redeploy of `web`.

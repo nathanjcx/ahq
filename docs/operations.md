@@ -9,7 +9,7 @@ in [architecture](architecture.md).
 | Component            | Role                                                                                        | Check                                          |
 | -------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | Convex               | Every table, the job queue, the journal, the schedule, the crons, subscriptions             | Convex dashboard deployment and function logs  |
-| web                  | Clerk sessions, the UI, API routes, OAuth callback, webhooks, alert intake, sealing secrets | Railway web deployment and `/health`           |
+| web                  | WorkOS sessions, the UI, API routes, OAuth callback, webhooks, alert intake, sealing secrets | Railway web deployment and `/health`           |
 | worker               | Queue jobs and turns, Agents sessions, session monitoring, artifact archive                 | Railway worker `/health`                       |
 | gateway              | The only MCP server an agent can reach                                                      | Railway gateway `/health`                      |
 | S3-compatible bucket | Private artifact archive                                                                    | Bucket metrics and an authorized file download |
@@ -28,7 +28,7 @@ administrators. Environment variables are for bootstrap trust and tunables.
 | `CREDENTIAL_ENCRYPTION_KEY`                                  | web, worker, gateway         | 32 bytes, base64; never in Convex |
 | `OPENAI_API_KEY`                                             | worker                       |                                   |
 | `MCP_GATEWAY_URL`                                            | worker                       | Base URL the sessions call        |
-| `APP_URL`, Clerk keys, `CLERK_JWT_ISSUER_DOMAIN`             | web, Convex                  |                                   |
+| `APP_URL`, `WORKOS_*`, `NEXT_PUBLIC_WORKOS_REDIRECT_URI`     | web, Convex                  | Client id and API key in both     |
 | `NEXT_PUBLIC_CONVEX_URL`, `CONVEX_URL`                       | browser, services            |                                   |
 | `PLATFORM_ADMIN_USER_IDS`                                    | web and Convex               | Must match in both                |
 | `WORKER_CONCURRENCY` (4, 1–16), `WORKER_MONITORS` (16, 1–64) | worker                       | Slot pools                        |
@@ -116,7 +116,7 @@ fingerprint: a repeat bumps `occurrences` on the open alert and changes nothing 
 
 **Signed webhook.** A workspace owner or administrator sets the workspace's alert secret. The web
 route seals the plaintext and calls `services/triage:setAlertSecretForActor`, which decides the role
-from the caller's own Clerk claims; passing no ciphertext clears the secret and closes the endpoint.
+from the caller's own WorkOS claims; passing no ciphertext clears the secret and closes the endpoint.
 `triage:intake` reports whether a secret is set and when it last changed, and never the secret itself.
 Senders post to `/api/alerts` with:
 
