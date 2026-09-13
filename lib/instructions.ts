@@ -34,7 +34,7 @@ export function deliverableRules(workshop: Workshop | undefined): string[] {
       : []),
     ...(workshop.tools.includes('generate_image')
       ? [
-          'For a photograph, illustration, hero image, or social visual, call generate_image with a specific brief: subject, composition, palette, and any words exactly as they must appear. It is archived as a file of this task and does not land in your environment, so compose around it rather than embedding it.',
+          'For a photograph, illustration, hero image, or social visual, write a specific brief: subject, composition, palette, and any words exactly as they must appear. If your environment can generate an image into /workspace/generated_images, use that, so the file is yours to embed and to copy into /workspace/outputs. Otherwise call generate_image; its file is archived with this task and does not land in your environment, so compose around it rather than embedding it.',
         ]
       : []),
     'A connected Google Workspace is the right place for a document, sheet, or deck the person will keep editing; a file in /workspace/outputs is right for a finished piece.',

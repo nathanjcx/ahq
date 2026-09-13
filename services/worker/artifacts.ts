@@ -19,6 +19,27 @@ export async function journal(taskId: string, event: JournalEvent) {
 const maxFiles = 100;
 const maxFileBytes = 25_000_000;
 
+/** The media type a person's browser opens a deliverable with; anything else downloads as bytes. */
+const MEDIA_TYPES: Record<string, string> = {
+  pdf: 'application/pdf',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  csv: 'text/csv',
+  txt: 'text/plain',
+  md: 'text/markdown',
+  html: 'text/html',
+  json: 'application/json',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+};
+export function mediaTypeFor(name: string) {
+  return MEDIA_TYPES[name.split('.').pop()?.toLowerCase() ?? ''] ?? 'application/octet-stream';
+}
+
 /** Copies session deliverables into the archive once each. Limits are reported, never silent. */
 export async function archiveFiles(runtime: WorkerRuntime, context: SessionContext) {
   if (!context.task.sessionId) return;
@@ -61,11 +82,13 @@ export async function archiveFiles(runtime: WorkerRuntime, context: SessionConte
     });
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (bytes.byteLength > maxFileBytes) throw new Error('Artifact exceeded archive size limit');
-    await putArtifact(storageKey, bytes, 'application/octet-stream');
+    const name = (artifact.path.split('/').pop() || 'file').slice(0, 300);
+    const mediaType = mediaTypeFor(name);
+    await putArtifact(storageKey, bytes, mediaType);
     await mutate('services/artifacts:recordArtifact', {
       taskId: context.task.id,
-      name: (artifact.path.split('/').pop() || 'file').slice(0, 300),
-      mediaType: 'application/octet-stream',
+      name,
+      mediaType,
       size: bytes.byteLength,
       storageKey,
       sha256: createHash('sha256').update(bytes).digest('hex'),
