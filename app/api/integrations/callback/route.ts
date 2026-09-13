@@ -12,6 +12,7 @@ import {
   startOAuth,
   type OAuthState,
   type StoredCredential,
+  credentialForServer,
 } from '@/lib/server/oauth';
 import { unseal, seal, equalSecret, requiredEnv } from '@/lib/server/secrets';
 export const runtime = 'nodejs';
@@ -79,7 +80,12 @@ export async function GET(request: Request) {
         serverUrl,
       };
       try {
-        await connect(identity, identity.authName, next, credential);
+        await connect(
+          identity,
+          identity.authName,
+          next,
+          credentialForServer(credential, serverUrl, next.name),
+        );
       } catch (error) {
         if (!(error instanceof UnauthorizedError)) throw error;
         const flow = await startOAuth({ ...next, queue });

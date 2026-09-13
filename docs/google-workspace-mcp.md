@@ -1,6 +1,6 @@
 # Google Workspace MCP
 
-Google Workspace MCP is a Developer Preview as of September 12, 2026. Treat it as a controlled test integration. The provider's own guide says each Workspace product has a dedicated MCP server, and that access inherits the user's Google permissions. Read [Google's configuration guide](https://developers.google.com/workspace/guides/configure-mcp-servers) before registering a client.
+Google Workspace MCP is a Developer Preview as of September 13, 2026. Treat it as a controlled test integration. Two gates apply before any tool call answers: the Cloud project must have the six MCP services enabled (without them every server answers 401 `invalid_token`, and discovery fails), and the applicant's account and project number must be enrolled in the [Developer Preview Program](https://developers.google.com/workspace/preview) (until then every call answers "not enrolled in the required Developer Preview Program"). Enrolment is a form and normally takes a day. The provider's own guide says each Workspace product has a dedicated MCP server, and that access inherits the user's Google permissions. Read [Google's configuration guide](https://developers.google.com/workspace/guides/configure-mcp-servers) before registering a client.
 
 ## Create the Google project
 
@@ -52,7 +52,7 @@ On the same Operations card, tick the product servers the organization has enabl
 
 These are the only Google URLs the application accepts; they come from the built-in registry in `lib/providers.ts` and cannot be edited in the app. Gmail is the provider default. Enabling a server is an admission decision, not a grant to any tool.
 
-In the UI the user picks which products to connect (Gmail, Drive, Docs, Sheets, Slides, Calendar) in one dialog and signs in once. After the callback, the app connects each remaining product with the same grant whenever Google accepts it. If one product's server rejects the token, the user is sent through consent again for that product, which is what happens when the client's scopes do not cover it.
+In the UI the user picks which products to connect (Gmail, Drive, Docs, Sheets, Slides, Calendar) in one dialog and signs in once. After the callback, the app connects each remaining product with a copy of the same grant addressed to that server (`credentialForServer`), so each connection discovers its own server's metadata, whenever Google accepts it. If one product's server rejects the token, the user is sent through consent again for that product, which is what happens when the client's scopes do not cover it.
 
 Each connection's allowed tools are the intersection of the tools discovered on that product server and the non-blocked `google-workspace` rows in the tool registry on Operations. Connecting a product fails when that intersection is empty, so review tools before asking anyone to connect. The registry section can import the discovered tool names from an administrator's own Google connection as blocked rows to review. The owner can narrow tools and set a resource scope afterwards on the connection's Manage access panel. The employee capability and the per-connection tool grant must both allow a call.
 

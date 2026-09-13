@@ -1,18 +1,18 @@
 # Verification
 
-What is proven and what is not, as of September 12, 2026, during the platform v4 pass. No production
-account, provider credential, or live deployment exists for this build. Nothing below claims a real
-provider call succeeded.
+What is proven and what is not, as of September 13, 2026. A production deployment exists
+(`app.trystaff.ai`, see [deployment](deployment.md) section 6), and the live checks at the end of
+this page were run against it.
 
-| Check                | Command               | State today                                                     |
-| -------------------- | --------------------- | --------------------------------------------------------------- |
-| Types                | `npm run typecheck`   | Clean                                                           |
-| Unit and integration | `npm test`            | 281 tests in 41 files, all passing                              |
-| Lint                 | `npm run lint`        | **Fails**: 19 errors and 6 warnings, all in `components/office` |
-| Everything           | `npm run check`       | Fails at the lint step                                          |
-| Smoke (browser)      | `npm run test:ui`     | Not part of `npm test`                                          |
-| Visual (browser)     | `npm run test:visual` | Not part of `npm test`                                          |
-| Office baselines     | `npm run test:lab`    | Not part of `npm test`                                          |
+| Check                | Command               | State today                        |
+| -------------------- | --------------------- | ---------------------------------- |
+| Types                | `npm run typecheck`   | Clean                              |
+| Unit and integration | `npm test`            | 386 tests in 50 files, all passing |
+| Lint                 | `npm run lint`        | Clean                              |
+| Everything           | `npm run check`       | Passes                             |
+| Smoke (browser)      | `npm run test:ui`     | Not part of `npm test`             |
+| Visual (browser)     | `npm run test:visual` | Not part of `npm test`             |
+| Office baselines     | `npm run test:lab`    | Not part of `npm test`             |
 
 ## Types and contracts
 
@@ -36,21 +36,21 @@ the assertion holds while the interface keeps treating ids as opaque.
 
 Pure modules, run by Vitest without a browser or a deployment.
 
-| File                        | Tests | What it protects                                                                         |
-| --------------------------- | ----- | ---------------------------------------------------------------------------------------- |
-| `schedule-time.test.ts`     | 13    | `lib/time.ts`: zones, DST, working windows, attended hours, `workingHoursBetween`        |
-| `schedule-planner.test.ts`  | 22    | `planTick`: priority, preemption, caps, free slots, cheap mode, unique keys              |
-| `memory-compiler.test.ts`   | 6     | Section order, importance ordering, budgets, the omission note                           |
-| `projects-graph.test.ts`    | 7     | Topological order, cycles, readiness, dependents, milestone status                       |
-| `text.test.ts`              | 20    | `lib/text.ts`: shortening, counting, slugs                                               |
-| `paging.test.ts`            | 4     | `lib/paging.ts`: pages counted per batch, in-app rows excluded, the twenty-minute gate   |
-| `projects-timeline.test.ts` | 5     | The roadmap timeline's lanes, flags, and dependency strings                              |
-| `office-activity.test.ts`   | 36    | `deriveActivities`: every rule, its timeout, attention, bubble text, provider matching   |
-| `office-labels.test.ts`     | 13    | Label priority, the collision pass and its stability, bubble ranking and placement       |
-| `office-stations.test.ts`   | 6     | The desk grid, sticky homes, the minimum gap over every activity, the prop queues        |
-| `office-rooms.test.ts`      | 21    | Records, boardroom, triage and lobby layout invariants: shelves, seats, cards, the wall  |
-| `office-stage.test.ts`      | 5     | `deriveScene`: the board, the room, the hour, and the workspace's hours inside the day   |
-| `office-replay.test.ts`     | 11    | `sceneAt` and `entryAt`: a recorded timeline replayed into the live floor's scene        |
+| File                        | Tests | What it protects                                                                        |
+| --------------------------- | ----- | --------------------------------------------------------------------------------------- |
+| `schedule-time.test.ts`     | 13    | `lib/time.ts`: zones, DST, working windows, attended hours, `workingHoursBetween`       |
+| `schedule-planner.test.ts`  | 22    | `planTick`: priority, preemption, caps, free slots, cheap mode, unique keys             |
+| `memory-compiler.test.ts`   | 6     | Section order, importance ordering, budgets, the omission note                          |
+| `projects-graph.test.ts`    | 7     | Topological order, cycles, readiness, dependents, milestone status                      |
+| `text.test.ts`              | 20    | `lib/text.ts`: shortening, counting, slugs                                              |
+| `paging.test.ts`            | 4     | `lib/paging.ts`: pages counted per batch, in-app rows excluded, the twenty-minute gate  |
+| `projects-timeline.test.ts` | 5     | The roadmap timeline's lanes, flags, and dependency strings                             |
+| `office-activity.test.ts`   | 36    | `deriveActivities`: every rule, its timeout, attention, bubble text, provider matching  |
+| `office-labels.test.ts`     | 13    | Label priority, the collision pass and its stability, bubble ranking and placement      |
+| `office-stations.test.ts`   | 6     | The desk grid, sticky homes, the minimum gap over every activity, the prop queues       |
+| `office-rooms.test.ts`      | 21    | Records, boardroom, triage and lobby layout invariants: shelves, seats, cards, the wall |
+| `office-stage.test.ts`      | 5     | `deriveScene`: the board, the room, the hour, and the workspace's hours inside the day  |
+| `office-replay.test.ts`     | 11    | `sceneAt` and `entryAt`: a recorded timeline replayed into the live floor's scene       |
 
 ## Convex tests
 
@@ -237,3 +237,23 @@ in [deployment](deployment.md) are run with real accounts and the results record
 
 The audit tab displays the recorded journal. It does not rerun provider actions, and it cannot
 recover intermediate events the provider did not persist.
+
+## Live checks on the production deployment
+
+Run by hand against `app.trystaff.ai` on September 13, 2026, with a Chromium the owner signed into
+and Playwright over CDP (the helper scripts live outside the repository, in `~/.config/trystaff/` on
+the setup machine). What each proved:
+
+| Check                                                      | Result                                                                                                                        |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| WorkOS sign-in with Google, magic link, and password       | Signs in; sign-ups are off and only invited accounts can create a user                                                        |
+| Google Workspace connect: six products from one consent    | Every product connects with every reviewed tool granted                                                                       |
+| Slack connect against the Trystaff workspace app           | Connects with the seven registered `slack_*` tools                                                                            |
+| Linear connect through dynamic client registration         | Connects after the owner's Linear login                                                                                       |
+| Hiring an employee whose tools span several Google servers | Hires; the capability rule unions a provider's connections                                                                    |
+| A Gmail task through the gateway                           | The turn runs and the tool call reaches Google, which answers "not enrolled" until the Developer Preview approves the project |
+| Canva, GitHub                                              | Not connected: Canva's redirect allow list is pending, GitHub waits on the owner's sudo code                                  |
+
+A real Agents session, a real gateway tool call, and a real provider answer have all been exercised.
+What has not: a completed provider write and its correction on a live provider, and `generate_image`
+on the production gateway (see the operations guide for the check to run).

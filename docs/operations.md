@@ -22,19 +22,20 @@ Sessions run in an OpenAI hosted environment with network access disabled,
 Operational configuration is data in Convex, edited on the Operations page by platform
 administrators. Environment variables are for bootstrap trust and tunables.
 
-| Variable                                                     | Where                        | Notes                             |
-| ------------------------------------------------------------ | ---------------------------- | --------------------------------- |
-| `AHQ_SERVICE_SECRET`                                         | Convex, web, worker, gateway | At least 32 characters            |
-| `CREDENTIAL_ENCRYPTION_KEY`                                  | web, worker, gateway         | 32 bytes, base64; never in Convex |
-| `OPENAI_API_KEY`                                             | worker                       |                                   |
-| `MCP_GATEWAY_URL`                                            | worker                       | Base URL the sessions call        |
-| `APP_URL`, `WORKOS_*`, `NEXT_PUBLIC_WORKOS_REDIRECT_URI`     | web, Convex                  | Client id and API key in both     |
-| `NEXT_PUBLIC_CONVEX_URL`, `CONVEX_URL`                       | browser, services            |                                   |
-| `PLATFORM_ADMIN_USER_IDS`                                    | web and Convex               | Must match in both                |
-| `WORKER_CONCURRENCY` (4, 1–16), `WORKER_MONITORS` (16, 1–64) | worker                       | Slot pools                        |
-| `MAX_TURN_SECONDS`                                           | worker                       | Wall-clock bound on one turn      |
-| S3 endpoint, region, bucket, keys                            | web, worker                  |                                   |
-| `QA_FIXTURE`                                                 | never on a deployment        | Builds `/qa` and `/office-lab`    |
+| Variable                                                     | Where                        | Notes                                |
+| ------------------------------------------------------------ | ---------------------------- | ------------------------------------ |
+| `AHQ_SERVICE_SECRET`                                         | Convex, web, worker, gateway | At least 32 characters               |
+| `CREDENTIAL_ENCRYPTION_KEY`                                  | web, worker, gateway         | 32 bytes, base64; never in Convex    |
+| `OPENAI_API_KEY`                                             | worker, gateway              | The gateway renders `generate_image` |
+| `MCP_GATEWAY_URL`                                            | worker                       | Base URL the sessions call           |
+| `APP_URL`                                                    | web, worker, gateway         | OAuth callback and token refresh     |
+| `WORKOS_*`, `NEXT_PUBLIC_WORKOS_REDIRECT_URI`                | web, Convex                  | Client id and API key in both        |
+| `NEXT_PUBLIC_CONVEX_URL`, `CONVEX_URL`                       | browser, services            |                                      |
+| `PLATFORM_ADMIN_USER_IDS`                                    | web and Convex               | Must match in both                   |
+| `WORKER_CONCURRENCY` (4, 1–16), `WORKER_MONITORS` (16, 1–64) | worker                       | Slot pools                           |
+| `MAX_TURN_SECONDS`                                           | worker                       | Wall-clock bound on one turn         |
+| S3 endpoint, region, bucket, keys                            | web, worker, gateway         | Artifacts, including studio images   |
+| `QA_FIXTURE`                                                 | never on a deployment        | Builds `/qa` and `/office-lab`       |
 
 Per-provider configuration — enabled server URLs, OAuth clients, the native inbox secret — lives in
 `providerConfigs`; the reviewed tool registry and its policy live in `registryTools`. Each connection

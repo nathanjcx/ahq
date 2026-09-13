@@ -31,9 +31,13 @@ Provider configuration is data, not deployment configuration. A platform adminis
 
 The available model IDs are `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, and `gpt-6-astra`. The names shown to users are Luna, Terra, Sol, and Astra.
 
-## Demo branch
+## What an employee can make
 
-The pre-migration demo is preserved at commit `110d2ba` on `origin/demo`. Check that branch before changing the deployment branch. The migration does not import its sample records or create an employee automatically.
+An employee reaches integrations through capabilities, and makes files through its **workshop**: the studio tools it may call (`generate_image`, served by the gateway and archived as a file of the task), the Python libraries installed in its hosted environment (a fixed allow list in `lib/contracts/core.ts`: reportlab, python-pptx, python-docx, openpyxl, matplotlib, Pillow, pypdf, pandas, markdown), and the deliverable kinds its listing promises. The session attaches only what the workshop names, the gateway refuses the rest, and the marketplace shows what each employee produces. Design SaaS (Canva, Figma, Gamma, Adobe) gate their MCP servers behind partner allow lists, so a design deliverable is rendered by the employee itself rather than through an integration.
+
+## Repositories and branches
+
+`trystaff/staff-ai` is the production repository; Railway builds `main`. The same history is mirrored to `nathanjcx/ahq`, where `platform-v4` is the working branch. Seed the marketplace with `npx convex run --prod seed:catalog` after a deploy that changes `lib/catalog.ts`; the seed is idempotent.
 
 ## Current limits
 
@@ -41,12 +45,13 @@ The pre-migration demo is preserved at commit `110d2ba` on `origin/demo`. Check 
 - A write is correctable only when its registry row has a correction descriptor naming the read tool, the id and version fields, and the fields to restore. Everything else gets a manual correction task or nothing. A correction restores fields; it does not recall notifications or downstream effects.
 - A dispatched write whose result never arrives is recorded as uncertain, not failed, and is never retried automatically. Reconcile it with provider evidence.
 - The app records token usage per model and per month, with an optional workspace token cap. It stores no cost estimate and shows none. Upstream OpenAI, Railway, and provider charges are separate.
-- A user holds one connection per provider server. Reconnecting the same account on the same server replaces it and resets the allowed tools to every reviewed tool on that server.
+- A user holds one connection per provider server. Reconnecting the same account on the same server refreshes it: a narrowing the owner made on Manage access is kept, and tools reviewed since are granted.
 - A persona sets voice, up to five traits, and a catchphrase. It never widens what an employee may do.
 - Rate limits are counted per web instance, and `CREDENTIAL_ENCRYPTION_KEY` has no dual-key reader. The full list is in [security](docs/security.md).
 - Gmail prepares drafts. There is no send operation.
-- Serving other companies through Slack or Google Workspace depends on the vendor review gates listed in [the deployment guide](docs/deployment.md).
-- No live deployment, provider credential, or real Agents session has been exercised. [Verification](docs/verification.md) lists exactly what is proven and what is not.
+- Serving other companies through Slack or Google Workspace depends on the vendor review gates listed in [the deployment guide](docs/deployment.md): Google's Developer Preview enrolment and OAuth verification, and a Slack Marketplace listing. Canva waits on its MCP waitlist.
+- A generated image is archived with the task; it does not land in the employee's environment, so an employee composes around it rather than embedding it.
+- [Verification](docs/verification.md) lists exactly what is proven live and what is not.
 
 ## References
 

@@ -201,6 +201,19 @@ export async function finishOAuth(state: OAuthState, code: string) {
   delete state.queue;
   return { oauth: state } satisfies StoredCredential;
 }
+/**
+ * The same grant, addressed to another server of the provider. Discovery is per server, so the copy
+ * starts without it and the next connection discovers that server's own metadata.
+ */
+export function credentialForServer(
+  credential: StoredCredential,
+  serverUrl: string,
+  name: string,
+): StoredCredential {
+  const { discovery: _discovery, queue: _queue, ...oauth } = credential.oauth;
+  return { ...credential, oauth: { ...oauth, serverUrl, name } };
+}
+
 export async function oauthProvider(state: OAuthState, save: (state: OAuthState) => Promise<void>) {
   return providerFor(state, await oauthClient(state.provider, state.serverUrl), save).provider;
 }

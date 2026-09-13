@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { sessionConfiguration, sessionUsage } from '../lib/server/agents';
 import { verifyInboxSignature, inboxPayload } from '../lib/server/inbox-events';
 import { publicAddress, approvedMcpUrl } from '../lib/server/network';
+import { credentialForServer } from '../lib/server/oauth';
 import { seal, unseal } from '../lib/server/secrets';
 import { toolPolicy, checkResourceScope, canonical } from '../lib/server/tool-policy';
 import { initialTaskInput } from '../services/task-input';
@@ -16,6 +17,37 @@ const policies: ToolPolicy[] = [
 ];
 
 describe('credential and integration boundaries', () => {
+  it('addresses a reused grant to the next product server without the first server’s discovery', () => {
+    const credential = {
+      oauth: {
+        nonce: 'n',
+        subject: 'user',
+        provider: 'google-workspace' as const,
+        name: 'Google Workspace Gmail',
+        serverUrl: 'https://gmailmcp.googleapis.com/mcp/v1',
+        queue: ['https://drivemcp.googleapis.com/mcp/v1'],
+        createdAt: 1,
+        discovery: {
+          resourceMetadataUrl: 'https://gmailmcp.googleapis.com/.well-known/oauth-protected-resource',
+        },
+        tokens: { access_token: 'a', token_type: 'bearer', refresh_token: 'r' },
+      },
+    };
+    const drive = credentialForServer(
+      credential,
+      'https://drivemcp.googleapis.com/mcp/v1',
+      'Google Workspace Drive',
+    );
+    expect(drive.oauth).toMatchObject({
+      serverUrl: 'https://drivemcp.googleapis.com/mcp/v1',
+      name: 'Google Workspace Drive',
+      tokens: credential.oauth.tokens,
+    });
+    expect(drive.oauth).not.toHaveProperty('discovery');
+    expect(drive.oauth).not.toHaveProperty('queue');
+    expect(credential.oauth.discovery).toBeDefined();
+  });
+
   it('encrypts secrets with authenticated randomized encryption', () => {
     process.env.CREDENTIAL_ENCRYPTION_KEY = randomBytes(32).toString('base64');
     const input = { accessToken: 'private-value' },

@@ -54,33 +54,33 @@ The hosted Agents session connects to the gateway from OpenAI's side, so `MCP_GA
 
 This is the complete list the code reads. Everything else that used to live here is now Convex data, edited on the Operations page.
 
-| Variable                          | Where                        | Required               | Purpose                                                |
-| --------------------------------- | ---------------------------- | ---------------------- | ------------------------------------------------------ |
-| `NEXT_PUBLIC_CONVEX_URL`          | web, worker, gateway         | yes                    | Convex URL, browser and server fallback                |
-| `CONVEX_URL`                      | web, worker, gateway         | no                     | Server-side Convex URL override                        |
-| `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | web                          | yes                    | `<APP_URL>/callback`, also set in WorkOS               |
-| `WORKOS_CLIENT_ID`                | web, Convex                  | yes                    | WorkOS environment; Convex validates tokens            |
-| `WORKOS_API_KEY`                  | web, Convex                  | yes                    | WorkOS server API                                      |
-| `WORKOS_AUTH_DOMAIN`              | Convex                       | with a custom domain   | The environment's custom auth domain, the token issuer |
-| `WORKOS_COOKIE_PASSWORD`          | web                          | yes                    | Seals the session cookie, 32+ characters               |
+| Variable                          | Where                        | Required               | Purpose                                                    |
+| --------------------------------- | ---------------------------- | ---------------------- | ---------------------------------------------------------- |
+| `NEXT_PUBLIC_CONVEX_URL`          | web, worker, gateway         | yes                    | Convex URL, browser and server fallback                    |
+| `CONVEX_URL`                      | web, worker, gateway         | no                     | Server-side Convex URL override                            |
+| `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | web                          | yes                    | `<APP_URL>/callback`, also set in WorkOS                   |
+| `WORKOS_CLIENT_ID`                | web, Convex                  | yes                    | WorkOS environment; Convex validates tokens                |
+| `WORKOS_API_KEY`                  | web, Convex                  | yes                    | WorkOS server API                                          |
+| `WORKOS_AUTH_DOMAIN`              | Convex                       | with a custom domain   | The environment's custom auth domain, the token issuer     |
+| `WORKOS_COOKIE_PASSWORD`          | web                          | yes                    | Seals the session cookie, 32+ characters                   |
 | `APP_URL`                         | web, gateway, worker         | yes                    | Origin checks, OAuth callback and token refresh, relay URL |
-| `AHQ_SERVICE_SECRET`              | web, worker, gateway, Convex | yes                    | Authenticates service functions                        |
-| `CREDENTIAL_ENCRYPTION_KEY`       | web, worker, gateway         | yes for integrations   | Seals and unseals every stored secret                  |
-| `OPENAI_API_KEY`                  | worker                       | yes for tasks          | Agents API                                             |
-| `MCP_GATEWAY_URL`                 | worker                       | yes for tasks          | Gateway origin written into session tools              |
-| `S3_ENDPOINT`                     | web, worker                  | yes for archived files | S3-compatible endpoint                                 |
-| `S3_BUCKET`                       | web, worker                  | yes for archived files | Artifact bucket                                        |
-| `S3_ACCESS_KEY_ID`                | web, worker                  | yes for archived files | Bucket access key                                      |
-| `S3_SECRET_ACCESS_KEY`            | web, worker                  | yes for archived files | Bucket secret                                          |
-| `S3_REGION`                       | web, worker                  | no                     | Defaults to `auto`                                     |
-| `S3_FORCE_PATH_STYLE`             | web, worker                  | no                     | Defaults to `false`                                    |
-| `PLATFORM_ADMIN_USER_IDS`         | web, Convex                  | yes for configuration  | WorkOS user IDs allowed on Operations                  |
-| `VAPID_PUBLIC_KEY`                | web, worker                  | yes for push           | Web Push application key                               |
-| `VAPID_PRIVATE_KEY`               | web, worker                  | yes for push           | Web Push signing key                                   |
-| `VAPID_SUBJECT`                   | web, worker                  | yes for push           | `mailto:` address or origin the push service contacts  |
-| `WORKER_CONCURRENCY`              | worker                       | no                     | Job slots, default 4, bounded 1 to 16                  |
-| `WORKER_MONITORS`                 | worker                       | no                     | Monitor slots, default 16, bounded 1 to 64             |
-| `MAX_TURN_SECONDS`                | worker                       | no                     | Run time limit, default 900, bounded 60 to 3600        |
+| `AHQ_SERVICE_SECRET`              | web, worker, gateway, Convex | yes                    | Authenticates service functions                            |
+| `CREDENTIAL_ENCRYPTION_KEY`       | web, worker, gateway         | yes for integrations   | Seals and unseals every stored secret                      |
+| `OPENAI_API_KEY`                  | worker                       | yes for tasks          | Agents API                                                 |
+| `MCP_GATEWAY_URL`                 | worker                       | yes for tasks          | Gateway origin written into session tools                  |
+| `S3_ENDPOINT`                     | web, worker                  | yes for archived files | S3-compatible endpoint                                     |
+| `S3_BUCKET`                       | web, worker                  | yes for archived files | Artifact bucket                                            |
+| `S3_ACCESS_KEY_ID`                | web, worker                  | yes for archived files | Bucket access key                                          |
+| `S3_SECRET_ACCESS_KEY`            | web, worker                  | yes for archived files | Bucket secret                                              |
+| `S3_REGION`                       | web, worker                  | no                     | Defaults to `auto`                                         |
+| `S3_FORCE_PATH_STYLE`             | web, worker                  | no                     | Defaults to `false`                                        |
+| `PLATFORM_ADMIN_USER_IDS`         | web, Convex                  | yes for configuration  | WorkOS user IDs allowed on Operations                      |
+| `VAPID_PUBLIC_KEY`                | web, worker                  | yes for push           | Web Push application key                                   |
+| `VAPID_PRIVATE_KEY`               | web, worker                  | yes for push           | Web Push signing key                                       |
+| `VAPID_SUBJECT`                   | web, worker                  | yes for push           | `mailto:` address or origin the push service contacts      |
+| `WORKER_CONCURRENCY`              | worker                       | no                     | Job slots, default 4, bounded 1 to 16                      |
+| `WORKER_MONITORS`                 | worker                       | no                     | Monitor slots, default 16, bounded 1 to 64                 |
+| `MAX_TURN_SECONDS`                | worker                       | no                     | Run time limit, default 900, bounded 60 to 3600            |
 
 Without the three `VAPID_*` variables push notifications are off and say so in the log; the other
 channels still deliver. Generate the pair once with `npx web-push generate-vapid-keys`.

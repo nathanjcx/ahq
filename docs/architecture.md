@@ -1,6 +1,6 @@
 # Architecture
 
-The shape of Staff AI as the code stands on September 12, 2026, during the platform v4 pass. Where
+The shape of Staff AI as the code stands on September 13, 2026. Where
 this and the code disagree, fix the code or update this document in the same change. What the
 [plan](platform-v4-plan.md) promises and the code does not yet do is listed under
 [Known gaps](#known-gaps).
@@ -28,11 +28,11 @@ Every table is in `convex/schema.ts`. The types the interface renders are in `li
 
 ### Floors and projects
 
-| Object    | Table        | Meaning                                                                                                                |
-| --------- | ------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| Floor     | `floors`     | A room and a team: name, brief, `employeeIds`, optional `reserved` (`triage`), archive                                 |
+| Object    | Table        | Meaning                                                                                                                                       |
+| --------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Floor     | `floors`     | A room and a team: name, brief, `employeeIds`, optional `reserved` (`triage`), archive                                                        |
 | Project   | `projects`   | A plan across floors: `floorIds`, optional `deadlineAt`, `status` (`planning`, `active`, `done`, `archived`), the planner's stored `proposal` |
-| Milestone | `milestones` | An ordered step of a project with `deadlineAt`, `dependsOn` (milestone ids), `status`                                  |
+| Milestone | `milestones` | An ordered step of a project with `deadlineAt`, `dependsOn` (milestone ids), `status`                                                         |
 
 A floor is a place; a project is a plan that spans floors. The only reserved floor is Triage: the
 lobby is a room in the office, not a team, and a task without a floor is simply floorless. A project's
@@ -240,23 +240,23 @@ queue kind from `lib/jobs.ts`.
 re-exports the type and `services/worker/turns/index.ts` maps the kinds the worker dispatches itself.
 The first four predate the schedule and live in `services/worker/jobs.ts`.
 
-| Kind             | Enqueued by                                | What the turn does                                                           |
-| ---------------- | ------------------------------------------ | ---------------------------------------------------------------------------- |
-| `start_task`     | `startTask`                                | First message of a `once` task; not a turn, and never for a daily task       |
-| `send_message`   | `tasks:message`                            | Follow-up message                                                            |
-| `cancel_task`    | `tasks:cancel`                             | Cancellation                                                                 |
-| `execute_action` | Approving a proposal                       | The approved external write                                                  |
-| `start_shift`    | Planner                                    | Opens the shift row, works the day, ends with `submit_report`                |
-| `review_shift`   | Planner                                    | Reads the dependency's report and artifacts, posts feedback, files no report |
-| `meeting_prep`   | Planner at the lead                        | One report against the agenda                                                |
-| `meeting_answer` | `meetings:ask`                             | One answer, short when the question went to everyone                         |
-| `meeting_wrapup` | `meetings:close`                           | Proposes outcomes as JSON a person confirms                                  |
-| `curation_run`   | Planner (janitor)                          | Merge, contest, archive, promote through `astra_janitor`                     |
-| `audit_run`      | Planner (auditor, after hours)             | `read_reports`, `read_journal`, then `submit_findings`                       |
+| Kind             | Enqueued by                                | What the turn does                                                              |
+| ---------------- | ------------------------------------------ | ------------------------------------------------------------------------------- |
+| `start_task`     | `startTask`                                | First message of a `once` task; not a turn, and never for a daily task          |
+| `send_message`   | `tasks:message`                            | Follow-up message                                                               |
+| `cancel_task`    | `tasks:cancel`                             | Cancellation                                                                    |
+| `execute_action` | Approving a proposal                       | The approved external write                                                     |
+| `start_shift`    | Planner                                    | Opens the shift row, works the day, ends with `submit_report`                   |
+| `review_shift`   | Planner                                    | Reads the dependency's report and artifacts, posts feedback, files no report    |
+| `meeting_prep`   | Planner at the lead                        | One report against the agenda                                                   |
+| `meeting_answer` | `meetings:ask`                             | One answer, short when the question went to everyone                            |
+| `meeting_wrapup` | `meetings:close`                           | Proposes outcomes as JSON a person confirms                                     |
+| `curation_run`   | Planner (janitor)                          | Merge, contest, archive, promote through `astra_janitor`                        |
+| `audit_run`      | Planner (auditor, after hours)             | `read_reports`, `read_journal`, then `submit_findings`                          |
 | `triage_run`     | Planner, one per open alert                | Reproduce, fix, `resolve_alert`, and `file_incident_report` after emergency use |
-| `page_alert`     | Planner, outside attended hours            | Records and delivers one page; no model turn                                 |
-| `email_classify` | `services/inbox:ingestInbox` on Gmail mail | Classifies mail into alerts; no tools at all                                 |
-| `plan_project`   | `projects:create` and `projects:replan`    | Proposes a roadmap; creates nothing                                          |
+| `page_alert`     | Planner, outside attended hours            | Records and delivers one page; no model turn                                    |
+| `email_classify` | `services/inbox:ingestInbox` on Gmail mail | Classifies mail into alerts; no tools at all                                    |
+| `plan_project`   | `projects:create` and `projects:replan`    | Proposes a roadmap; creates nothing                                             |
 
 Every turn goes through one interface, `TurnRunner` in `services/worker/turns/runner.ts`. The OpenAI
 client is behind it alone, which is what lets the runtime harness drive real gateway tools with a
@@ -264,24 +264,36 @@ scripted runner.
 
 ### Internal MCP servers and the role matrix
 
-The gateway serves six internal servers, one path segment each under `/mcp/`, authorized by the same
+The gateway serves seven internal servers, one path segment each under `/mcp/`, authorized by the same
 run token as a provider connection. `lib/server/agents.ts` holds the matrix, and the gateway is the
 enforcement point; the worker's copy only keeps a session from advertising a server its token would
 be refused for.
 
-| Server          | Tools                                                                                             | Reached by                |
-| --------------- | ------------------------------------------------------------------------------------------------- | ------------------------- |
-| `astra_floor`   | `floor_post`, `floor_handoff`                                                                     | worker on a floor, triage |
-| `astra_memory`  | `remember`, `recall`, `read_memory`, `read_board`                                                 | worker, janitor, triage   |
-| `astra_shift`   | `submit_report`, `submit_summary`                                                                 | worker                    |
-| `astra_audit`   | `read_reports`, `read_journal`, `read_artifact`, `read_memory`, `read_channel`, `submit_findings` | auditor only              |
-| `astra_janitor` | `merge`, `contest`, `archive`, `promote`, `read_memory`                                           | janitor only              |
-| `astra_triage`  | `report_reproduction`, `resolve_alert`, `file_incident_report`, plus the admitted provider tools   | triage only               |
+| Server          | Tools                                                                                             | Reached by                               |
+| --------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `astra_floor`   | `floor_post`, `floor_handoff`                                                                     | worker on a floor, triage                |
+| `astra_memory`  | `remember`, `recall`, `read_memory`, `read_board`                                                 | worker, janitor, triage                  |
+| `astra_shift`   | `submit_report`, `submit_summary`                                                                 | worker                                   |
+| `astra_studio`  | `generate_image`                                                                                  | worker whose version's workshop names it |
+| `astra_audit`   | `read_reports`, `read_journal`, `read_artifact`, `read_memory`, `read_channel`, `submit_findings` | auditor only                             |
+| `astra_janitor` | `merge`, `contest`, `archive`, `promote`, `read_memory`                                           | janitor only                             |
+| `astra_triage`  | `report_reproduction`, `resolve_alert`, `file_incident_report`, plus the admitted provider tools  | triage only                              |
 
 `serversFor(employeeKind, taskKind)` is the whole rule: an auditor sees `audit` and nothing else; a
 janitor sees `janitor` and `memory`; triage sees `triage`, `memory`, and its floor; a worker sees
-`memory`, `floor`, and `shift` on a work or meeting task, and `memory` and `shift` otherwise. Only a
-`worker` instance reaches provider connections at all. The role is re-read on every request and
+`memory`, `floor`, `shift`, and `studio` on a work or meeting task, and `memory` and `shift`
+otherwise. Only a `worker` instance reaches provider connections at all.
+
+The studio is the one internal server gated per employee version rather than per role. An employee
+version carries an optional **workshop** (`lib/contracts/core.ts`): `tools` from `STUDIO_TOOLS`,
+`libraries` from `WORKSHOP_LIBRARIES` (the Python packages installed in the hosted environment), and
+`deliverables` from `DELIVERABLES` (what the listing promises). `sessionConfiguration` attaches
+`astra_studio` with `allowed_tools` equal to the workshop's tools and installs the workshop's
+libraries; the gateway's `generate_image` refuses a run whose version's workshop lacks it; and
+`deliverableRules` names in the instructions exactly what the environment has. `generate_image`
+renders with `IMAGE_MODEL` (`lib/server/images.ts`), stores the PNG through `putArtifact`, and records
+it with `services/artifacts:recordArtifact`, so it is a file of the task like anything the session
+saved in `/workspace/outputs`. The role is re-read on every request and
 again on every tool call, so a token whose task went terminal is refused between listing a tool and
 calling it.
 
@@ -382,13 +394,13 @@ and the day around it into the whole room: activities and floor signals from the
 memory summaries, the workspace's hours inside the day so a figure can be off shift or writing the
 day's report, and the hour from the viewer's clock so the daylight follows it. The rooms:
 
-| Room       | Where it is mounted                      | What dresses it                                                        |
-| ---------- | ---------------------------------------- | ---------------------------------------------------------------------- |
-| Lobby      | `floors/lobby-view.tsx`                  | `deriveScene` with `room: 'lobby'`; the wall is `calendar:entries` for the coming week, and the lift stands beside it |
-| Floor      | `floors/floor-team.tsx`                  | `deriveScene`: board, binder, notebooks, findings folders, beacon, notice, overnight lamps |
-| Records    | `records/records-basement.tsx`           | `memory:summaries` for workspace, floors and projects, one run of casework each; the janitor while a curation run is open |
-| Boardroom  | `meetings/meeting-view.tsx`              | `meetings:get` and the calendar entry, through the same `deriveActivities` the floor uses |
-| Triage     | `triage/triage-floor.tsx`                | `triage:alerts` and the notification ledger: the alert board, the status lamp, the beacon, the notice |
+| Room      | Where it is mounted            | What dresses it                                                                                                           |
+| --------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Lobby     | `floors/lobby-view.tsx`        | `deriveScene` with `room: 'lobby'`; the wall is `calendar:entries` for the coming week, and the lift stands beside it     |
+| Floor     | `floors/floor-team.tsx`        | `deriveScene`: board, binder, notebooks, findings folders, beacon, notice, overnight lamps                                |
+| Records   | `records/records-basement.tsx` | `memory:summaries` for workspace, floors and projects, one run of casework each; the janitor while a curation run is open |
+| Boardroom | `meetings/meeting-view.tsx`    | `meetings:get` and the calendar entry, through the same `deriveActivities` the floor uses                                 |
+| Triage    | `triage/triage-floor.tsx`      | `triage:alerts` and the notification ledger: the alert board, the status lamp, the beacon, the notice                     |
 
 The three rooms a page mounts over its own content share `office/room-view.tsx`: a fold-away panel
 that starts folded on a phone, where a canvas costs more than it says.
