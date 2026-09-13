@@ -43,28 +43,38 @@ The hosted Agents session connects to the gateway from OpenAI's side, so `MCP_GA
 
 This is the complete list the code reads. Everything else that used to live here is now Convex data, edited on the Operations page.
 
-| Variable                            | Where                        | Required               | Purpose                                         |
-| ----------------------------------- | ---------------------------- | ---------------------- | ----------------------------------------------- |
-| `NEXT_PUBLIC_CONVEX_URL`            | web, worker, gateway         | yes                    | Convex URL, browser and server fallback         |
-| `CONVEX_URL`                        | web, worker, gateway         | no                     | Server-side Convex URL override                 |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | web                          | yes                    | Clerk browser SDK                               |
-| `CLERK_SECRET_KEY`                  | web                          | yes                    | Clerk server SDK                                |
-| `CLERK_JWT_ISSUER_DOMAIN`           | Convex                       | yes                    | Issuer Convex validates                         |
-| `APP_URL`                           | web                          | yes                    | Origin checks, OAuth callback, relay URL        |
-| `AHQ_SERVICE_SECRET`                | web, worker, gateway, Convex | yes                    | Authenticates service functions                 |
-| `CREDENTIAL_ENCRYPTION_KEY`         | web, worker, gateway         | yes for integrations   | Seals and unseals every stored secret           |
-| `OPENAI_API_KEY`                    | worker                       | yes for tasks          | Agents API                                      |
-| `MCP_GATEWAY_URL`                   | worker                       | yes for tasks          | Gateway origin written into session tools       |
-| `S3_ENDPOINT`                       | web, worker                  | yes for archived files | S3-compatible endpoint                          |
-| `S3_BUCKET`                         | web, worker                  | yes for archived files | Artifact bucket                                 |
-| `S3_ACCESS_KEY_ID`                  | web, worker                  | yes for archived files | Bucket access key                               |
-| `S3_SECRET_ACCESS_KEY`              | web, worker                  | yes for archived files | Bucket secret                                   |
-| `S3_REGION`                         | web, worker                  | no                     | Defaults to `auto`                              |
-| `S3_FORCE_PATH_STYLE`               | web, worker                  | no                     | Defaults to `false`                             |
-| `PLATFORM_ADMIN_USER_IDS`           | web, Convex                  | yes for configuration  | Clerk user IDs allowed on Operations            |
-| `WORKER_CONCURRENCY`                | worker                       | no                     | Job slots, default 4, bounded 1 to 16           |
-| `WORKER_MONITORS`                   | worker                       | no                     | Monitor slots, default 16, bounded 1 to 64      |
-| `MAX_TURN_SECONDS`                  | worker                       | no                     | Run time limit, default 900, bounded 60 to 3600 |
+| Variable                            | Where                        | Required               | Purpose                                               |
+| ----------------------------------- | ---------------------------- | ---------------------- | ----------------------------------------------------- |
+| `NEXT_PUBLIC_CONVEX_URL`            | web, worker, gateway         | yes                    | Convex URL, browser and server fallback               |
+| `CONVEX_URL`                        | web, worker, gateway         | no                     | Server-side Convex URL override                       |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | web                          | yes                    | Clerk browser SDK                                     |
+| `CLERK_SECRET_KEY`                  | web                          | yes                    | Clerk server SDK                                      |
+| `CLERK_JWT_ISSUER_DOMAIN`           | Convex                       | yes                    | Issuer Convex validates                               |
+| `APP_URL`                           | web                          | yes                    | Origin checks, OAuth callback, relay URL              |
+| `AHQ_SERVICE_SECRET`                | web, worker, gateway, Convex | yes                    | Authenticates service functions                       |
+| `CREDENTIAL_ENCRYPTION_KEY`         | web, worker, gateway         | yes for integrations   | Seals and unseals every stored secret                 |
+| `OPENAI_API_KEY`                    | worker                       | yes for tasks          | Agents API                                            |
+| `MCP_GATEWAY_URL`                   | worker                       | yes for tasks          | Gateway origin written into session tools             |
+| `S3_ENDPOINT`                       | web, worker                  | yes for archived files | S3-compatible endpoint                                |
+| `S3_BUCKET`                         | web, worker                  | yes for archived files | Artifact bucket                                       |
+| `S3_ACCESS_KEY_ID`                  | web, worker                  | yes for archived files | Bucket access key                                     |
+| `S3_SECRET_ACCESS_KEY`              | web, worker                  | yes for archived files | Bucket secret                                         |
+| `S3_REGION`                         | web, worker                  | no                     | Defaults to `auto`                                    |
+| `S3_FORCE_PATH_STYLE`               | web, worker                  | no                     | Defaults to `false`                                   |
+| `PLATFORM_ADMIN_USER_IDS`           | web, Convex                  | yes for configuration  | Clerk user IDs allowed on Operations                  |
+| `VAPID_PUBLIC_KEY`                  | web, worker                  | yes for push           | Web Push application key                              |
+| `VAPID_PRIVATE_KEY`                 | web, worker                  | yes for push           | Web Push signing key                                  |
+| `VAPID_SUBJECT`                     | web, worker                  | yes for push           | `mailto:` address or origin the push service contacts |
+| `WORKER_CONCURRENCY`                | worker                       | no                     | Job slots, default 4, bounded 1 to 16                 |
+| `WORKER_MONITORS`                   | worker                       | no                     | Monitor slots, default 16, bounded 1 to 64            |
+| `MAX_TURN_SECONDS`                  | worker                       | no                     | Run time limit, default 900, bounded 60 to 3600       |
+
+Without the three `VAPID_*` variables push notifications are off and say so in the log; the other
+channels still deliver. Generate the pair once with `npx web-push generate-vapid-keys`.
+
+`OPENAI_API_KEY` and `MCP_GATEWAY_URL` are read when a task needs them, not at startup: a worker
+without them starts, serves `/health` with them named in `missingConfig`, logs the same line, and
+fails each job it claims with that reason rather than crash-looping out of the deployment.
 
 Keep `CLERK_SECRET_KEY` on web only and `OPENAI_API_KEY` on worker only. `PLATFORM_ADMIN_USER_IDS` must hold the same list in Convex and on the web service, because Convex guards the configuration functions and the web service guards the routes that seal secrets. Leave `PORT` unset. `ALLOW_INSECURE_MCP_FOR_TESTS` exists for the test suite and only has an effect when `NODE_ENV=test`; never set it on a deployed service.
 

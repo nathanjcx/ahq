@@ -88,8 +88,10 @@ no preparation turn, and `tasks:create` refuses it new work until the findings a
 "audit policy holds its other work". Reserved staff are exempt, or the audit and triage runs that
 clear a finding could never run.
 
-**Caps.** `dailyTokenCap` stops everything except triage on the next tick. `triageAllowance` stops
-triage. The workspace's older `monthlyTokenCap` still refuses new task creation, follow-up messages,
+**Caps.** `dailyTokenCap` stops everything except triage on the next tick, and says so: the first tick
+that finds the cap spent posts one `Escalation: the daily token cap is spent.` line in the workspace
+channel and logs it, once per workspace per day. Watch for it when the queue goes quiet.
+`triageAllowance` stops triage. The workspace's older `monthlyTokenCap` still refuses new task creation, follow-up messages,
 and inbox assignment for the calendar month. Nothing is reserved, so in-flight work overshoots by its
 own usage.
 
@@ -133,6 +135,11 @@ verifies, so nobody can spend a workspace's allowance from outside. An exact rep
 is answered from the first result rather than opening a second incident. A new `high` or `critical`
 alert records and delivers one page to every reachable person; outside attended hours the scheduler
 keeps paging from there. The response is `{ accepted: true, alertId, duplicate }`.
+
+The native endpoints meter the same way round: a delivery is verified against the provider's signing
+secret first, and only a verified one is charged to that provider's shared limit of 600 per window, so
+junk cannot drop a real GitHub, Linear, or Slack delivery. Traffic that fails verification is metered
+by sender address.
 
 **GitHub.** The existing native webhook at `/api/webhooks/native/github` also feeds triage: the
 delivery is matched against each following workspace's `triageRules`, case-insensitively, against the
@@ -243,16 +250,37 @@ Replica-safe by construction; all coordination is Convex leases.
 - **Wake signal.** The subscription carries counts and a revision only. Workers pull, and also pull
   every 15 seconds.
 - **Shutdown.** On `SIGTERM` or `SIGINT` the worker stops claiming, unsubscribes, waits up to 30
-  seconds for in-flight jobs, releases every stream lease, and exits.
+  seconds for in-flight jobs, releases every stream lease, and exits. The image runs the process
+  directly, so the signal reaches that handler rather than a shell. **Set Railway's draining seconds to
+  at least 40 on `worker`** (service settings, _Draining seconds_; the default is shorter than the
+  drain). Below that the platform kills the process mid-drain: the job leases then sit until the 60
+  second expiry, the stream leases until 120, and `releaseMonitors` never runs. The `gateway` finishes
+  in-flight requests only, so its default is enough.
 
 Health is JSON on `/health`, HTTP 200 while the Convex subscription is live and 503 otherwise, with
-`status`, `workerId`, `connected`, `inFlightJobs`, `activeMonitors`, free slots, and last claim time.
+`status`, `workerId`, `connected`, `inFlightJobs`, `activeMonitors`, free slots, last claim time, and
+what the operator would otherwise have to go digging for:
+
+- `missingConfig` names the variables a task needs that this process does not have — `OPENAI_API_KEY`,
+  `MCP_GATEWAY_URL`. The worker starts and stays healthy without them and logs the same line once at
+  startup; every job it claims then fails with that reason on the task rather than taking the process
+  down. An empty list is the normal answer.
+- `pendingJobs`, `failedJobs`, and `uncertainTasks` are the counts from the last subscription update,
+  `null` before the first one. Each is capped at 100, so 100 reads as "at least 100". A rising
+  `failedJobs` with a flat backlog is the shape of a job failing on every attempt; the worker's error
+  lines name `job`, `kind`, `task`, and `attempt` for exactly that case.
 
 ## The gateway
 
 One process, `createGateway({ backend })`, so the same code runs against Convex in production and
-`convex-test` in the harness. `/health` answers `{"status":"ok","service":"mcp-gateway"}`. Every
-other request is `/mcp/<segment>` with the task run token as bearer:
+`convex-test` in the harness. `/health` runs one service query that reads no tables and answers
+`{"status":"ok","service":"mcp-gateway"}`, or 503 `degraded` when Convex is unreachable or refuses the
+service secret — a gateway that cannot authorize anything fails its healthcheck instead of passing as
+a process that happens to be listening. One probe stands for ten seconds, because the endpoint is
+public. The web service's `/health` is a plain liveness probe: it answers 200 without touching Convex
+or Clerk, so a misconfigured web service passes its healthcheck and reports `not_configured` on the
+routes that need those. Every other gateway request is `/mcp/<segment>` with the task run token as
+bearer:
 
 - An internal segment (`floor`, `memory`, `shift`, `audit`, `triage`, `janitor`) is checked against
   the role matrix before anything else, and again on every tool call.
