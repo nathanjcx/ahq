@@ -23,6 +23,19 @@ function bound(map: Map<string, { expiresAt: number }>, now: number) {
   }
 }
 
+/**
+ * Who is asking, before anything has proved who it is.
+ *
+ * `x-forwarded-for` is a list every hop appends to, so the left of it is whatever the client chose to
+ * send and only the last entry was written by the proxy in front of this process. Metering on the last
+ * hop is what makes the limit a limit: a sender that spoofs the header spends its own bucket rather
+ * than a fresh one per forged address. With no proxy in front, unsigned traffic meters as one caller.
+ */
+export function senderKey(headers: Headers): string {
+  const hops = headers.get('x-forwarded-for')?.split(',') ?? [];
+  return hops[hops.length - 1]?.trim() || 'unknown';
+}
+
 export function withinRateLimit(key: string, limit: number, windowMs = 60_000): boolean {
   const now = Date.now();
   const current = windows.get(key);

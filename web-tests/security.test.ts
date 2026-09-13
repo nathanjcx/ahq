@@ -9,7 +9,15 @@ import { installBackend } from '../lib/server/backend';
 import { contentSecurityPolicy, nonceValue } from '../lib/server/csp';
 import { resetRateLimits } from '../lib/server/rate-limit';
 import { safeError, seal, serviceSecret } from '../lib/server/secrets';
-import { harness, hireOne, identity, publishEmployee, secret, type Harness } from './support';
+import {
+  configureProvider,
+  harness,
+  hireOne,
+  identity,
+  publishEmployee,
+  secret,
+  type Harness,
+} from './support';
 
 const appUrl = 'https://hq.example.com';
 const viewer = 'viewer-user';
@@ -106,6 +114,55 @@ describe('signed alert intake', () => {
       'closed',
     ]);
     expect(await t.run((ctx) => ctx.db.query('notifications').collect())).toHaveLength(1);
+  });
+});
+
+describe('webhook rate limits', () => {
+  it('meters unsigned alerts by the hop the proxy wrote, whatever the client claims', async () => {
+    const { signed, call } = await alertIntake();
+    const forged = { ...signed, 'x-astra-signature': '0'.repeat(64) };
+    // Every request claims a different sender in the hop it controls; only the last hop is the one
+    // Railway wrote, so all 600 spend one bucket and the flood stops instead of renaming itself.
+    const flood = (attempt: number) => call({ ...forged, 'x-forwarded-for': `9.9.9.${attempt}, 10.0.0.4` });
+    for (let attempt = 0; attempt < 600; attempt++) expect((await flood(attempt)).status).toBe(401);
+    expect((await flood(600)).status).toBe(429);
+  });
+
+  it('charges a provider inbox only for deliveries that verify', async () => {
+    const t = harness();
+    installBackend(testBackend(t));
+    const inboxSecret = 'github-inbox-signing-secret-long-enough';
+    await configureProvider(t, { provider: 'github', inboxSecretCiphertext: seal(inboxSecret) });
+    const { POST } = await import('../app/api/webhooks/native/[provider]/route');
+    const call = (body: string, headers: Record<string, string>) =>
+      POST(new Request(`${appUrl}/api/webhooks/native/github`, { method: 'POST', headers, body }), {
+        params: Promise.resolve({ provider: 'github' }),
+      });
+
+    // A full window of junk from one sender stops at that sender's own limit.
+    const junk = JSON.stringify({ action: 'opened' });
+    const unsigned = { 'x-github-delivery': 'd', 'x-github-event': 'issues', 'x-forwarded-for': '10.0.0.4' };
+    for (let attempt = 0; attempt < 600; attempt++) expect((await call(junk, unsigned)).status).toBe(400);
+    expect((await call(junk, unsigned)).status).toBe(429);
+
+    // GitHub's own delivery still lands: nothing unverified was ever charged to the provider.
+    const body = JSON.stringify({
+      action: 'opened',
+      issue: {
+        title: 'Checkout fails',
+        body: 'Five hundreds.',
+        html_url: 'https://github.com/acme/web/issues/1',
+      },
+      repository: { id: 7, full_name: 'acme/web' },
+    });
+    const delivery = await call(body, {
+      'x-github-delivery': 'delivery-1',
+      'x-github-event': 'issues',
+      'x-hub-signature-256': `sha256=${createHmac('sha256', inboxSecret).update(body).digest('hex')}`,
+      'x-forwarded-for': '140.82.115.1',
+    });
+    expect(delivery.status).toBe(202);
+    expect(await delivery.json()).toEqual({ accepted: true, delivered: 0 });
   });
 });
 

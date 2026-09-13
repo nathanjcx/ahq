@@ -3,7 +3,7 @@ import { alertRequest, type AlertResponse } from '@/lib/api/schemas';
 import { mutate, query } from '@/lib/server/backend';
 import { failure, HttpError, jsonOk, rawBody } from '@/lib/server/http';
 import { deliverNotifications, type NotificationAttempt } from '@/lib/server/notify';
-import { recallReply, rememberReply, withinRateLimit } from '@/lib/server/rate-limit';
+import { recallReply, rememberReply, senderKey, withinRateLimit } from '@/lib/server/rate-limit';
 import { equalSecret, unseal } from '@/lib/server/secrets';
 
 export const runtime = 'nodejs';
@@ -14,16 +14,6 @@ const SIGNATURE_HEADER = 'x-astra-signature';
 const MAX_AGE_MS = 300_000;
 /** Severities that page a person the moment the alert opens. */
 const PAGING_SEVERITIES = ['high', 'critical'];
-
-/**
- * Who is asking, before anything has proved who it is. The workspace id is on screen in the app, so
- * metering unsigned requests by it lets anyone spend a workspace's whole allowance on garbage. The
- * first forwarded hop is the closest thing to the sender; with no proxy in front, unsigned traffic
- * is metered as one caller.
- */
-function senderKey(request: Request) {
-  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-}
 
 /**
  * The signature covers the timestamp and the exact body, so a replayed body with a fresh timestamp
@@ -42,9 +32,11 @@ function verify(secret: string, timestamp: string, body: string, signature: stri
 /** Generic signed alert intake: uptime probes, error trackers, and cloud health notices. */
 export async function POST(request: Request) {
   try {
+    // The workspace id is on screen in the app, so metering unsigned requests by it would let anyone
+    // spend a workspace's whole allowance on garbage. Unsigned traffic is metered by sender instead.
     const workspaceId = request.headers.get(WORKSPACE_HEADER);
     if (!workspaceId) throw new HttpError(400, 'The workspace header is required.', 'invalid_request');
-    if (!withinRateLimit(`alert-senders:${senderKey(request)}`, 600))
+    if (!withinRateLimit(`alert-senders:${senderKey(request.headers)}`, 600))
       throw new HttpError(429, 'Too many alert requests.', 'rate_limited');
     const ciphertext = await query<string | null>('services/triage:alertSecret', { workspaceId });
     if (!ciphertext) throw new HttpError(404, 'Alert intake is not configured.', 'not_configured');
