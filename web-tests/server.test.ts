@@ -29,6 +29,7 @@ describe('credential and integration boundaries', () => {
         createdAt: 1,
         discovery: {
           resourceMetadataUrl: 'https://gmailmcp.googleapis.com/.well-known/oauth-protected-resource',
+          authorizationServerUrl: 'https://accounts.google.com',
         },
         tokens: { access_token: 'a', token_type: 'bearer', refresh_token: 'r' },
       },
