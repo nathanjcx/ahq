@@ -1,3 +1,4 @@
+import { capabilityGranted } from '../../lib/capabilities';
 import type { Doc, Id } from '../_generated/dataModel';
 import { policiesFor } from '../registry';
 import { authKey, canSeeConnection, type DbCtx } from '../shared';
@@ -51,13 +52,7 @@ export async function activeTaskContext(ctx: ReadCtx, task: Doc<'tasks'>) {
   );
   for (const capability of version.capabilities) {
     if (capability.optional) continue;
-    if (
-      !visible.some(
-        (connection) =>
-          connection.provider === capability.provider &&
-          capability.tools.every((tool: string) => connection.allowedTools.includes(tool)),
-      )
-    )
+    if (!capabilityGranted(capability, visible))
       throw new Error(`Required ${capability.provider} access is unavailable`);
   }
   const active = visible

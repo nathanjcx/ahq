@@ -1,3 +1,4 @@
+import { capabilityGranted } from '../../lib/capabilities';
 import type { TaskKind } from '../../lib/contracts/core';
 import type { Doc, Id } from '../_generated/dataModel';
 import type { MutationCtx } from '../_generated/server';
@@ -64,13 +65,7 @@ export async function assertEmployeeReady(
   );
   for (const capability of version.capabilities) {
     if (capability.optional) continue;
-    if (
-      !visible.some(
-        (connection) =>
-          connection.provider === capability.provider &&
-          capability.tools.every((tool: string) => connection.allowedTools.includes(tool)),
-      )
-    )
+    if (!capabilityGranted(capability, visible))
       throw new Error(`Connect ${capability.provider} with the required permissions first`);
   }
   return { installation, version };

@@ -1,19 +1,12 @@
+import { capabilityGranted } from '@/lib/capabilities';
 import type { Connection, Listing } from '@/lib/contracts';
 
-/** Providers a listing requires that no connected integration fully grants. */
+/** Providers a listing requires that its connected integrations do not fully grant. */
 export function missingRequiredCapabilities(listing: Listing, connections: Connection[]) {
   return [
     ...new Set(
       listing.capabilities
-        .filter((capability) => {
-          if (capability.optional) return false;
-          return !connections.some(
-            (connection) =>
-              connection.provider === capability.provider &&
-              connection.status === 'connected' &&
-              capability.tools.every((tool) => connection.allowedTools.includes(tool)),
-          );
-        })
+        .filter((capability) => !capability.optional && !capabilityGranted(capability, connections))
         .map((capability) => capability.provider),
     ),
   ];
