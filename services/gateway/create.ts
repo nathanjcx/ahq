@@ -14,6 +14,8 @@ import { internalMcp, providerServer, type GatewayRequest } from './tools';
 
 const maxBodyBytes = 1_000_000;
 const requestIdPattern = /^[A-Za-z0-9._:-]{1,200}$/;
+/** How long one health probe stands for. `/health` is public, so it is not a way to drive Convex. */
+const healthProbeMs = 10_000;
 
 export interface GatewayOptions {
   /** Defaults to the process backend. An injected backend is installed for the whole process. */
@@ -50,14 +52,31 @@ export function createGateway(options: GatewayOptions = {}) {
   const backend = options.backend ?? processBackend();
   const nextRequestId = options.requestId ?? (() => randomUUID());
 
+  /**
+   * Readiness is one service query that reads no tables: it answers only if Convex is reachable and
+   * accepts this process's service secret. A gateway with the wrong secret refuses every real request,
+   * so it must fail its healthcheck rather than pass as a process that happens to be listening.
+   */
+  let probe: { at: number; ready: boolean } | undefined;
+  const ready = async () => {
+    if (probe && Date.now() - probe.at < healthProbeMs) return probe.ready;
+    const result = await backend.query('services/config:policies', { providers: [] }).then(
+      () => true,
+      () => false,
+    );
+    probe = { at: Date.now(), ready: result };
+    return result;
+  };
+
   const handler = async (req: IncomingMessage, res: ServerResponse) => {
     const supplied = req.headers['x-request-id'];
     const requestId =
       typeof supplied === 'string' && requestIdPattern.test(supplied) ? supplied : nextRequestId();
     if (!res.headersSent) res.setHeader('x-request-id', requestId);
     if ((req.url || '').split('?')[0] === '/health') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end('{"status":"ok","service":"mcp-gateway"}');
+      const healthy = await ready();
+      res.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json' });
+      res.end(`{"status":"${healthy ? 'ok' : 'degraded'}","service":"mcp-gateway"}`);
       return;
     }
     try {
