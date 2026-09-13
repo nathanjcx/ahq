@@ -185,19 +185,20 @@ export const setGmailWatch = mutation({
   },
 });
 
-/** Every connected Gmail connection with a watch, for the push endpoint and the renewal pass. */
-export const gmailWatches = query({
-  args: { secret: v.string(), mailbox: v.optional(v.string()) },
+/**
+ * Every connected Gmail connection for the renewal pass (watch or not), or the ones watching one
+ * mailbox for the push endpoint.
+ */
+export const gmailConnections = query({
+  args: { secret: v.string(), serverUrl: v.string(), mailbox: v.optional(v.string()) },
   handler: async (ctx, args) => {
     requireService(args.secret);
     const rows = await ctx.db
       .query('connections')
-      .filter((q) =>
-        q.and(q.eq(q.field('provider'), 'google-workspace'), q.eq(q.field('status'), 'connected')),
-      )
+      .filter((q) => q.and(q.eq(q.field('serverUrl'), args.serverUrl), q.eq(q.field('status'), 'connected')))
       .collect();
     return rows
-      .filter((row) => row.gmailWatch && (!args.mailbox || row.gmailWatch.mailbox === args.mailbox))
-      .map((row) => ({ connection: privateConnection(row), watch: row.gmailWatch! }));
+      .filter((row) => !args.mailbox || row.gmailWatch?.mailbox === args.mailbox)
+      .map((row) => ({ connection: privateConnection(row), watch: row.gmailWatch }));
   },
 });

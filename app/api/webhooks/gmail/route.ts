@@ -1,7 +1,7 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/server/backend';
-import { syncGmail, type GmailWatch } from '@/lib/server/gmail';
+import { GMAIL_SERVER_URL, syncGmail, type GmailWatch } from '@/lib/server/gmail';
 import { failure, HttpError, rawBody } from '@/lib/server/http';
 import { withinRateLimit } from '@/lib/server/rate-limit';
 import { requiredEnv, safeError } from '@/lib/server/secrets';
@@ -37,8 +37,8 @@ export async function POST(request: Request) {
     if (!withinRateLimit(`gmail-push:${mailbox}`, 300))
       throw new HttpError(429, 'Too many pushes.', 'rate_limited');
     const watches = await query<Array<{ connection: PrivateConnection; watch: GmailWatch }>>(
-      'services/integrations:gmailWatches',
-      { mailbox },
+      'services/integrations:gmailConnections',
+      { serverUrl: GMAIL_SERVER_URL, mailbox },
     );
     let inserted = 0;
     for (const { connection, watch } of watches) {
