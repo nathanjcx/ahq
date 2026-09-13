@@ -146,3 +146,22 @@ Run these with a test Clerk organization and test provider records, and record t
 - [OpenAI Agents sessions](https://developers.openai.com/api/docs/guides/agents-api/sessions)
 - [OpenAI MCP connections](https://developers.openai.com/api/docs/guides/agents-api/tools/mcp)
 - [OpenAI hosted environments](https://developers.openai.com/api/docs/guides/agents-api/environments/openai-hosted)
+
+## 6. The trystaff deployment (as set up on September 13, 2026)
+
+What exists, created from this machine's CLI logins (Railway and Cloudflare as `spencer@trystaff.ai`, Convex as the trystaff account):
+
+| Piece             | Where                                                                                                                                     |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Source            | GitHub `trystaff/staff-ai`, branch `main` (mirrors `platform-v4`)                                                                         |
+| Convex project    | team `spencer-morris-739a5` (rename to `trystaff` in the dashboard), project `staff-ai`                                                   |
+| Convex production | `combative-pig-574` at `https://combative-pig-574.convex.cloud`; dev `laudable-mongoose-734`                                              |
+| Railway project   | `staff-ai` (`2e764c8c-ca28-49f7-9ed2-74cb71e8dee2`) in workspace "Spencer Morris's Projects"                                              |
+| Railway services  | `web` (`Dockerfile`), `worker` (`Dockerfile.worker`), `gateway` (`Dockerfile.gateway`), all from `main`                                   |
+| Railway domains   | web `web-production-34638.up.railway.app`, gateway `gateway-production-1a0f.up.railway.app`                                               |
+| Custom domain     | `app.trystaff.ai` on `web`: CNAME `app` → `vr13r0en.up.railway.app`, TXT `_railway-verify.app` → the token `railway domain status` prints |
+| Cloudflare        | account `efcd9eb4fb3e9ac231414a8867b3babe`; no zone and R2 not enabled yet                                                                |
+
+Variables already set: Convex production has `AHQ_SERVICE_SECRET` and `CLERK_JWT_ISSUER_DOMAIN=https://clerk.trystaff.ai`; every Railway service has `NEXT_PUBLIC_CONVEX_URL`, `AHQ_SERVICE_SECRET`, `CREDENTIAL_ENCRYPTION_KEY`; `web` has `APP_URL` (the Railway domain until DNS moves), `worker` has `MCP_GATEWAY_URL` and `WORKER_CONCURRENCY`. The generated secrets live only in `~/.config/trystaff/deploy.env` on the machine that ran the setup, and in the services.
+
+Still to set, in order: the two DNS records above (at GoDaddy, or in Cloudflare once the zone's nameservers are live); Clerk production keys (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` on `web`; `PLATFORM_ADMIN_USER_IDS` on `web` and Convex; confirm `CLERK_JWT_ISSUER_DOMAIN`); `OPENAI_API_KEY` on `worker`; R2 (`S3_*` on `web` and `worker`) once R2 is enabled; then `APP_URL=https://app.trystaff.ai` and a redeploy of `web`.
