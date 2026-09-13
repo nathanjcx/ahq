@@ -149,7 +149,16 @@ Each provider needs one-time setup outside the application before anyone can con
 | Slack            | app "Staff AI" (`A0C1L574S4U`) in the Trystaff Slack workspace, 25 user scopes from the MCP tool table, redirect `/api/integrations/callback`                              | Convex `providerConfigs.slack`, endpoints `slack.com/oauth/v2_user/authorize` and `slack.com/api/oauth.v2.user.access` |
 | Google Workspace | OAuth client "Staff AI Workspace" in Cloud project `staff-ai-508505`; consent screen carries Gmail, Drive, Docs, Sheets, Slides, Calendar scopes; the six APIs are enabled | Convex `providerConfigs.google-workspace` as the default client for all six product servers                            |
 
-The secrets live in `~/.config/trystaff/deploy.env` on the setup machine and sealed in Convex. Slack's MCP server admits only directory-published or internal apps, so until the app is submitted to the Slack Marketplace it works for the Trystaff workspace only. Google's Gmail and Drive scopes are restricted: until Google's verification completes, only the test users listed on the consent screen can connect, and the verification needs a demo video and a CASA security assessment.
+The secrets live in `~/.config/trystaff/deploy.env` on the setup machine and sealed in Convex. Slack's MCP server admits only directory-published or internal apps, so until the app is submitted to the Slack Marketplace it works for the Trystaff workspace only; the app's "Enable Slack MCP Server" switch (Agents page) is on, without it every connection fails at discovery. Google's Gmail and Drive scopes are restricted: until Google's verification completes, only the test users listed on the consent screen can connect, and the verification needs a demo video and a CASA security assessment.
+
+State on September 13, 2026:
+
+- Google Workspace: the six MCP APIs are enabled in `staff-ai-508505` (without them the servers answer 401 `invalid_token`), all six products connect and grant every reviewed tool, and the Developer Preview Program application for project number `701645781270` (spencer@trystaff.ai) is submitted; until Google approves it every tool call answers "not enrolled in the required Developer Preview Program". Verification: branding published, scope justifications and intended use saved; the demo video link is still missing because YouTube is not yet available to the trystaff.ai account (`youtube.com/oops`, the service is on in the admin console). The recorded demo is `~/.config/trystaff/staff-ai-google-demo.mp4` (4.5 min, sign-in, consent, connection, tool list, hire, task). Once it is on YouTube, paste the link on the scopes page, save, and press Confirm on Verification center → Prepare for verification.
+- Slack: connected for the Trystaff workspace with the seven registered `slack_*` tools.
+- Linear: dynamic registration works; the sign-in reaches Linear's login and needs a Linear account.
+- GitHub: the sign-in reaches GitHub's sudo verification (a code by email or passkey); complete it once in the browser.
+- Canva: `mcp.canva.com` answers "Invalid redirect URI" until Canva allow-lists the callback through its MCP waitlist; nothing to fix on our side.
+- Every Railway service carries `APP_URL`; without it the gateway and worker cannot use a stored OAuth grant and every provider tool listing fails with `provider_error`.
 
 ## 7. Inbox delivery
 
