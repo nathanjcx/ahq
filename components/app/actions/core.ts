@@ -54,6 +54,7 @@ export type CoreActions = {
     allowedTools: string[],
     resourceScope: string,
     inboxResources: string,
+    inboxRoute?: { employeeId: string; floorId?: string } | null,
   ) => Promise<unknown>;
   markRead: (itemId: string) => Promise<unknown>;
   assign: (itemId: string, employeeId: string, floorId?: string) => Promise<unknown>;
@@ -208,12 +209,22 @@ export function useCoreActions(): CoreActions {
     decide: (proposalId, approved) => decide({ proposalId: asId(proposalId), approved }),
     correct: (proposalId) => correct({ proposalId: asId(proposalId) }),
     disconnect: (connectionId) => disconnect({ connectionId: asId(connectionId) }),
-    updateConnectionAccess: (connectionId, allowedTools, resourceScope, inboxResources) =>
+    updateConnectionAccess: (connectionId, allowedTools, resourceScope, inboxResources, inboxRoute) =>
       updateConnectionAccess({
         connectionId: asId(connectionId),
         allowedTools,
         resourceScope,
         inboxResources,
+        ...(inboxRoute === undefined
+          ? {}
+          : {
+              inboxRoute: inboxRoute
+                ? {
+                    employeeId: asId<'installations'>(inboxRoute.employeeId),
+                    ...(inboxRoute.floorId ? { floorId: asId<'floors'>(inboxRoute.floorId) } : {}),
+                  }
+                : null,
+            }),
       }),
     markRead: (itemId) => markRead({ itemId: asId(itemId) }),
     assign: (itemId, employeeId, floorId) =>

@@ -59,6 +59,10 @@ export const updateAccess = mutation({
     allowedTools: v.array(v.string()),
     resourceScope: v.string(),
     inboxResources: v.string(),
+    /** Where a new inbox item goes on its own. Null clears the route; absent leaves it alone. */
+    inboxRoute: v.optional(
+      v.union(v.null(), v.object({ employeeId: v.id('installations'), floorId: v.optional(v.id('floors')) })),
+    ),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -71,10 +75,20 @@ export const updateAccess = mutation({
     const grantable = await grantableTools(ctx, connection.provider, connection.tools);
     if (allowedTools.some((tool) => !grantable.includes(tool)))
       throw new Error('An allowed tool is not available on this connection');
+    if (args.inboxRoute) {
+      const employee = await ctx.db.get(args.inboxRoute.employeeId);
+      if (!employee || employee.workspaceId !== workspace._id) throw new Error('Employee not found');
+      if (args.inboxRoute.floorId) {
+        const floor = await ctx.db.get(args.inboxRoute.floorId);
+        if (!floor || floor.workspaceId !== workspace._id || !floor.employeeIds.includes(employee._id))
+          throw new Error('Employee is not assigned to this floor');
+      }
+    }
     await ctx.db.patch(connection._id, {
       allowedTools,
       resourceScope: resourceIds(args.resourceScope, 'Resource restrictions').join(','),
       inboxResources: resourceIds(args.inboxResources, 'Inbox resources'),
+      ...(args.inboxRoute === undefined ? {} : { inboxRoute: args.inboxRoute ?? undefined }),
     });
     return null;
   },

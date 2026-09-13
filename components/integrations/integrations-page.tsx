@@ -4,10 +4,17 @@ import { useState } from 'react';
 import { PageIntro } from '../shared/page-intro';
 import { providerSetup, startConnect } from './connect';
 import { IntegrationCard } from './integration-card';
-import { ManageAccessPanel } from './manage-access-panel';
+import { ManageAccessPanel, type InboxRoute } from './manage-access-panel';
 import { ProductPicker } from './product-picker';
 import { SharePanel } from './share-panel';
-import type { Connection, ConnectionVisibility, ProviderId, ProviderReadiness } from '@/lib/contracts';
+import type {
+  Connection,
+  ConnectionVisibility,
+  Employee,
+  Floor,
+  ProviderId,
+  ProviderReadiness,
+} from '@/lib/contracts';
 import { getProvider, providers } from '@/lib/providers';
 import './integrations.css';
 
@@ -18,6 +25,8 @@ export function IntegrationsPage({
   canManage,
   onDisconnect,
   onUpdateAccess,
+  employees,
+  floors,
   onSetSharing = () => {},
   onNotice,
 }: {
@@ -26,7 +35,15 @@ export function IntegrationsPage({
   readiness: ProviderReadiness[];
   canManage: boolean;
   onDisconnect: (id: string) => void;
-  onUpdateAccess: (id: string, tools: string[], scope: string, inboxResources: string) => void;
+  onUpdateAccess: (
+    id: string,
+    tools: string[],
+    scope: string,
+    inboxResources: string,
+    inboxRoute: InboxRoute,
+  ) => void;
+  employees: Employee[];
+  floors: Floor[];
   onSetSharing?: (id: string, visibility: ConnectionVisibility, visibleToSubjects: string[]) => void;
   onNotice: (text: string) => void;
 }) {
@@ -92,9 +109,11 @@ export function IntegrationsPage({
         <ManageAccessPanel
           connection={managing}
           inboxConfigured={providerSetup(getProvider(managing.provider), readiness).inboxConfigured}
+          employees={employees}
+          floors={floors}
           onClose={() => setManaging(null)}
-          onSave={(tools, scope, inboxResources) => {
-            onUpdateAccess(managing.id, tools, scope, inboxResources);
+          onSave={(tools, scope, inboxResources, inboxRoute) => {
+            onUpdateAccess(managing.id, tools, scope, inboxResources, inboxRoute);
             setManaging(null);
           }}
         />

@@ -386,6 +386,8 @@ export default defineSchema({
     resourceScope: v.string(),
     inboxResources: v.array(v.string()),
     inboxMode: v.union(v.literal('push'), v.literal('on-demand'), v.literal('unsupported')),
+    /** Where a new inbox item goes on its own: an employee, and the floor its task starts on. */
+    inboxRoute: v.optional(v.object({ employeeId: v.id('installations'), floorId: v.optional(v.id('floors')) })),
     inboxRelaySecretCiphertext: v.optional(v.string()),
     serverUrl: v.string(),
     credentialCiphertext: v.string(),

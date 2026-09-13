@@ -99,8 +99,13 @@ export function PageContent(props: PageContentProps) {
         readiness={props.readiness}
         canManage={props.canManageWorkspace || dashboard.isPlatformAdmin}
         onDisconnect={(id) => run(() => actions.disconnect(id), 'Integration disconnected')}
-        onUpdateAccess={(id, tools, scope, inbox) =>
-          run(() => actions.updateConnectionAccess(id, tools, scope, inbox), 'Integration access updated')
+        employees={dashboard.employees}
+        floors={dashboard.floors}
+        onUpdateAccess={(id, tools, scope, inbox, route) =>
+          run(
+            () => actions.updateConnectionAccess(id, tools, scope, inbox, route),
+            'Integration access updated',
+          )
         }
         onSetSharing={(id, visibility, subjects) =>
           run(() => actions.setConnectionSharing(id, visibility, subjects), 'Sharing updated')

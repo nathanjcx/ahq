@@ -252,6 +252,7 @@ export const dashboard = query({
         allowedTools: connection.allowedTools,
         resourceScope: connection.resourceScope,
         inboxResources: connection.inboxResources,
+        inboxRoute: connection.inboxRoute,
         lastCheckedAt: connection.lastCheckedAt,
         inboxMode: connection.inboxMode,
         error: connection.error,

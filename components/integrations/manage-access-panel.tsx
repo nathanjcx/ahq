@@ -4,25 +4,48 @@ import { useState } from 'react';
 import { Sheet } from '../shared/sheet';
 import { ToolChecklist } from '../shared/tool-checklist';
 import { RelaySecret } from './relay-secret';
-import type { Connection } from '@/lib/contracts';
+import type { Connection, Employee, Floor } from '@/lib/contracts';
 import { getProvider } from '@/lib/providers';
+
+export type InboxRoute = { employeeId: string; floorId?: string } | null;
 
 export function ManageAccessPanel({
   connection,
   inboxConfigured,
+  employees,
+  floors,
   onClose,
   onSave,
 }: {
   connection: Connection;
   inboxConfigured: boolean;
+  /** Who a new inbox item can be routed to, and the floors they stand on. */
+  employees: Employee[];
+  floors: Floor[];
   onClose: () => void;
-  onSave: (tools: string[], scope: string, inboxResources: string) => void;
+  onSave: (tools: string[], scope: string, inboxResources: string, inboxRoute: InboxRoute) => void;
 }) {
   const provider = getProvider(connection.provider);
   const [selected, setSelected] = useState(connection.allowedTools);
   const [scope, setScope] = useState(connection.resourceScope);
   const [inboxResources, setInboxResources] = useState(connection.inboxResources.join(', '));
   const [advanced, setAdvanced] = useState(Boolean(connection.resourceScope));
+  const [routeEmployee, setRouteEmployee] = useState(connection.inboxRoute?.employeeId ?? '');
+  const [routeFloor, setRouteFloor] = useState(connection.inboxRoute?.floorId ?? '');
+  const routeCandidates = employees.filter(
+    (employee) => (employee.kind ?? 'worker') === 'worker' && employee.status !== 'retired',
+  );
+  const routeFloors = floors.filter(
+    (floor) => !floor.archivedAt && floor.employeeIds.includes(routeEmployee),
+  );
+  const route: InboxRoute = routeEmployee
+    ? {
+        employeeId: routeEmployee,
+        ...(routeFloor && routeFloors.some((floor) => floor.id === routeFloor)
+          ? { floorId: routeFloor }
+          : {}),
+      }
+    : null;
   const tools = connection.tools.map((name) => ({ name }));
   return (
     <Sheet
@@ -30,7 +53,10 @@ export function ManageAccessPanel({
       subtitle="Changes apply to new agent calls as soon as you save."
       onClose={onClose}
       footer={
-        <button className="primary-button full" onClick={() => onSave(selected, scope, inboxResources)}>
+        <button
+          className="primary-button full"
+          onClick={() => onSave(selected, scope, inboxResources, route)}
+        >
           Save access
         </button>
       }
@@ -58,6 +84,33 @@ export function ManageAccessPanel({
           </label>
         )}
         {!provider.inbox && <RelaySecret connectionId={connection.id} />}
+        <label>
+          Route new inbox items to
+          <select value={routeEmployee} onChange={(event) => setRouteEmployee(event.target.value)}>
+            <option value="">Nobody · items wait in the Inbox</option>
+            {routeCandidates.map((employee) => (
+              <option key={employee.id} value={employee.id}>
+                {employee.name} · {employee.role}
+              </option>
+            ))}
+          </select>
+          <small className="field-hint">
+            Each new item starts a task for this employee in your name, as if you had assigned it.
+          </small>
+        </label>
+        {routeEmployee && routeFloors.length > 0 && (
+          <label>
+            On floor
+            <select value={routeFloor} onChange={(event) => setRouteFloor(event.target.value)}>
+              <option value="">No floor</option>
+              {routeFloors.map((floor) => (
+                <option key={floor.id} value={floor.id}>
+                  {floor.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button type="button" className="text-button" onClick={() => setAdvanced(!advanced)}>
           {advanced ? 'Hide' : 'Show'} advanced restrictions
         </button>

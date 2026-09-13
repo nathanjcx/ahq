@@ -2,8 +2,9 @@ import { v } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation } from './_generated/server';
 import { assertEmployeeReady, assertTokenCap, assignmentForFloor, startTask } from './lib/tasks';
+import { inboxTaskPrompt } from './services/inbox';
 import type { Ctx } from './shared';
-import { canSeeConnection, requireWorkspace, untrustedBlock } from './shared';
+import { canSeeConnection, requireWorkspace } from './shared';
 
 /** An inbox item is visible to whoever can use the connection that delivered it. */
 async function visibleItem(
@@ -50,9 +51,7 @@ export const assign = mutation({
       employeeId: args.employeeId,
       version,
       title: item.title,
-      prompt: `Review this ${item.provider} inbox item and handle it within your approved access.\n\n${untrustedBlock(
-        `${item.title}\n${item.preview}`,
-      )}`,
+      prompt: inboxTaskPrompt(item),
       floor: args.floorId
         ? await assignmentForFloor(ctx, workspace._id, args.floorId, args.employeeId)
         : undefined,

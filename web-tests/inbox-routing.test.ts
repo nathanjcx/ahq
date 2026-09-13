@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { api } from '../convex/_generated/api';
-import { configureProvider, githubUrl, harness, identity, secret, type Harness } from './support';
+import {
+  configureProvider,
+  githubUrl,
+  harness,
+  hireOne,
+  identity,
+  publishEmployee,
+  secret,
+  type Harness,
+} from './support';
 
 async function connect(t: Harness, subject: string, tools: string[]) {
   return t.mutation(api.services.integrations.connectIntegration, {
@@ -99,6 +108,55 @@ describe('integration grants and inbox routing', () => {
     await connect(t, 'user-a', ['issue_read', 'create_issue', 'comment_issue']);
     const [connection] = (await a.query(api.workspace.dashboard, {})).connections;
     expect(connection.allowedTools).toEqual(['issue_read', 'comment_issue']);
+  });
+
+  it('starts a task for each new item when the connection routes its inbox', async () => {
+    const t = harness();
+    await githubWorkspace(t);
+    const a = t.withIdentity(identity('user-a'));
+    await a.mutation(api.workspace.bootstrap, { name: 'Acme' });
+    const { listingId } = await publishEmployee(t, {
+      capabilities: [{ provider: 'github', tools: ['issue_read'], optional: false }],
+    });
+    const { connectionId } = await connect(t, 'user-a', ['issue_read', 'create_issue']);
+    const { employeeId } = await hireOne(a, listingId);
+    const item = {
+      externalId: 'mail-1',
+      title: 'Build the Q4 sheet',
+      preview: 'Numbers attached.',
+      createdAt: 1,
+    };
+    await t.mutation(api.services.inbox.ingestInbox, { secret, connectionId, items: [item] });
+    let dashboard = await a.query(api.workspace.dashboard, {});
+    expect(dashboard.inbox[0]).toMatchObject({ status: 'unread' });
+    expect(dashboard.tasks).toEqual([]);
+
+    await a.mutation(api.integrations.updateAccess, {
+      connectionId,
+      allowedTools: ['issue_read'],
+      resourceScope: '',
+      inboxResources: '',
+      inboxRoute: { employeeId },
+    });
+    await t.mutation(api.services.inbox.ingestInbox, {
+      secret,
+      connectionId,
+      items: [{ ...item, externalId: 'mail-2', title: 'Second request' }],
+    });
+    dashboard = await a.query(api.workspace.dashboard, {});
+    const routed = dashboard.inbox.find((entry) => entry.title === 'Second request');
+    expect(routed).toMatchObject({ status: 'assigned' });
+    expect(dashboard.tasks).toHaveLength(1);
+    expect(dashboard.tasks[0]).toMatchObject({ title: 'Second request', employeeId, createdBy: 'user-a' });
+    expect(dashboard.tasks[0].prompt).toContain('Numbers attached.');
+    expect(dashboard.connections[0].inboxRoute).toEqual({ employeeId });
+    // A redelivery of the same item creates nothing more.
+    await t.mutation(api.services.inbox.ingestInbox, {
+      secret,
+      connectionId,
+      items: [{ ...item, externalId: 'mail-2', title: 'Second request' }],
+    });
+    expect((await a.query(api.workspace.dashboard, {})).tasks).toHaveLength(1);
   });
 
   it('delivers a provider event only to connections following that resource', async () => {

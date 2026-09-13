@@ -193,6 +193,8 @@ export interface Connection {
   allowedTools: string[];
   resourceScope: string;
   inboxResources: string[];
+  /** Where a new inbox item goes on its own, when the owner set a route. */
+  inboxRoute?: { employeeId: string; floorId?: string };
   lastCheckedAt?: number;
   inboxMode: 'push' | 'on-demand' | 'unsupported';
   error?: string;
