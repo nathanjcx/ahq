@@ -27,7 +27,7 @@ export const C = {
   /** The nosing along the room's open edge. */
   floorEdge: '#d7d4cd',
   /** The parquet run: six board tones laid at random. */
-  planks: ['#c9c6bf', '#bdb9b1', '#d0cdc6', '#c4c0b8', '#cbc8c1', '#c0bcb4'],
+  planks: ['#cbc8c0', '#b7b3aa', '#d3d0c9', '#c1bdb4', '#c6c3bc', '#bcb8af'],
   /** Cool plaster. */
   wall: '#e6eaf1',
   /** The basement's darker plaster. */
@@ -147,11 +147,11 @@ export const C = {
 
   /* === Lamps: warm tungsten, because an office lamp is warm === */
   /** A lit fitting's own glow. */
-  lamp: '#ffe8c4',
+  lamp: '#fff1de',
   /** The halo it throws, and the light it casts. */
-  lampHalo: '#ffe2bb',
+  lampHalo: '#ffeedb',
   /** The glass a window spills at night. */
-  windowGlow: '#ffd9ad',
+  windowGlow: '#ffe3c3',
 
   /* === Scene lighting the ramp does not carry === */
   /** The hemisphere light's sky and ground, by day and by night. */
@@ -218,7 +218,7 @@ export const sky: Record<'night' | 'morning' | 'noon' | 'evening' | 'dusk' | 'wi
     ground: '#1d2534',
     grid: '#2d3a4e',
     // Lamplight inside, moonlight through the glazing.
-    ambient: '#ffe0bd',
+    ambient: '#ffeeda',
     sun: '#8fa9de',
     fill: '#5d7ba8',
     disc: '#eef3ff',
@@ -255,17 +255,17 @@ export const sky: Record<'night' | 'morning' | 'noon' | 'evening' | 'dusk' | 'wi
     background: '#1f2838',
     ground: '#27303f',
     grid: '#3a4558',
-    ambient: '#ffdbb4',
+    ambient: '#ffe9d3',
     sun: '#7f9bd0',
     fill: '#5f7ca6',
     disc: '#e4ecff',
   },
-  /** A room with no windows, such as the basement: no sun at all, lamps at full. */
+  /** A room with no windows, such as the basement: no sun at all, on strip lighting. */
   windowless: {
     background: '#1b212b',
     ground: '#232a35',
     grid: '#333c4a',
-    ambient: '#ffe4c6',
+    ambient: '#e9eff8',
     sun: '#b7bec8',
     fill: '#8f96a0',
     disc: '#eef3ff',

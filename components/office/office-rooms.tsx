@@ -220,7 +220,7 @@ export function RecordsRoom({
       ))}
       {/* Painted aisle markings, so the empty half of the room still reads as a store. */}
       {[-2.9, 0.4].map((z) => (
-        <Box key={z} p={[0, 0.012, z]} s={[15.6, 0.012, 0.05]} color={C.amber} castShadow={false} />
+        <Box key={z} p={[0, 0.012, z]} s={[15.6, 0.012, 0.05]} color={C.metalDeep} castShadow={false} />
       ))}
       <group position={[4.9, 0, 1.35]} rotation={[0, Math.PI / 2, 0]}>
         <Desk position={[0, 0, 0]} index={0} />
