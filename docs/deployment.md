@@ -36,6 +36,8 @@ npx convex env set --prod PLATFORM_ADMIN_USER_IDS 'user_...'
 npx convex deploy
 ```
 
+Deploy Convex before pushing a web change that calls a new Convex function: Railway builds `main` on push, and a client that subscribes to a function the deployment does not have yet renders the error screen until Convex catches up.
+
 Generate `AHQ_SERVICE_SECRET`, `CREDENTIAL_ENCRYPTION_KEY`, and `WORKOS_COOKIE_PASSWORD` independently; the cookie password is at least 32 characters, for example `openssl rand -base64 32`. The encryption key is 32 random bytes in base64, for example `openssl rand -base64 32`; web, worker, and gateway validate it as an AES-256-GCM key. Copy the deployment's `https://...convex.cloud` URL for `NEXT_PUBLIC_CONVEX_URL`.
 
 ## 2. Railway services
