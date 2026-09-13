@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Staff AI · layout mockup</title>
+<style>
+  :root {
+    --ink: #1c2a3d; --ink-soft: #46566c; --muted: #6b7a90; --line: #dde4ee; --line-soft: #eaeff6;
+    --canvas: #f4f6fa; --paper: #ffffff; --accent: #2a68cd; --accent-soft: #eef4fe; --accent-deep: #1d4f9e;
+    --green: #2f7a4f; --green-soft: #e7f3ea; --amber: #9a6a12; --amber-soft: #fbf1dc; --red: #b4452f; --red-soft: #fbe9e4;
+    --font: "Inter", "DM Sans", "Segoe UI", system-ui, sans-serif; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font: 13px/1.45 var(--font); color: var(--ink); background: var(--canvas); }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  h1, h2, h3, h4, p { margin: 0; }
+  a { color: var(--accent); text-decoration: none; }
+  .app { display: grid; grid-template-columns: 220px minmax(0, 1fr); height: 100vh; overflow: hidden; }
+
+  /* Sidebar: six destinations. Everything the product does lives under one of them. */
+  .side { display: flex; flex-direction: column; min-height: 0; overflow: auto; border-right: 1px solid var(--line); background: var(--paper); }
+  .brand { display: flex; align-items: center; gap: 9px; padding: 14px 16px; font-weight: 700; font-size: 15px; }
+  .brand i { width: 24px; height: 24px; border-radius: 7px; background: var(--accent); display: grid; place-items: center; color: #fff; font-style: normal; font-size: 12px; }
+  .ws { margin: 4px 10px 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+  .ws small { display: block; color: var(--muted); }
+  .nav { padding: 0 8px; }
+  .nav button { width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 7px; text-align: left; color: var(--ink-soft); }
+  .nav button[aria-current="page"] { background: var(--accent-soft); color: var(--accent-deep); font-weight: 600; }
+  .nav button:hover { background: var(--canvas); }
+  .nav .pill { margin-left: auto; min-width: 20px; padding: 1px 6px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 11px; text-align: center; }
+  .nav .pill.warn { background: var(--amber); }
+  .nav .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+  .side .spacer { flex: 1; }
+  .side .foot { padding: 10px 8px; border-top: 1px solid var(--line-soft); }
+  .side .foot button { width: 100%; display: flex; gap: 10px; padding: 8px 10px; border-radius: 7px; color: var(--ink-soft); }
+
+  /* Main column: one flat header per page, content directly below. No page intros, no nested card headers. */
+  .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+  .top { height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 18px; border-bottom: 1px solid var(--line); background: var(--paper); }
+  .top h1 { font-size: 15px; font-weight: 600; }
+  .top .tabs { display: flex; gap: 2px; margin-left: 18px; }
+  .top .tabs button { padding: 6px 10px; border-radius: 6px; color: var(--muted); }
+  .top .tabs button[aria-selected="true"] { background: var(--canvas); color: var(--ink); font-weight: 600; }
+  .top .grow { flex: 1; }
+  .search { width: 260px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--canvas); color: var(--muted); }
+  .btn { padding: 6px 11px; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); font-weight: 500; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.small { padding: 4px 9px; font-size: 12px; }
+  .page { display: none; flex: 1; min-height: 0; }
+  .page.on { display: flex; }
+
+  /* Work: three panes. Filters · stream · thread. */
+  .work { display: grid; grid-template-columns: 200px minmax(0, 1fr) 420px; flex: 1; min-height: 0; }
+  .filters { border-right: 1px solid var(--line); padding: 12px 8px; background: var(--paper); overflow: auto; }
+  .filters h4 { padding: 8px 10px 4px; color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .filters button { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; color: var(--ink-soft); }
+  .filters button[aria-current="true"] { background: var(--accent-soft); color: var(--accent-deep); font-weight: 600; }
+  .filters .n { margin-left: auto; color: var(--muted); font-size: 12px; }
+  .stream { overflow: auto; background: var(--paper); border-right: 1px solid var(--line); }
+  .group { padding: 10px 16px 4px; color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; position: sticky; top: 0; background: var(--paper); }
+  .item { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line-soft); cursor: pointer; }
+  .item:hover { background: #f7f9fc; }
+  .item.sel { background: var(--accent-soft); }
+  .av { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 12px; }
+  .item .t { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+  .item .t small { color: var(--muted); font-weight: 400; }
+  .item .m { color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .r { text-align: right; color: var(--muted); font-size: 12px; }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 11px; font-weight: 600; }
+  .tag.need { background: var(--amber-soft); color: var(--amber); }
+  .tag.run { background: var(--green-soft); color: var(--green); }
+  .tag.inc { background: var(--red-soft); color: var(--red); }
+  .tag.wait { background: var(--canvas); color: var(--muted); }
+  .quick { display: flex; gap: 6px; margin-top: 6px; }
+  .quick button { padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); font-size: 12px; }
+  .quick button.go { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .thread { display: flex; flex-direction: column; min-height: 0; background: var(--paper); }
+  .thread header { padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .thread header h2 { font-size: 14px; font-weight: 600; }
+  .thread header .meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; color: var(--muted); font-size: 12px; align-items: center; }
+  .thread .body { flex: 1; overflow: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; }
+  .msg .av { width: 26px; height: 26px; font-size: 11px; }
+  .msg b { font-size: 12px; }
+  .msg time { color: var(--muted); font-size: 11px; margin-left: 6px; }
+  .msg p { margin-top: 2px; color: var(--ink-soft); }
+  .msg .tool { margin-top: 4px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--canvas); font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+  .ask { margin-top: 6px; padding: 10px; border: 1px solid #f0dcb0; border-radius: 8px; background: var(--amber-soft); }
+  .ask b { color: var(--amber); }
+  .ask .opts { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .ask .opts button { padding: 4px 9px; border: 1px solid #e3cf9e; border-radius: 6px; background: #fff; font-size: 12px; }
+  .approve { margin-top: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
+  .approve .diff { margin: 6px 0; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); white-space: pre; }
+  .approve .row { display: flex; gap: 6px; }
+  .files { display: flex; gap: 6px; flex-wrap: wrap; }
+  .files span { padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; background: var(--canvas); }
+  .compose { padding: 10px 16px 12px; border-top: 1px solid var(--line); }
+  .compose .box { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; color: var(--muted); min-height: 54px; }
+  .compose .row { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
+  .compose .row .grow { flex: 1; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chips span { padding: 2px 7px; border: 1px dashed var(--line); border-radius: 6px; font-size: 11px; color: var(--muted); }
+
+  /* Generic content pages: a list with a detail pane, or a table. */
+  .two { display: grid; grid-template-columns: minmax(0, 1fr) 400px; flex: 1; min-height: 0; }
+  .list { overflow: auto; background: var(--paper); border-right: 1px solid var(--line); }
+  .detail { overflow: auto; background: var(--paper); padding: 16px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 8px 16px; color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--paper); }
+  td { padding: 9px 16px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+  td .who { display: flex; align-items: center; gap: 8px; }
+  td small { display: block; color: var(--muted); }
+  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 10px; font-size: 12px; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; }
+  .section { margin-top: 16px; }
+  .section h3 { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+  .office { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 300px; }
+  .canvas { background: repeating-linear-gradient(45deg, #eef2f8 0 12px, #e9eef5 12px 24px); position: relative; display: grid; place-items: center; color: var(--muted); }
+  .canvas .frame { position: absolute; inset: 0; border-right: 1px solid var(--line); }
+  .rail { background: var(--paper); padding: 14px 16px; overflow: auto; }
+  .rail h3 { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  .rail .row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line-soft); font-size: 12px; }
+  .rail .row .grow { flex: 1; }
+  .rail .row time { color: var(--muted); font-variant-numeric: tabular-nums; width: 64px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; padding: 16px; overflow: auto; }
+  .card { border: 1px solid var(--line); border-radius: 9px; background: var(--paper); padding: 12px; }
+  .card h4 { font-size: 13px; } .card p { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .card .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+
+  /* Notes about the information architecture, toggled from the top bar. */
+  .notes { position: fixed; right: 16px; bottom: 16px; width: 380px; max-height: 70vh; overflow: auto; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); box-shadow: 0 12px 40px rgba(28,42,61,.14); display: none; font-size: 12px; }
+  .notes.on { display: block; }
+  .notes h3 { font-size: 13px; margin-bottom: 6px; } .notes p, .notes li { color: var(--ink-soft); } .notes ul { padding-left: 16px; margin: 6px 0; }
+  .notes .replaces { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><i>S</i> Staff AI</div>
+    <div class="ws"><div><b>trystaff</b><small>5 employees · admin</small></div><span>⌄</span></div>
+    <nav class="nav">
+      <button data-page="work" aria-current="page">Work <span class="pill">3</span></button>
+      <button data-page="office">Office</button>
+      <button data-page="team">Team</button>
+      <button data-page="plan">Plan</button>
+      <button data-page="records">Records</button>
+      <button data-page="integrations">Integrations <span class="pill warn">1</span></button>
+    </nav>
+    <div class="spacer"></div>
+    <div class="foot">
+      <button data-page="settings">Settings</button>
+      <button data-page="admin">Platform admin</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- WORK ------------------------------------------------------------------------ -->
+    <section class="page on" id="page-work">
+      <div style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="top">
+        <h1>Work</h1>
+        <div class="tabs"><button aria-selected="true">Needs you</button><button>Everything</button><button>Mine</button></div>
+        <div class="grow"></div>
+        <div class="search">Search work, people, files…</div>
+        <button class="btn primary">New task</button>
+        <button class="btn" onclick="toggleNotes()">IA notes</button>
+      </div>
+      <div class="work">
+        <div class="filters">
+          <h4>Show</h4>
+          <button aria-current="true">Needs you <span class="n">3</span></button>
+          <button>Running <span class="n">4</span></button>
+          <button>Waiting on others <span class="n">2</span></button>
+          <button>Incidents <span class="n">1</span></button>
+          <button>Done today <span class="n">6</span></button>
+          <h4>Employee</h4>
+          <button><span class="dot" style="background:#c2508a"></span>Elena <span class="n">2</span></button>
+          <button><span class="dot" style="background:#d97b2b"></span>Camila <span class="n">3</span></button>
+          <button><span class="dot" style="background:#3a5f9e"></span>Grace <span class="n">1</span></button>
+          <button><span class="dot" style="background:#5c6670"></span>Triage <span class="n">1</span></button>
+          <h4>Floor</h4>
+          <button>Launch <span class="n">5</span></button>
+          <button>Support <span class="n">2</span></button>
+          <button>No floor <span class="n">3</span></button>
+        </div>
+
+        <div class="stream">
+          <div class="group">Needs you</div>
+          <div class="item sel">
+            <div class="av" style="background:#c2508a">E</div>
+            <div>
+              <div class="t">Elena <small>· Launch flyer</small> <span class="tag need">Question</span></div>
+              <div class="m">Which pricing line goes on the flyer: the $49 seat price or "from $49"? The brief has both.</div>
+              <div class="quick"><button class="go">Answer</button><button>Open task</button></div>
+            </div>
+            <div class="r">2m</div>
+          </div>
+          <div class="item">
+            <div class="av" style="background:#d97b2b">C</div>
+            <div>
+              <div class="t">Camila <small>· Outbound Q4 list</small> <span class="tag need">Approval</span></div>
+              <div class="m">Wants to send 12 drafts from your Gmail. Preview shows recipients, subject lines, and the sequence step.</div>
+              <div class="quick"><button class="go">Review 12 drafts</button><button>Reject</button></div>
+            </div>
+            <div class="r">14m</div>
+          </div>
+          <div class="item">
+            <div class="av" style="background:#5c6670">T</div>
+            <div>
+              <div class="t">Triage <small>· Incident #41</small> <span class="tag inc">Waiting on you</span></div>
+              <div class="m">Reproduced the checkout timeout. Fix is a one-line config change on the primary; needs a person to merge.</div>
+              <div class="quick"><button class="go">Open PR</button><button>Acknowledge</button></div>
+            </div>
+            <div class="r">31m</div>
+          </div>
+
+          <div class="group">Running</div>
+          <div class="item">
+            <div class="av" style="background:#3a5f9e">G</div>
+            <div>
+              <div class="t">Grace <small>· Board pack, September</small> <span class="tag run">Working</span></div>
+              <div class="m">Reconciled actuals to the export. Now writing the variance lines; 3 of 9 departments done.</div>
+            </div>
+            <div class="r">now</div>
+          </div>
+          <div class="item">
+            <div class="av" style="background:#d97b2b">C</div>
+            <div>
+              <div class="t">Camila <small>· Account research: Acme</small> <span class="tag run">Working</span></div>
+              <div class="m">Reading the last three Slack threads with Acme before writing the recap.</div>
+            </div>
+            <div class="r">now</div>
+          </div>
+          <div class="item">
+            <div class="av" style="background:#c2508a">E</div>
+            <div>
+              <div class="t">Elena <small>· Newsletter, week 38</small> <span class="tag run">Draft ready</span></div>
+              <div class="m">First draft saved. Tightened version comes after your pricing answer.</div>
+              <div class="quick"><button>Read draft</button><button>Add context</button></div>
+            </div>
+            <div class="r">9m</div>
+          </div>
+
+          <div class="group">Waiting on others</div>
+          <div class="item">
+            <div class="av" style="background:#3a5f9e">G</div>
+            <div>
+              <div class="t">Grace <small>· Runway forecast</small> <span class="tag wait">Blocked</span></div>
+              <div class="m">Waiting for the headcount plan from Nathan before the forecast can roll forward.</div>
+              <div class="quick"><button>Nudge Nathan</button><button>Attach plan</button></div>
+            </div>
+            <div class="r">2h</div>
+          </div>
+
+          <div class="group">Done today</div>
+          <div class="item">
+            <div class="av" style="background:#c2508a">E</div>
+            <div>
+              <div class="t">Elena <small>· One-page flyer</small> <span class="tag wait">Done</span></div>
+              <div class="m">staff-ai-flyer.pdf, staff-ai-hero.png</div>
+            </div>
+            <div class="r">3h</div>
+          </div>
+        </div>
+
+        <div class="thread">
+          <header>
+            <h2>Launch flyer</h2>
+            <div class="meta">
+              <span>Elena · Content marketer</span><span>·</span><span>Floor: Launch</span><span>·</span><span>Due Thu</span>
+              <span class="grow"></span>
+              <button class="btn small">Reassign</button><button class="btn small">Pause</button>
+            </div>
+          </header>
+          <div class="body">
+            <div class="msg"><div class="av" style="background:#2a68cd">S</div><div><b>You</b><time>10:02</time><p>Make a one-page PDF flyer for the launch from the brief in Drive. Hero image, three benefits, pricing, CTA to app.trystaff.ai.</p></div></div>
+            <div class="msg"><div class="av" style="background:#c2508a">E</div><div><b>Elena</b><time>10:03</time><p>Reading the brief.</p><div class="tool">google-workspace · read_file_content · "Launch brief v3"</div></div></div>
+            <div class="msg"><div class="av" style="background:#c2508a">E</div><div><b>Elena</b><time>10:05</time><p>Rendered the hero image and laid out the page.</p><div class="files"><span>staff-ai-hero.png</span><span>flyer-draft-1.pdf</span></div></div></div>
+            <div class="msg"><div class="av" style="background:#c2508a">E</div><div><b>Elena</b><time>10:06</time>
+              <div class="ask"><b>Question</b><p>Which pricing line goes on the flyer? The brief says both "$49 per seat" and "from $49".</p>
+                <div class="opts"><button>"$49 per seat"</button><button>"From $49"</button><button>Leave pricing off</button><button>Something else…</button></div>
+              </div>
+            </div></div>
+            <div class="msg"><div class="av" style="background:#d97b2b">C</div><div><b>Camila</b><time>10:20</time>
+              <div class="approve"><b>Wants to: create 12 Gmail drafts</b>
+                <div class="diff">to: 12 recipients from "Q4 outbound" sheet
+subject: "{{company}} × Staff AI"
+step: 1 of 3 · nothing sends without you</div>
+                <div class="row"><button class="btn small primary">Approve</button><button class="btn small">Edit one</button><button class="btn small">Reject</button></div>
+              </div>
+            </div></div>
+          </div>
+          <div class="compose">
+            <div class="box">Reply, add context, or change direction… </div>
+            <div class="row">
+              <div class="chips"><span>+ file</span><span>+ link</span><span>+ from Drive</span><span>@ mention</span></div>
+              <div class="grow"></div>
+              <button class="btn small">Save as memory</button>
+              <button class="btn small primary">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+    </section>
+
+    <!-- OFFICE ------------------------------------------------------------------------ -->
+    <section class="page" id="page-office">
+      <div style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="top">
+        <h1>Office</h1>
+        <div class="tabs"><button aria-selected="true">Lobby</button><button>Launch</button><button>Support</button><button>Triage</button></div>
+        <div class="grow"></div>
+        <button class="btn">Replay the day</button><button class="btn primary">New floor</button>
+        <button class="btn" onclick="toggleNotes()">IA notes</button>
+      </div>
+      <div class="office">
+        <div class="canvas"><div class="frame"></div><span>3D office (unchanged renderer). Figures, name pills, speech bubbles. Nothing else drawn over the room.</span></div>
+        <div class="rail">
+          <h3>On this floor</h3>
+          <div class="row"><div class="av" style="background:#c2508a;width:22px;height:22px;font-size:10px">E</div><div class="grow">Elena<br><small style="color:var(--muted)">Launch flyer · waiting on you</small></div><span class="tag need">Question</span></div>
+          <div class="row"><div class="av" style="background:#d97b2b;width:22px;height:22px;font-size:10px">C</div><div class="grow">Camila<br><small style="color:var(--muted)">Account research</small></div><span class="tag run">Working</span></div>
+          <div class="row"><div class="av" style="background:#3a5f9e;width:22px;height:22px;font-size:10px">G</div><div class="grow">Grace<br><small style="color:var(--muted)">Off shift · back Mon 09:00</small></div></div>
+          <h3 style="margin-top:16px">This week</h3>
+          <div class="row"><time>Mon 09:00</time><div class="grow">Launch stand-up</div></div>
+          <div class="row"><time>Mon 14:00</time><div class="grow">Nightly audit</div></div>
+          <div class="row"><time>Thu 17:00</time><div class="grow">Flyer due</div></div>
+          <h3 style="margin-top:16px">Board</h3>
+          <div class="row"><div class="grow">Launch flyer</div><span class="tag need">Question</span></div>
+          <div class="row"><div class="grow">Newsletter, week 38</div><span class="tag run">Draft</span></div>
+          <div class="row"><div class="grow">Pricing page copy</div><span class="tag wait">Queued</span></div>
+        </div>
+      </div>
+      </div>
+    </section>
+
+    <!-- TEAM ------------------------------------------------------------------------ -->
+    <section class="page" id="page-team">
+      <div style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="top">
+        <h1>Team</h1>
+        <div class="tabs"><button aria-selected="true">Employees</button><button>Hire</button><button>Floors</button></div>
+        <div class="grow"></div>
+        <div class="search">Search employees…</div>
+        <button class="btn primary">Hire</button>
+        <button class="btn" onclick="toggleNotes()">IA notes</button>
+      </div>
+      <div class="two">
+        <div class="list">
+          <table>
+            <thead><tr><th>Employee</th><th>Floor</th><th>Now</th><th>Access</th><th>Today</th></tr></thead>
+            <tbody>
+              <tr><td><div class="who"><div class="av" style="background:#c2508a">E</div><div>Elena<small>Content marketer · v2</small></div></div></td><td>Launch</td><td><span class="tag need">Question</span></td><td>Google</td><td>2 tasks · 1 file</td></tr>
+              <tr><td><div class="who"><div class="av" style="background:#d97b2b">C</div><div>Camila<small>Outbound SDR · v2</small></div></div></td><td>Launch</td><td><span class="tag run">Working</span></td><td>Google, Slack</td><td>3 tasks</td></tr>
+              <tr><td><div class="who"><div class="av" style="background:#3a5f9e">G</div><div>Grace<small>FP&amp;A analyst · v2</small></div></div></td><td>—</td><td><span class="tag wait">Off shift</span></td><td>Google</td><td>1 task</td></tr>
+              <tr><td><div class="who"><div class="av" style="background:#5c6670">T</div><div>Triage<small>Reserved</small></div></div></td><td>Triage</td><td><span class="tag inc">Incident</span></td><td>GitHub</td><td>1 incident</td></tr>
+              <tr><td><div class="who"><div class="av" style="background:#5c6670">A</div><div>The Auditor<small>Reserved</small></div></div></td><td>—</td><td><span class="tag wait">Nightly</span></td><td>—</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="detail">
+          <h2 style="font-size:15px">Elena</h2>
+          <p style="color:var(--muted)">Content marketer · version 2 · Launch floor</p>
+          <div class="section"><h3>Instructions</h3><p style="color:var(--ink-soft)">Writes blog posts, newsletters, and long-form content in your voice. Renders images and PDFs herself.</p></div>
+          <div class="section"><h3>Can use</h3><div class="files"><span>Google Docs, Drive</span><span>generate_image</span><span>reportlab, pillow</span></div></div>
+          <div class="section"><h3>Standing context</h3><div class="chips"><span>Brand voice: plain, confident</span><span>Pricing: $49/seat</span><span>+ add</span></div></div>
+          <div class="section"><h3>Recent</h3><dl class="kv"><dt>10:06</dt><dd>Asked about pricing</dd><dt>10:05</dt><dd>Rendered hero image</dd><dt>Sun</dt><dd>Flyer delivered</dd></dl></div>
+          <div class="section"><div class="row" style="display:flex;gap:6px"><button class="btn small primary">Assign work</button><button class="btn small">Move floor</button><button class="btn small">Upgrade to v3</button></div></div>
+        </div>
+      </div>
+      </div>
+    </section>
+
+    <!-- PLAN ------------------------------------------------------------------------ -->
+    <section class="page" id="page-plan">
+      <div style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="top">
+        <h1>Plan</h1>
+        <div class="tabs"><button aria-selected="true">Projects</button><button>Calendar</button><button>Meetings</button></div>
+        <div class="grow"></div>
+        <button class="btn primary">New project</button>
+        <button class="btn" onclick="toggleNotes()">IA notes</button>
+      </div>
+      <div class="two">
+        <div class="list">
+          <table>
+            <thead><tr><th>Project</th><th>Floors</th><th>Next milestone</th><th>Deadline</th><th>Pace</th></tr></thead>
+            <tbody>
+              <tr><td>September launch<small>4 milestones · 2 done</small></td><td>Launch, Support</td><td>Flyer and newsletter</td><td>Thu</td><td><span class="tag run">On track</span></td></tr>
+              <tr><td>Q4 outbound<small>3 milestones · 0 done</small></td><td>Launch</td><td>Prospect list</td><td>Oct 3</td><td><span class="tag need">Behind</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="detail">
+          <h2 style="font-size:15px">September launch</h2>
+          <p style="color:var(--muted)">Ship the release: changelog, migration notes, announcement.</p>
+          <div class="section"><h3>Milestones</h3>
+            <dl class="kv"><dt>Done</dt><dd>Changelog · Migration notes</dd><dt>Thu</dt><dd>Flyer and newsletter <span class="tag need">Question open</span></dd><dt>Sep 20</dt><dd>Customer announcement · waits on flyer</dd></dl>
+          </div>
+          <div class="section"><h3>Meetings</h3><dl class="kv"><dt>Mon 09:00</dt><dd>Launch stand-up · agenda from what is due</dd></dl></div>
+        </div>
+      </div>
+      </div>
+    </section>
+
+    <!-- RECORDS ------------------------------------------------------------------------ -->
+    <section class="page" id="page-records">
+      <div style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="top">
+        <h1>Records</h1>
+        <div class="tabs"><button aria-selected="true">Files</button><button>Activity</button><button>Memory</button><button>Audit</button></div>
+        <div class="grow"></div>
+        <div class="search">Search files…</div>
+        <button class="btn" onclick="toggleNotes()">IA notes</button>
+      </div>
+      <div class="two">
+        <div class="list">
+          <table>
+            <thead><tr><th>File</th><th>From</th><th>Task</th><th>When</th></tr></thead>
+            <tbody>
+              <tr><td>staff-ai-flyer.pdf<small>2.6 MB · PDF</small></td><td>Elena</td><td>One-page flyer</td><td>Sun 13:25</td></tr>
+              <tr><td>staff-ai-hero.png<small>1.5 MB · image</small></td><td>Elena</td><td>One-page flyer</td><td>Sun 13:25</td></tr>
+              <tr><td>board-pack-sep.pdf<small>draft</small></td><td>Grace</td><td>Board pack, September</td><td>now</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="detail">
+          <h2 style="font-size:15px">staff-ai-flyer.pdf</h2>
+          <p style="color:var(--muted)">Elena · One-page flyer · Sun 13:25</p>
+          <div style="margin-top:12px;height:280px;border:1px solid var(--line);border-radius:8px;background:var(--canvas);display:grid;place-items:center;color:var(--muted)">preview</div>
+          <div class="section"><div style="display:flex;gap:6px"><button class="btn small primary">Download</button><button class="btn small">Open task</button><button class="btn small">Send to Drive</button></div></div>
+        </div>
+      </div>
+      </div>
+    </section>
+
+    <!-- INTEGRATIONS ------------------------------------------------------------------------ -->
+    <section class="page" id="page-integrations">
+      <div style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="top"><h1>Integrations</h1><div class="grow"></div><button class="btn" onclick="toggleNotes()">IA notes</button></div>
+      <div class="cards">
+        <div class="card"><h4>Google Workspace</h4><p>Gmail, Drive, Docs, Sheets, Slides, Calendar · connected · 29 tools</p><div class="foot"><span class="tag run">Connected</span><button class="btn small">Manage</button></div></div>
+        <div class="card"><h4>Slack</h4><p>Trystaff workspace · 7 tools</p><div class="foot"><span class="tag run">Connected</span><button class="btn small">Manage</button></div></div>
+        <div class="card"><h4>Linear</h4><p>10 tools</p><div class="foot"><span class="tag run">Connected</span><button class="btn small">Manage</button></div></div>
+        <div class="card"><h4>GitHub</h4><p>Repositories, pull requests, engineering context</p><div class="foot"><span class="tag need">Sign-in pending</span><button class="btn small primary">Connect</button></div></div>
+        <div class="card"><h4>Canva</h4><p>Waiting on Canva's allow list</p><div class="foot"><span class="tag wait">Unavailable</span><button class="btn small" disabled>Connect</button></div></div>
+      </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS / ADMIN ------------------------------------------------------------------------ -->
+    <section class="page" id="page-settings">
+      <div style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="top"><h1>Settings</h1><div class="tabs"><button aria-selected="true">Workspace</button><button>Hours &amp; policies</button><button>Members</button><button>Usage</button></div><div class="grow"></div><button class="btn" onclick="toggleNotes()">IA notes</button></div>
+      <div class="detail" style="max-width:720px">
+        <dl class="kv"><dt>Name</dt><dd>trystaff</dd><dt>Timezone</dt><dd>America/New_York</dd><dt>Working hours</dt><dd>Mon–Fri 09:00–18:00</dd><dt>Overnight</dt><dd>Audits only</dd><dt>Token cap</dt><dd>None</dd><dt>Members</dt><dd>5 (invitation only)</dd></dl>
+      </div>
+      </div>
+    </section>
+    <section class="page" id="page-admin">
+      <div style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="top"><h1>Platform admin</h1><div class="tabs"><button aria-selected="true">Marketplace</button><button>Providers</button><button>Tool registry</button></div><div class="grow"></div><button class="btn" onclick="toggleNotes()">IA notes</button></div>
+      <div class="detail"><p style="color:var(--muted)">Unchanged in function: drafts, versions, provider OAuth clients, the reviewed tool registry. Only platform admins see this destination.</p></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="notes" id="notes">
+  <h3>Information architecture</h3>
+  <p>Fifteen destinations become six, plus Settings and Platform admin. Every existing feature keeps a home; nothing is dropped.</p>
+  <ul>
+    <li><b>Work</b> (default). The inbox of everything in motion, grouped by what it needs from you. One row per thread: a task, an approval, a question, a handoff, an incident, a report. Actions inline (answer, approve, add context, reassign). The right pane is the thread. <span class="replaces">Replaces Tasks, Inbox, the review bar, and most of Triage.</span></li>
+    <li><b>Office</b>. The 3D room, one floor at a time, with a rail for the floor's people, week, and board. <span class="replaces">Replaces Office page and the floor tabs.</span></li>
+    <li><b>Team</b>. Employees (table + detail), Hire (marketplace), Floors (staffing). <span class="replaces">Replaces Employees, Marketplace, floor editing.</span></li>
+    <li><b>Plan</b>. Projects, Calendar, Meetings. <span class="replaces">Replaces Projects and Calendar.</span></li>
+    <li><b>Records</b>. Files, Activity, Memory, Audit. <span class="replaces">Replaces Files, Activity, Records, Audit.</span></li>
+    <li><b>Integrations</b>. Unchanged, denser.</li>
+    <li><b>Settings</b> and <b>Platform admin</b> move to the bottom of the sidebar.</li>
+  </ul>
+  <h3>Shell rules</h3>
+  <ul>
+    <li>One 48px header per page: title, tabs, search, primary action. No page intros, no eyebrows, no nested card headers.</li>
+    <li>Lists are tables or streams with a fixed right detail pane, not stacked cards.</li>
+    <li>Status is a small tag with four tones: needs you, working, waiting, incident.</li>
+    <li>Type: 13px base, 15px titles. One accent. No gradients.</li>
+  </ul>
+  <h3>Work, in detail</h3>
+  <ul>
+    <li>Grouped by <i>Needs you · Running · Waiting on others · Done today</i>; filters by employee and floor.</li>
+    <li>A question from an employee renders as options you tap; an approval renders as a preview with Approve / Edit / Reject.</li>
+    <li>The composer adds context (files, links, Drive), mentions people, and can save a line as memory so it holds for future shifts.</li>
+    <li>Everything here is live from Convex; the row updates as the employee works.</li>
+  </ul>
+</div>
+
+<script>
+  const pages = document.querySelectorAll('.page');
+  document.querySelectorAll('[data-page]').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('[data-page]').forEach((x) => x.removeAttribute('aria-current'));
+    b.setAttribute('aria-current', 'page');
+    pages.forEach((p) => p.classList.toggle('on', p.id === 'page-' + b.dataset.page));
+  }));
+  function toggleNotes() { document.getElementById('notes').classList.toggle('on'); }
+  const hash = location.hash.slice(1); if (hash) document.querySelector(`[data-page="${hash}"]`)?.click();
+</script>
+</body>
+</html>
