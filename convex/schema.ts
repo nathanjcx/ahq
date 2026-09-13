@@ -387,8 +387,12 @@ export default defineSchema({
     inboxResources: v.array(v.string()),
     inboxMode: v.union(v.literal('push'), v.literal('on-demand'), v.literal('unsupported')),
     /** Where a new inbox item goes on its own: an employee, and the floor its task starts on. */
-    inboxRoute: v.optional(v.object({ employeeId: v.id('installations'), floorId: v.optional(v.id('floors')) })),
+    inboxRoute: v.optional(
+      v.object({ employeeId: v.id('installations'), floorId: v.optional(v.id('floors')) }),
+    ),
     inboxRelaySecretCiphertext: v.optional(v.string()),
+    /** The Gmail push watch on this mailbox: whose it is, the history cursor, and when Gmail drops it. */
+    gmailWatch: v.optional(v.object({ mailbox: v.string(), historyId: v.string(), expiresAt: v.number() })),
     serverUrl: v.string(),
     credentialCiphertext: v.string(),
     credentialKeyVersion: v.string(),

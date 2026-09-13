@@ -169,3 +169,35 @@ export const setRelaySecret = mutation({
     return null;
   },
 });
+
+const gmailWatch = v.object({ mailbox: v.string(), historyId: v.string(), expiresAt: v.number() });
+
+/** Records the Gmail push watch (or its moved cursor) on a connection. */
+export const setGmailWatch = mutation({
+  args: { secret: v.string(), connectionId: v.id('connections'), watch: gmailWatch },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const connection = await ctx.db.get(args.connectionId);
+    if (!connection || connection.status === 'revoked') throw new Error('Connection not found');
+    await ctx.db.patch(connection._id, { gmailWatch: args.watch, inboxMode: 'push', error: undefined });
+    return null;
+  },
+});
+
+/** Every connected Gmail connection with a watch, for the push endpoint and the renewal pass. */
+export const gmailWatches = query({
+  args: { secret: v.string(), mailbox: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const rows = await ctx.db
+      .query('connections')
+      .filter((q) =>
+        q.and(q.eq(q.field('provider'), 'google-workspace'), q.eq(q.field('status'), 'connected')),
+      )
+      .collect();
+    return rows
+      .filter((row) => row.gmailWatch && (!args.mailbox || row.gmailWatch.mailbox === args.mailbox))
+      .map((row) => ({ connection: privateConnection(row), watch: row.gmailWatch! }));
+  },
+});

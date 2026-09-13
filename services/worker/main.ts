@@ -3,6 +3,7 @@ import { ConvexClient } from 'convex/browser';
 import { makeFunctionReference } from 'convex/server';
 import { agentsClient } from '../../lib/server/agents';
 import { credentialKey, requiredEnv, safeError, serviceSecret } from '../../lib/server/secrets';
+import { gmailPass, gmailPassMs } from './gmail';
 import { healthServer, missingTaskConfig } from './health';
 import { releaseMonitors } from './monitor';
 import { pull, pullIntervalMs } from './queue';
@@ -32,6 +33,8 @@ const unsubscribe = database.onUpdate(
   (error) => console.error('Queue subscription failed:', safeError(error)),
 );
 const pullTimer = setInterval(() => void pull(runtime), pullIntervalMs);
+const gmailTimer = setInterval(() => void gmailPass(), gmailPassMs);
+void gmailPass();
 const health = healthServer(runtime, Number(process.env.PORT || 4002));
 console.log(`Worker ${runtime.workerId} started`);
 // Said once at startup and on every /health: the worker runs, and every task it claims will fail
@@ -45,6 +48,7 @@ async function shutdown(signal: string) {
   console.log(`Worker ${runtime.workerId} stopping on ${signal}`);
   runtime.stopping = true;
   clearInterval(pullTimer);
+  clearInterval(gmailTimer);
   unsubscribe();
   const deadline = Date.now() + drainDeadlineMs;
   while (runtime.jobSlots.free() < runtime.jobSlots.total && Date.now() < deadline) await delay(drainPollMs);

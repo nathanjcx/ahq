@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { getProvider } from '@/lib/providers';
 import { mutate } from '@/lib/server/backend';
+import { GMAIL_SERVER_URL, startGmailWatch } from '@/lib/server/gmail';
 import { actor, failure, workspaceClaims } from '@/lib/server/http';
 import { discoverTools } from '@/lib/server/mcp';
 import {
@@ -24,25 +25,47 @@ async function connect(
   credential: StoredCredential,
 ) {
   const tools = await discoverTools(state, credential);
-  await mutate('services/integrations:connectIntegration', {
-    ...workspaceClaims(identity),
-    provider: state.provider,
-    name: state.name,
-    account: state.name,
-    ownerName,
-    serverUrl: state.serverUrl,
-    tools: tools.map((tool) => tool.name),
-    toolAnnotations: tools.map((tool) => ({
-      name: tool.name,
-      readOnlyHint: tool.annotations?.readOnlyHint,
-      destructiveHint: tool.annotations?.destructiveHint,
-      idempotentHint: tool.annotations?.idempotentHint,
-    })),
-    credentialCiphertext: seal(credential),
-    credentialKeyVersion: '1',
-    // Convex cannot seal, so the relay secret is generated and sealed here.
-    inboxRelaySecretCiphertext: seal(randomBytes(32).toString('base64url')),
-  });
+  const credentialCiphertext = seal(credential);
+  const { connectionId } = await mutate<{ connectionId: string }>(
+    'services/integrations:connectIntegration',
+    {
+      ...workspaceClaims(identity),
+      provider: state.provider,
+      name: state.name,
+      account: state.name,
+      ownerName,
+      serverUrl: state.serverUrl,
+      tools: tools.map((tool) => tool.name),
+      toolAnnotations: tools.map((tool) => ({
+        name: tool.name,
+        readOnlyHint: tool.annotations?.readOnlyHint,
+        destructiveHint: tool.annotations?.destructiveHint,
+        idempotentHint: tool.annotations?.idempotentHint,
+      })),
+      credentialCiphertext,
+      credentialKeyVersion: '1',
+      // Convex cannot seal, so the relay secret is generated and sealed here.
+      inboxRelaySecretCiphertext: seal(randomBytes(32).toString('base64url')),
+    },
+  );
+  // Gmail publishes this mailbox's changes to us from now on. A watch that cannot start is reported on
+  // the connection rather than failing the sign-in; the worker's renewal pass tries again.
+  if (state.serverUrl === GMAIL_SERVER_URL && process.env.GMAIL_PUBSUB_TOPIC) {
+    await startGmailWatch({
+      id: connectionId,
+      provider: state.provider,
+      serverUrl: state.serverUrl,
+      credentialCiphertext,
+    }).catch((error) =>
+      mutate('services/integrations:markConnectionError', {
+        connectionId,
+        error: `Gmail push: ${error instanceof Error ? error.message : 'could not start the watch'}`.slice(
+          0,
+          500,
+        ),
+      }).catch(() => {}),
+    );
+  }
 }
 
 export async function GET(request: Request) {
