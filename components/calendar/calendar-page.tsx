@@ -93,6 +93,7 @@ export function CalendarPage({
       <>
         <MeetingView
           entry={meetingEntry}
+          employees={dashboard.employees}
           actions={actions}
           run={run}
           onBack={() => onSelectMeeting(null)}

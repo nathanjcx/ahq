@@ -8,7 +8,6 @@ import type { OfficeEmployee } from '../office/office-view';
 import { useLabelMode } from '../office/use-labels';
 import { EmptyMini } from '../shared/empty';
 import { Avatar } from '../shared/marks';
-import { boardCards } from './floor-board';
 import { FloorReplay } from './floor-replay';
 import { FloorScene } from './floor-scene';
 import type { Employee, ScheduleSummary, Task } from '@/lib/contracts';
@@ -89,7 +88,8 @@ export function FloorTeam({
               floorId={floorId}
               label={floorName}
               labels={labels.mode}
-              dressing={{ board: { cards: boardCards(tasks) } }}
+              tasks={tasks}
+              schedule={schedule}
               onSelect={onEmployee}
             />
           ) : undefined

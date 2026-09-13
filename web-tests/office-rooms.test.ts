@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { boardCards } from '@/components/floors/floor-board';
 import { afterHours, daylight, windowless } from '@/components/office/daylight';
 import {
   BOARD_CARDS,
   BOARD_COLUMNS,
   MAX_ATTENDEES,
   MAX_SHELVES,
+  boardCards,
   boardLayout,
   boardroomSeats,
   defaultShelves,

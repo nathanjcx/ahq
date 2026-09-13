@@ -6,9 +6,10 @@ import type { MeetingsActions, OutcomeResult } from '../app/actions/meetings';
 import { usageLine } from '../shared/format';
 import { shortDate, shortTime } from '../shared/time';
 import { useUiQuery } from '../shared/use-ui-query';
+import { Boardroom } from './boardroom';
 import { OutcomeCard } from './outcome-card';
 import { PrepReports, Transcript } from './transcript';
-import type { CalendarEntry, Meeting, MeetingStatus } from '@/lib/contracts';
+import type { CalendarEntry, Employee, Meeting, MeetingStatus } from '@/lib/contracts';
 import { asId, uiApi } from '@/lib/ui-api';
 import './meetings.css';
 
@@ -26,6 +27,7 @@ const STATE_LABEL: Record<MeetingStatus, string> = {
  */
 export function MeetingView({
   entry,
+  employees,
   actions,
   run,
   onBack,
@@ -34,6 +36,8 @@ export function MeetingView({
   onOpenMeeting,
 }: {
   entry: CalendarEntry;
+  /** The workspace's instances, so the boardroom seats the attendees in their own colours. */
+  employees: Employee[];
   actions: MeetingsActions;
   run: (work: () => Promise<unknown>, success: string) => Promise<boolean>;
   onBack: () => void;
@@ -130,6 +134,8 @@ export function MeetingView({
       </header>
 
       {meeting?.usage && <p className="meeting-total-usage">{usageLine(meeting.usage)}</p>}
+
+      <Boardroom entry={entry} meeting={meeting} employees={employees} />
 
       <div className="meeting-body">
         {(entry.purpose || entry.agenda.length > 0) && (

@@ -2,15 +2,17 @@
 
 import { useQuery } from 'convex/react';
 import dynamic from 'next/dynamic';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { deriveActivities, deriveFloorSignals, type DayInput, type EmployeeActivity } from './activity';
 import { startOfDay } from './day-replay';
 import type { LabelMode } from './office-labels';
+import { boardCards, type CalendarEntry, type MemoryFill } from './office-layout';
 import type { SelectProp } from './office-props';
-import type { OfficeDressing, OfficeEmployee, OfficeProvider } from './office-scene';
+import type { OfficeDressing, OfficeEmployee, OfficeProvider, OfficeRoom } from './office-scene';
 import type { RenderStats } from './office-view';
 import { useActivityCues } from './sound';
-import { useDayQueries } from './use-day';
+import { useDayQueries, useNow, useWeekCalendar } from './use-day';
+import { useFloorMemory } from './use-memory';
 import type { Dashboard, FloorPost } from '@/lib/contracts';
 import { providers as providerCatalog } from '@/lib/providers';
 import { asId, uiApi } from '@/lib/ui-api';
@@ -42,6 +44,8 @@ export type OfficeStageProps = {
   floorId?: string;
   /** Whether a Convex client exists. Without one the office stays furnished and still. */
   live: boolean;
+  /** Which room of the tower this is. A floor by default. */
+  room?: OfficeRoom;
   /** Overrides live data, so replay never touches the subscription. */
   scene?: OfficeSceneData;
   archived?: boolean;
@@ -58,14 +62,37 @@ export type OfficeStageProps = {
 
 const NO_DAY: DayInput = {};
 
+/** Everything the live office reads, in one argument, so the derivation stays one function. */
+export type SceneInput = {
+  dashboard: Dashboard;
+  /** This floor's channel, which is where the whiteboard note comes from. */
+  posts: FloorPost[];
+  /** Who the room is showing, which is who the day is derived for. */
+  employees: { id: string; name: string }[];
+  /** The floor on show. Omit for the lobby, which holds unassigned work. */
+  floorId?: string;
+  now: number;
+  /** The rest of the workspace's day: shifts, meetings, findings, alerts, pages. */
+  day?: DayInput;
+  room?: OfficeRoom;
+  /** How full the floor's memory and its instances' notebooks are. */
+  memory?: MemoryFill;
+  /** The week on the lobby's calendar wall. */
+  calendar?: CalendarEntry[];
+};
+
 /** Turns one dashboard, one board and the day around them into everything the room shows. */
-export function deriveScene(
-  dashboard: Dashboard,
-  posts: FloorPost[],
-  floorId: string | undefined,
-  now: number,
-  day: DayInput = NO_DAY,
-): OfficeSceneData {
+export function deriveScene({
+  dashboard,
+  posts,
+  employees,
+  floorId,
+  now,
+  day: rest = NO_DAY,
+  room,
+  memory,
+  calendar,
+}: SceneInput): OfficeSceneData {
   const tasks = dashboard.tasks.filter((task) => (floorId ? task.floorId === floorId : !task.floorId));
   const taskIds = new Set(tasks.map((task) => task.id));
   const connected = dashboard.connections.filter((connection) => connection.status === 'connected');
@@ -87,7 +114,14 @@ export function deriveScene(
     0,
   );
   const note = [...posts].reverse().find((post) => post.kind === 'note');
+  // The workspace's hours belong to the day: they are what makes somebody off
+  // shift, and what turns the end of a shift into writing the day's report.
+  const day: DayInput = {
+    ...rest,
+    ...(dashboard.schedule ? { schedule: dashboard.schedule } : {}),
+  };
   const signals = deriveFloorSignals(day, floorId, now);
+  const cards = floorId ? boardCards(tasks) : [];
   return {
     traits: new Map(
       dashboard.employees
@@ -95,7 +129,7 @@ export function deriveScene(
         .map((employee) => [employee.id, employee.persona!.traits]),
     ),
     activities: deriveActivities({
-      employees: dashboard.employees,
+      employees,
       tasks,
       events: dashboard.events.filter((event) => event.taskId && taskIds.has(event.taskId)),
       proposals: dashboard.proposals,
@@ -106,6 +140,12 @@ export function deriveScene(
     providers,
     ...(note ? { note: note.text.slice(0, NOTE_CHARS) } : {}),
     lightBudget: cap > 0 ? Math.min(1, used / cap) : 0,
+    // The room follows the viewer's clock rather than the hour it was opened at.
+    hour: new Date(now).getHours(),
+    ...(room ? { room } : {}),
+    ...(cards.length ? { board: { cards } } : {}),
+    ...(memory ? { memory } : {}),
+    ...(calendar?.length ? { calendar } : {}),
     ...(signals.incident ? { incident: true, incidentCount: signals.incidentCount } : {}),
     ...(signals.emergency ? { emergency: signals.emergency } : {}),
     ...(signals.meeting ? { meeting: signals.meeting } : {}),
@@ -122,25 +162,14 @@ export function deriveScene(
   };
 }
 
-
 /**
  * The office, dressed by the journal. With a Convex client it subscribes for the
  * dashboard and the floor board itself, so the pages above it keep their own shape.
  */
-export function OfficeStage({ live, scene, ...props }: OfficeStageProps) {
-  if (scene) return <Stage {...props} scene={scene} />;
-  if (!live) return <Stage {...props} scene={emptyScene} />;
-  return <LiveStage {...props} />;
-}
-
-/** Activities age out on their own, so the office re-reads the journal on a slow tick. */
-function useNow(intervalMs: number) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(timer);
-  }, [intervalMs]);
-  return now;
+export function OfficeStage({ live, scene, room, ...props }: OfficeStageProps) {
+  const dressed = scene ?? (live ? undefined : emptyScene);
+  if (dressed) return <Stage {...props} scene={room ? { ...dressed, room } : dressed} />;
+  return <LiveStage {...props} room={room} />;
 }
 
 function LiveStage(props: Omit<OfficeStageProps, 'live' | 'scene'>) {
@@ -150,10 +179,27 @@ function LiveStage(props: Omit<OfficeStageProps, 'live' | 'scene'>) {
     props.floorId ? { floorId: asId<'floors'>(props.floorId) } : 'skip',
   );
   const now = useNow(5_000);
-  const day = useDayQueries(startOfDay(now));
+  const midnight = startOfDay(now);
+  const day = useDayQueries(midnight);
+  const memory = useFloorMemory(props.floorId);
+  const calendar = useWeekCalendar(props.room === 'lobby' ? midnight : undefined);
+  const { employees, floorId, room } = props;
   const scene = useMemo(
-    () => (dashboard ? deriveScene(dashboard, posts ?? [], props.floorId, now, day) : emptyScene),
-    [dashboard, posts, props.floorId, now, day],
+    () =>
+      dashboard
+        ? deriveScene({
+            dashboard,
+            posts: posts ?? [],
+            employees,
+            ...(floorId ? { floorId } : {}),
+            now,
+            day,
+            ...(room ? { room } : {}),
+            ...(memory ? { memory } : {}),
+            calendar,
+          })
+        : emptyScene,
+    [dashboard, posts, employees, floorId, now, day, room, memory, calendar],
   );
   useActivityCues(scene.activities);
   return <Stage {...props} scene={scene} />;

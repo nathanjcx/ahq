@@ -38,7 +38,7 @@ export function LobbyView({
         <div>
           <span className="eyebrow">LOBBY</span>
           <h2>Lobby</h2>
-          <p>Tasks created without a floor stay here.</p>
+          <p>The week is on the wall, the lift is behind it, and work without a floor waits here.</p>
         </div>
         <div className="floor-heading-actions">
           <button
@@ -54,6 +54,7 @@ export function LobbyView({
       <div className="floor-overview">
         <FloorScene
           label="Lobby"
+          room="lobby"
           live={configured}
           employeeCount={lobbyEmployees.length}
           officeEmployees={officeEmployees}

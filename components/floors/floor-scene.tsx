@@ -3,7 +3,7 @@
 import { Tag, Volume2, VolumeX } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { OfficeStage, type OfficeSceneData } from '../office/office-stage';
-import type { OfficeEmployee } from '../office/office-view';
+import type { OfficeEmployee, OfficeRoom } from '../office/office-view';
 import { useSound } from '../office/sound';
 import { useLabelMode } from '../office/use-labels';
 import { pluralize } from '@/lib/text';
@@ -23,6 +23,7 @@ export function FloorScene({
   officeEmployees,
   emptyMessage,
   floorId,
+  room,
   live = false,
   scene,
   stage,
@@ -37,6 +38,8 @@ export function FloorScene({
   emptyMessage: string;
   /** The floor on show. Omit for the lobby. */
   floorId?: string;
+  /** Which room of the tower this is. A floor by default. */
+  room?: OfficeRoom;
   /** Whether a Convex client exists, so the office may subscribe for live work. */
   live?: boolean;
   /** Replaces live work, so replay never touches the subscription. */
@@ -67,6 +70,7 @@ export function FloorScene({
             emptyMessage={emptyMessage}
             archived={archived}
             floorId={floorId}
+            room={room}
             live={live && !archived}
             scene={scene}
             labels={labels.mode}
