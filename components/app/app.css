@@ -7,175 +7,140 @@
 .app-frame {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 242px minmax(0, 1fr);
+  grid-template-columns: 224px minmax(0, 1fr);
 }
 .sidebar {
   position: fixed;
   inset: 0 auto 0 0;
   z-index: 64;
-  width: 242px;
+  width: 224px;
   display: flex;
   flex-direction: column;
-  padding: 23px 14px 16px;
+  padding: 0 10px 12px;
   overflow-y: auto;
-  background: #e9edf2;
-  border-right: 1px solid #d4dae2;
+  background: #fafbfc;
+  border-right: 1px solid var(--line);
 }
 /* === components/app/sidebar.tsx === */
 .brand-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  height: 52px;
   padding: 0 8px;
 }
 .brand {
   appearance: none;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 6px;
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--ink);
-  font-size: 23px;
-  font-weight: 720;
-  letter-spacing: -1.15px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 .brand i {
-  color: var(--accent);
-  font-style: normal;
-  font-weight: 480;
-}
-/* The same tile and S as public/icon.svg, so the app and its favicon carry one mark. */
-.brand-glyph {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--accent);
   color: #fff;
-  background: linear-gradient(140deg, #3b7be0, var(--accent-deep));
-  box-shadow: 0 2px 0 #c7d5ea;
-}
-.brand-glyph.large {
-  width: 45px;
-  height: 45px;
-  border-radius: 12px;
-}
-.workspace-chip {
-  display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
-  align-items: center;
-  gap: 9px;
-  margin: 28px 0 2px;
-  padding: 8px;
-}
-.workspace-chip > span:nth-child(2),
-.account-row > span:nth-child(2) {
-  min-width: 0;
-}
-.workspace-chip strong,
-.workspace-chip small,
-.account-row strong,
-.account-row small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.workspace-chip strong,
-.account-row strong {
-  font-size: var(--text-md);
-  font-weight: 660;
-}
-.workspace-chip small,
-.account-row small {
-  margin-top: 1px;
-  color: var(--muted);
-  font-size: var(--text-sm);
-}
-.workspace-mark {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 34px;
-  border: 1px solid #c7d0da;
-  border-radius: 7px;
-  color: var(--slate-600);
-  background: #d8dfe8;
+  font-size: 11px;
+  font-style: normal;
   font-weight: 700;
+  letter-spacing: 0.02em;
 }
-.nav-heading {
-  display: block;
-  margin: 23px 9px 8px;
-  color: #9097a0;
-  font-size: var(--text-xs);
-  font-weight: 720;
-  letter-spacing: 1.25px;
-}
-.nav-admin-heading {
-  margin-top: 25px;
+.nav {
+  display: grid;
+  gap: 2px;
+  padding-top: 4px;
 }
 .nav-item {
   appearance: none;
   width: 100%;
-  height: 38px;
+  height: 32px;
   display: flex;
   align-items: center;
-  gap: 11px;
-  margin: 2px 0;
+  gap: 10px;
   padding: 0 10px;
-  color: #666d75;
+  color: var(--ink-soft);
   background: transparent;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius);
   font-size: var(--text-md);
+  font-weight: 500;
+  text-align: left;
 }
-.nav-item:hover {
+.nav-item:hover:not(:disabled) {
+  background: var(--slate-100);
   color: var(--ink);
-  background: #e3e8ed;
 }
 .nav-item[data-active='true'] {
   color: var(--accent-deep);
-  background: var(--accent-soft);
-  font-weight: 670;
-  box-shadow: inset 3px 0 var(--accent);
+  background: #e9eef8;
 }
-.nav-badge {
-  display: grid;
-  place-items: center;
-  min-width: 19px;
-  height: 19px;
-  margin-left: auto;
-  padding: 0 5px;
-  border-radius: 5px;
-  color: var(--accent-deep);
-  background: var(--accent-soft);
+.nav-item[data-active='true'] svg {
+  color: var(--accent);
+}
+.nav-item > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-count {
+  color: var(--muted);
   font-size: var(--text-xs);
-  font-weight: 700;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
 }
-.account-row {
-  width: 100%;
-  margin-bottom: 6px;
+.nav-count[data-hot='true'] {
+  color: var(--accent-deep);
+  font-weight: 600;
+}
+.sidebar-bottom {
+  margin-top: auto;
   display: grid;
-  grid-template-columns: 31px minmax(0, 1fr) 16px;
+  gap: 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.sidebar-account {
+  display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 8px;
-  text-align: left;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 2px;
+}
+.sidebar-account .workspace-switcher {
+  flex: 1;
+  min-width: 0;
+}
+.sidebar-account .workspace-button {
+  width: 100%;
+  max-width: none;
+  height: 40px;
   border: 0;
-  border-radius: 7px;
   background: transparent;
+  box-shadow: none;
 }
-.account-row:hover {
-  background: #dfe4ea;
+.sidebar-account .workspace-button:hover {
+  background: var(--slate-100);
 }
-.avatar-user {
-  width: 31px;
-  height: 31px;
-  color: #5e666f;
-  background: #d5dce4;
-  border: 1px solid #c8d0d9;
+.sidebar-account .workspace-button span {
+  flex: 1;
+  max-width: none;
+  text-align: left;
+}
+.sidebar .account-panel,
+.sidebar .workspace-panel {
+  top: auto;
+  right: auto;
+  bottom: calc(100% + 6px);
+  left: 0;
 }
 .sidebar-close,
 .mobile-menu {
@@ -186,50 +151,83 @@
   grid-column: 2;
 }
 .topbar {
-  height: 68px;
+  height: 52px;
   position: sticky;
   top: 0;
   z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 35px;
-  border-bottom: 1px solid rgba(208, 215, 223, 0.86);
-  background: rgba(241, 245, 250, 0.9);
-  backdrop-filter: blur(16px);
+  gap: 12px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
 }
 .topbar-title {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: var(--text-md);
-  font-weight: 670;
+  gap: 14px;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 .topbar-actions {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
+}
+/* Segmented control: a destination's sections, beside its title. */
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--slate-100);
+}
+.segmented button {
+  appearance: none;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.segmented button:hover {
+  color: var(--ink);
+}
+.segmented button[aria-selected='true'] {
+  background: #fff;
+  color: var(--ink);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.08),
+    0 0 0 1px rgba(15, 23, 42, 0.04);
 }
 .notification-button {
   position: relative;
 }
 .notification-button i {
   position: absolute;
-  top: 3px;
-  right: 2px;
+  top: 2px;
+  right: 1px;
   display: flex;
-  min-width: 16px;
-  height: 16px;
+  min-width: 15px;
+  height: 15px;
   align-items: center;
   justify-content: center;
   padding: 0 4px;
-  color: #fdfeff;
-  border: 2px solid var(--canvas);
+  color: #fff;
+  border: 2px solid #fff;
   border-radius: 999px;
   background: var(--accent);
-  font-size: var(--text-2xs);
+  font-size: 9px;
   font-style: normal;
-  font-weight: 780;
+  font-weight: 700;
 }
 
 /* === components/app/topbar.tsx: the notifications ledger === */
@@ -551,7 +549,7 @@
 .page-wrap {
   max-width: 1440px;
   margin: 0 auto;
-  padding: 38px clamp(25px, 3.3vw, 52px) 60px;
+  padding: 20px 24px 48px;
 }
 .task-safety {
   display: flex;
@@ -957,11 +955,11 @@
     display: inline-grid !important;
   }
   .topbar {
-    height: 61px;
-    padding: 0 20px;
+    height: 52px;
+    padding: 0 12px;
   }
   .page-wrap {
-    padding: 29px 20px 50px;
+    padding: 16px 12px 40px;
   }
   .setup-banner {
     padding: 8px 20px;
@@ -986,9 +984,6 @@
   .setup-banner-icon {
     flex: 0 0 auto;
   }
-  .account-menu {
-    display: none;
-  }
   .workspace-button span {
     max-width: 90px;
   }
@@ -996,219 +991,5 @@
     right: 8px;
     left: 8px;
     width: auto;
-  }
-}
-/* === components/app/review-bar.tsx === */
-.review-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: 10px clamp(20px, 3.3vw, 52px);
-  color: #6b5127;
-  border-bottom: 1px solid #e7d7b4;
-  background: #f7eed8;
-}
-.review-bar-mark {
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  width: 30px;
-  height: 30px;
-  color: #8a6a2e;
-  border-radius: var(--radius);
-  background: #f1e2c2;
-}
-.review-bar > span:nth-child(2) {
-  display: grid;
-  min-width: 0;
-}
-.review-bar strong {
-  font-size: var(--text-md);
-}
-.review-bar small {
-  margin-top: 2px;
-  color: #8c7444;
-  font-size: var(--text-2xs);
-}
-.review-bar .primary-button {
-  margin-left: auto;
-  flex: 0 0 auto;
-}
-.review-list {
-  display: grid;
-  gap: var(--space-3);
-}
-.review-card {
-  overflow: hidden;
-  border: 1px solid #e1d4bc;
-  border-radius: var(--radius-lg);
-  background: #fbfdff;
-}
-.review-card[data-active='true'] {
-  border-color: #cbad76;
-  box-shadow: 0 0 0 2px #f1e3c6;
-}
-.review-pick {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  align-items: start;
-  gap: 2px;
-  padding: 14px 0 0 12px;
-  cursor: pointer;
-}
-.review-pick input {
-  width: 16px;
-  height: 16px;
-  margin-top: 5px;
-  accent-color: var(--accent);
-}
-.review-card .proposal-head {
-  border-bottom: 0;
-}
-.review-pick .proposal-head {
-  padding: 0 14px 0 0;
-}
-.review-evidence {
-  margin: 0 14px;
-}
-.review-evidence > summary {
-  padding: 7px 0;
-  color: #6b727a;
-  cursor: pointer;
-  font-size: var(--text-sm);
-  font-weight: 680;
-}
-.review-card > .text-button {
-  margin: 4px 9px 10px;
-}
-.review-target {
-  flex: 1 1 100%;
-  color: var(--muted);
-  font-size: var(--text-sm);
-}
-.review-decide {
-  display: flex;
-  gap: var(--space-2);
-  width: 100%;
-}
-.review-decide button {
-  flex: 1;
-}
-@media (max-width: 640px) {
-  .nav-item {
-    height: var(--tap);
-  }
-  /* The ledger takes the width of the screen, and the strip stays one line. */
-  .bell-panel {
-    position: fixed;
-    top: 58px;
-    right: 8px;
-    left: 8px;
-    width: auto;
-  }
-  .bell-item,
-  .bell-review {
-    min-height: var(--tap);
-  }
-  .incident-strip {
-    gap: 8px;
-    padding: 8px 12px;
-  }
-  .incident-strip p small {
-    display: none;
-  }
-  /* The review bar rides above the bottom of the screen, and the toast rides above it. */
-  .toast {
-    right: 10px;
-    left: 10px;
-    bottom: calc(78px + env(safe-area-inset-bottom));
-    max-width: none;
-  }
-  .review-bar {
-    position: fixed;
-    z-index: 55;
-    left: 10px;
-    right: 10px;
-    bottom: calc(12px + env(safe-area-inset-bottom));
-    padding: 10px 12px;
-    border: 1px solid #e0cda2;
-    border-radius: var(--radius-lg);
-    box-shadow: 0 12px 34px rgba(60, 48, 25, 0.2);
-  }
-  .review-bar small {
-    display: none;
-  }
-  .page-wrap {
-    padding-bottom: 100px;
-  }
-  .review-pick .proposal-head,
-  .review-card .proposal-head {
-    grid-template-columns: 30px minmax(0, 1fr);
-  }
-  .review-card .proposal-status {
-    grid-column: 2;
-    justify-self: start;
-  }
-  .settings-shell {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
-  }
-  .settings-sections {
-    position: static;
-    flex-direction: row;
-    gap: 6px;
-    overflow-x: auto;
-    padding-bottom: 4px;
-  }
-  .settings-sections button {
-    flex: 0 0 auto;
-    min-height: var(--tap);
-    border: 1px solid var(--line);
-  }
-  .settings-sections button[data-active='true'] {
-    border-color: var(--slate-400);
-    box-shadow: none;
-  }
-  .settings-sections small {
-    display: none;
-  }
-  .settings-pair {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .day-picker button {
-    min-height: var(--tap);
-    flex: 1;
-  }
-  .rates-table th,
-  .rates-table td {
-    padding: 4px 3px;
-  }
-  /* Usage and admin tables read as cards. */
-  .usage-table thead {
-    display: none;
-  }
-  .usage-table tr {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 2px 10px;
-    padding: 9px 0;
-    border-bottom: 1px solid var(--line);
-  }
-  .usage-table th,
-  .usage-table td {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 2px 0;
-    border: 0;
-    text-align: left;
-  }
-  .usage-table tbody th {
-    grid-column: 1 / -1;
-    font-size: var(--text-md);
-  }
-  .usage-table td::before {
-    content: attr(data-label);
-    color: var(--muted);
   }
 }

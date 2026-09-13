@@ -1,5 +1,5 @@
 import type { Actions } from './actions';
-import type { Page } from './nav';
+import type { Destination } from './nav';
 import type { Dashboard } from '@/lib/contracts';
 
 /**
@@ -13,7 +13,8 @@ export type PageProps = {
   canManageWorkspace: boolean;
   /** Runs a mutation, shows the success text or the error, and reports whether it succeeded. */
   run: (work: () => Promise<unknown>, success: string) => Promise<boolean>;
-  go: (page: Page) => void;
+  /** Navigates to a destination, or to one of the page ids the interface used to have. */
+  go: (page: Destination) => void;
   onNotice: (text: string) => void;
   selectedFloorId: string | null;
   onSelectFloor: (id: string | null) => void;

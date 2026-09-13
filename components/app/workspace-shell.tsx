@@ -6,11 +6,10 @@ import { FloorPanel } from '../floors/floor-panel';
 import { WorkspaceReadyContext } from '../shared/use-ui-query';
 import type { Actions } from './actions';
 import { IncidentStrip } from './incident-strip';
-import { nav, pageTitle, type Page } from './nav';
+import { pageTabs, pageTitle, resolveRoute, routeHash, type Destination, type Route } from './nav';
 import { NewTaskPanel } from './new-task-panel';
 import { SetupBanner, Toast } from './notices';
 import { PageContent } from './page-content';
-import { ReviewBar } from './review-bar';
 import { SettingsPanel } from './settings-panel';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
@@ -44,17 +43,17 @@ export function WorkspaceShell({
   providerConfigs?: ProviderConfig[];
   actions: Actions;
 }) {
-  const [page, setPage] = useState<Page>('office');
+  const [route, setRoute] = useState<Route>({ page: 'work', tab: 'threads' });
+  const { page, tab } = route;
   useEffect(() => {
     const sync = () => {
-      const value = window.location.hash.slice(1);
-      if (nav.some((item) => item.id === value) || value === 'admin' || value === 'operations')
-        setPage(value as Page);
+      const next = resolveRoute(window.location.hash.slice(1));
+      if (next && (next.page !== 'admin' || dashboard.isPlatformAdmin)) setRoute(next);
     };
     sync();
     window.addEventListener('hashchange', sync);
     return () => window.removeEventListener('hashchange', sync);
-  }, []);
+  }, [dashboard.isPlatformAdmin]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
@@ -76,9 +75,11 @@ export function WorkspaceShell({
     return () => window.clearTimeout(timer);
   }, [notice]);
 
-  function go(next: Page) {
-    setPage(next);
-    window.location.hash = next;
+  function go(next: Destination, nextTab?: string) {
+    const resolved = resolveRoute(nextTab ? `${next}/${nextTab}` : next);
+    if (!resolved) return;
+    setRoute(resolved);
+    window.location.hash = routeHash(resolved);
     setSidebarOpen(false);
   }
 
@@ -119,6 +120,7 @@ export function WorkspaceShell({
       <div className="app-frame">
         <Sidebar
           dashboard={dashboard}
+          configured={configured}
           page={page}
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
@@ -137,12 +139,14 @@ export function WorkspaceShell({
         <main className="main">
           <Topbar
             title={pageTitle(page)}
+            tabs={pageTabs(page)}
+            tab={tab}
+            onTab={(next) => go(page, next)}
             configured={configured}
             proposals={dashboard.proposals}
             canCreateTask={Boolean(workspace) && hasReadyEmployee}
             onOpenNavigation={() => setSidebarOpen(true)}
             onNewTask={() => openNewTask()}
-            onSettings={() => setSettingsOpen(true)}
             onReview={(taskId) => {
               setSelectedTask(taskId);
               go('tasks');
@@ -151,16 +155,6 @@ export function WorkspaceShell({
             onOpen={go}
           />
 
-          <ReviewBar
-            proposals={dashboard.proposals}
-            onDecide={(id, approved) =>
-              void run(() => actions.decide(id, approved), approved ? 'Action approved' : 'Action rejected')
-            }
-            onOpenTask={(taskId) => {
-              setSelectedTask(taskId);
-              go('tasks');
-            }}
-          />
 
           <IncidentStrip dashboard={dashboard} actions={actions} run={run} go={go} />
 
@@ -168,6 +162,7 @@ export function WorkspaceShell({
           <div className="page-wrap">
             <PageContent
               page={page}
+              tab={tab}
               dashboard={dashboard}
               listings={listings}
               drafts={drafts}

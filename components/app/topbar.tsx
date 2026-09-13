@@ -1,17 +1,16 @@
 'use client';
 
-import { ArrowUpRight, Bell, Check, CheckCheck, Menu, Plus, Settings } from 'lucide-react';
+import { ArrowUpRight, Bell, Check, CheckCheck, Menu, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { relativeTime } from '../shared/time';
 import { useUiQuery } from '../shared/use-ui-query';
-import { AccountMenu, WorkspaceSwitcher } from './account';
 import type { TriageActions } from './actions/triage';
-import type { Page } from './nav';
+import type { Destination, TabSpec } from './nav';
 import type { ActionProposal, Notification } from '@/lib/contracts';
 import { uiApi } from '@/lib/ui-api';
 
 /** Where a notification is about. Everything triage is on the Triage floor. */
-const TARGET: Record<Notification['kind'], Page> = {
+const TARGET: Record<Notification['kind'], Destination> = {
   triage: 'triage',
   meeting: 'calendar',
   finding: 'audit',
@@ -20,17 +19,23 @@ const TARGET: Record<Notification['kind'], Page> = {
 
 export function Topbar({
   title,
+  tabs,
+  tab,
+  onTab,
   configured,
   proposals,
   canCreateTask,
   notificationActions,
   onOpenNavigation,
   onNewTask,
-  onSettings,
   onReview,
   onOpen,
 }: {
   title: string;
+  /** The destination's tabs, shown as a segmented control beside the title. */
+  tabs: TabSpec[];
+  tab?: string;
+  onTab: (tab: string) => void;
   configured: boolean;
   proposals: ActionProposal[];
   canCreateTask: boolean;
@@ -38,10 +43,9 @@ export function Topbar({
   notificationActions: Pick<TriageActions, 'acknowledgeNotification' | 'acknowledgeNotifications'>;
   onOpenNavigation: () => void;
   onNewTask: () => void;
-  onSettings: () => void;
   onReview: (taskId: string) => void;
   /** Navigates to what a notification is about. */
-  onOpen: (page: Page) => void;
+  onOpen: (page: Destination) => void;
 }) {
   const pending = proposals.filter((proposal) => proposal.status === 'pending');
 
@@ -52,6 +56,20 @@ export function Topbar({
           <Menu size={20} />
         </button>
         <span>{title}</span>
+        {tabs.length > 0 && (
+          <div className="segmented" role="tablist" aria-label={`${title} sections`}>
+            {tabs.map((item) => (
+              <button
+                key={item.id}
+                role="tab"
+                aria-selected={tab === item.id}
+                onClick={() => onTab(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div className="topbar-actions">
         {configured ? (
@@ -71,19 +89,9 @@ export function Topbar({
           />
         )}
         <button className="primary-button compact" disabled={!canCreateTask} onClick={onNewTask}>
-          <Plus size={16} />
+          <Plus size={15} />
           New task
         </button>
-        {configured && <WorkspaceSwitcher />}
-        <button
-          className="icon-button topbar-settings"
-          aria-label="Settings"
-          disabled={!configured}
-          onClick={onSettings}
-        >
-          <Settings size={18} />
-        </button>
-        {configured && <AccountMenu />}
       </div>
     </header>
   );
@@ -93,7 +101,7 @@ type BellProps = {
   pending: ActionProposal[];
   actions: Pick<TriageActions, 'acknowledgeNotification' | 'acknowledgeNotifications'>;
   onReview: (taskId: string) => void;
-  onOpen: (page: Page) => void;
+  onOpen: (page: Destination) => void;
 };
 
 /** Subscribes to the ledger. Only mount this where a Convex client exists. */
@@ -159,7 +167,7 @@ function NotificationPanel({
   actions: Pick<TriageActions, 'acknowledgeNotification' | 'acknowledgeNotifications'>;
   onClose: () => void;
   onReview: (taskId: string) => void;
-  onOpen: (page: Page) => void;
+  onOpen: (page: Destination) => void;
 }) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

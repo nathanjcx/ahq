@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { nav } from '../components/app/nav';
+import { destinations } from '../components/app/nav';
 import { slug } from '../lib/text';
 
 /**
@@ -12,7 +12,7 @@ const viewports = [
   { name: 'mobile', width: 390, height: 844 },
 ] as const;
 
-const pages = [...nav.map((item) => item.label), 'Marketplace admin', 'Operations'];
+const pages = destinations.map((item) => item.label);
 
 const fixtureEnabled = process.env.QA_FIXTURE === '1';
 test.skip(!fixtureEnabled, 'Set QA_FIXTURE=1 to build the fixture route and run the visual suite.');

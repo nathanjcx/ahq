@@ -32,6 +32,7 @@ export const coreApi = {
   updateFloor: api.floors.update,
   setFloorArchived: api.floors.setArchived,
   floorBoard: api.floors.board,
+  pendingHandoffs: api.work.pendingHandoffs,
   requestHandoff: api.floors.requestHandoff,
   decideHandoff: api.floors.decideHandoff,
 

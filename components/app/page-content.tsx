@@ -14,14 +14,15 @@ import { IntegrationsPage } from '../integrations/integrations-page';
 import { MarketplacePage } from '../marketplace/marketplace-page';
 import { ProjectsPage } from '../projects/projects-page';
 import { RecordsPage } from '../records/records-page';
-import { TasksPage } from '../tasks/tasks-page';
 import { TriagePage } from '../triage/triage-page';
+import { WorkPage } from '../work/work-page';
 import type { Page } from './nav';
 import type { PageProps } from './page-props';
 import type { Listing, Floor, ProviderConfig, ProviderReadiness, RegistryTool } from '@/lib/contracts';
 
 export type PageContentProps = PageProps & {
   page: Page;
+  tab?: string;
   listings: Listing[];
   drafts: EditorDraft[];
   registryTools: RegistryTool[];
@@ -32,9 +33,10 @@ export type PageContentProps = PageProps & {
 };
 
 export function PageContent(props: PageContentProps) {
-  const { page, dashboard, actions, run, go } = props;
+  const { page, tab, dashboard, actions, run, go } = props;
+  const is = (target: Page, name?: string) => page === target && (!name || tab === name);
 
-  if (page === 'office')
+  if (is('office'))
     return (
       <FloorPage
         dashboard={dashboard}
@@ -58,13 +60,13 @@ export function PageContent(props: PageContentProps) {
       />
     );
 
-  if (page === 'projects') return <ProjectsPage {...props} />;
-  if (page === 'calendar') return <CalendarPage {...props} />;
-  if (page === 'records') return <RecordsPage {...props} />;
-  if (page === 'audit') return <AuditPage {...props} />;
-  if (page === 'triage') return <TriagePage {...props} />;
+  if (is('plan', 'projects')) return <ProjectsPage {...props} />;
+  if (is('plan', 'calendar')) return <CalendarPage {...props} />;
+  if (is('records', 'memory')) return <RecordsPage {...props} />;
+  if (is('records', 'audit')) return <AuditPage {...props} />;
+  if (is('work', 'incidents')) return <TriagePage {...props} />;
 
-  if (page === 'inbox')
+  if (is('work', 'inbox'))
     return (
       <InboxPage
         items={dashboard.inbox}
@@ -78,41 +80,18 @@ export function PageContent(props: PageContentProps) {
       />
     );
 
-  if (page === 'employees') return <EmployeesPage {...props} />;
+  if (is('team', 'employees')) return <EmployeesPage {...props} />;
 
-  if (page === 'tasks')
-    return (
-      <TasksPage
-        tasks={dashboard.tasks}
-        floors={dashboard.floors}
-        proposals={dashboard.proposals}
-        selectedId={props.selectedTask}
-        configured={props.configured}
-        onSelect={props.onSelectTask}
-        onNew={() => props.onNewTask()}
-        onSend={(taskId, text) => run(() => actions.sendMessage(taskId, text), 'Message sent')}
-        onCancel={(taskId) => run(() => actions.cancelTask(taskId), 'Task cancelled')}
-        onDecide={(id, approved) =>
-          run(() => actions.decide(id, approved), approved ? 'Action approved' : 'Action rejected')
-        }
-        onCorrect={props.onCorrect}
-        employees={dashboard.employees}
-        onSetVisibility={(taskId, visibility) =>
-          run(() => actions.setTaskVisibility(taskId, visibility), 'Visibility updated')
-        }
-        onRequestHandoff={(floorId, toEmployeeId, brief, taskId) =>
-          run(() => actions.requestHandoff(floorId, toEmployeeId, brief, taskId), 'Handoff requested')
-        }
-      />
-    );
+  if (is('work', 'threads')) return <WorkPage {...props} />;
 
-  if (page === 'files') return <FilesPage artifacts={dashboard.artifacts} onTasks={() => go('tasks')} />;
+  if (is('records', 'files'))
+    return <FilesPage artifacts={dashboard.artifacts} onTasks={() => go('tasks')} />;
 
-  if (page === 'activity') return <ActivityPage events={dashboard.events} />;
+  if (is('records', 'activity')) return <ActivityPage events={dashboard.events} />;
 
-  if (page === 'marketplace') return <MarketplacePage {...props} />;
+  if (is('team', 'hire')) return <MarketplacePage {...props} />;
 
-  if (page === 'integrations')
+  if (is('integrations'))
     return (
       <IntegrationsPage
         connections={dashboard.connections}
@@ -130,7 +109,7 @@ export function PageContent(props: PageContentProps) {
       />
     );
 
-  if (page === 'admin' && dashboard.isPlatformAdmin)
+  if (is('admin', 'marketplace') && dashboard.isPlatformAdmin)
     return (
       <MarketplaceStudioPage
         drafts={props.drafts}
@@ -142,7 +121,7 @@ export function PageContent(props: PageContentProps) {
       />
     );
 
-  if (page === 'operations' && dashboard.isPlatformAdmin)
+  if (is('admin', 'operations') && dashboard.isPlatformAdmin)
     return (
       <OperationsPage
         configs={props.providerConfigs ?? []}

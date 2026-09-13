@@ -61,6 +61,7 @@ import type * as services_triage from "../services/triage.js";
 import type * as shared from "../shared.js";
 import type * as tasks from "../tasks.js";
 import type * as triage from "../triage.js";
+import type * as work from "../work.js";
 import type * as workspace from "../workspace.js";
 
 import type {
@@ -123,6 +124,7 @@ declare const fullApi: ApiFromModules<{
   shared: typeof shared;
   tasks: typeof tasks;
   triage: typeof triage;
+  work: typeof work;
   workspace: typeof workspace;
 }>;
 

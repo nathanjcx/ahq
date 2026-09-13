@@ -1,7 +1,7 @@
 'use client';
 
 import type { Actions } from '../app/actions';
-import type { Page } from '../app/nav';
+import type { Destination } from '../app/nav';
 import { FloorFeeds } from '../channels/floor-feeds';
 import type { OfficeEmployee } from '../office/office-view';
 import { FloorBinder } from './floor-binder';
@@ -51,7 +51,7 @@ export function FloorPage({
   configured: boolean;
   actions: Actions;
   run: (work: () => Promise<unknown>, success: string) => Promise<boolean>;
-  onPage: (page: Page) => void;
+  onPage: (page: Destination) => void;
   onEmployee: (id: string) => void;
   onTask: (id: string) => void;
   selectedFloorId: string | null;

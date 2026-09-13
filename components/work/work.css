@@ -1,0 +1,247 @@
+/* === components/work/work-page.tsx: the stream beside the open thread === */
+.work-layout {
+  min-height: calc(100vh - 140px);
+  grid-template-columns: 380px minmax(0, 1fr);
+  overflow: hidden;
+}
+.work-list {
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+}
+.work-list-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 42px;
+  padding: 0 10px 0 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+.work-scope {
+  display: flex;
+  gap: 2px;
+}
+.work-scope button {
+  appearance: none;
+  height: 26px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+.work-scope button[aria-selected='true'] {
+  background: var(--slate-100);
+  color: var(--ink);
+}
+.work-scope em {
+  margin-left: 5px;
+  color: var(--accent-deep);
+  font-style: normal;
+  font-weight: 600;
+}
+.work-filter select {
+  height: 26px;
+  padding: 0 22px 0 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.work-filter select:hover {
+  background: var(--slate-100);
+  color: var(--ink);
+}
+.work-group {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 12px 16px 6px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.work-group span {
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.work-row {
+  appearance: none;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 10px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--slate-100);
+  background: transparent;
+  text-align: left;
+}
+.work-row:hover {
+  background: var(--slate-50);
+}
+.work-row[data-active='true'] {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.work-row .employee-avatar,
+.work-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  box-shadow: none;
+  border: 0;
+}
+.work-avatar {
+  display: inline-grid;
+  place-items: center;
+  background: var(--slate-100);
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.work-avatar[data-kind='alert'] {
+  background: #fbe4e1;
+  color: #b91c1c;
+}
+.work-row-body {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.work-row-who {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.work-row-who strong {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.work-row-who span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.work-row-preview {
+  overflow: hidden;
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.work-row-time {
+  color: #94a3b8;
+  font-size: var(--text-xs);
+}
+/* Status: a dot and its words, in four tones. */
+.work-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.work-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+.work-status[data-tone='need'] {
+  color: #b45309;
+}
+.work-status[data-tone='need'] i {
+  background: #d97706;
+  box-shadow: 0 0 0 3px #fdf1dc;
+}
+.work-status[data-tone='run'] {
+  color: #15803d;
+}
+.work-status[data-tone='run'] i {
+  background: #16a34a;
+  box-shadow: 0 0 0 3px #e4f5ea;
+}
+.work-status[data-tone='bad'] {
+  color: #b91c1c;
+}
+.work-status[data-tone='bad'] i {
+  background: #dc2626;
+  box-shadow: 0 0 0 3px #fbe4e1;
+}
+/* A handoff or an incident, read in the thread pane. */
+.work-pane {
+  display: flex;
+  flex-direction: column;
+}
+.work-pane-head {
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--line);
+}
+.work-pane-head h2 {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+.work-pane-head p {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.work-pane-body {
+  padding: 20px 22px;
+  max-width: 720px;
+}
+.work-brief {
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+.work-hint {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.work-pane-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+.work-empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 48px 24px;
+}
+@media (max-width: 820px) {
+  .work-layout {
+    min-height: auto;
+  }
+}
+.work-row-who strong {
+  flex: 0 0 auto;
+}
+/* The thread fills the pane; the tasks page capped it at a fixed height. */
+.work-layout .conversation {
+  height: 100%;
+  max-height: none;
+}
+.work-layout .conversation-head {
+  min-height: 56px;
+  padding: 12px 22px;
+}
+.work-layout .conversation-head h2 {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}

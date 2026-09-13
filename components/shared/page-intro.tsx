@@ -9,12 +9,13 @@ export function PageIntro({
   description: string;
   action?: ReactNode;
 }) {
+  // The top bar already names the page, so this is the page's one line and its primary action.
   return (
     <div className="page-intro">
-      <div>
-        <h1>{title}</h1>
-        <p>{description}</p>
-      </div>
+      <p>
+        <span className="sr-only">{title}. </span>
+        {description}
+      </p>
       {action}
     </div>
   );

@@ -1,15 +1,14 @@
 'use client';
 
 import { ArrowRight, LoaderCircle, ShieldCheck } from 'lucide-react';
-import { BrandMark } from '../shared/marks';
 import './app.css';
 
 export function SignInScreen() {
   return (
     <div className="signin-screen">
       <div className="signin-card card">
-        <span className="brand-glyph large">
-          <BrandMark size={25} />
+        <span className="brand" aria-hidden="true">
+          Staff <i>AI</i>
         </span>
         <span className="eyebrow">STAFF AI</span>
         <h1>Sign in</h1>
@@ -31,8 +30,8 @@ export function SignInScreen() {
 export function CenteredLoader({ label }: { label: string }) {
   return (
     <div className="centered-loader">
-      <span className="brand-glyph">
-        <BrandMark size={19} />
+      <span className="brand" aria-hidden="true">
+        Staff <i>AI</i>
       </span>
       <LoaderCircle className="spin" size={20} />
       <p>{label}</p>
