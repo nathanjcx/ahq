@@ -1,4 +1,4 @@
-# Astra HQ web migration plan
+# Staff AI web migration plan
 
 This document predates platform v2 and is kept as history. [Architecture](architecture.md) describes the current system.
 

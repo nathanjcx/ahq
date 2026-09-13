@@ -106,7 +106,7 @@ export function Sheet({
         />
         <header onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
           <div>
-            <span className="eyebrow">ASTRA HQ</span>
+            <span className="eyebrow">STAFF AI</span>
             <h2>{title}</h2>
             <p>{subtitle}</p>
           </div>

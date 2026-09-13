@@ -17,15 +17,16 @@
   padding: 13px 14px;
   text-align: left;
   border: 0;
-  border-bottom: 1px solid #ebece6;
+  border-bottom: 1px solid #e6e9ec;
   background: transparent;
 }
 .task-list > button:hover,
 .task-list > button[data-active='true'] {
-  background: var(--sage-50);
+  background: var(--slate-50);
 }
 .task-list > button[data-active='true'] {
-  box-shadow: inset 3px 0 var(--sage-400);
+  box-shadow: inset 3px 0 var(--accent);
+  background: var(--accent-soft);
 }
 .task-list strong,
 .task-list small {
@@ -51,9 +52,9 @@
   margin-top: 5px;
   padding: 2px 5px;
   overflow: hidden;
-  color: #697d67;
+  color: #67717d;
   border-radius: 999px;
-  background: #e9eee4;
+  background: #e4e9ee;
   font-size: var(--text-base);
   font-weight: 680;
   line-height: 1.4;
@@ -64,15 +65,15 @@
   width: 118px;
   height: 29px;
   padding: 0 22px 0 8px;
-  color: #627162;
-  border: 1px solid #d9e0d4;
+  color: #626971;
+  border: 1px solid #d4d9e0;
   border-radius: 6px;
   outline: 0;
-  background: #fffef9;
+  background: #f9fcff;
   font-size: var(--text-base);
 }
 .task-floor-filter select:focus-visible {
-  outline: 2px solid var(--sage-600);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 /* === components/tasks/task-detail.tsx and task-conversation.tsx === */
@@ -103,7 +104,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  color: #728070;
+  color: #707780;
   font-size: var(--text-xs);
   text-transform: capitalize;
 }
@@ -141,7 +142,7 @@
 }
 .task-tabs button[data-active='true'] {
   color: var(--ink);
-  border-bottom-color: var(--terra);
+  border-bottom-color: var(--accent);
 }
 .message-stream {
   flex: 1;
@@ -154,15 +155,15 @@
   height: 30px;
   display: grid;
   place-items: center;
-  color: #617261;
-  border: 1px solid #d8dfd1;
+  color: #616972;
+  border: 1px solid #d1d7df;
   border-radius: 7px;
-  background: #eef1e9;
+  background: #e9edf1;
 }
 .message-markdown {
   max-width: 720px;
   margin-top: 4px;
-  color: #3e5045;
+  color: #3e4650;
   font-size: var(--text-md);
   line-height: 1.65;
   overflow-wrap: anywhere;
@@ -180,7 +181,7 @@
 .message-markdown code {
   padding: 1px 4px;
   border-radius: 4px;
-  background: #edf0e9;
+  background: #e9ecf0;
   font-family: var(--mono);
   font-size: 0.9em;
 }
@@ -188,7 +189,7 @@
   overflow-x: auto;
   padding: 10px;
   border-radius: 7px;
-  background: #edf0e9;
+  background: #e9ecf0;
 }
 .message-markdown pre code {
   padding: 0;
@@ -198,7 +199,7 @@
   align-items: center;
   gap: 6px;
   margin: 17px 40px;
-  color: #8a9588;
+  color: #888e95;
   font-size: var(--text-2xs);
 }
 .working-line {
@@ -206,7 +207,7 @@
   align-items: center;
   gap: 9px;
   margin-left: 40px;
-  color: #7a8879;
+  color: #798088;
   font-size: var(--text-xs);
 }
 .working-line > span {
@@ -217,7 +218,7 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #82967d;
+  background: #7d8896;
   animation: bounce 1.3s infinite;
 }
 .working-line i:nth-child(2) {
@@ -283,10 +284,10 @@
 .task-notice {
   margin: 12px 22px 0;
   padding: 9px 12px;
-  color: #40603f;
-  border: 1px solid #cfdec7;
+  color: #3f4e60;
+  border: 1px solid var(--slate-200);
   border-radius: 7px;
-  background: #eef4e9;
+  background: #e9eef4;
   font-size: var(--text-base);
 }
 
@@ -300,15 +301,15 @@
   align-items: center;
   gap: 6px;
   padding: 3px 7px;
-  color: #5d705e;
-  border: 1px solid #dce3d7;
+  color: #5d6670;
+  border: 1px solid #d7dce3;
   border-radius: 999px;
-  background: #f3f5ee;
+  background: #eef1f5;
   font-size: var(--text-sm);
   font-weight: 660;
 }
 .visibility-trigger:hover {
-  border-color: #c3d0ba;
+  border-color: #bac4d0;
 }
 .visibility-options {
   position: absolute;
@@ -337,24 +338,24 @@
   font-weight: 620;
 }
 .visibility-options button:hover {
-  background: var(--sage-50);
+  background: var(--slate-50);
 }
 .visibility-options button > span {
   display: grid;
   place-items: center;
-  color: var(--sage-600);
+  color: var(--slate-600);
 }
 
 /* === components/shared/json-view.tsx === */
 .json-view {
   margin-top: 10px;
-  border: 1px solid #e3e6dc;
+  border: 1px solid #dce1e6;
   border-radius: 7px;
-  background: #f7f8f2;
+  background: #f2f5f8;
 }
 .json-view > summary {
   padding: 8px 11px;
-  color: #6d7a6b;
+  color: #6b727a;
   cursor: pointer;
   font-size: var(--text-sm);
   font-weight: 680;
@@ -371,8 +372,8 @@
   align-items: center;
   gap: 5px;
   padding: 3px 7px;
-  color: #6d7a6b;
-  border: 1px solid #dfe3d8;
+  color: #6b727a;
+  border: 1px solid #d8dde3;
   border-radius: 6px;
   background: var(--paper);
   font-size: var(--text-xs);
@@ -383,9 +384,9 @@
   overflow: auto;
   margin: 0;
   padding: 10px 11px;
-  color: #405043;
+  color: #404750;
   border-radius: 6px;
-  background: #eef1e8;
+  background: #e8ecf1;
   font-family: var(--mono);
   font-size: var(--text-sm);
   line-height: 1.6;
@@ -397,13 +398,13 @@
 .state-diff {
   margin-top: 10px;
   overflow: hidden;
-  border: 1px solid #e3e6dc;
+  border: 1px solid #dce1e6;
   border-radius: 7px;
   background: var(--paper);
 }
 .state-diff-note {
   padding: 8px 11px;
-  color: #6d7a6b;
+  color: #6b727a;
   font-size: var(--text-sm);
   font-weight: 680;
 }
@@ -413,7 +414,7 @@
   grid-template-columns: 120px minmax(0, 1fr);
   gap: 10px;
   padding: 7px 11px;
-  border-top: 1px solid #ecefe6;
+  border-top: 1px solid #e6eaef;
   font-size: var(--text-base);
 }
 .state-diff-pair .diff-head,
@@ -422,14 +423,14 @@
 }
 .diff-head {
   border-top: 0;
-  color: #97a294;
-  background: #f7f8f2;
+  color: #949aa2;
+  background: #f2f5f8;
   font-size: var(--text-xs);
   font-weight: 700;
   text-transform: uppercase;
 }
 .diff-field {
-  color: #6d7a6b;
+  color: #6b727a;
   font-weight: 660;
   overflow-wrap: anywhere;
 }
@@ -441,15 +442,15 @@
   background: #fdf7e8;
 }
 .diff-changed .diff-after {
-  color: #40603f;
+  color: #3f4e60;
   font-weight: 650;
 }
 .diff-unchanged {
-  border-top: 1px solid #ecefe6;
+  border-top: 1px solid #e6eaef;
 }
 .diff-unchanged > summary {
   padding: 7px 11px;
-  color: #8b9589;
+  color: #898e95;
   cursor: pointer;
   font-size: var(--text-sm);
   font-weight: 650;
@@ -465,7 +466,7 @@
   overflow: hidden;
   border: 1px solid #e1d4bc;
   border-radius: 9px;
-  background: #fffcf3;
+  background: #fbfdff;
   box-shadow: 0 6px 20px rgba(92, 73, 42, 0.06);
 }
 .proposal-head {
@@ -504,7 +505,7 @@
 .proposal-approved,
 .proposal-succeeded {
   color: #4c7549;
-  background: #e6f0e1;
+  background: #e1e8f0;
 }
 .proposal-rejected,
 .proposal-failed {
@@ -563,7 +564,7 @@
   font-size: var(--text-sm);
 }
 .proposal-link a {
-  color: var(--sage-600);
+  color: var(--slate-600);
   font-weight: 680;
   text-decoration: underline;
 }
@@ -625,7 +626,7 @@
 }
 .audit-proposal {
   border-color: #e1d4bc;
-  background: #fffcf3;
+  background: #fbfdff;
 }
 .audit-entry-head {
   display: flex;
@@ -654,9 +655,9 @@
 }
 .audit-kind {
   padding: 2px 7px;
-  color: #6d7a6b;
+  color: #6b727a;
   border-radius: 999px;
-  background: var(--sage-50);
+  background: var(--slate-50);
   font-size: var(--text-xs);
   font-weight: 700;
   text-transform: uppercase;
@@ -670,12 +671,12 @@
 }
 /* Neutral only when no status colour applies; the proposal-* and outcome-* pills keep their colours. */
 .audit-outcome:not([class*='proposal-']):not([class*='outcome-']) {
-  color: #6d7a6b;
-  background: var(--sage-100);
+  color: #6b727a;
+  background: var(--slate-100);
 }
 .outcome-succeeded {
   color: #4c7549;
-  background: #e6f0e1;
+  background: #e1e8f0;
 }
 .outcome-failed,
 .outcome-denied {
@@ -715,7 +716,7 @@
 }
 .audit-hash {
   margin-top: 7px;
-  color: #9aa394;
+  color: #949ba3;
   font-family: var(--mono);
   font-size: var(--text-xs);
   line-height: 1.5;
@@ -725,7 +726,7 @@
   margin: 11px 0 0;
   padding: 0 0 0 15px;
   list-style: none;
-  border-left: 2px solid var(--sage-200);
+  border-left: 2px solid var(--slate-200);
 }
 .audit-stepper li {
   position: relative;
@@ -743,7 +744,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--sage-400);
+  background: var(--slate-400);
 }
 .audit-stepper strong {
   margin-right: 7px;
@@ -778,7 +779,7 @@
   }
   .state-diff-pair .diff-value::before {
     content: 'Before ';
-    color: #97a294;
+    color: #949aa2;
     font-weight: 700;
   }
   .state-diff-pair .diff-after::before {

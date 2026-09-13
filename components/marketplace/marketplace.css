@@ -6,10 +6,10 @@
   align-items: center;
   min-height: 20px;
   padding: 0 8px;
-  border: 1px solid #dce2d5;
+  border: 1px solid #d5dbe2;
   border-radius: 999px;
-  color: #70806f;
-  background: #f3f5ee;
+  color: #6f7780;
+  background: #eef1f5;
   font-size: var(--text-2xs);
   font-weight: 680;
 }
@@ -25,7 +25,7 @@
   align-items: center;
   gap: 8px;
   padding: 0 11px;
-  border: 1px solid #d9e0d4;
+  border: 1px solid #d4d9e0;
   border-radius: 7px;
   background: var(--paper);
 }
@@ -42,7 +42,7 @@
   align-items: center;
   gap: 7px;
   padding: 0 13px;
-  border: 1px solid #d9e0d4;
+  border: 1px solid #d4d9e0;
   border-radius: 7px;
   background: var(--paper);
   font-size: var(--text-xs);
@@ -72,7 +72,7 @@
   overflow: hidden;
   padding: 0;
   border: 0;
-  background: color-mix(in srgb, var(--listing-color) 20%, #e9eee1);
+  background: color-mix(in srgb, var(--listing-color) 20%, #e1e7ee);
 }
 .listing-visual::before {
   content: '';
@@ -144,7 +144,7 @@
 }
 .listing-role {
   margin: 2px 0 8px !important;
-  color: var(--sage-600) !important;
+  color: var(--slate-600) !important;
   font-weight: 650;
 }
 .listing-copy > p {
@@ -163,7 +163,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  color: #687868;
+  color: #686f78;
   font-size: var(--text-2xs);
 }
 .listing-footer {
@@ -179,7 +179,7 @@
   display: block;
 }
 .listing-footer > span strong {
-  color: #486447;
+  color: #475464;
   font-size: var(--text-xs);
 }
 .listing-footer > span small {
@@ -205,22 +205,22 @@
   display: grid;
   place-items: center;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--listing-color) 35%, #d9ded3);
+  border: 1px solid color-mix(in srgb, var(--listing-color) 35%, #d3d8de);
   border-radius: 13px;
-  background: color-mix(in srgb, var(--listing-color) 17%, #edf0e7);
+  background: color-mix(in srgb, var(--listing-color) 17%, #e7ebf0);
 }
 .market-gallery-stage img,
 .market-gallery-stage video {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  background: #172019;
+  background: #171b20;
 }
 .market-media-error {
   display: grid;
   place-items: center;
   gap: 8px;
-  color: #687767;
+  color: #676e77;
   text-align: center;
 }
 .market-media-error strong {
@@ -231,7 +231,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: var(--sage-700);
+  color: var(--slate-700);
   font-size: var(--text-xs);
   font-weight: 700;
 }
@@ -250,11 +250,11 @@
   color: white;
   border: 2px solid transparent;
   border-radius: 8px;
-  background: #66776a;
+  background: #666e77;
 }
 .market-thumbnails button[data-active='true'] {
-  border-color: var(--terra);
-  box-shadow: 0 0 0 2px #f0dfd6;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
 }
 .market-thumbnails img {
   width: 100%;
@@ -331,14 +331,14 @@
 }
 .market-capabilities code {
   overflow-wrap: anywhere;
-  color: #566958;
+  color: #565f69;
   font-size: var(--text-2xs);
 }
 .capability-empty {
   padding: 12px;
   color: var(--muted);
   border-radius: 7px;
-  background: var(--sage-50);
+  background: var(--slate-50);
   font-size: var(--text-xs);
 }
 .hire-blocked {
@@ -377,7 +377,7 @@
   display: block;
 }
 .market-hire-bar strong {
-  color: #486447;
+  color: #475464;
   font-size: 15px;
 }
 .market-hire-bar small {
@@ -410,7 +410,7 @@
   left: 0;
   right: 0;
   height: 7px;
-  background: #819377;
+  background: #778493;
 }
 .market-shelves::before {
   top: 45px;
@@ -437,8 +437,8 @@
   display: block;
   width: 29px;
   height: 38px;
-  border: 4px solid #71866c;
-  background: #dfe7d7;
+  border: 4px solid #6c7886;
+  background: #d7dee7;
 }
 .market-shelves i:nth-child(2) {
   height: 30px;
@@ -498,7 +498,7 @@
   flex: 0 0 auto;
   width: 44px;
   height: 44px;
-  color: #fff;
+  color: #ffffff;
   border-radius: var(--radius-lg);
 }
 @media (max-width: 640px) {
@@ -545,7 +545,7 @@
   font-size: var(--text-2xs);
 }
 .listing-installed {
-  color: #486447;
+  color: #475464;
   font-size: var(--text-xs);
   font-weight: 650;
 }
@@ -576,7 +576,7 @@
   color: var(--ink-soft);
   border: 1px solid var(--line);
   border-radius: 7px;
-  background: var(--sage-50);
+  background: var(--slate-50);
   font-family: var(--mono);
   font-size: var(--text-xs);
   line-height: 1.6;
@@ -588,7 +588,7 @@
   align-items: center;
   gap: 5px;
   margin-top: 10px;
-  color: var(--sage-600);
+  color: var(--slate-600);
   font-size: var(--text-xs);
 }
 .market-versions ol {
@@ -619,9 +619,9 @@
 }
 .change-row > span {
   padding: 3px 8px;
-  color: var(--sage-800);
+  color: var(--slate-800);
   border-radius: 999px;
-  background: var(--sage-100);
+  background: var(--slate-100);
   font-size: var(--text-2xs);
 }
 .upgrade-prompt {

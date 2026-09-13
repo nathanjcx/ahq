@@ -4,7 +4,7 @@ Google Workspace MCP is a Developer Preview as of September 12, 2026. Treat it a
 
 ## Create the Google project
 
-Create or choose a Google Cloud project owned by the organization that will test Astra HQ. Enable both the product APIs and their MCP services. The current Google list is:
+Create or choose a Google Cloud project owned by the organization that will test Staff AI. Enable both the product APIs and their MCP services. The current Google list is:
 
 ```sh
 gcloud services enable \
@@ -60,11 +60,11 @@ Each connection's allowed tools are the intersection of the tools discovered on 
 
 The current integration exposes Gmail draft workflows. `gmail.create_draft` creates a draft for review in Gmail. There is no send operation in the supported registry, and a task must never tell a user that a draft was sent. Show the draft target, recipients, subject, body, and the provider result before a human sends it in Gmail.
 
-Google warns that emails and documents can contain indirect prompt injection. Treat retrieved content as untrusted data. Keep external writes behind Astra HQ's action proposal and approval flow, use narrow scopes, and review every write. An OAuth grant does not remove provider-side restrictions, Workspace admin controls, or the employee's selected tool and resource permissions.
+Google warns that emails and documents can contain indirect prompt injection. Treat retrieved content as untrusted data. Keep external writes behind Staff AI's action proposal and approval flow, use narrow scopes, and review every write. An OAuth grant does not remove provider-side restrictions, Workspace admin controls, or the employee's selected tool and resource permissions.
 
 ## Inbox and event visibility
 
-An MCP connection does not register Google push events. To ingest Gmail, Drive, Calendar, or Chat events, configure the provider-side watch and Google Pub/Sub or an authorized relay separately. The relay must filter events to the connected account and permitted resources before sending them to Astra HQ's webhook endpoint. Use the normalized relay protocol in [inbox delivery](inbox-delivery.md), signed with the connection's own relay secret, which the owner reveals or rotates from Manage access:
+An MCP connection does not register Google push events. To ingest Gmail, Drive, Calendar, or Chat events, configure the provider-side watch and Google Pub/Sub or an authorized relay separately. The relay must filter events to the connected account and permitted resources before sending them to Staff AI's webhook endpoint. Use the normalized relay protocol in [inbox delivery](inbox-delivery.md), signed with the connection's own relay secret, which the owner reveals or rotates from Manage access:
 
 ```text
 POST /api/webhooks/inbox/<connectionId>

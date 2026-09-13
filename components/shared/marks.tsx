@@ -17,6 +17,23 @@ import { providerShort } from './format';
 import type { Employee, ProviderId, Task } from '@/lib/contracts';
 import { providers, type ProviderDefinition } from '@/lib/providers';
 
+/**
+ * The Staff AI monogram: the S from `public/icon.svg`, drawn as a stroke so it stays open at
+ * 16px. The tile behind it belongs to whichever glyph class wraps it.
+ */
+export function BrandMark({ size = 18 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 1024 1024" width={size} height={size} fill="none" aria-hidden="true">
+      <path
+        d="M660 372a150 150 0 1 0-150 150 150 150 0 1 1-150 150"
+        stroke="currentColor"
+        strokeWidth="118"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export function Avatar({ employee, large = false }: { employee: Employee; large?: boolean }) {
   return (
     <span

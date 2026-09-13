@@ -25,15 +25,16 @@
   padding: 12px 14px;
   text-align: left;
   border: 0;
-  border-bottom: 1px solid #ebece6;
+  border-bottom: 1px solid #e6e9ec;
   background: transparent;
 }
 .shelf-list > button:hover,
 .shelf-list > button[data-active='true'] {
-  background: var(--sage-50);
+  background: var(--slate-50);
 }
 .shelf-list > button[data-active='true'] {
-  box-shadow: inset 3px 0 var(--sage-400);
+  box-shadow: inset 3px 0 var(--accent);
+  background: var(--accent-soft);
 }
 .shelf-list strong,
 .shelf-list small {
@@ -69,7 +70,7 @@
   padding: 14px 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  background: var(--sage-50);
+  background: var(--slate-50);
 }
 .shelf-counts {
   display: flex;
@@ -84,7 +85,7 @@
   font-size: var(--text-lg);
 }
 .shelf-counts span[data-alert='true'] strong {
-  color: var(--terra);
+  color: var(--alert);
 }
 .shelf-fill small,
 .shelf-unbudgeted {
@@ -97,16 +98,16 @@
   height: 7px;
   overflow: hidden;
   border-radius: 999px;
-  background: var(--sage-200);
+  background: var(--slate-200);
 }
 .shelf-bar > i {
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: var(--sage-600);
+  background: var(--accent);
 }
 .shelf-bar[data-over='true'] > i {
-  background: var(--terra);
+  background: var(--alert);
 }
 
 /* === components/records/claim-list.tsx === */
@@ -126,7 +127,7 @@
 }
 .claim[data-status='proposed'] {
   border-color: #d9cfae;
-  background: #fdfaee;
+  background: #fafcff;
 }
 .claim-head {
   display: flex;
@@ -137,8 +138,8 @@
 .claim-kind {
   padding: 2px 7px;
   border-radius: 999px;
-  color: var(--sage-800);
-  background: var(--sage-100);
+  color: var(--slate-800);
+  background: var(--slate-100);
   font-size: var(--text-2xs);
   font-weight: 700;
 }
@@ -150,7 +151,7 @@
   letter-spacing: 0.4px;
 }
 .claim[data-status='contested'] .claim-status {
-  color: var(--terra);
+  color: var(--alert);
 }
 .claim-confidence {
   margin-left: auto;
@@ -174,8 +175,8 @@
 .claim-tag {
   padding: 1px 6px;
   border-radius: 999px;
-  color: #6d7c6b;
-  background: #eef1e8;
+  color: #6b737c;
+  background: #e8ecf1;
 }
 .claim-actions {
   display: flex;
@@ -192,7 +193,7 @@
   margin-top: 10px;
   list-style: none;
   padding-left: 14px;
-  border-left: 2px solid var(--sage-200);
+  border-left: 2px solid var(--slate-200);
 }
 .claim-chain li + li {
   margin-top: 10px;
@@ -269,7 +270,7 @@
   margin-top: 11px;
   padding-top: 10px;
   border-top: 1px dashed var(--line);
-  color: var(--terra-dark);
+  color: var(--alert-deep);
   font-size: var(--text-xs);
 }
 .contested-actions {
@@ -288,7 +289,7 @@
   padding: 15px 16px 17px;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  background: var(--cream);
+  background: var(--canvas);
 }
 .claim-composer .section-title h2 {
   display: flex;
@@ -304,10 +305,10 @@
 .composer-row select {
   min-height: 38px;
   padding: 8px 10px;
-  border: 1px solid #d5ddd0;
+  border: 1px solid #d0d6dd;
   border-radius: 7px;
   outline: 0;
-  background: #fffef9;
+  background: #f9fcff;
   font-size: var(--text-sm);
 }
 .composer-row input {
@@ -316,8 +317,8 @@
 }
 .composer-row input:focus,
 .composer-row select:focus {
-  border-color: #9aad90;
-  box-shadow: 0 0 0 3px #e4eadf;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 /* === components/records/task-dossier.tsx === */
@@ -325,7 +326,7 @@
   padding: 15px 16px 17px;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  background: var(--cream);
+  background: var(--canvas);
 }
 .dossier-head {
   display: flex;
@@ -382,7 +383,7 @@
   align-items: baseline;
   gap: 12px;
   padding: 10px 0;
-  border-top: 1px solid #ebece6;
+  border-top: 1px solid #e6e9ec;
 }
 .janitor-log li p {
   color: var(--ink);
@@ -404,14 +405,14 @@
   justify-self: start;
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--sage-100);
-  color: var(--sage-800);
+  background: var(--slate-100);
+  color: var(--slate-800);
   font-size: var(--text-2xs);
   font-weight: 700;
 }
 .janitor-action[data-action='contested'] {
   background: #f2ddd2;
-  color: var(--terra-dark);
+  color: var(--alert-deep);
 }
 .janitor-action[data-action='promoted'] {
   background: #efe6cd;

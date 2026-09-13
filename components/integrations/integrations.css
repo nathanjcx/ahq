@@ -17,7 +17,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  color: #849182;
+  color: #828991;
   font-size: var(--text-2xs);
   text-transform: capitalize;
 }
@@ -25,7 +25,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #a4aea1;
+  background: #a1a7ae;
 }
 .connection-state.connected {
   color: #567753;
@@ -46,20 +46,20 @@
   background: #c3675d;
 }
 .connection-state.setup {
-  color: #8a8f86;
+  color: #868a8f;
 }
 .setup-note {
   margin-top: 14px;
   padding: 12px 13px;
-  border: 1px dashed #d3dacd;
+  border: 1px dashed #cdd3da;
   border-radius: 8px;
-  color: #6f7d6d;
+  color: #6d747d;
   font-size: var(--text-xs);
 }
 .setup-note strong {
   display: block;
   margin-bottom: 5px;
-  color: #4d5c4b;
+  color: #4b535c;
   font-size: var(--text-xs);
 }
 .setup-note ul {
@@ -75,7 +75,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #567753;
+  color: var(--accent-deep);
   font-weight: 600;
 }
 .integration-card .primary-button,
@@ -151,9 +151,9 @@
   align-items: flex-start;
   gap: 8px;
   padding: 11px;
-  color: #687769;
+  color: #686f77;
   border-radius: 7px;
-  background: var(--sage-50);
+  background: var(--slate-50);
   font-size: var(--text-2xs);
 }
 .form-note svg {
@@ -241,30 +241,30 @@
   gap: 9px;
   align-items: center;
   padding: 11px;
-  border: 1px solid #dce2d6;
+  border: 1px solid #d6dbe2;
   border-radius: 7px;
-  background: #fffef9;
+  background: #f9fcff;
   cursor: pointer;
 }
 .share-choices label:has(input:checked) {
-  border-color: #aebfa6;
-  background: #edf3e9;
-  box-shadow: inset 3px 0 #78906f;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 var(--accent);
 }
 .share-choices input {
   width: 15px;
   height: 15px;
   min-height: 0;
   padding: 0;
-  accent-color: var(--sage-800);
+  accent-color: var(--accent);
 }
 .share-choices strong {
   display: block;
-  color: #3f4d3f;
+  color: #3f454d;
   font-size: var(--text-sm);
 }
 .share-members strong {
-  color: #3f4d3f;
+  color: #3f454d;
   font-family: inherit;
   font-size: var(--text-sm);
 }
@@ -285,7 +285,7 @@
   padding: 15px;
   border: 1px solid var(--line);
   border-radius: 9px;
-  background: #f6f7f0;
+  background: #f0f3f7;
 }
 .relay-secret label {
   width: 100%;
@@ -321,7 +321,7 @@
   align-items: center;
   gap: 6px;
   min-height: 34px;
-  color: #5d6b5b;
+  color: #5b626b;
   cursor: pointer;
   font-weight: 700;
 }

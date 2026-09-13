@@ -18,15 +18,16 @@
   padding: 14px;
   text-align: left;
   border: 0;
-  border-bottom: 1px solid #ebece6;
+  border-bottom: 1px solid #e6e9ec;
   background: transparent;
 }
 .inbox-list > button:hover,
 .inbox-list > button[data-active='true'] {
-  background: var(--sage-50);
+  background: var(--slate-50);
 }
 .inbox-list > button[data-active='true'] {
-  box-shadow: inset 3px 0 var(--sage-400);
+  box-shadow: inset 3px 0 var(--accent);
+  background: var(--accent-soft);
 }
 .inbox-list strong,
 .inbox-list small,
@@ -39,12 +40,12 @@
 }
 .inbox-list small {
   margin: 4px 0 6px;
-  color: #758376;
+  color: #757b83;
   font-size: var(--text-sm);
   line-height: 1.35;
 }
 .inbox-list time {
-  color: #9aa397;
+  color: #979ca3;
   font-size: var(--text-2xs);
 }
 .unread-dot {
@@ -54,7 +55,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--terra);
+  background: var(--accent);
 }
 /* === components/inbox/inbox-page.tsx: detail pane === */
 .detail-pane {
@@ -81,10 +82,10 @@
 .inbox-preview {
   margin: 28px 0;
   padding: 24px;
-  color: #506054;
-  border: 1px solid #e0e4da;
+  color: #505760;
+  border: 1px solid #dadfe4;
   border-radius: 9px;
-  background: #fafaf4;
+  background: #f4f7fa;
   font-size: var(--text-lg);
   line-height: 1.7;
   white-space: pre-wrap;
@@ -102,15 +103,15 @@
   width: 100%;
   min-height: 39px;
   padding: 9px 11px;
-  border: 1px solid #d5ddd0;
+  border: 1px solid #d0d6dd;
   border-radius: 7px;
   outline: 0;
-  background: #fffef9;
+  background: #f9fcff;
   font-size: var(--text-sm);
 }
 .detail-actions select:focus {
-  border-color: #9aad90;
-  box-shadow: 0 0 0 3px #e4eadf;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 @media (max-width: 820px) {
   .detail-pane {

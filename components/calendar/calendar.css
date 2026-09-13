@@ -36,7 +36,7 @@
   justify-content: center;
   gap: 2px;
   padding: 8px 12px 8px 14px;
-  border-top: 1px solid #edefe8;
+  border-top: 1px solid #e8ebef;
   border-right: 1px solid var(--line);
   box-shadow: inset 3px 0 var(--row-color);
 }
@@ -54,7 +54,7 @@
   white-space: nowrap;
 }
 [data-tower='true'] .cal-row-label {
-  background: #f4f5ee;
+  background: #eef1f5;
 }
 
 /* === components/calendar/calendar-grid.tsx: blocks === */
@@ -65,10 +65,10 @@
   min-width: 0;
   max-width: 100%;
   padding: 4px 7px;
-  color: #4a5f4d;
-  border: 1px solid #dde4d6;
+  color: #4a535f;
+  border: 1px solid #d6dce4;
   border-radius: 6px;
-  background: #eef2e9;
+  background: #e9edf2;
   font-size: var(--text-sm);
   font-weight: 640;
   text-align: left;
@@ -96,7 +96,7 @@
   flex: none;
 }
 .cal-item:hover:not(.cal-static) {
-  border-color: #c2cfb8;
+  border-color: #b8c2cf;
 }
 .cal-item[data-kind='meeting'] {
   color: #8a5537;
@@ -116,14 +116,14 @@
 .cal-item[data-kind='overnight'] {
   color: #5d5a78;
   border-color: #d7d5e4;
-  background: #eeedf5;
+  background: #edf1f5;
 }
 .cal-item[data-status='cancelled'] {
   opacity: 0.55;
   text-decoration: line-through;
 }
 .cal-item[data-status='live'] {
-  box-shadow: 0 0 0 2px rgba(144, 168, 132, 0.45);
+  box-shadow: 0 0 0 2px rgba(132, 148, 168, 0.45);
 }
 
 /* === components/calendar/calendar-grid.tsx: week board === */
@@ -138,7 +138,7 @@
 }
 .cal-gutter {
   border-right: 1px solid var(--line);
-  background: #f7f8f2;
+  background: #f2f5f8;
 }
 .cal-day-head {
   display: flex;
@@ -148,11 +148,11 @@
   padding: 9px 4px;
   color: inherit;
   border: 0;
-  border-left: 1px solid #edefe8;
-  background: #f7f8f2;
+  border-left: 1px solid #e8ebef;
+  background: #f2f5f8;
 }
 .cal-day-head:hover {
-  background: #eef1e7;
+  background: #e7ecf1;
 }
 .cal-day-head span {
   color: var(--muted);
@@ -164,11 +164,11 @@
   font-size: var(--text-lg);
 }
 .cal-day-head[data-today='true'] {
-  color: var(--terra);
-  background: #fbf0e8;
+  color: var(--accent-deep);
+  background: var(--accent-soft);
 }
 .cal-day-head[data-today='true'] span {
-  color: var(--terra);
+  color: var(--accent);
 }
 .cal-cell {
   display: flex;
@@ -176,14 +176,14 @@
   gap: 4px;
   min-height: 52px;
   padding: 5px;
-  border-top: 1px solid #edefe8;
-  border-left: 1px solid #edefe8;
+  border-top: 1px solid #e8ebef;
+  border-left: 1px solid #e8ebef;
 }
 .cal-cell[data-off='true'] {
-  background: #f4f5ef;
+  background: #eff2f5;
 }
 .cal-cell[data-today='true'] {
-  background: #fdf7f2;
+  background: var(--accent-soft);
 }
 
 /* === components/calendar/calendar-grid.tsx: day timeline === */
@@ -197,12 +197,12 @@
 .cal-track {
   position: relative;
   height: calc(var(--lanes) * 38px + 8px);
-  border-top: 1px solid #edefe8;
+  border-top: 1px solid #e8ebef;
 }
 .cal-axis-row .cal-track {
   height: 30px;
   border-top: 0;
-  background: #f7f8f2;
+  background: #f2f5f8;
 }
 .cal-axis-row .cal-gutter {
   border-right: 1px solid var(--line);
@@ -213,7 +213,7 @@
   left: calc(var(--at) * 100%);
   padding-left: 5px;
   color: var(--muted);
-  border-left: 1px solid #e2e6da;
+  border-left: 1px solid #dadfe6;
   font-size: var(--text-2xs);
   font-weight: 680;
   white-space: nowrap;
@@ -224,7 +224,7 @@
   bottom: 0;
   left: calc(var(--from) * 100%);
   width: calc((var(--to) - var(--from)) * 100%);
-  background: #f2f5ec;
+  background: #ecf0f5;
 }
 .cal-now {
   position: absolute;
@@ -232,7 +232,7 @@
   bottom: 0;
   left: calc(var(--at) * 100%);
   width: 2px;
-  background: var(--terra);
+  background: var(--accent);
 }
 .cal-slot {
   position: absolute;
@@ -263,7 +263,7 @@
 }
 .cal-agenda h3 span {
   padding: 2px 7px;
-  color: var(--terra);
+  color: var(--accent);
   border-radius: 999px;
   background: #fbeee5;
   font-size: var(--text-2xs);
@@ -280,7 +280,7 @@
   padding: 9px 15px;
   text-align: left;
   border: 0;
-  border-top: 1px solid #f0f1ea;
+  border-top: 1px solid #eaedf1;
   background: transparent;
 }
 .cal-agenda-row strong {
@@ -301,9 +301,9 @@
   place-items: center;
   width: 28px;
   height: 28px;
-  color: #5c705c;
+  color: #5c6570;
   border-radius: 8px;
-  background: #eef2e9;
+  background: #e9edf2;
 }
 .cal-agenda-mark[data-kind='meeting'] {
   color: #8a5537;
@@ -329,7 +329,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  color: #5f6d61;
+  color: #5f656d;
   font-size: var(--text-xs);
   font-weight: 670;
 }
@@ -368,7 +368,7 @@
   align-items: center;
   gap: 6px;
   margin-bottom: 8px;
-  color: #5f6d61;
+  color: #5f656d;
   font-size: var(--text-xs);
   font-weight: 670;
 }
@@ -393,15 +393,15 @@
   min-width: 0;
   min-height: 39px;
   padding: 9px 11px;
-  border: 1px solid #d5ddd0;
+  border: 1px solid #d0d6dd;
   border-radius: 7px;
   outline: 0;
-  background: #fffef9;
+  background: #f9fcff;
   font-size: var(--text-sm);
 }
 .cal-suggest-add input:focus {
-  border-color: #9aad90;
-  box-shadow: 0 0 0 3px #e4eadf;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 @media (max-width: 1100px) {

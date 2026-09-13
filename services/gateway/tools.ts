@@ -51,7 +51,7 @@ export function providerServer(
   connection: PrivateConnection,
 ): Server {
   const allowed = permittedTools(context, connection);
-  const mcp = new Server({ name: 'astra-hq', version: '1.0.0' }, { capabilities: { tools: {} } });
+  const mcp = new Server({ name: 'staff-ai', version: '1.0.0' }, { capabilities: { tools: {} } });
   mcp.setRequestHandler(ListToolsRequestSchema, async () => {
     try {
       return await connectedMcp(connection, async (client) => {

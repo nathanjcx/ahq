@@ -280,7 +280,7 @@ function replayRecord(employees: OfficeEmployee[]): DayRecord {
     employeeName,
     kind,
     createdBy: 'system',
-    createdByName: 'Astra HQ',
+    createdByName: 'Staff AI',
     isOwner: true,
     visibility: 'workspace' as const,
     title: kind === 'triage' ? 'Checkout incident' : 'Nightly audit',

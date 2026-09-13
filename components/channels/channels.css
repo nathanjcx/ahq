@@ -59,7 +59,7 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  color: var(--terra);
+  color: var(--accent);
   font-size: var(--text-sm);
   font-weight: 780;
   letter-spacing: 0.06em;
@@ -69,33 +69,33 @@
   content: '';
   flex: 1;
   height: 1px;
-  background: var(--terra);
+  background: var(--accent);
   opacity: 0.55;
 }
 
 /* Posts */
 .channel-post {
   padding: 11px 13px;
-  border: 1px solid #e6e9e0;
-  border-left: 3px solid var(--sage-200);
+  border: 1px solid #e0e4e9;
+  border-left: 3px solid var(--slate-200);
   border-radius: 9px;
   background: var(--paper);
 }
 .channel-post[data-kind='report'] {
-  border-left-color: var(--sage-400);
+  border-left-color: var(--slate-400);
 }
 .channel-post[data-kind='feedback'] {
   border-left-color: #8fa7bd;
 }
 .channel-post[data-kind='finding'] {
-  border-left-color: var(--amber);
+  border-left-color: var(--warn);
 }
 .channel-post[data-kind='alert'] {
   border-left-color: var(--red);
   background: #fdf5f3;
 }
 .channel-post[data-kind='decision'] {
-  border-left-color: var(--terra);
+  border-left-color: var(--accent);
 }
 .channel-post[data-contested='true'] {
   border-color: #e4cbb9;
@@ -128,17 +128,17 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  color: var(--sage-800);
+  color: var(--slate-800);
   border-radius: 6px;
-  background: var(--sage-100);
+  background: var(--slate-100);
 }
 .channel-author[data-who='person'] {
-  color: #fffdf5;
-  background: var(--sage-600);
+  color: #fdfeff;
+  background: var(--slate-600);
 }
 .channel-author[data-who='workspace'] {
   color: var(--muted);
-  background: var(--cream-deep);
+  background: var(--canvas-deep);
 }
 .channel-kind {
   display: inline-flex;
@@ -147,7 +147,7 @@
   padding: 2px 8px;
   color: var(--ink-soft);
   border-radius: 999px;
-  background: var(--sage-50);
+  background: var(--slate-50);
   font-size: var(--text-sm);
   font-weight: 700;
   white-space: nowrap;
@@ -159,13 +159,13 @@
 }
 .post-text p {
   margin-top: 7px;
-  color: #4d5b50;
+  color: #4d535b;
   font-size: var(--text-md);
   line-height: 1.55;
   white-space: pre-wrap;
 }
 .post-text a {
-  color: var(--terra-dark);
+  color: var(--accent-deep);
   text-decoration: underline;
   word-break: break-word;
 }
@@ -188,7 +188,7 @@
   height: 5px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: #c3cbbf;
+  background: #bfc4cb;
 }
 .channel-system > span {
   overflow: hidden;
@@ -198,7 +198,7 @@
 .channel-system > small {
   margin-left: auto;
   flex: 0 0 auto;
-  color: #a3ada2;
+  color: #a2a7ad;
   font-size: var(--text-sm);
 }
 .channel-system .text-button {
@@ -209,7 +209,7 @@
   padding: 12px 13px;
   border: 1px solid #e1d4bc;
   border-radius: 9px;
-  background: #fffcf3;
+  background: #fbfdff;
 }
 .channel-handoff > header {
   display: flex;
@@ -223,7 +223,7 @@
 }
 .channel-handoff > p {
   margin-top: 8px;
-  color: #4d5b50;
+  color: #4d535b;
   font-size: var(--text-md);
   line-height: 1.55;
 }
@@ -268,7 +268,7 @@
   text-align: right;
 }
 .channel-addressed {
-  color: var(--terra-dark);
+  color: var(--accent-deep);
   font-weight: 680;
 }
 /* Outranks the composer's own row layout in globals, which would lay the list out sideways. */
@@ -294,7 +294,7 @@
   background: none;
 }
 .channel-mentions button:hover {
-  background: var(--sage-50);
+  background: var(--slate-50);
 }
 .channel-mentions strong {
   font-size: var(--text-md);
@@ -326,7 +326,7 @@
   flex-direction: column;
   overflow-y: auto;
   border-right: 1px solid var(--line);
-  background: #fbfaf4;
+  background: #f4f7fb;
 }
 .floor-feeds-list > button {
   display: grid;
@@ -339,7 +339,7 @@
 }
 .floor-feeds-list > button[aria-pressed='true'] {
   background: var(--paper);
-  box-shadow: inset 3px 0 0 var(--sage-600);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 .floor-feeds-list strong {
   font-size: var(--text-md);
@@ -375,7 +375,7 @@
     border-bottom: 0;
   }
   .floor-feeds-list > button[aria-pressed='true'] {
-    box-shadow: inset 0 -3px 0 var(--sage-600);
+    box-shadow: inset 0 -3px 0 var(--accent);
   }
 }
 @media (max-width: 640px) {

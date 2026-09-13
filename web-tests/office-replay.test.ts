@@ -140,7 +140,7 @@ const record: DayRecord = {
       employeeName: emi.name,
       kind: 'triage',
       createdBy: 'system',
-      createdByName: 'Astra HQ',
+      createdByName: 'Staff AI',
       isOwner: true,
       visibility: 'workspace',
       title: 'Checkout incident',
