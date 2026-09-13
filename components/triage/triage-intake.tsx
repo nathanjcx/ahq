@@ -27,8 +27,8 @@ export function TriageIntake() {
           <Ready on={intake.signedEndpointReady} yes="Secret set" no="No secret yet" />
         </div>
         <p>
-          Post a normalized alert here. Sign the timestamp and the exact body so a replayed body does
-          not verify.
+          Post a normalized alert here. Sign the timestamp and the exact body so a replayed body does not
+          verify.
         </p>
         <div className="intake-endpoint">
           <code>POST /api/alerts</code>
@@ -47,12 +47,15 @@ export function TriageIntake() {
           <dd>Milliseconds since the epoch, no more than five minutes old</dd>
           <dt>x-astra-signature</dt>
           <dd>
-            <code>HMAC-SHA256(secret, `${'${timestamp}'}.${'${body}'}`)</code> in lowercase hex
+            <code>
+              HMAC-SHA256(secret, `${'${timestamp}'}.${'${body}'}`)
+            </code>{' '}
+            in lowercase hex
           </dd>
         </dl>
         <p className="muted-note">
-          The signing secret is set once by a platform administrator and is never read back. Rotating
-          it replaces it.
+          The signing secret is set once by a platform administrator and is never read back. Rotating it
+          replaces it.
         </p>
       </section>
 
@@ -65,8 +68,8 @@ export function TriageIntake() {
           <Ready on={intake.github.length > 0} yes="Connected" no="Not connected" />
         </div>
         <p>
-          Connect GitHub on the Integrations page and choose the repositories to watch. A delivery
-          becomes an incident when a label or any word in it matches one of the triage rules below.
+          Connect GitHub on the Integrations page and choose the repositories to watch. A delivery becomes an
+          incident when a label or any word in it matches one of the triage rules below.
         </p>
         {intake.github.length > 0 && (
           <ul className="intake-repos">
@@ -83,9 +86,7 @@ export function TriageIntake() {
               </span>
             ))
           ) : (
-            <p className="muted-note">
-              No triage rules yet, so no GitHub delivery becomes an incident.
-            </p>
+            <p className="muted-note">No triage rules yet, so no GitHub delivery becomes an incident.</p>
           )}
         </div>
         <p className="muted-note">Triage rules and the two allow-lists live in Settings, under Policies.</p>

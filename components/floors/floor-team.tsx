@@ -27,7 +27,8 @@ function shiftFor(employee: Employee, tasks: Task[], schedule?: ScheduleSummary)
   const review = mine.find((task) => task.status === 'awaiting_approval');
   if (review) return { label: 'Waiting on you', tone: 'review', detail: review.title };
   const held = mine.find((task) => task.status === 'waiting' || task.status === 'blocked');
-  if (held) return { label: held.status === 'waiting' ? 'Waiting' : 'Blocked', tone: 'held', detail: held.title };
+  if (held)
+    return { label: held.status === 'waiting' ? 'Waiting' : 'Blocked', tone: 'held', detail: held.title };
   const queued = mine.filter((task) => task.status === 'queued');
   if (queued.length) return { label: 'Queued', tone: 'working', detail: pluralize(queued.length, 'task') };
   if (employee.status !== 'ready') return { label: employee.status, tone: 'held' };

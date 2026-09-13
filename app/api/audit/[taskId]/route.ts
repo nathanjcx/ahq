@@ -1,7 +1,7 @@
 import type { AuditResponse } from '@/lib/api/schemas';
 import type { AuditEntry, AuditTimeline, CorrectionKind, ProviderId } from '@/lib/contracts';
 import { query } from '@/lib/server/backend';
-import { actor, failure, jsonOk } from '@/lib/server/http';
+import { actor, failure, jsonOk, workspaceClaims } from '@/lib/server/http';
 import { unseal } from '@/lib/server/secrets';
 export const runtime = 'nodejs';
 
@@ -65,7 +65,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tas
   try {
     const identity = await actor();
     const { taskId } = await params;
-    const sealed = await query<SealedTimeline>('services/actions:auditTimeline', { ...identity, taskId });
+    const sealed = await query<SealedTimeline>('services/actions:auditTimeline', {
+      ...workspaceClaims(identity),
+      taskId,
+    });
     const entries: AuditEntry[] = [
       ...sealed.events.map((event): AuditEntry => ({
         kind: 'event',

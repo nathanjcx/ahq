@@ -1005,9 +1005,7 @@ it('files the missing report itself and escalates when an emergency run writes n
   });
   await runQueue(['triage_run']);
 
-  const placeholder = (
-    await t.withIdentity(identity(subject)).query(api.triage.incidentReports, {})
-  ).find(
+  const placeholder = (await t.withIdentity(identity(subject)).query(api.triage.incidentReports, {})).find(
     (report) => report.alertId === alert.alertId,
   );
   expect(placeholder).toMatchObject({ emergency: true, missing: true });
@@ -1102,8 +1100,8 @@ it('shifts a daily task again on a later day, though its session finished the la
     .map((shift) => shift.date);
   expect(worked).toEqual(['2026-09-16', '2026-09-17', '2026-09-18']);
   // No closing summary either: a daily task is closed on purpose, not at the end of every shift.
-  expect(
-    (await rows<{ taskId: string }>('taskSummaries')).some((row) => row.taskId === dailyTaskId),
-  ).toBe(false);
+  expect((await rows<{ taskId: string }>('taskSummaries')).some((row) => row.taskId === dailyTaskId)).toBe(
+    false,
+  );
   scripts.delete('start_shift');
 });

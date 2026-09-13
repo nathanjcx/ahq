@@ -177,9 +177,7 @@ export async function createInstances(
   if (floor && floor.archivedAt !== undefined) throw new Error('Floor is archived');
   const base = input.name ? cleanText(input.name, 'Employee name', 120) : version.name;
   const taken = await namesOnFloor(ctx, workspace._id, input.floorId);
-  const names = input.names
-    ? chosenNames(input.names, taken)
-    : instanceNames(base, taken, input.count);
+  const names = input.names ? chosenNames(input.names, taken) : instanceNames(base, taken, input.count);
   const now = Date.now();
   const employeeIds: Id<'installations'>[] = [];
   for (const name of names)

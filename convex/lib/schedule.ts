@@ -350,8 +350,7 @@ export function planTick(input: PlannerInput): PlannedJob[] {
       // No next page is due once three have been sent, answered or not: `nextAttemptAt` is the whole
       // cadence, so a workspace whose channels deliver nothing stops at three rather than paging on
       // every tick until the incident closes.
-      if (paging.acknowledged || paging.nextAttemptAt === undefined || paging.nextAttemptAt > now)
-        continue;
+      if (paging.acknowledged || paging.nextAttemptAt === undefined || paging.nextAttemptAt > now) continue;
       const taskId = pager.standingTaskId ?? alert.triageTaskId;
       if (!taskId) continue;
       planned.push({

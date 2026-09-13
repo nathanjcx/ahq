@@ -35,7 +35,6 @@ export interface PrivateConnection {
   credentialKeyVersion?: string;
 }
 
-
 /** Queue kinds the worker runs, named once in `lib/jobs.ts` and shared with the planner. */
 export type { JobKind };
 

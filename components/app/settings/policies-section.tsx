@@ -113,8 +113,8 @@ export function PoliciesSection({ settings, canManage, save }: SectionProps) {
           onChange={(event) => setTriageText(event.target.value)}
         />
         <small>
-          One reviewed tool per line. The Triage floor may use these without asking, per proposal. Merging
-          and deploying are not among them.
+          One reviewed tool per line. The Triage floor may use these without asking, per proposal. Merging and
+          deploying are not among them.
         </small>
       </label>
 
@@ -133,12 +133,12 @@ export function PoliciesSection({ settings, canManage, save }: SectionProps) {
       <div className="settings-rule">
         <strong>When triage may act without you</strong>
         <p>
-          Inside attended hours, never: a merge or a deploy waits for your approval. Outside attended
-          hours, a triage employee may reach for the emergency allow-list only after three notification
-          attempts spaced over twenty minutes have all gone unacknowledged. It must then verify the fix
-          and file an incident report naming the issue, the reproduction, the fix, why it acted without
-          permission, and the knock-on risks. Every step is journaled and the report goes to the
-          workspace channel and the next meeting.
+          Inside attended hours, never: a merge or a deploy waits for your approval. Outside attended hours, a
+          triage employee may reach for the emergency allow-list only after three notification attempts spaced
+          over twenty minutes have all gone unacknowledged. It must then verify the fix and file an incident
+          report naming the issue, the reproduction, the fix, why it acted without permission, and the
+          knock-on risks. Every step is journaled and the report goes to the workspace channel and the next
+          meeting.
         </p>
       </div>
 

@@ -19,7 +19,7 @@ import { asId } from '@/lib/ui-api';
 
 /**
  * A full workspace, written down. It exists so the interface can be photographed and reviewed at
- * every viewport without a Convex deployment, a Clerk instance, or a real employee doing work. Every
+ * every viewport without a Convex deployment, a WorkOS environment, or a real employee doing work. Every
  * status, correction kind, and sharing state the interface can render appears at least once.
  */
 

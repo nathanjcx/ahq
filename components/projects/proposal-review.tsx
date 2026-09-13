@@ -16,14 +16,7 @@ import {
 import { ProposalQuestions, type HireSuggestion } from './proposal-questions';
 import { proposalTimeline } from './roadmap';
 import { RoadmapTimeline } from './roadmap-timeline';
-import type {
-  Employee,
-  Floor,
-  Listing,
-  PlanProjection,
-  Project,
-  RoadmapProposal,
-} from '@/lib/contracts';
+import type { Employee, Floor, Listing, PlanProjection, Project, RoadmapProposal } from '@/lib/contracts';
 import { pluralize } from '@/lib/text';
 
 /**
@@ -153,7 +146,9 @@ export function ProposalReview({
                 aria-label={`Milestone ${index + 1} deadline`}
                 value={dateInputValue(milestone.deadlineAt)}
                 onChange={(event) =>
-                  change(editMilestone(draft, milestone.key, { deadlineAt: dateInputTime(event.target.value) }))
+                  change(
+                    editMilestone(draft, milestone.key, { deadlineAt: dateInputTime(event.target.value) }),
+                  )
                 }
               />
               <button

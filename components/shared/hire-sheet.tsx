@@ -186,8 +186,8 @@ export function HireSheet({
         </label>
         {needsApproval && (
           <p className="hire-note">
-            This workspace asks an owner or an administrator to approve a hire. The names and the
-            overnight model you choose here ride with the request.
+            This workspace asks an owner or an administrator to approve a hire. The names and the overnight
+            model you choose here ride with the request.
           </p>
         )}
         <fieldset className="hire-names">
@@ -241,8 +241,8 @@ export function HireSheet({
         {overCap && (
           <p className="hire-warning">
             <AlertTriangle size={15} />
-            This workspace runs at most {capacityNow?.maxConcurrentInstances} instances. Retire one,
-            hire fewer, or raise the limit in Settings.
+            This workspace runs at most {capacityNow?.maxConcurrentInstances} instances. Retire one, hire
+            fewer, or raise the limit in Settings.
           </p>
         )}
         {blocked && (

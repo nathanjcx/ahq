@@ -77,7 +77,10 @@ for (const viewport of viewports) {
 
     await page.getByRole('tab', { name: 'Floors' }).click();
     if (mobile) await page.locator('.shelf-list > button').first().click();
-    await page.getByRole('button', { name: /^History/ }).first().click();
+    await page
+      .getByRole('button', { name: /^History/ })
+      .first()
+      .click();
     await expect(page.locator('.claim-chain')).toBeVisible();
     await expectNoOverflow(page, viewport.width);
     await shoot(page, viewport.name, 'records-chain');

@@ -2,15 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { dateInputValue } from '../shared/time';
-import {
-  DAY_MS,
-  dayAt,
-  dayMoments,
-  dayOf,
-  momentAt,
-  yesterday,
-  type DayRecord,
-} from './day-replay';
+import { DAY_MS, dayAt, dayMoments, dayOf, momentAt, yesterday, type DayRecord } from './day-replay';
 import type { LabelMode } from './office-labels';
 import type { SelectProp } from './office-props';
 import type { OfficeDressing, OfficeEmployee } from './office-scene';
@@ -146,7 +138,6 @@ function clock(at: number): string {
   const when = new Date(at);
   return `${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}`;
 }
-
 
 /** A recorded day, from the same subscriptions the live office uses. */
 function useDayRecord(employees: OfficeEmployee[], from: number): DayRecord {

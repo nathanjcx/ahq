@@ -109,8 +109,8 @@ export function ProjectDetail({
           {project.behindMilestones > 0 && (
             <p className="project-behind">
               <AlertTriangle size={15} />
-              {pluralize(project.behindMilestones, 'milestone')} past deadline. Replan, or move the
-              work that is late.
+              {pluralize(project.behindMilestones, 'milestone')} past deadline. Replan, or move the work that
+              is late.
             </p>
           )}
         </div>

@@ -60,7 +60,7 @@ leave the hours inconsistent, and only a workspace owner or admin may call it.
 | `triageAllowance`                       | 500,000                                                                   | Today's triage tokens; triage stops here and nowhere else   |
 | `memoryBudgets`                         | workspace 2,000, project 3,000, floor 4,000, agent 1,500, summaries 1,500 | Estimated tokens per section                                |
 | `hiringPolicy`                          | `anyone`                                                                  | `anyone`, `admins`, or `approval`                           |
-| `auditPolicy`                           | `soft`                                                                    | `soft` leads the day with findings; `hard` holds other work  |
+| `auditPolicy`                           | `soft`                                                                    | `soft` leads the day with findings; `hard` holds other work |
 | `triageRules`                           | empty                                                                     | GitHub labels or keywords that make a delivery an alert     |
 | `triageAllowList`                       | empty                                                                     | Tools a triage run executes without a proposal              |
 | `emergencyAllowList`                    | empty                                                                     | Tools the emergency rule admits                             |

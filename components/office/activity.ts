@@ -400,8 +400,7 @@ function sessionActivity(context: Context): EmployeeActivity | undefined {
     return { activity: 'celebrating', since: settled.updatedAt, taskId: settled.id };
 
   if (!active) return undefined;
-  if (active.kind === 'standing')
-    return { activity: 'planning', since: active.updatedAt, taskId: active.id };
+  if (active.kind === 'standing') return { activity: 'planning', since: active.updatedAt, taskId: active.id };
 
   const message = active.lastMessage;
   if (message && now - message.createdAt < WRITING_MS)
@@ -489,7 +488,9 @@ function shiftActivity({ employee, day, now }: Context): EmployeeActivity | unde
       ...(started.taskId ? { taskId: started.taskId } : {}),
     };
   const ended = newest(
-    mine.filter((shift) => shift.endedAt !== undefined && now >= shift.endedAt && now - shift.endedAt < LEAVING_MS),
+    mine.filter(
+      (shift) => shift.endedAt !== undefined && now >= shift.endedAt && now - shift.endedAt < LEAVING_MS,
+    ),
     (shift) => shift.endedAt ?? 0,
   );
   if (ended?.endedAt)

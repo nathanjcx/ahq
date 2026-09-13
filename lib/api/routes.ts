@@ -1,6 +1,7 @@
-/** Web routes that need the encryption key or Clerk's backend API. Convex handles everything else. */
+/** Web routes that need the encryption key or the WorkOS API. Convex handles everything else. */
 export const webApi = {
   members: '/api/workspace/members',
+  organizations: '/api/workspace/organizations',
   audit: (taskId: string) => `/api/audit/${encodeURIComponent(taskId)}`,
   connect: '/api/integrations/connect',
   relaySecret: (connectionId: string) => `/api/integrations/relay-secret/${encodeURIComponent(connectionId)}`,

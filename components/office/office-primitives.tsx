@@ -189,12 +189,7 @@ export function Cylinder({
   rotation?: Point;
 }) {
   return (
-    <mesh
-      position={p}
-      rotation={rotation}
-      castShadow={casts([radius * 2, height, radius * 2])}
-      receiveShadow
-    >
+    <mesh position={p} rotation={rotation} castShadow={casts([radius * 2, height, radius * 2])} receiveShadow>
       <cylinderGeometry args={[radius, radius, height, 16]} />
       <meshStandardMaterial color={color} roughness={0.7} />
     </mesh>

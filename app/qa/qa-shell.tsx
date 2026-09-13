@@ -1,17 +1,29 @@
 'use client';
 
-import { ClerkProvider } from '@clerk/nextjs';
 import { ConvexProvider, ConvexReactClient } from 'convex/react';
 import { useEffect, useState } from 'react';
 import { qaFixture, type QaFixture } from './fixture';
 import { fixtureQueries } from './fixtures';
 import { offlineActions } from '@/components/app/actions';
+import { IdentityContext, type Identity } from '@/components/app/identity';
 import { WorkspaceShell } from '@/components/app/workspace-shell';
 import { FixtureQueriesContext } from '@/components/shared/use-ui-query';
 
-/** Syntactically valid but unreachable. Clerk's widgets render their signed-out state and stop. */
-const clerkKey = 'pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk';
 const convex = new ConvexReactClient('https://quiet-otter-123.convex.cloud');
+
+/** A signed-in person, written down, so the account menu and workspace switcher photograph fully. */
+const identity: Identity = {
+  name: 'Riley Chen',
+  email: 'riley@northwind.example',
+  organizationId: 'org_northwind',
+  organizations: [
+    { id: 'org_northwind', name: 'Northwind Studio', role: 'admin' },
+    { id: 'org_atlas', name: 'Atlas Logistics', role: 'member' },
+  ],
+  signOut: () => {},
+  openOrganization: () => {},
+  createOrganization: async () => {},
+};
 
 declare global {
   interface Window {
@@ -30,7 +42,7 @@ export function QaWorkspace() {
   }, [fixture]);
 
   return (
-    <ClerkProvider publishableKey={clerkKey}>
+    <IdentityContext value={identity}>
       <ConvexProvider client={convex}>
         <FixtureQueriesContext value={fixtureQueries}>
           <WorkspaceShell
@@ -45,6 +57,6 @@ export function QaWorkspace() {
           />
         </FixtureQueriesContext>
       </ConvexProvider>
-    </ClerkProvider>
+    </IdentityContext>
   );
 }

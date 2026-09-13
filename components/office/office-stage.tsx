@@ -122,7 +122,6 @@ export function deriveScene(
   };
 }
 
-
 /**
  * The office, dressed by the journal. With a Convex client it subscribes for the
  * dashboard and the floor board itself, so the pages above it keep their own shape.

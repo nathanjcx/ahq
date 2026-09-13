@@ -15,7 +15,7 @@ const notificationKind = v.union(
 
 /**
  * Who a workspace can reach. Convex has no membership list, so this is everyone who created a floor
- * or a project here, plus the owner of a personal workspace. The Clerk member list belongs to the
+ * or a project here, plus the owner of a personal workspace. The WorkOS member list belongs to the
  * web service; pass `subjects` explicitly when the caller knows better.
  */
 async function workspaceSubjects(ctx: Ctx, workspace: Doc<'workspaces'>) {

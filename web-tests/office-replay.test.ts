@@ -254,7 +254,7 @@ describe('replaying a day', () => {
     expect(atHour(11.71).signals.meeting).toBeUndefined();
   });
 
-  it('leaves last night\'s finding open until the morning it was addressed', () => {
+  it("leaves last night's finding open until the morning it was addressed", () => {
     expect(activity(9.5, bruno.id)).toBe('uneasy');
     expect(atHour(9.5).signals.findings.get(bruno.id)).toBe(1);
     expect(atHour(12).signals.findings.get(bruno.id)).toBeUndefined();

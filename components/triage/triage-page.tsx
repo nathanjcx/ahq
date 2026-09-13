@@ -170,15 +170,7 @@ function AlertsTab({
   );
 }
 
-function AlertRow({
-  alert,
-  selected,
-  onSelect,
-}: {
-  alert: Alert;
-  selected: boolean;
-  onSelect: () => void;
-}) {
+function AlertRow({ alert, selected, onSelect }: { alert: Alert; selected: boolean; onSelect: () => void }) {
   const stage = alertStage(alert);
   const paging = pagingSentence(alert.paging);
   return (

@@ -80,7 +80,9 @@ export function dayInputAt(record: DayRecord, at: number): DayInput {
     });
 
   return {
-    ...(record.schedule ? { schedule: { ...record.schedule, working: isWorkingAt(record.schedule, at) } } : {}),
+    ...(record.schedule
+      ? { schedule: { ...record.schedule, working: isWorkingAt(record.schedule, at) } }
+      : {}),
     shifts,
     meetings,
     findings: record.findings
@@ -143,14 +145,16 @@ export function dayMoments(record: DayRecord): Moment[] {
   }
   for (const { entry, meeting } of record.meetings) {
     moments.push({ at: entry.startsAt, text: `${entry.title} starts` });
-    if (meeting?.openedAt !== undefined) moments.push({ at: meeting.openedAt, text: `${entry.title} opened` });
+    if (meeting?.openedAt !== undefined)
+      moments.push({ at: meeting.openedAt, text: `${entry.title} opened` });
     for (const turn of meeting?.turns ?? [])
       if (turn.kind === 'question' || turn.kind === 'answer')
         moments.push({
           at: turn.createdAt,
           text: `${turn.authorName} ${turn.kind === 'question' ? 'asked' : 'answered'}: ${turn.text}`,
         });
-    if (meeting?.closedAt !== undefined) moments.push({ at: meeting.closedAt, text: `${entry.title} closed` });
+    if (meeting?.closedAt !== undefined)
+      moments.push({ at: meeting.closedAt, text: `${entry.title} closed` });
   }
   for (const task of record.tasks)
     if (task.kind && task.kind !== 'work')

@@ -115,13 +115,7 @@ function PublishDiff({ draft }: { draft: EditorDraft }) {
 }
 
 /** Read a draft the way a customer and a session would, and what publishing it would change. */
-export function MarketplaceStudioPreview({
-  draft,
-  onClose,
-}: {
-  draft: EditorDraft;
-  onClose: () => void;
-}) {
+export function MarketplaceStudioPreview({ draft, onClose }: { draft: EditorDraft; onClose: () => void }) {
   const [tab, setTab] = useState<Tab>('Listing');
   return (
     <Sheet

@@ -28,11 +28,11 @@ Every table is in `convex/schema.ts`. The types the interface renders are in `li
 
 ### Floors and projects
 
-| Object    | Table        | Meaning                                                                                                                |
-| --------- | ------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| Floor     | `floors`     | A room and a team: name, brief, `employeeIds`, optional `reserved` (`triage`), archive                                 |
+| Object    | Table        | Meaning                                                                                                                                       |
+| --------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Floor     | `floors`     | A room and a team: name, brief, `employeeIds`, optional `reserved` (`triage`), archive                                                        |
 | Project   | `projects`   | A plan across floors: `floorIds`, optional `deadlineAt`, `status` (`planning`, `active`, `done`, `archived`), the planner's stored `proposal` |
-| Milestone | `milestones` | An ordered step of a project with `deadlineAt`, `dependsOn` (milestone ids), `status`                                  |
+| Milestone | `milestones` | An ordered step of a project with `deadlineAt`, `dependsOn` (milestone ids), `status`                                                         |
 
 A floor is a place; a project is a plan that spans floors. The only reserved floor is Triage: the
 lobby is a room in the office, not a team, and a task without a floor is simply floorless. A project's
@@ -240,23 +240,23 @@ queue kind from `lib/jobs.ts`.
 re-exports the type and `services/worker/turns/index.ts` maps the kinds the worker dispatches itself.
 The first four predate the schedule and live in `services/worker/jobs.ts`.
 
-| Kind             | Enqueued by                                | What the turn does                                                           |
-| ---------------- | ------------------------------------------ | ---------------------------------------------------------------------------- |
-| `start_task`     | `startTask`                                | First message of a `once` task; not a turn, and never for a daily task       |
-| `send_message`   | `tasks:message`                            | Follow-up message                                                            |
-| `cancel_task`    | `tasks:cancel`                             | Cancellation                                                                 |
-| `execute_action` | Approving a proposal                       | The approved external write                                                  |
-| `start_shift`    | Planner                                    | Opens the shift row, works the day, ends with `submit_report`                |
-| `review_shift`   | Planner                                    | Reads the dependency's report and artifacts, posts feedback, files no report |
-| `meeting_prep`   | Planner at the lead                        | One report against the agenda                                                |
-| `meeting_answer` | `meetings:ask`                             | One answer, short when the question went to everyone                         |
-| `meeting_wrapup` | `meetings:close`                           | Proposes outcomes as JSON a person confirms                                  |
-| `curation_run`   | Planner (janitor)                          | Merge, contest, archive, promote through `astra_janitor`                     |
-| `audit_run`      | Planner (auditor, after hours)             | `read_reports`, `read_journal`, then `submit_findings`                       |
+| Kind             | Enqueued by                                | What the turn does                                                              |
+| ---------------- | ------------------------------------------ | ------------------------------------------------------------------------------- |
+| `start_task`     | `startTask`                                | First message of a `once` task; not a turn, and never for a daily task          |
+| `send_message`   | `tasks:message`                            | Follow-up message                                                               |
+| `cancel_task`    | `tasks:cancel`                             | Cancellation                                                                    |
+| `execute_action` | Approving a proposal                       | The approved external write                                                     |
+| `start_shift`    | Planner                                    | Opens the shift row, works the day, ends with `submit_report`                   |
+| `review_shift`   | Planner                                    | Reads the dependency's report and artifacts, posts feedback, files no report    |
+| `meeting_prep`   | Planner at the lead                        | One report against the agenda                                                   |
+| `meeting_answer` | `meetings:ask`                             | One answer, short when the question went to everyone                            |
+| `meeting_wrapup` | `meetings:close`                           | Proposes outcomes as JSON a person confirms                                     |
+| `curation_run`   | Planner (janitor)                          | Merge, contest, archive, promote through `astra_janitor`                        |
+| `audit_run`      | Planner (auditor, after hours)             | `read_reports`, `read_journal`, then `submit_findings`                          |
 | `triage_run`     | Planner, one per open alert                | Reproduce, fix, `resolve_alert`, and `file_incident_report` after emergency use |
-| `page_alert`     | Planner, outside attended hours            | Records and delivers one page; no model turn                                 |
-| `email_classify` | `services/inbox:ingestInbox` on Gmail mail | Classifies mail into alerts; no tools at all                                 |
-| `plan_project`   | `projects:create` and `projects:replan`    | Proposes a roadmap; creates nothing                                          |
+| `page_alert`     | Planner, outside attended hours            | Records and delivers one page; no model turn                                    |
+| `email_classify` | `services/inbox:ingestInbox` on Gmail mail | Classifies mail into alerts; no tools at all                                    |
+| `plan_project`   | `projects:create` and `projects:replan`    | Proposes a roadmap; creates nothing                                             |
 
 Every turn goes through one interface, `TurnRunner` in `services/worker/turns/runner.ts`. The OpenAI
 client is behind it alone, which is what lets the runtime harness drive real gateway tools with a
@@ -276,7 +276,7 @@ be refused for.
 | `astra_shift`   | `submit_report`, `submit_summary`                                                                 | worker                    |
 | `astra_audit`   | `read_reports`, `read_journal`, `read_artifact`, `read_memory`, `read_channel`, `submit_findings` | auditor only              |
 | `astra_janitor` | `merge`, `contest`, `archive`, `promote`, `read_memory`                                           | janitor only              |
-| `astra_triage`  | `report_reproduction`, `resolve_alert`, `file_incident_report`, plus the admitted provider tools   | triage only               |
+| `astra_triage`  | `report_reproduction`, `resolve_alert`, `file_incident_report`, plus the admitted provider tools  | triage only               |
 
 `serversFor(employeeKind, taskKind)` is the whole rule: an auditor sees `audit` and nothing else; a
 janitor sees `janitor` and `memory`; triage sees `triage`, `memory`, and its floor; a worker sees

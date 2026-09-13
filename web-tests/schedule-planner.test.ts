@@ -214,10 +214,7 @@ describe('triage and preparation', () => {
       freeSlots: 0,
       instances: [responder, worker('ann')],
       tasks: [daily('one', 'ann')],
-      alerts: [
-        alert('low', { severity: 'low' }),
-        alert('bad', { severity: 'critical', createdAt: 2 }),
-      ],
+      alerts: [alert('low', { severity: 'low' }), alert('bad', { severity: 'critical', createdAt: 2 })],
     });
     // One responder takes the worst alert first, and the shift still waits for a slot. The run's key
     // carries the ledger it is briefed with, so a page that lands plans a run that knows about it.
@@ -281,8 +278,10 @@ describe('triage and preparation', () => {
     ]);
     // And when the emergency rule opens, the run that may act on it is a run of its own.
     expect(
-      plan({ runKeys: ['triage:first:0', 'triage:first:3'], paging: { ...ledger(3), opensAt: mondayNight } })
-        .map((job) => job.uniqueKey),
+      plan({
+        runKeys: ['triage:first:0', 'triage:first:3'],
+        paging: { ...ledger(3), opensAt: mondayNight },
+      }).map((job) => job.uniqueKey),
     ).toEqual(['triage:first:3:e']);
   });
 
@@ -456,7 +455,12 @@ describe('the audit policy', () => {
       ['shift', 'flagged'],
       ['shift', 'clear'],
     ]);
-    const later = { ...soft, tasks: soft.tasks.map((task) => task.taskId === 'flagged' ? { ...task, lastShiftDate: '2026-06-01' } : task) };
+    const later = {
+      ...soft,
+      tasks: soft.tasks.map((task) =>
+        task.taskId === 'flagged' ? { ...task, lastShiftDate: '2026-06-01' } : task,
+      ),
+    };
     expect(shape(planTick(later))).toEqual([
       ['shift', 'other'],
       ['shift', 'clear'],
@@ -470,7 +474,12 @@ describe('the audit policy', () => {
       ['shift', 'clear'],
     ]);
     // Its other tasks and its review shift stay held until the findings are addressed.
-    const later = { ...hard, tasks: hard.tasks.map((task) => task.taskId === 'flagged' ? { ...task, lastShiftDate: '2026-06-01' } : task) };
+    const later = {
+      ...hard,
+      tasks: hard.tasks.map((task) =>
+        task.taskId === 'flagged' ? { ...task, lastShiftDate: '2026-06-01' } : task,
+      ),
+    };
     expect(shape(planTick(later))).toEqual([['shift', 'clear']]);
     // Cleared findings release the day; the instance takes its next task, one run at a time.
     expect(shape(planTick({ ...later, findings: [] }))).toEqual([

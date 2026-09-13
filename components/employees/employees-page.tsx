@@ -115,17 +115,14 @@ export function EmployeesPage({ listings, ...props }: Props) {
   const [hiring, setHiring] = useState<{ listing: Listing; floorId?: string } | null>(null);
   const { open, openDetail, closeDetail } = useMasterDetail();
   const statuses = useUiQuery(uiApi.instanceStatus, {});
-  const visible = dashboard.employees.filter(
-    (employee) => showRetired || employee.status !== 'retired',
-  );
+  const visible = dashboard.employees.filter((employee) => showRetired || employee.status !== 'retired');
   const groups = groupInstances(
     visible.filter((employee) => !isReserved(employee)),
     dashboard.floors,
   );
   const reserved = reservedStaff(visible);
   const retiredCount = dashboard.employees.filter((employee) => employee.status === 'retired').length;
-  const selected =
-    visible.find((employee) => employee.id === props.selectedEmployee) ?? visible[0] ?? null;
+  const selected = visible.find((employee) => employee.id === props.selectedEmployee) ?? visible[0] ?? null;
   const statusFor = (id: string) => statuses?.find((entry) => entry.employeeId === id);
   const { needsApproval } = hireContext(dashboard);
   const openCard = (employee: Employee) => {
@@ -183,10 +180,7 @@ export function EmployeesPage({ listings, ...props }: Props) {
                         </p>
                       </div>
                       {listing && (
-                        <button
-                          className="secondary-button compact"
-                          onClick={() => setHiring({ listing })}
-                        >
+                        <button className="secondary-button compact" onClick={() => setHiring({ listing })}>
                           <UserPlus size={14} />
                           Hire more
                         </button>

@@ -1,5 +1,5 @@
 import { query } from '../../../../lib/server/backend';
-import { actor, failure } from '../../../../lib/server/http';
+import { actor, failure, workspaceClaims } from '../../../../lib/server/http';
 import { getArtifact } from '../../../../lib/server/storage';
 export const runtime = 'nodejs';
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -8,7 +8,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       { id } = await params;
     const { artifact } = await query<{ artifact: { storageKey: string; name: string; size: number } }>(
       'services/artifacts:artifactContext',
-      { ...identity, artifactId: id },
+      { ...workspaceClaims(identity), artifactId: id },
     );
     const file = await getArtifact(artifact.storageKey);
     if (!file.Body) throw new Error('File is unavailable');

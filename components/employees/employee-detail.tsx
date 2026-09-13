@@ -10,14 +10,7 @@ import { Avatar } from '../shared/marks';
 import { relativeTime, shortTime } from '../shared/time';
 import { useUiQuery } from '../shared/use-ui-query';
 import { readinessLabel, shiftLabel } from './instances';
-import type {
-  Connection,
-  Employee,
-  Floor,
-  InstanceStatus,
-  ModelId,
-  ProviderId,
-} from '@/lib/contracts';
+import type { Connection, Employee, Floor, InstanceStatus, ModelId, ProviderId } from '@/lib/contracts';
 import { MODEL_IDS } from '@/lib/contracts';
 import { asId, uiApi } from '@/lib/ui-api';
 
@@ -103,13 +96,7 @@ function InstanceFindings({ employeeId, onAudit }: { employeeId: string; onAudit
   );
 }
 
-function InstanceUpgrade({
-  employee,
-  onUpgrade,
-}: {
-  employee: Employee;
-  onUpgrade: () => Promise<unknown>;
-}) {
+function InstanceUpgrade({ employee, onUpgrade }: { employee: Employee; onUpgrade: () => Promise<unknown> }) {
   const upgrade = useUiQuery(uiApi.instanceUpgrade, {
     employeeId: asId<'installations'>(employee.id),
   });
@@ -133,8 +120,8 @@ function InstanceUpgrade({
         ))}
       </ul>
       <p className="upgrade-note">
-        The new version is checked against this workspace&rsquo;s connections as it is applied. If it
-        needs access the workspace cannot reach, nothing changes and the instance stays on version{' '}
+        The new version is checked against this workspace&rsquo;s connections as it is applied. If it needs
+        access the workspace cannot reach, nothing changes and the instance stays on version{' '}
         {upgrade.fromVersion}.
       </p>
       <button className="primary-button" onClick={onUpgrade}>
@@ -241,11 +228,7 @@ export function EmployeeDetail({
                 <label>
                   Name
                   <span className="rename-row">
-                    <input
-                      value={name}
-                      maxLength={120}
-                      onChange={(event) => setName(event.target.value)}
-                    />
+                    <input value={name} maxLength={120} onChange={(event) => setName(event.target.value)} />
                     <button
                       className="secondary-button compact"
                       disabled={!name.trim() || name === employee.name}
@@ -260,10 +243,7 @@ export function EmployeeDetail({
                   <select
                     value={employee.floorId ?? ''}
                     onChange={(event) =>
-                      run(
-                        () => actions.moveEmployee(employee.id, event.target.value || undefined),
-                        'Moved',
-                      )
+                      run(() => actions.moveEmployee(employee.id, event.target.value || undefined), 'Moved')
                     }
                   >
                     <option value="">Lobby</option>
@@ -344,12 +324,8 @@ export function EmployeeDetail({
           </>
         )}
         {tab === 'Feed' && <EmployeeFeed employeeId={employee.id} compact />}
-        {tab === 'Memory' && (
-          <InstanceMemory employeeId={employee.id} onRecords={() => onPage('records')} />
-        )}
-        {tab === 'Findings' && (
-          <InstanceFindings employeeId={employee.id} onAudit={() => onPage('audit')} />
-        )}
+        {tab === 'Memory' && <InstanceMemory employeeId={employee.id} onRecords={() => onPage('records')} />}
+        {tab === 'Findings' && <InstanceFindings employeeId={employee.id} onAudit={() => onPage('audit')} />}
         {tab === 'Upgrade' && (
           <InstanceUpgrade
             employee={employee}
@@ -362,19 +338,19 @@ export function EmployeeDetail({
           <div className="retire-panel">
             {retired ? (
               <p>
-                Retired. Its work stays readable everywhere it was done, and its name still resolves on
-                old tasks.
+                Retired. Its work stays readable everywhere it was done, and its name still resolves on old
+                tasks.
               </p>
             ) : (
               <>
                 <p>
-                  Retiring takes this instance off its floor and gives up its place against the
-                  concurrency cap. Finish or cancel its active work first.
+                  Retiring takes this instance off its floor and gives up its place against the concurrency
+                  cap. Finish or cancel its active work first.
                 </p>
                 <p className="retire-note">
                   <ShieldAlert size={14} />
-                  Everything it has already done stays readable. Hiring the same version again makes a
-                  new instance with an empty notebook.
+                  Everything it has already done stays readable. Hiring the same version again makes a new
+                  instance with an empty notebook.
                 </p>
                 <button
                   className="secondary-button danger"

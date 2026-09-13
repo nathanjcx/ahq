@@ -81,7 +81,10 @@ async function runTurnJob(runtime: WorkerRuntime, job: Job) {
   // that has weeks to run.
   if (job.kind === 'start_shift' || job.kind === 'review_shift') {
     const context = await query<TaskContext>('services/sessions:taskContext', { taskId: job.taskId });
-    if (context.task.cadence !== 'daily' && ['completed', 'failed', 'cancelled'].includes(context.task.status))
+    if (
+      context.task.cadence !== 'daily' &&
+      ['completed', 'failed', 'cancelled'].includes(context.task.status)
+    )
       await taskSummary(runtime, job, context);
   }
   await mutate('services/queue:completeJob', { jobId: job.id, leaseToken: job.leaseToken });

@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { getProvider } from '@/lib/providers';
 import { mutate } from '@/lib/server/backend';
-import { actor, displayName, failure } from '@/lib/server/http';
+import { actor, failure, workspaceClaims } from '@/lib/server/http';
 import { discoverTools } from '@/lib/server/mcp';
 import {
   finishOAuth,
@@ -24,7 +24,7 @@ async function connect(
 ) {
   const tools = await discoverTools(state, credential);
   await mutate('services/integrations:connectIntegration', {
-    ...identity,
+    ...workspaceClaims(identity),
     provider: state.provider,
     name: state.name,
     account: state.name,
@@ -64,8 +64,7 @@ export async function GET(request: Request) {
     if (!code) throw new Error('Authorization was not granted.');
     const queue = [...(state.queue ?? [])];
     const credential = await finishOAuth(state, code);
-    const ownerName = await displayName(identity.authSubject);
-    await connect(identity, ownerName, state, credential);
+    await connect(identity, identity.authName, state, credential);
     // Remaining servers of a multi-product provider. Reuse the grant when the server accepts it;
     // otherwise send the user through consent for that server.
     const definition = getProvider(state.provider);
@@ -80,7 +79,7 @@ export async function GET(request: Request) {
         serverUrl,
       };
       try {
-        await connect(identity, ownerName, next, credential);
+        await connect(identity, identity.authName, next, credential);
       } catch (error) {
         if (!(error instanceof UnauthorizedError)) throw error;
         const flow = await startOAuth({ ...next, queue });

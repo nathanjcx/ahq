@@ -206,8 +206,8 @@ export function MarketplaceDetail({
                   Version {listing.currentVersion} is available to {pluralize(behind.length, 'instance')}
                 </strong>
                 <small>
-                  An upgrade re-checks the connections this employee needs. If one is missing, nothing
-                  changes and the instance stays where it is.
+                  An upgrade re-checks the connections this employee needs. If one is missing, nothing changes
+                  and the instance stays where it is.
                 </small>
                 <div className="upgrade-instances">
                   {behind.map((instance) => (

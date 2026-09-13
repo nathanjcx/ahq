@@ -34,14 +34,7 @@ function nightLabel(date: string) {
   });
 }
 
-export function AuditPage({
-  dashboard,
-  actions,
-  canManageWorkspace,
-  run,
-  onSelectTask,
-  go,
-}: PageProps) {
+export function AuditPage({ dashboard, actions, canManageWorkspace, run, onSelectTask, go }: PageProps) {
   const [floorFilter, setFloorFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<FindingStatus | 'all'>('all');
   const [chosenDate, setChosenDate] = useState<string | null>(null);
@@ -75,7 +68,10 @@ export function AuditPage({
   const nightFindings = shown.filter((finding) => finding.auditDate === date);
 
   // One document per instance, the shape the auditor files and the employee reads.
-  const byInstance = new Map<string, { employeeId: string; employeeName: string; findings: AuditFinding[] }>();
+  const byInstance = new Map<
+    string,
+    { employeeId: string; employeeName: string; findings: AuditFinding[] }
+  >();
   for (const finding of nightFindings) {
     const document = byInstance.get(finding.employeeId) ?? {
       employeeId: finding.employeeId,

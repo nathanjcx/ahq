@@ -351,7 +351,9 @@ const schedule: ScheduleSummary = {
 describe('the day around the desk', () => {
   it('walks an attendee to the meeting an hour before it starts', () => {
     const state = derive({
-      day: { meetings: [{ entry: calendarEntry({ id: 'cal_1', kind: 'meeting', startsAt: NOW + 600_000 }) }] },
+      day: {
+        meetings: [{ entry: calendarEntry({ id: 'cal_1', kind: 'meeting', startsAt: NOW + 600_000 }) }],
+      },
     }).get(ada.id);
     expect(state?.activity).toBe('preparing');
   });
@@ -452,9 +454,9 @@ describe('the day around the desk', () => {
     const shifts = [{ employeeId: ada.id, startedAt: NOW - 60_000, endedAt: NOW + 600_000 }];
     expect(derive({ day: { shifts } }).get(ada.id)?.activity).toBe('arriving');
     expect(
-      derive({ day: { shifts: [{ employeeId: ada.id, startedAt: NOW - 3_600_000, endedAt: NOW - 60_000 }] } }).get(
-        ada.id,
-      )?.activity,
+      derive({
+        day: { shifts: [{ employeeId: ada.id, startedAt: NOW - 3_600_000, endedAt: NOW - 60_000 }] },
+      }).get(ada.id)?.activity,
     ).toBe('leaving');
     expect(derive({ day: { schedule } }).get(ada.id)?.activity).toBe('off_shift');
   });

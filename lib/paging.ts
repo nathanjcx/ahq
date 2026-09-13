@@ -52,8 +52,7 @@ export function livePages(rows: PageAttempt[]) {
   const delivered = new Map<number, boolean>();
   for (const row of rows) {
     if (row.acknowledgedAt !== undefined || row.sentAt <= (answeredAt ?? 0)) continue;
-    const away =
-      row.deliveredAt !== undefined && PAGING_TRANSPORTS.includes(row.deliveredChannel ?? '');
+    const away = row.deliveredAt !== undefined && PAGING_TRANSPORTS.includes(row.deliveredChannel ?? '');
     delivered.set(row.sentAt, (delivered.get(row.sentAt) ?? false) || away);
   }
   const pages: LivePage[] = [...delivered]

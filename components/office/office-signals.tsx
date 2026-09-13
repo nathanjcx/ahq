@@ -5,13 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, JSX } from 'react';
 import * as THREE from 'three';
-import {
-  boardLayout,
-  CALENDAR_ENTRIES,
-  TABLE,
-  type BoardCard,
-  type CalendarEntry,
-} from './office-layout';
+import { boardLayout, CALENDAR_ENTRIES, TABLE, type BoardCard, type CalendarEntry } from './office-layout';
 import { useOverlayLabel, useOverlayRelayout } from './office-overlay';
 import { Box, C, Round, type Point } from './office-primitives';
 import { STATUS_COLOR, type SelectProp } from './office-props';

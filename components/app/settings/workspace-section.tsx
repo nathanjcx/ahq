@@ -12,7 +12,7 @@ function cacheHitRate(usage: ModelUsage) {
 }
 
 const setup = [
-  { title: 'Connect authentication', hint: 'Add the Clerk publishable and secret keys.' },
+  { title: 'Connect authentication', hint: 'Add the WorkOS client id, API key, and cookie password.' },
   { title: 'Deploy application data', hint: 'Set the Convex deployment URL and deploy functions.' },
   { title: 'Start the worker and gateway', hint: 'Add the OpenAI key and shared service secret on Railway.' },
   { title: 'Connect one MCP provider', hint: 'Grant the smallest useful set of tools and resources.' },
@@ -46,7 +46,7 @@ export function WorkspaceSection({
             <small>
               {dashboard.viewer.name
                 ? `Signed in as ${dashboard.viewer.name}.`
-                : 'Clerk and Convex are configured.'}
+                : 'WorkOS and Convex are configured.'}
             </small>
           </span>
         </div>

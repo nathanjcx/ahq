@@ -13,12 +13,7 @@ import { ClaimList } from './claim-list';
 import { ContestedPairs, contestedPairs } from './contested-pairs';
 import { JanitorLog } from './janitor-log';
 import { TaskDossier } from './task-dossier';
-import {
-  defaultWorkspaceSettings,
-  type Memory,
-  type MemoryBudgets,
-  type MemoryScope,
-} from '@/lib/contracts';
+import { defaultWorkspaceSettings, type Memory, type MemoryBudgets, type MemoryScope } from '@/lib/contracts';
 import { pluralize } from '@/lib/text';
 import { asId, uiApi } from '@/lib/ui-api';
 import './records.css';
@@ -87,21 +82,13 @@ function ShelfMeter({ claims, budget }: { claims: Memory[]; budget: number }) {
   );
 }
 
-export function RecordsPage({
-  dashboard,
-  actions,
-  canManageWorkspace,
-  run,
-  onSelectTask,
-  go,
-}: PageProps) {
+export function RecordsPage({ dashboard, actions, canManageWorkspace, run, onSelectTask, go }: PageProps) {
   const [scope, setScope] = useState<MemoryScope>('workspace');
   const [chosen, setChosen] = useState<Partial<Record<MemoryScope, string>>>({});
   const [budgetsOpen, setBudgetsOpen] = useState(false);
   const { open, openDetail, closeDetail } = useMasterDetail();
 
-  const summaries =
-    useUiQuery(uiApi.memorySummaries, isSummaryScope(scope) ? { scope } : 'skip') ?? [];
+  const summaries = useUiQuery(uiApi.memorySummaries, isSummaryScope(scope) ? { scope } : 'skip') ?? [];
   const settings = useUiQuery(uiApi.workspaceSettings, {});
   const budgets = settings?.memoryBudgets ?? defaultWorkspaceSettings.memoryBudgets;
   const janitorEntries = useUiQuery(uiApi.janitorLog, {}) ?? [];
