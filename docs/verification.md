@@ -172,8 +172,8 @@ The same file holds the performance probe: `/office-lab?preset=floor-day` at 144
 `width=1440&height=860`, which sizes the stage to the viewport, so the frame time is a measurement of
 a 1440 canvas rather than of the 1280 one the baselines fix. Twenty frames are sampled through
 `requestAnimationFrame` and the median asserted. The plan's budget is 16 ms,
-and `LAB_FRAME_BUDGET_MS` sets it; the default is 700 ms, because this machine renders through
-SwiftShader with no GPU. Set the real budget on a machine with one. The probe also asserts the plan's
+and `LAB_FRAME_BUDGET_MS` sets it; the default is 1,000 ms, a guard against a collapse rather than a
+budget, because this machine renders a 1440 canvas through SwiftShader with no GPU. Set the real budget on a machine with one. The probe also asserts the plan's
 draw-call budget: under 400 calls on a floor at 1440, read from `data-office-stats`. Static geometry
 is merged per material family, which brought a floor from roughly 2,100 calls to roughly 300.
 

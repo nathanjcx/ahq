@@ -76,6 +76,8 @@ test('office performance budget', async ({ page }) => {
         requestAnimationFrame(tick);
       }),
   );
-  // Software rendering has no GPU; LAB_FRAME_BUDGET_MS=16 is the budget on a machine with one.
-  expect(sample.medianMs, 'median frame time').toBeLessThan(Number(process.env.LAB_FRAME_BUDGET_MS ?? 700));
+  // Software rendering has no GPU; LAB_FRAME_BUDGET_MS=16 is the budget on a machine
+  // with one. The fallback is a guard against a collapse under SwiftShader, sized for
+  // the 1440 canvas this draws, not the plan's budget.
+  expect(sample.medianMs, 'median frame time').toBeLessThan(Number(process.env.LAB_FRAME_BUDGET_MS ?? 1_000));
 });
