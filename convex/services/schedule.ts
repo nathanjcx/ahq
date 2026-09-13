@@ -1,7 +1,6 @@
 import { v, type Infer } from 'convex/values';
 import type { WorkspaceSettings } from '../../lib/contracts';
 import { pagingState } from '../../lib/paging';
-import { taskPages } from './notifications';
 import { internal } from '../_generated/api';
 import type { Doc, Id } from '../_generated/dataModel';
 import { internalMutation, mutation, query, type MutationCtx } from '../_generated/server';
@@ -32,6 +31,7 @@ import { model } from '../schema';
 import { requireService } from '../shared';
 import { taskForRunToken } from './context';
 import { ensureJanitorFor } from './memory';
+import { taskPages } from './notifications';
 
 /** How far ahead the tick looks for meetings that may need preparation. */
 const MEETING_HORIZON_MS = 8 * 3_600_000;
@@ -223,6 +223,15 @@ async function planWorkspace(ctx: MutationCtx, workspace: Doc<'workspaces'>, now
       lastReviewDate: reviewedToday.has(task._id) ? date : undefined,
     }));
   for (const task of plannerTasks) {
+    if (task.cadence !== 'daily' && task.status === 'completed') {
+      const report = await ctx.db
+        .query('reports')
+        .withIndex('by_task', (q) => q.eq('taskId', task.taskId as Id<'tasks'>))
+        .order('desc')
+        .first();
+      if (report && !report.inferred && report.next.length)
+        task.carry = { next: report.next, reportDate: shiftDate(report.createdAt, settings) };
+    }
     if (task.status !== 'needs_input' && task.status !== 'awaiting_approval') continue;
     const row = tasks.find((doc) => doc._id === task.taskId)!;
     const pages = await taskPages(ctx, row._id);
@@ -487,6 +496,12 @@ async function closeShift(ctx: MutationCtx, shift: Doc<'shifts'>, filed?: Report
     createdAt: now,
   });
   await ctx.db.patch(shift._id, { endedAt: now, reportId });
+  // What the employee said blocks it is a question only a person can answer: the session ends as
+  // needs_input, the owner is paged, and the answer resumes the task.
+  if (filed?.blockedOn.length && shift.kind === 'work')
+    await ctx.db.patch(task._id, {
+      question: { text: `Blocked on: ${filed.blockedOn.join('; ')}`.slice(0, 2_000), askedAt: now },
+    });
   const report = await ctx.db.get(reportId);
   if (report) await postShiftReport(ctx, task, report);
   return { reportId };

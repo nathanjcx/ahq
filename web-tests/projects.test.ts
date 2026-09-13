@@ -274,6 +274,10 @@ describe('task dependencies', () => {
       dependsOn: [firstId],
     });
 
+    // The first failure buys the dependency one fresh session; the dependent waits through it.
+    await finishTask(t, firstId, 'failed');
+    expect(await t.run((ctx) => ctx.db.get(firstId))).toMatchObject({ status: 'queued' });
+    expect(await t.run((ctx) => ctx.db.get(secondId))).toMatchObject({ status: 'waiting' });
     await finishTask(t, firstId, 'failed');
     expect(await t.run((ctx) => ctx.db.get(secondId))).toMatchObject({
       status: 'blocked',

@@ -176,6 +176,8 @@ export interface PlannerTask {
   lastReviewDate?: string;
   /** Set while the task waits on a person: since when, and how far its pages have run. */
   waiting?: { since: number; paging: AlertPaging; pagesSent: number };
+  /** A finished one-off task whose last report named what comes next: the lines, and the day they were filed. */
+  carry?: { next: string[]; reportDate: string };
 }
 /** One hired instance. Reserved kinds run their turns in a standing task rather than project tasks. */
 export interface PlannerInstance {
@@ -264,6 +266,8 @@ export interface PlannedJob {
   entryId?: string;
   /** The alert a triage run answers. */
   alertId?: string;
+  /** What the last report said comes next, for a shift that picks a finished task back up. */
+  carry?: string[];
   /** Why the planner chose this run. */
   reason: string;
 }
@@ -427,11 +431,14 @@ export function planTick(input: PlannerInput): PlannedJob[] {
   }
 
   const open = input.tasks.filter((task) => !CLOSED_STATUSES.includes(task.status));
+  // A daily task shifts every working day. A one-off task that finished with work named for the next
+  // shift gets that shift on a later day, so what a report promised is not left to a person to notice.
   const shifts = runsWork
     ? open.filter(
         (task) =>
-          task.cadence === 'daily' &&
-          SHIFT_STATUSES.includes(task.status) &&
+          (task.cadence === 'daily'
+            ? SHIFT_STATUSES.includes(task.status)
+            : task.status === 'completed' && task.carry !== undefined && task.carry.reportDate !== date) &&
           task.lastShiftDate !== date &&
           instances.has(task.employeeId),
       )
@@ -452,10 +459,13 @@ export function planTick(input: PlannerInput): PlannedJob[] {
       date,
       model: modelFor(working, instance, task.model),
       findingIds,
+      ...(task.carry ? { carry: task.carry.next } : {}),
       reason: working
         ? findingIds.length
           ? 'open findings lead the working day'
-          : 'daily task has no shift today'
+          : task.carry
+            ? 'the last report left work for the next shift'
+            : 'daily task has no shift today'
         : 'overnight policy is cheap',
     });
   }

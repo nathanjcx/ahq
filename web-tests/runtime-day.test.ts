@@ -14,6 +14,7 @@ import { internalServerTools, serversFor } from '../lib/server/agents';
 import { installBackend, type Backend } from '../lib/server/backend';
 import { seal } from '../lib/server/secrets';
 import { createGateway } from '../services/gateway/create';
+import { initialTaskInput } from '../services/task-input';
 import type { Job, TaskContext } from '../services/types';
 import { runJob } from '../services/worker/jobs';
 import { createRuntime, type WorkerRuntime } from '../services/worker/state';
@@ -1139,4 +1140,73 @@ it('stops a task on a question until the person answers it', async () => {
   const answered = await t.run(async (ctx) => ctx.db.get(taskId));
   expect(answered?.status).toBe('queued');
   expect(answered?.question).toBeUndefined();
+});
+
+it('gives a failed task one fresh session with the failure in its brief, then lets it stand', async () => {
+  const user = t.withIdentity(identity(subject));
+  const { taskId } = await user.mutation(api.tasks.create, {
+    employeeId,
+    floorId,
+    title: 'Reconcile the ledger',
+    prompt: 'Reconcile the ledger.',
+  });
+  const fail = async () => {
+    const { inputRevision } = await t.query(api.services.sessions.sessionContext, { secret, taskId });
+    await t.run(async (ctx) => {
+      for (const job of await ctx.db.query('jobs').collect())
+        if (job.taskId === taskId && job.state === 'queued')
+          await ctx.db.patch(job._id, { state: 'completed' });
+      await ctx.db.patch(taskId, { sessionId: 'sess_1' });
+    });
+    await t.mutation(api.services.sessions.recordEvents, {
+      secret,
+      taskId,
+      events: [],
+      status: 'failed',
+      error: 'The provider dropped the session.',
+      inputRevision,
+    });
+    return t.run(async (ctx) => ctx.db.get(taskId));
+  };
+  const retried = await fail();
+  expect(retried).toMatchObject({ status: 'queued', error: 'The provider dropped the session.' });
+  expect(retried?.retriedAt).toBeDefined();
+  expect(retried?.sessionId).toBeUndefined();
+  const context = await t.query(api.services.sessions.taskContext, { secret, taskId });
+  expect(initialTaskInput(context)).toContain('A previous attempt at this task failed: The provider dropped');
+  const failed = await fail();
+  expect(failed?.status).toBe('failed');
+});
+
+it('turns what a report says blocks it into a question for the person', async () => {
+  const user = t.withIdentity(identity(subject));
+  const { taskId } = await user.mutation(api.tasks.create, {
+    employeeId: secondEmployeeId,
+    floorId,
+    title: 'Price list',
+    prompt: 'Update the price list.',
+    cadence: 'daily',
+  });
+  // The tick runs one shift per instance; the builder's own daily task must not take the slot.
+  await t.run(async (ctx) => {
+    for (const task of await ctx.db.query('tasks').collect())
+      if (task.cadence === 'daily' && task._id !== taskId)
+        await ctx.db.patch(task._id, { status: 'cancelled' });
+  });
+  scripts.set('start_shift', async ({ call, context }) => {
+    if (context.task.id !== String(taskId)) return 'Not this one.';
+    await call('shift', 'submit_report', {
+      done: [],
+      inProgress: ['The list'],
+      blockedOn: ['Which currency the list is in'],
+      next: [],
+      risks: [],
+    });
+    return 'Blocked.';
+  });
+  vi.setSystemTime(FRIDAY_10 + 3 * 86_400_000);
+  const ran = await runQueue(['start_shift']);
+  expect(ran.map((job) => job.taskId)).toContain(String(taskId));
+  const task = await t.run(async (ctx) => ctx.db.get(taskId));
+  expect(task?.question).toMatchObject({ text: 'Blocked on: Which currency the list is in' });
 });

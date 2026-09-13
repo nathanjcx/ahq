@@ -1,16 +1,16 @@
 import { v } from 'convex/values';
 import type { Workshop } from '../../lib/contracts';
+import { pagingState } from '../../lib/paging';
 import type { Doc } from '../_generated/dataModel';
 import { mutation, query } from '../_generated/server';
 import type { MutationCtx } from '../_generated/server';
 import { recordCompletedTask } from '../lib/marketplace';
 import { systemPost } from '../lib/posts';
-import { finalAssistantMessage, releaseDependents } from '../lib/tasks';
+import { finalAssistantMessage, insertJob, releaseDependents } from '../lib/tasks';
 import { taskStatus, tokenUsage } from '../schema';
 import { requireService, usagePeriod } from '../shared';
 import { activeTaskContext, isTerminal, privateConnection, taskForRunToken, taskInputState } from './context';
 import { recordAttempts, taskPages } from './notifications';
-import { pagingState } from '../../lib/paging';
 
 export const taskContext = query({
   args: { secret: v.string(), taskId: v.id('tasks') },
@@ -66,6 +66,8 @@ function publicTask(task: Doc<'tasks'>) {
     updatedAt: task.updatedAt,
     usage: task.usage,
     question: task.question,
+    error: task.error,
+    retriedAt: task.retriedAt,
   };
 }
 
@@ -339,6 +341,22 @@ export const recordEvents = mutation({
       patch.status = nextStatus;
     }
     if (args.error !== undefined) patch.error = args.error.slice(0, 2_000);
+    // A work task that failed once gets one fresh session with the failure in its brief. The second
+    // failure stands. Tried here, where the failure is recorded, so nothing polls for it.
+    if (patch.status === 'failed' && (task.kind ?? 'work') === 'work' && task.retriedAt === undefined) {
+      patch.status = 'queued';
+      patch.retriedAt = recordedAt;
+      patch.sessionId = undefined;
+      patch.streamOwner = undefined;
+      patch.streamLeaseExpiresAt = undefined;
+      await insertJob(ctx, {
+        workspaceId: task.workspaceId,
+        taskId: task._id,
+        uniqueKey: `retry:${task._id}`,
+        kind: 'start_task',
+        payload: JSON.stringify({}),
+      });
+    }
     const status = patch.status ?? task.status;
     const becameTerminal = isTerminal(status) && !isTerminal(task.status);
     // A daily task's session completes at the end of every shift and the next shift reopens it, so a

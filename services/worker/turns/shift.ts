@@ -41,9 +41,12 @@ export async function startShift(runtime: WorkerRuntime, job: Job) {
     kind: 'work',
   });
   const findings = await findingSection(input.employeeId, input.findingIds ?? []);
+  const carried = input.carry?.length
+    ? { heading: 'Carried over from your last report', lines: input.carry.map((line) => `- ${line}`) }
+    : undefined;
   await runTurn(runtime, job, context, {
     ...(input.model ? { model: input.model } : {}),
-    sections: findings ? [findings] : [],
+    sections: [findings, carried].filter((section) => section !== undefined),
     brief: [
       `Shift ${date}: continue the task; end with a report.`,
       'Task',

@@ -519,3 +519,22 @@ describe('a task waiting on a person', () => {
     expect(planTick(answered).filter((job) => job.kind === 'page')).toEqual([]);
   });
 });
+
+describe('a finished one-off task whose report left work', () => {
+  it('shifts again on a later day, carrying the report’s next lines, and not on the day it was filed', () => {
+    const carry = { next: ['Send the summary to finance.'], reportDate: '2026-05-29' };
+    const done = daily('t1', 'e1', { cadence: 'once', status: 'completed', carry });
+    const planned = planTick(input({ instances: [worker('e1')], tasks: [done] }));
+    expect(planned.map((job) => [job.kind, job.uniqueKey, job.carry])).toEqual([
+      ['shift', 'shift:t1:2026-06-01', ['Send the summary to finance.']],
+    ]);
+    const today = daily('t1', 'e1', {
+      cadence: 'once',
+      status: 'completed',
+      carry: { ...carry, reportDate: '2026-06-01' },
+    });
+    expect(planTick(input({ instances: [worker('e1')], tasks: [today] }))).toEqual([]);
+    const silent = daily('t1', 'e1', { cadence: 'once', status: 'completed' });
+    expect(planTick(input({ instances: [worker('e1')], tasks: [silent] }))).toEqual([]);
+  });
+});

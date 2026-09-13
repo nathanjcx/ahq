@@ -22,6 +22,8 @@ export interface TurnPayload {
   alertId?: string;
   projectId?: string;
   reason?: string;
+  /** What the last report said comes next, when this shift picks a finished task back up. */
+  carry?: string[];
 }
 
 export function payload(job: Job): TurnPayload {

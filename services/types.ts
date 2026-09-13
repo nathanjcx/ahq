@@ -69,6 +69,9 @@ export interface TaskContext {
      * that wants its own cost subtracts this from what the session reports afterwards.
      */
     usage?: { input: number; cached: number; output: number };
+    error?: string;
+    /** Set once the platform restarted this task after a failure; `error` then says what failed. */
+    retriedAt?: number;
   };
   employee: { id: string; name: string; kind: EmployeeKind };
   employeeVersion: {
