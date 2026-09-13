@@ -220,14 +220,16 @@ const NO_DAY: DayInput = {};
  * One activity per employee.
  *
  * Precedence, highest first: the meeting an attendee is in, a live incident a
- * triage employee is on, an audit pass, a curation run, a planning turn, a task
- * that needs a person, a task that just failed or finished, what the live task's
- * journal says, a dependency the task is waiting on, an open finding, the edges
- * of the working day, an open handoff, then `idle`.
+ * triage employee is on, an audit pass, a curation run, a shift that has only
+ * just started, a planning turn, a task that needs a person, a task that just
+ * failed or finished, what the live task's journal says, a dependency the task
+ * is waiting on, an open finding, the edges of the working day, an open handoff,
+ * then `idle`.
  */
 export function deriveActivities(input: ActivityInput): Map<string, EmployeeActivity> {
   const { employees, tasks, events, proposals, posts, now } = input;
   const day = input.day ?? NO_DAY;
+  const employeeIds = new Set(employees.map((employee) => employee.id));
   const byEmployee = new Map<string, Task[]>();
   for (const task of tasks) {
     const list = byEmployee.get(task.employeeId);
@@ -264,6 +266,7 @@ export function deriveActivities(input: ActivityInput): Map<string, EmployeeActi
       latestEvent,
       handoff,
       employeeByName,
+      employeeIds,
       finishedById,
       day,
       now,
@@ -293,6 +296,8 @@ type Context = {
   latestEvent?: ActivityEvent;
   handoff?: FloorPost;
   employeeByName: Map<string, string>;
+  /** Everybody the room is showing, which is whose desk an auditor can walk to. */
+  employeeIds: Set<string>;
   finishedById: Map<string, Task>;
   day: DayInput;
   now: number;
@@ -303,6 +308,7 @@ function activityFor(context: Context): EmployeeActivity {
     meetingActivity(context) ??
     triageActivity(context) ??
     auditActivity(context) ??
+    arrivingActivity(context) ??
     sessionActivity(context) ??
     dependencyActivity(context) ??
     uneasyActivity(context) ??
@@ -362,14 +368,18 @@ function triageActivity({ own, day }: Context): EmployeeActivity | undefined {
  * An audit pass or a curation run. The auditor stands at the desk of whoever
  * they are auditing; the janitor files at the shelves.
  */
-function auditActivity({ employee, own, day }: Context): EmployeeActivity | undefined {
+function auditActivity({ employee, own, day, employeeIds }: Context): EmployeeActivity | undefined {
   const curation = own.find((task) => task.kind === 'curation' && ACTIVE_STATUSES.includes(task.status));
   if (curation) return { activity: 'filing', since: curation.updatedAt, taskId: curation.id };
   const audit = own.find((task) => task.kind === 'audit' && ACTIVE_STATUSES.includes(task.status));
   if (!audit) return undefined;
-  // Whose desk: the finding this pass has already written, else the task it reads.
+  // Whose desk: the newest finding still open against somebody else in this room.
+  // A closed one has been dealt with, and a desk on another floor is not here.
   const finding = newest(
-    (day.findings ?? []).filter((item) => item.employeeId !== employee.id),
+    (day.findings ?? []).filter(
+      (item) =>
+        item.status === 'open' && item.employeeId !== employee.id && employeeIds.has(item.employeeId),
+    ),
     (item) => item.createdAt,
   );
   return {
@@ -377,6 +387,30 @@ function auditActivity({ employee, own, day }: Context): EmployeeActivity | unde
     since: audit.updatedAt,
     taskId: audit.id,
     ...(finding ? { visitingId: finding.employeeId } : {}),
+  };
+}
+
+/**
+ * Somebody who has only just clocked on is still crossing the floor. Their first
+ * task is already queued or running by then, so this sits above the journal or
+ * nobody would ever be seen arriving.
+ */
+function arrivingActivity({ employee, day, now }: Context): EmployeeActivity | undefined {
+  const started = newest(
+    (day.shifts ?? []).filter(
+      (shift) =>
+        shift.employeeId === employee.id &&
+        now >= shift.startedAt &&
+        now - shift.startedAt < ARRIVING_MS &&
+        (shift.endedAt ?? Infinity) > now,
+    ),
+    (shift) => shift.startedAt,
+  );
+  if (!started) return undefined;
+  return {
+    activity: 'arriving',
+    since: started.startedAt,
+    ...(started.taskId ? { taskId: started.taskId } : {}),
   };
 }
 
@@ -473,21 +507,12 @@ function uneasyActivity({ employee, day }: Context): EmployeeActivity | undefine
 }
 
 /**
- * The edges of the day: somebody who has just clocked on, somebody whose shift
- * has just ended, and the empty floor outside working hours.
+ * The far edge of the day: somebody whose shift has just ended, somebody still
+ * on one the journal had nothing to say about, and the empty floor outside
+ * working hours. Arrivals are earlier, above the journal.
  */
 function shiftActivity({ employee, day, now }: Context): EmployeeActivity | undefined {
   const mine = (day.shifts ?? []).filter((shift) => shift.employeeId === employee.id);
-  const started = newest(
-    mine.filter((shift) => now >= shift.startedAt && now - shift.startedAt < ARRIVING_MS),
-    (shift) => shift.startedAt,
-  );
-  if (started)
-    return {
-      activity: 'arriving',
-      since: started.startedAt,
-      ...(started.taskId ? { taskId: started.taskId } : {}),
-    };
   const ended = newest(
     mine.filter((shift) => shift.endedAt !== undefined && now >= shift.endedAt && now - shift.endedAt < LEAVING_MS),
     (shift) => shift.endedAt ?? 0,

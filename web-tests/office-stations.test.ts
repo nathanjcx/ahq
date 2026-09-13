@@ -9,6 +9,7 @@ import {
   type PlacedStation,
 } from '../components/office/office-stations';
 
+/** Every activity the office can place, so a new one cannot arrive without a station of its own. */
 const ACTIVITIES: Activity[] = [
   'idle',
   'thinking',
@@ -19,6 +20,23 @@ const ACTIVITIES: Activity[] = [
   'celebrating',
   'failed',
   'talking',
+  'reading_memory',
+  'remembering',
+  'filing',
+  'waiting',
+  'blocked',
+  'reviewing_peer',
+  'preparing',
+  'presenting',
+  'answering',
+  'auditing',
+  'triaging',
+  'planning',
+  'arriving',
+  'leaving',
+  'off_shift',
+  'reporting',
+  'uneasy',
 ];
 const providers = [
   { id: 'linear', color: '#5b6ad0' },
@@ -50,6 +68,9 @@ function floor(count: number, next: () => number) {
     } as EmployeeActivity,
   }));
   for (const person of people) {
+    // An auditor reads somebody's desk, and two of them can pick the same one.
+    if (person.state.activity === 'auditing')
+      person.state = { ...person.state, visitingId: people[Math.floor(next() * people.length)].id };
     if (person.state.activity !== 'talking') continue;
     const other = people[Math.floor(next() * people.length)];
     if (other.id === person.id) continue;
