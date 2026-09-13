@@ -1,6 +1,5 @@
 'use client';
 
-import { useQuery } from 'convex/react';
 import dynamic from 'next/dynamic';
 import { useMemo } from 'react';
 import { deriveActivities, deriveFloorSignals, type DayInput, type EmployeeActivity } from './activity';
@@ -13,6 +12,7 @@ import type { RenderStats } from './office-view';
 import { useActivityCues } from './sound';
 import { useDayQueries, useNow, useWeekCalendar } from './use-day';
 import { useFloorMemory } from './use-memory';
+import { useUiQuery } from '@/components/shared/use-ui-query';
 import type { Dashboard, FloorPost } from '@/lib/contracts';
 import { providers as providerCatalog } from '@/lib/providers';
 import { asId, uiApi } from '@/lib/ui-api';
@@ -44,6 +44,8 @@ export type OfficeStageProps = {
   floorId?: string;
   /** Whether a Convex client exists. Without one the office stays furnished and still. */
   live: boolean;
+  /** The workspace as the page reads it. The office derives the whole room from it. */
+  dashboard?: Dashboard;
   /** Which room of the tower this is. A floor by default. */
   room?: OfficeRoom;
   /** Overrides live data, so replay never touches the subscription. */
@@ -166,15 +168,17 @@ export function deriveScene({
  * The office, dressed by the journal. With a Convex client it subscribes for the
  * dashboard and the floor board itself, so the pages above it keep their own shape.
  */
-export function OfficeStage({ live, scene, room, ...props }: OfficeStageProps) {
-  const dressed = scene ?? (live ? undefined : emptyScene);
+export function OfficeStage({ live, scene, room, dashboard, ...props }: OfficeStageProps) {
+  const dressed = scene ?? (live && dashboard ? undefined : emptyScene);
   if (dressed) return <Stage {...props} scene={room ? { ...dressed, room } : dressed} />;
-  return <LiveStage {...props} room={room} />;
+  return <LiveStage {...props} room={room} dashboard={dashboard!} />;
 }
 
-function LiveStage(props: Omit<OfficeStageProps, 'live' | 'scene'>) {
-  const dashboard = useQuery(uiApi.dashboard, {});
-  const posts = useQuery(
+function LiveStage({
+  dashboard,
+  ...props
+}: Omit<OfficeStageProps, 'live' | 'scene' | 'dashboard'> & { dashboard: Dashboard }) {
+  const posts = useUiQuery(
     uiApi.floorBoard,
     props.floorId ? { floorId: asId<'floors'>(props.floorId) } : 'skip',
   );
@@ -186,19 +190,17 @@ function LiveStage(props: Omit<OfficeStageProps, 'live' | 'scene'>) {
   const { employees, floorId, room } = props;
   const scene = useMemo(
     () =>
-      dashboard
-        ? deriveScene({
-            dashboard,
-            posts: posts ?? [],
-            employees,
-            ...(floorId ? { floorId } : {}),
-            now,
-            day,
-            ...(room ? { room } : {}),
-            ...(memory ? { memory } : {}),
-            calendar,
-          })
-        : emptyScene,
+      deriveScene({
+        dashboard,
+        posts: posts ?? [],
+        employees,
+        ...(floorId ? { floorId } : {}),
+        now,
+        day,
+        ...(room ? { room } : {}),
+        ...(memory ? { memory } : {}),
+        calendar,
+      }),
     [dashboard, posts, employees, floorId, now, day, room, memory, calendar],
   );
   useActivityCues(scene.activities);

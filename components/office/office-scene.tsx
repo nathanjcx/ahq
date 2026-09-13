@@ -242,12 +242,13 @@ const CALENDAR_WALL: Point = [2.75, 1.72, -0.6];
 const NOTICE: Point = [-8.35, 1.62, -5.78];
 /** A waiting figure holds its string at about chest height. */
 const STRING_HEIGHT = 1.18;
-/** The overlay cards hang above the props they belong to. The board's card hangs
- *  off the near edge of the floor, beside the board: the one part of the frame no
- *  desk, seat or standing station can put a figure in. */
-const TASK_CARDS: Point = [-1.2, 1, 7.9];
-/** Beside the wall it reads out, clear of anyone huddled in the middle of the room. */
-const CALENDAR_CARD: Point = [4.9, 2.2, -0.6];
+/** The overlay cards hang above the props they belong to. The board's card stands
+ *  beside the board over the open floor between it and the lounge, rather than
+ *  above it over the desks. */
+const TASK_CARDS: Point = [2.2, 1.4, 3.6];
+/** On the wall it reads out, low enough to clear anyone huddled in the middle of
+ *  the room and central enough to stay inside a narrow stage. */
+const CALENDAR_CARD: Point = [2.75, 1, -0.6];
 /** The triage signals stack on the window wall's pier: the board, then the lamp. */
 const ALERT_BOARD: Point = [-8.86, 1.4, -0.8];
 const STATUS_LAMP: Point = [-8.8, 2.66, -0.8];

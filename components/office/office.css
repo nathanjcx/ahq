@@ -399,6 +399,7 @@
 
 /* === components/office/room-view.tsx: one of the tower's other rooms, over its page === */
 .office-room {
+  flex: none;
   margin: 18px 0 0;
   overflow: hidden;
 }
@@ -432,6 +433,8 @@
 
 .office-room-stage {
   height: 340px;
+  /* A canvas has no content to be sized by, so it never gives up its height. */
+  flex: none;
 }
 
 @media (max-width: 640px) {

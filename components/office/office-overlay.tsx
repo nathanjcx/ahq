@@ -66,6 +66,8 @@ export function useOverlayRelayout(): () => void {
 
 /** The pass runs at 20fps; the figures themselves animate at the frame rate. */
 const PASS_SECONDS = 0.05;
+/** A pinned card outranks every pill; its own rank breaks ties with the other cards. */
+const PINNED = 6;
 const projected = new THREE.Vector3();
 
 /**
@@ -146,7 +148,7 @@ export function OfficeOverlay({ children }: { children: ReactNode }) {
         y,
         width: pill.offsetWidth,
         height: pill.offsetHeight,
-        priority: entry.pinned ? 6 : entry.forced ? 5 : entry.priority,
+        priority: entry.pinned ? PINNED + entry.priority : entry.forced ? 5 : entry.priority,
       });
     }
     layoutLabels(pills).forEach((placement, index) => {

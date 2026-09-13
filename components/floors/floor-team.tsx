@@ -10,7 +10,7 @@ import { EmptyMini } from '../shared/empty';
 import { Avatar } from '../shared/marks';
 import { FloorReplay } from './floor-replay';
 import { FloorScene } from './floor-scene';
-import type { Employee, ScheduleSummary, Task } from '@/lib/contracts';
+import type { Dashboard, Employee, ScheduleSummary, Task } from '@/lib/contracts';
 import { pluralize } from '@/lib/text';
 
 type Shift = { label: string; tone: 'working' | 'review' | 'held' | 'idle'; detail?: string };
@@ -37,6 +37,7 @@ function shiftFor(employee: Employee, tasks: Task[], schedule?: ScheduleSummary)
 export function FloorTeam({
   floorName,
   floorId,
+  dashboard,
   configured,
   archived,
   staff,
@@ -51,6 +52,8 @@ export function FloorTeam({
   floorName: string;
   /** This floor, so the office can read its board and replay its finished tasks. */
   floorId: string;
+  /** The workspace the page is showing, which is what the office dresses itself from. */
+  dashboard: Dashboard;
   /** Whether a Convex client exists. */
   configured: boolean;
   archived: boolean;
@@ -79,6 +82,7 @@ export function FloorTeam({
         archived={archived}
         compact
         floorId={floorId}
+        dashboard={dashboard}
         live={configured}
         scene={replay}
         stage={

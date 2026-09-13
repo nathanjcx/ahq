@@ -1,5 +1,5 @@
 import type { FixtureQueries } from '@/components/shared/use-ui-query';
-import type { Channel, Post } from '@/lib/contracts';
+import type { Channel, FloorPost, Post } from '@/lib/contracts';
 
 /** The same fixed clock the workspace fixture uses, so screenshots stay comparable. */
 const now = Date.UTC(2026, 2, 17, 14, 30);
@@ -153,8 +153,43 @@ const employeeFeeds: Record<string, Post[]> = {
   emp_mina: [],
 };
 
+/**
+ * The same floor, as the office reads it: the note that goes on the whiteboard and
+ * the handoff that puts two figures face to face.
+ */
+const boardPosts: Record<string, FloorPost[]> = {
+  proj_launch: [
+    {
+      id: 'board_note',
+      floorId: 'proj_launch',
+      kind: 'note',
+      authorSubject: 'user_dana',
+      authorName: 'Dana Okoye',
+      text: 'Migration notes before the announcement. Nothing ships without the changelog.',
+      createdAt: ago(4),
+    },
+    {
+      id: 'board_handoff',
+      floorId: 'proj_launch',
+      kind: 'handoff',
+      authorName: 'Bruno',
+      text: 'Handed the announcement to Ada',
+      taskId: 'task_awaiting',
+      createdAt: ago(2),
+      handoff: {
+        toEmployeeId: 'emp_ada',
+        toEmployeeName: 'Ada',
+        brief: 'The changelog is signed off; the announcement needs a second pair of eyes.',
+        status: 'pending',
+        taskId: 'task_awaiting',
+      },
+    },
+  ],
+};
+
 /** Query answers for the channels pages under the fixture route. */
 export const channelsQueries: FixtureQueries = {
+  'floors:board': (args: unknown) => boardPosts[(args as { floorId?: string }).floorId ?? ''] ?? [],
   'channels:list': channels,
   'channels:posts': (args: unknown) => {
     const channelId = (args as { channelId?: string }).channelId;

@@ -135,9 +135,9 @@ export function MeetingView({
 
       {meeting?.usage && <p className="meeting-total-usage">{usageLine(meeting.usage)}</p>}
 
-      <Boardroom entry={entry} meeting={meeting} employees={employees} />
-
       <div className="meeting-body">
+        <Boardroom entry={entry} meeting={meeting} employees={employees} />
+
         {(entry.purpose || entry.agenda.length > 0) && (
           <section className="meeting-section">
             <h3>Agenda</h3>

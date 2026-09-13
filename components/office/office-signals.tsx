@@ -290,6 +290,9 @@ export function TaskCards({
   const relayout = useOverlayRelayout();
   useLayoutEffect(() => {
     label?.anchor.set(...position);
+    // The floor's work outranks the other fixed cards: on a small stage the
+    // whiteboard's note gives way to the board rather than the other way round.
+    label?.rank(1, false);
   }, [label, position]);
   const shown = boardLayout(cards).cards;
   if (!shown.length) return null;
