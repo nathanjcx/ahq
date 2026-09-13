@@ -13,7 +13,7 @@
   padding: 17px;
 }
 .file-card:hover {
-  border-color: #bdcbb7;
+  border-color: #b7c0cb;
   transform: translateY(-1px);
 }
 .file-icon {
@@ -21,10 +21,10 @@
   place-items: center;
   width: 42px;
   height: 46px;
-  color: var(--sage-600);
-  border: 1px solid #d8dfd2;
+  color: var(--slate-600);
+  border: 1px solid #d2d8df;
   border-radius: 8px;
-  background: var(--sage-50);
+  background: var(--slate-50);
 }
 .file-card h3 {
   overflow: hidden;

@@ -16,7 +16,7 @@
   padding: var(--space-3);
   overflow-y: auto;
   border-right: 1px solid var(--line);
-  background: var(--cream);
+  background: var(--canvas);
 }
 .project-card {
   display: grid;
@@ -28,7 +28,7 @@
   background: var(--paper);
 }
 .project-card[data-active='true'] {
-  border-color: var(--sage-400);
+  border-color: var(--accent);
   box-shadow: var(--shadow-sm);
 }
 .project-card > header {
@@ -61,8 +61,8 @@
 .project-card-floors span {
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--sage-50);
-  color: var(--sage-800);
+  background: var(--slate-50);
+  color: var(--slate-800);
 }
 .project-card-behind {
   display: flex;
@@ -76,8 +76,8 @@
 .project-status {
   padding: 2px 9px;
   border-radius: 999px;
-  background: var(--sage-100);
-  color: var(--sage-800);
+  background: var(--slate-100);
+  color: var(--slate-800);
   font-size: var(--text-2xs);
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -85,13 +85,13 @@
 }
 .project-status[data-status='planning'] {
   background: #f2e7d6;
-  color: var(--amber);
+  color: var(--warn);
 }
 .project-status[data-status='done'] {
-  background: var(--sage-200);
+  background: var(--slate-200);
 }
 .project-status[data-status='archived'] {
-  background: var(--cream-deep);
+  background: var(--canvas-deep);
   color: var(--muted);
 }
 
@@ -201,7 +201,7 @@
   padding: 10px 13px;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  background: var(--sage-50);
+  background: var(--slate-50);
 }
 .projection-note[data-over='true'] {
   border-color: #e4c6c0;
@@ -244,7 +244,7 @@
   width: 128px;
   padding-top: var(--roadmap-head);
   border-right: 1px solid var(--line);
-  background: var(--cream);
+  background: var(--canvas);
 }
 .roadmap-label {
   display: flex;
@@ -299,8 +299,8 @@
   transform: translateX(-50%);
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--sage-100);
-  color: var(--sage-800);
+  background: var(--slate-100);
+  color: var(--slate-800);
   font-size: var(--text-2xs);
   font-weight: 680;
   white-space: nowrap;
@@ -308,7 +308,7 @@
   text-overflow: ellipsis;
 }
 .roadmap-flag[data-status='done'] {
-  background: var(--sage-200);
+  background: var(--slate-200);
 }
 .roadmap-flag[data-behind='true'] {
   background: #f8e0dc;
@@ -323,13 +323,13 @@
   top: 0;
   bottom: 0;
   width: 1px;
-  background: var(--sage-200);
+  background: var(--slate-200);
 }
 .roadmap-guide[data-behind='true'] {
   background: #e0b6ae;
 }
 .roadmap-today {
-  background: var(--terra);
+  background: var(--accent);
   opacity: 0.55;
 }
 .roadmap-strings {
@@ -341,7 +341,7 @@
 }
 .roadmap-strings path {
   fill: none;
-  stroke: var(--sage-400);
+  stroke: var(--slate-400);
   stroke-width: 1;
   stroke-dasharray: 3 3;
 }
@@ -354,10 +354,10 @@
   height: calc(var(--row-h) - 12px);
   margin-top: 6px;
   padding: 0 9px;
-  border: 1px solid var(--sage-200);
+  border: 1px solid var(--slate-200);
   border-radius: 999px;
-  background: var(--sage-100);
-  color: var(--sage-800);
+  background: var(--slate-100);
+  color: var(--slate-800);
   font-size: var(--text-2xs);
   font-weight: 660;
   overflow: hidden;
@@ -372,17 +372,17 @@
   background: var(--paper);
 }
 .roadmap-bar[data-status='running'] {
-  border-color: var(--terra);
-  background: #f6e3d9;
-  color: var(--terra-dark);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
 }
 .roadmap-bar[data-status='completed'] {
-  background: var(--sage-200);
+  background: var(--green-soft);
 }
 .roadmap-bar[data-status='waiting'] {
   border-color: #e0c99b;
   background: #f6ecd9;
-  color: var(--amber);
+  color: var(--warn);
 }
 .roadmap-bar[data-status='blocked'],
 .roadmap-bar[data-status='failed'] {
@@ -426,8 +426,8 @@
   height: 22px;
   flex: none;
   border-radius: 50%;
-  background: var(--sage-100);
-  color: var(--sage-800);
+  background: var(--slate-100);
+  color: var(--slate-800);
   font-size: var(--text-sm);
   font-weight: 700;
 }
@@ -440,15 +440,15 @@
 .milestone-status {
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--sage-50);
-  color: var(--sage-800);
+  background: var(--slate-50);
+  color: var(--slate-800);
   font-size: var(--text-2xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 .project-milestones > ol > li[data-status='done'] .milestone-status {
-  background: var(--sage-200);
+  background: var(--slate-200);
 }
 .milestone-deadline {
   color: var(--muted);
@@ -473,7 +473,7 @@
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--cream);
+  background: var(--canvas);
 }
 .project-task[data-status='blocked'] {
   border-color: #e4c6c0;
@@ -517,7 +517,7 @@
 .project-task-waiting {
   flex-basis: 100%;
   margin: 0;
-  color: var(--amber);
+  color: var(--warn);
   font-size: var(--text-sm);
 }
 .project-task[data-status='blocked'] .project-task-waiting {
@@ -547,11 +547,11 @@
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--cream);
+  background: var(--canvas);
 }
 .task-editors > li[data-active='true'] {
-  border-color: var(--sage-400);
-  background: var(--sage-50);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 .task-editors > li > input:first-child {
   flex: 1;
@@ -613,7 +613,7 @@
   flex: none;
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--amber);
+  background: var(--warn);
   color: var(--paper);
   font-size: var(--text-2xs);
   font-weight: 700;
@@ -621,10 +621,10 @@
   letter-spacing: 0.04em;
 }
 .question-kind[data-kind='capacity'] {
-  background: var(--sage-600);
+  background: var(--slate-600);
 }
 .question-kind[data-kind='cost'] {
-  background: var(--terra);
+  background: var(--accent);
 }
 .question-answer {
   display: flex;
@@ -686,14 +686,14 @@
   min-height: 0;
   flex: none;
   margin-top: 2px;
-  accent-color: var(--sage-800);
+  accent-color: var(--accent);
 }
 .project-options label > span {
   min-width: 0;
 }
 .project-options label[data-checked='true'] {
-  border-color: var(--sage-400);
-  background: var(--sage-50);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 .project-options strong {
   display: block;

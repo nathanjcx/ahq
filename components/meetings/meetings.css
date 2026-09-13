@@ -38,9 +38,9 @@
 }
 .meeting-state {
   padding: 4px 9px;
-  color: #6d7a6b;
+  color: #6b727a;
   border-radius: 999px;
-  background: var(--sage-100);
+  background: var(--slate-100);
   font-size: var(--text-2xs);
   font-weight: 760;
   text-transform: uppercase;
@@ -76,7 +76,7 @@
 }
 .meeting-section h3 {
   margin-bottom: 9px;
-  color: #718071;
+  color: #717880;
   font-size: var(--text-xs);
   font-weight: 700;
   letter-spacing: 0.6px;
@@ -120,7 +120,7 @@
 .meeting-report > summary::after {
   content: 'Read';
   margin-left: auto;
-  color: var(--sage-600);
+  color: var(--slate-600);
   font-size: var(--text-xs);
   font-weight: 680;
 }
@@ -139,7 +139,7 @@
   max-width: 780px;
   margin-bottom: 18px;
   padding-left: 13px;
-  border-left: 2px solid var(--sage-200);
+  border-left: 2px solid var(--slate-200);
 }
 .meeting-question p,
 .meeting-answer p {
@@ -158,13 +158,13 @@
   margin-top: 12px;
   padding: 10px 13px;
   border-radius: 9px;
-  background: #f4f6ef;
+  background: #eff2f6;
 }
 .meeting-question time,
 .meeting-answer time {
   display: block;
   margin-top: 5px;
-  color: #9ba49a;
+  color: #9a9fa4;
   font-size: var(--text-2xs);
 }
 .meeting-pending {
@@ -195,7 +195,7 @@
 }
 .meeting-outcome[data-status='confirmed'] {
   border-color: #cfdec7;
-  background: #f5f9f1;
+  background: #f1f5f9;
 }
 .meeting-outcome[data-status='dismissed'] {
   border-color: var(--line);
@@ -242,11 +242,11 @@
 .meeting-address select {
   height: 29px;
   padding: 0 8px;
-  color: #627162;
-  border: 1px solid #d9e0d4;
+  color: #626971;
+  border: 1px solid #d4d9e0;
   border-radius: 6px;
   outline: 0;
-  background: #fffef9;
+  background: #f9fcff;
   font-size: var(--text-base);
 }
 

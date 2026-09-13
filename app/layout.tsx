@@ -9,7 +9,7 @@ import './globals.css';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Astra HQ',
+  title: 'Staff AI',
   description: 'A calm place to direct your AI workforce.',
   icons: { icon: '/favicon.svg' },
 };

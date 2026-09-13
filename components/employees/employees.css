@@ -99,11 +99,11 @@
 }
 .employee-card:hover,
 .employee-card[data-active='true'] {
-  border-color: #b9c8b1;
+  border-color: var(--accent);
 }
 .employee-card[data-active='true'] {
   box-shadow:
-    inset 3px 0 #708866,
+    inset 3px 0 #667588,
     var(--shadow-sm);
 }
 .employee-card h3 {
@@ -163,7 +163,7 @@
 }
 .profile-tabs button[data-active='true'] {
   color: var(--ink);
-  border-bottom-color: var(--terra);
+  border-bottom-color: var(--accent);
 }
 .profile-panel {
   padding: 20px 22px 22px;
@@ -240,9 +240,9 @@
 }
 .persona-traits > span {
   padding: 3px 8px;
-  color: var(--sage-800);
+  color: var(--slate-800);
   border-radius: 999px;
-  background: var(--sage-100);
+  background: var(--slate-100);
   font-size: var(--text-2xs);
 }
 .profile-panel .primary-button.full {
@@ -256,11 +256,11 @@
 .notebook > li {
   padding: 11px 12px;
   border: 1px solid var(--line);
-  border-left: 3px solid var(--sage-400);
+  border-left: 3px solid var(--slate-400);
   border-radius: 7px;
 }
 .notebook > li[data-status='contested'] {
-  border-left-color: var(--amber);
+  border-left-color: var(--warn);
 }
 .notebook > li[data-status='archived'] {
   opacity: 0.6;
@@ -290,9 +290,9 @@
 .finding-mark {
   align-self: flex-start;
   padding: 3px 7px;
-  color: var(--sage-800);
+  color: var(--slate-800);
   border-radius: 999px;
-  background: var(--sage-100);
+  background: var(--slate-100);
   font-size: var(--text-2xs);
   font-weight: 650;
 }
@@ -334,9 +334,9 @@
 }
 .change-list > li {
   padding: 3px 8px;
-  color: var(--sage-800);
+  color: var(--slate-800);
   border-radius: 999px;
-  background: var(--sage-100);
+  background: var(--slate-100);
   font-size: var(--text-2xs);
 }
 .upgrade-note,

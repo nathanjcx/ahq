@@ -45,7 +45,7 @@ export function FloorDirectory({
           </span>
           <div>
             <span className="eyebrow">BUILDING DIRECTORY</span>
-            <h2>{workspaceName || 'Astra HQ'}</h2>
+            <h2>{workspaceName || 'Staff AI'}</h2>
           </div>
         </div>
         <div className="directory-list">

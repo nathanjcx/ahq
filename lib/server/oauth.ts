@@ -106,7 +106,7 @@ function providerFor(
   const provider: OAuthClientProvider = {
     redirectUrl: callback,
     clientMetadata: {
-      client_name: 'Astra HQ',
+      client_name: 'Staff AI',
       redirect_uris: [callback],
       grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],

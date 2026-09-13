@@ -123,7 +123,7 @@ export function internalServer(
   tools: InternalTool[],
   dynamic?: DynamicTools,
 ): Server {
-  const mcp = new Server({ name: `astra-hq-${server}`, version: '1.0.0' }, { capabilities: { tools: {} } });
+  const mcp = new Server({ name: `staff-ai-${server}`, version: '1.0.0' }, { capabilities: { tools: {} } });
   const current = async () => {
     const context = await request.backend
       .query<GatewayContext | null>('services/actions:gatewayContext', { runToken: request.runToken })

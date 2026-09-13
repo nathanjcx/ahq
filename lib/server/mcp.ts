@@ -15,7 +15,7 @@ export async function withMcp<T>(
   onRefresh?: (value: StoredCredential) => Promise<void>,
 ): Promise<T> {
   const url = approvedMcpUrl(connection.provider, connection.serverUrl);
-  const client = new Client({ name: 'astra-hq', version: '1.0.0' });
+  const client = new Client({ name: 'staff-ai', version: '1.0.0' });
   const transport = new StreamableHTTPClientTransport(url, {
     fetch: safeFetch,
     authProvider: await oauthProvider(credential.oauth, async (state) => {

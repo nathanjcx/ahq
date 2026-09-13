@@ -14,4 +14,4 @@ export const webApi = {
 } as const;
 
 /** Proves to a route that the request came from this application's own code, not a cross-site form. */
-export const REQUESTED_WITH = { header: 'x-requested-with', value: 'astra-hq' } as const;
+export const REQUESTED_WITH = { header: 'x-requested-with', value: 'staff-ai' } as const;

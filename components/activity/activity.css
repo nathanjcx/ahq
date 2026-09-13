@@ -8,9 +8,9 @@
   align-items: center;
   gap: 8px;
   padding: 13px 18px;
-  color: #6f7a6e;
+  color: #6e737a;
   border-bottom: 1px solid var(--line);
-  background: var(--sage-50);
+  background: var(--slate-50);
   font-size: var(--text-xs);
 }
 .activity-list {
@@ -37,7 +37,7 @@
   top: 17px;
   bottom: -3px;
   width: 1px;
-  background: #dfe4da;
+  background: #dadfe4;
 }
 .activity-list li:last-child .timeline-mark::after {
   display: none;
@@ -49,8 +49,8 @@
   margin-top: 5px;
   border: 3px solid var(--paper);
   border-radius: 50%;
-  background: #7e9575;
-  box-shadow: 0 0 0 1px #bdc8b7;
+  background: #758395;
+  box-shadow: 0 0 0 1px #b7bfc8;
 }
 .activity-list h3 {
   font-size: var(--text-base);
@@ -61,7 +61,7 @@
   font-size: var(--text-2xs);
 }
 .sequence {
-  color: #a1a9a0;
+  color: #a0a4a9;
   font-family: var(--mono);
   font-size: var(--text-2xs);
 }
