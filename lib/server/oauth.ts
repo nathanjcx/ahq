@@ -7,9 +7,11 @@ import {
 import type { OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js';
 import type { ProviderRuntimeConfig } from '../../services/types';
 import type { ProviderId } from '../contracts';
+import { getProvider } from '../providers';
+import { mutate } from './backend';
 import { providerRuntimeConfig } from './config';
 import { safeFetch } from './network';
-import { requiredEnv, unseal } from './secrets';
+import { requiredEnv, seal, unseal } from './secrets';
 export interface OAuthConfig {
   clientId: string;
   clientSecret?: string;
@@ -32,6 +34,8 @@ export interface OAuthState {
   discovery?: OAuthDiscoveryState;
   tokens?: OAuthTokens;
   tokenExpiresAt?: number;
+  /** The client this flow registered with the server itself, when no administrator registered one. */
+  client?: { clientId: string; clientSecret?: string };
 }
 export interface StoredCredential {
   oauth: OAuthState;
@@ -62,13 +66,19 @@ export function pickOAuthClient(config: ProviderRuntimeConfig, serverUrl?: strin
   );
 }
 
-export async function oauthClient(provider: string, serverUrl?: string): Promise<OAuthConfig> {
+/**
+ * The administrator's client for this server, or undefined when the provider registers clients
+ * dynamically and none has been registered yet. A provider that can do neither is not set up.
+ */
+export async function oauthClient(provider: string, serverUrl?: string): Promise<OAuthConfig | undefined> {
   const config = await providerRuntimeConfig(provider);
   const client = config && pickOAuthClient(config, serverUrl);
-  if (!client?.clientId)
+  if (!client?.clientId) {
+    if (getProvider(provider).dynamicRegistration) return undefined;
     throw new Error(
       `Sign-in for ${provider} is not set up yet. Ask your administrator to register its OAuth client.`,
     );
+  }
   return {
     clientId: client.clientId,
     clientSecret: client.clientSecretCiphertext ? unseal<string>(client.clientSecretCiphertext) : undefined,
@@ -81,12 +91,16 @@ export async function oauthClient(provider: string, serverUrl?: string): Promise
 
 function providerFor(
   state: OAuthState,
-  settings: OAuthConfig,
+  configured: OAuthConfig | undefined,
   onTokens?: (state: OAuthState) => Promise<void>,
 ): { provider: OAuthClientProvider; redirect: () => string | undefined } {
   let authorizationUrl: string | undefined;
   const callback = new URL('/api/integrations/callback', requiredEnv('APP_URL')).href;
-  if (settings.authorizationUrl && settings.tokenUrl && !state.discovery) {
+  // A dynamically registered client behaves like an administrator's entry with no fixed endpoints.
+  const settings: OAuthConfig | undefined =
+    configured ??
+    (state.client ? { clientId: state.client.clientId, clientSecret: state.client.clientSecret } : undefined);
+  if (settings?.authorizationUrl && settings.tokenUrl && !state.discovery) {
     const authorization = httpsEndpoint(settings.authorizationUrl, 'authorization endpoint');
     const token = httpsEndpoint(settings.tokenUrl, 'token endpoint');
     state.discovery = {
@@ -111,13 +125,29 @@ function providerFor(
       grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],
       token_endpoint_auth_method:
-        settings.tokenAuthMethod || (settings.clientSecret ? 'client_secret_post' : 'none'),
-      ...(settings.scopes ? { scope: settings.scopes } : {}),
+        settings?.tokenAuthMethod || (settings?.clientSecret ? 'client_secret_post' : 'none'),
+      ...(settings?.scopes ? { scope: settings.scopes } : {}),
     },
-    clientInformation: () => ({
-      client_id: settings.clientId,
-      ...(settings.clientSecret ? { client_secret: settings.clientSecret } : {}),
-    }),
+    clientInformation: () =>
+      settings
+        ? {
+            client_id: settings.clientId,
+            ...(settings.clientSecret ? { client_secret: settings.clientSecret } : {}),
+          }
+        : undefined,
+    // The SDK registers a client when none exists. It lives on this flow's state and, sealed, on
+    // the provider's configuration so the next person signing in reuses it instead of registering.
+    saveClientInformation: async (info) => {
+      state.client = { clientId: info.client_id, clientSecret: info.client_secret };
+      await mutate('services/config:setOAuthClient', {
+        actorSubject: 'registration',
+        provider: state.provider,
+        serverUrl: state.serverUrl,
+        clientId: info.client_id,
+        ...(info.client_secret ? { clientSecretCiphertext: seal(info.client_secret) } : {}),
+        tokenAuthMethod: info.client_secret ? 'client_secret_post' : 'none',
+      });
+    },
     state: () => state.nonce,
     tokens: () => state.tokens,
     saveTokens: async (tokens) => {
@@ -146,7 +176,7 @@ export async function startOAuth(input: Omit<OAuthState, 'nonce' | 'createdAt'>)
   const state: OAuthState = { ...input, nonce: randomBytes(24).toString('base64url'), createdAt: Date.now() };
   const settings = await oauthClient(state.provider, state.serverUrl);
   const flow = providerFor(state, settings);
-  await mcpAuth(flow.provider, { serverUrl: state.serverUrl, scope: settings.scopes, fetchFn: safeFetch });
+  await mcpAuth(flow.provider, { serverUrl: state.serverUrl, scope: settings?.scopes, fetchFn: safeFetch });
   const authorizationUrl = flow.redirect();
   if (!authorizationUrl) throw new Error('Provider did not return an authorization page');
   // The browser is sent here, so it is checked again after discovery, not only after configuration.

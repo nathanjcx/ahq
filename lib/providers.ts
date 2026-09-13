@@ -5,6 +5,11 @@ export interface ProviderDefinition {
   description: string;
   color: string;
   serverUrl: string;
+  /**
+   * The server's authorization server offers dynamic client registration, so no administrator has
+   * to register an OAuth client: the first sign-in registers one and it is kept for everyone.
+   */
+  dynamicRegistration?: boolean;
   documentation: string;
   note: string;
   /** Provider resources a user can follow in the inbox: label and example ID. */
@@ -18,6 +23,7 @@ export const providers: ProviderDefinition[] = [
     description: 'Issues, projects, and the work moving your team forward.',
     color: '#6864d9',
     serverUrl: 'https://mcp.linear.app/mcp',
+    dynamicRegistration: true,
     documentation: 'https://linear.app/docs/mcp',
     note: 'Sign in with Linear. Every external change is reviewed before it happens.',
     inbox: { label: 'Linear team IDs', example: 'a1b2c3d4-…' },
@@ -65,6 +71,7 @@ export const providers: ProviderDefinition[] = [
     description: 'Create and refine visual work with your brand.',
     color: '#00a9ae',
     serverUrl: 'https://mcp.canva.com/mcp',
+    dynamicRegistration: true,
     documentation: 'https://www.canva.dev/docs/mcp/',
     note: 'Sign in with Canva. Available tools depend on your Canva account.',
   },

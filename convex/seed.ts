@@ -1,8 +1,9 @@
 import { v } from 'convex/values';
 import { CATALOG, CATALOG_TOOLS, type CatalogEmployee } from '../lib/catalog';
+import { providerServerUrls, providers } from '../lib/providers';
 import { internalMutation } from './_generated/server';
 import { listingForDraft } from './lib/marketplace';
-import { validateRegistryTool } from './registry';
+import { providerConfigFor, validateRegistryTool } from './registry';
 
 /** Who the catalog publishes as. Distinct from the reserved publisher so listings stay visible. */
 export const CATALOG_PUBLISHER = 'catalog';
@@ -148,3 +149,35 @@ function pick(version: {
     persona: version.persona ?? { voice: '', traits: [] },
   };
 }
+
+/**
+ * Enables every provider's default MCP server URLs where an administrator has not chosen any, so a
+ * fresh deployment can connect a provider without a visit to the Operations page first.
+ *
+ *   npx convex run --prod seed:enableDefaultServers
+ */
+export const enableDefaultServers = internalMutation({
+  args: {},
+  returns: v.array(v.string()),
+  handler: async (ctx) => {
+    const now = Date.now();
+    const enabled: string[] = [];
+    for (const definition of providers) {
+      const existing = await providerConfigFor(ctx, definition.id);
+      if (existing?.enabledUrls.length) continue;
+      const urls = providerServerUrls(definition);
+      if (existing)
+        await ctx.db.patch(existing._id, { enabledUrls: urls, updatedBy: CATALOG_PUBLISHER, updatedAt: now });
+      else
+        await ctx.db.insert('providerConfigs', {
+          provider: definition.id,
+          enabledUrls: urls,
+          oauthClients: [],
+          updatedBy: CATALOG_PUBLISHER,
+          updatedAt: now,
+        });
+      enabled.push(definition.id);
+    }
+    return enabled;
+  },
+});

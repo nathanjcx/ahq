@@ -121,3 +121,24 @@ describe('typed web client', () => {
     });
   });
 });
+
+describe('provider setup', () => {
+  it('lets a provider that registers its own client connect without an administrator entry', async () => {
+    const { providerSetup } = await import('../components/integrations/connect');
+    const { getProvider } = await import('../lib/providers');
+    const readiness = (provider: 'linear' | 'github', enabledUrls: string[]) => [
+      { provider, enabledUrls, oauthUrls: [], reviewedTools: 3, inboxConfigured: false },
+    ];
+    const linear = getProvider('linear');
+    expect(providerSetup(linear, readiness('linear', [linear.serverUrl])).connectable).toEqual([
+      linear.serverUrl,
+    ]);
+    expect(providerSetup(linear, readiness('linear', [])).missing).toContain(
+      'Enable its server URL on the Operations page.',
+    );
+    const github = getProvider('github');
+    const setup = providerSetup(github, readiness('github', [github.serverUrl]));
+    expect(setup.connectable).toEqual([]);
+    expect(setup.missing).toContain('Add its OAuth client on the Operations page.');
+  });
+});

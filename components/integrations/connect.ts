@@ -16,7 +16,8 @@ export function providerSetup(provider: ProviderDefinition, readiness: ProviderR
   const entry = readiness.find((item) => item.provider === provider.id);
   const urls = providerServerUrls(provider);
   const enabled = urls.filter((url) => entry?.enabledUrls.includes(url));
-  const withOAuth = urls.filter((url) => entry?.oauthUrls.includes(url));
+  // A registered client, or a server that registers one itself on the first sign-in.
+  const withOAuth = enabled.filter((url) => provider.dynamicRegistration || entry?.oauthUrls.includes(url));
   const missing: string[] = [];
   if (!enabled.length) missing.push('Enable its server URL on the Operations page.');
   else if (!withOAuth.length) missing.push('Add its OAuth client on the Operations page.');
