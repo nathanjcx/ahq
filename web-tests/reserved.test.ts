@@ -8,9 +8,9 @@ const kinds: ReservedKind[] = ['janitor', 'auditor', 'triage'];
 describe('reserved employees', () => {
   it('makes one instance per kind per workspace, whatever asks for it', async () => {
     const t = harness();
-    const owner = t.withIdentity(orgIdentity('owner', 'acme', 'org:admin'));
+    const owner = t.withIdentity(orgIdentity('owner', 'acme', 'admin'));
     const { workspaceId } = await owner.mutation(api.workspace.bootstrap, { name: 'Acme' });
-    const other = t.withIdentity(orgIdentity('other', 'globex', 'org:admin'));
+    const other = t.withIdentity(orgIdentity('other', 'globex', 'admin'));
     const second = await other.mutation(api.workspace.bootstrap, { name: 'Globex' });
 
     const ensure = (id: typeof workspaceId, kind: ReservedKind) =>
@@ -39,7 +39,7 @@ describe('reserved employees', () => {
   it('keeps reserved versions out of the marketplace', async () => {
     const t = harness();
     const { versionId } = await publishEmployee(t);
-    const owner = t.withIdentity(orgIdentity('owner', 'acme', 'org:admin'));
+    const owner = t.withIdentity(orgIdentity('owner', 'acme', 'admin'));
     const { workspaceId } = await owner.mutation(api.workspace.bootstrap, { name: 'Acme' });
     for (const kind of kinds)
       await t.run(async (ctx) =>

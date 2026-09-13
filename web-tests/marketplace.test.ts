@@ -15,8 +15,8 @@ import {
   type Harness,
 } from './support';
 
-const ownerIdentity = identity('owner', 'acme', 'org:admin');
-const memberIdentity = identity('member', 'acme', 'org:member');
+const ownerIdentity = identity('owner', 'acme', 'admin');
+const memberIdentity = identity('member', 'acme', 'member');
 const persona = { voice: 'Writes in short declaratives.', traits: ['terse'] };
 
 type DraftInput = {

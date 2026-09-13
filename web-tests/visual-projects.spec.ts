@@ -18,7 +18,7 @@ test.skip(!fixtureEnabled, 'Set QA_FIXTURE=1 to build the fixture route and run 
 function watchErrors(page: Page) {
   const errors: string[] = [];
   page.on('pageerror', (error) => {
-    if (!/clerk/i.test(error.message)) errors.push(error.message);
+    errors.push(error.message);
   });
   return errors;
 }

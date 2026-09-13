@@ -8,7 +8,7 @@ const DAY = 86_400_000;
 
 async function workspace(t: Harness) {
   const { listingId } = await publishEmployee(t);
-  const owner = t.withIdentity(orgIdentity('owner', 'acme', 'org:admin'));
+  const owner = t.withIdentity(orgIdentity('owner', 'acme', 'admin'));
   await owner.mutation(api.workspace.bootstrap, { name: 'Acme' });
   const { employeeId } = await hireOne(owner, listingId);
   await owner.mutation(api.schedule.updateSettings, {
@@ -113,7 +113,7 @@ describe('meetings', () => {
         ],
       }),
     ).rejects.toThrow('listed twice');
-    const outsider = t.withIdentity(orgIdentity('outsider', 'other', 'org:admin'));
+    const outsider = t.withIdentity(orgIdentity('outsider', 'other', 'admin'));
     await outsider.mutation(api.workspace.bootstrap, { name: 'Other' });
     await expect(
       outsider.mutation(api.calendar.createMeeting, {

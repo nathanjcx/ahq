@@ -3,7 +3,7 @@ import { api } from '../convex/_generated/api';
 import { compileWorkingMemory } from '../lib/server/memory';
 import { harness, hireOne, identity as orgIdentity, publishEmployee, secret, type Harness } from './support';
 
-const admin = orgIdentity('owner', 'acme', 'org:admin');
+const admin = orgIdentity('owner', 'acme', 'admin');
 const colleague = orgIdentity('colleague', 'acme');
 
 /** One workspace with a staffed floor and a running task, which is what memory hangs off. */

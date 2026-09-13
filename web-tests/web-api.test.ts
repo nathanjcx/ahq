@@ -7,14 +7,24 @@ import { resetRateLimits, withinRateLimit } from '../lib/server/rate-limit';
 
 const appUrl = 'https://hq.example.com';
 
+/** The sealed AuthKit session a route reads through `withAuth()`, without a WorkOS environment. */
+vi.mock('@workos-inc/authkit-nextjs', () => ({
+  withAuth: async () => ({ user: { id: 'caller', name: 'Caller', email: 'caller@example.com' } }),
+  getWorkOS: () => {
+    throw new Error('The WorkOS API is not reachable in tests');
+  },
+}));
+
 function post(headers: Record<string, string>, body = '{}') {
   return new Request(`${appUrl}/api/integrations/connect`, { method: 'POST', headers, body });
 }
 
 beforeEach(() => {
   process.env.APP_URL = appUrl;
-  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = 'pk_test_key';
-  process.env.CLERK_SECRET_KEY = 'sk_test_key';
+  process.env.WORKOS_CLIENT_ID = 'client_test';
+  process.env.WORKOS_API_KEY = 'sk_test_key';
+  process.env.WORKOS_COOKIE_PASSWORD = 'a'.repeat(32);
+  process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI = `${appUrl}/callback`;
   resetRateLimits();
   vi.unstubAllGlobals();
 });

@@ -10,7 +10,7 @@ this and the code disagree, fix the code or update this document in the same cha
 | Part    | Owns                                                                                  | Talks to                          |
 | ------- | ------------------------------------------------------------------------------------- | --------------------------------- |
 | Convex  | Every table, the job queue, the journal, the schedule inputs, live subscriptions      | Nothing outbound                  |
-| web     | Clerk sign-in, OAuth callbacks, audit unsealing, downloads, webhooks, alert intake    | Convex (service secret), Clerk    |
+| web     | WorkOS sign-in, OAuth callbacks, audit unsealing, downloads, webhooks, alert intake   | Convex (service secret), WorkOS   |
 | worker  | Queue jobs, Agents sessions, turns, session monitoring, artifact archive              | Convex, OpenAI, S3, provider MCPs |
 | gateway | The only MCP server an agent can reach: provider connections and the internal servers | Convex, provider MCPs             |
 

@@ -5,7 +5,7 @@ import { slug } from '../lib/text';
 /**
  * Photographs the whole interface against the /qa fixture at both viewports and checks the two
  * things a screenshot cannot show: that nothing overflows the viewport horizontally, and that no
- * page error was thrown. Clerk cannot reach its fake instance here, so its own failures are ignored.
+ * page error was thrown. The fixture route carries its own identity, so no page error is expected.
  */
 const viewports = [
   { name: 'desktop', width: 1440, height: 1000 },
@@ -17,19 +17,13 @@ const pages = [...nav.map((item) => item.label), 'Marketplace admin', 'Operation
 const fixtureEnabled = process.env.QA_FIXTURE === '1';
 test.skip(!fixtureEnabled, 'Set QA_FIXTURE=1 to build the fixture route and run the visual suite.');
 
-function isClerkError(message: string) {
-  return /clerk/i.test(message);
-}
-
 function watchErrors(page: Page) {
   const errors: string[] = [];
-  page.on('pageerror', (error) => {
-    if (!isClerkError(error.message)) errors.push(error.message);
-  });
+  page.on('pageerror', (error) => errors.push(error.message));
   return errors;
 }
 
-/** The dev overlay sits over the sidebar and reports the fake Clerk instance as an issue. */
+/** The dev overlay sits over the sidebar, so hide it before photographing. */
 async function open(page: Page) {
   await page.goto('/qa');
   await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' });

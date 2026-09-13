@@ -445,7 +445,7 @@ describe('planner inputs', () => {
 
   it('shows the planner what the workspace has agreed', async () => {
     const { t, projectId } = await setup();
-    const admin = t.withIdentity(orgIdentity('owner', 'acme', 'org:admin'));
+    const admin = t.withIdentity(orgIdentity('owner', 'acme', 'admin'));
     const workspaceId = await t.run(async (ctx) => (await ctx.db.get(projectId))!.workspaceId);
     await admin.mutation(api.memory.propose, {
       scope: 'workspace',

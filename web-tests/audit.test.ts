@@ -208,7 +208,7 @@ describe('audit findings', () => {
   it('escalates to the workspace channel and the next meeting’s agenda', async () => {
     const t = harness();
     const { owner, workspaceId, employeeId, taskId, runToken } = await auditedDay(t);
-    const boss = t.withIdentity(orgIdentity('boss', 'acme', 'org:admin'));
+    const boss = t.withIdentity(orgIdentity('boss', 'acme', 'admin'));
     const { entryId } = await boss.mutation(api.calendar.createMeeting, {
       title: 'Launch review',
       startsAt: Date.now() + 86_400_000,
@@ -322,7 +322,7 @@ describe('audit findings', () => {
     await expect(
       owner.mutation(api.audit.escalate, { id: ignored.id as Id<'auditFindings'> }),
     ).rejects.toThrow('Only an administrator');
-    const boss = t.withIdentity(orgIdentity('boss', 'acme', 'org:admin'));
+    const boss = t.withIdentity(orgIdentity('boss', 'acme', 'admin'));
     await boss.mutation(api.audit.escalate, { id: ignored.id as Id<'auditFindings'> });
     expect((await owner.query(api.audit.findings, { status: 'escalated' }))[0].id).toBe(ignored.id);
     // A finding without a task is still an administrator's to address.
@@ -367,7 +367,7 @@ describe('a hard audit policy', () => {
     await expect(newWork()).rejects.toThrow('audit policy holds its other work');
 
     const finding = (await owner.query(api.audit.findings, { status: 'open' }))[0];
-    const boss = t.withIdentity(orgIdentity('boss', 'acme', 'org:admin'));
+    const boss = t.withIdentity(orgIdentity('boss', 'acme', 'admin'));
     await boss.mutation(api.audit.markAddressed, { id: finding.id as Id<'auditFindings'> });
     expect(await newWork()).toMatchObject({ taskId: expect.anything() });
   });

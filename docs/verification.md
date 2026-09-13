@@ -115,7 +115,7 @@ first call rather than at startup.
 
 All three are Playwright and need a browser, so none is part of `npm test`. On this machine set
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium`. Without `PLAYWRIGHT_BASE_URL` the config starts
-`next dev` on port 3010 with Clerk and Convex unset, so that port has to be free.
+`next dev` on port 3010 with WorkOS and Convex unset, so that port has to be free.
 
 Against a dedicated server — which is the pattern to use when running more than one suite, or when
 port 3010 is busy:
@@ -217,8 +217,8 @@ in [deployment](deployment.md) are run with real accounts and the results record
 - **The emergency rule end to end.** The gateway's gate is tested; the ledger reaching three
   delivered, unanswered pages is not, because nothing in production sends the second and third page.
   The harness sends them itself.
-- **Clerk members.** Organization membership lookup for the sharing member list has never run against
-  a real organization.
+- **WorkOS organizations.** Listing organization memberships, creating an organization, and switching
+  the session to one have never run against a real WorkOS environment, and neither has a real sign-in.
 - **Sound.** The WebAudio graph, its cues, and the ambient pad have never been exercised by a test;
   a browser only creates that graph from a user gesture.
 - **Multiple replicas under load.** The lease invariants are tested in a single process against
