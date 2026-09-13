@@ -64,7 +64,7 @@ Google warns that emails and documents can contain indirect prompt injection. Tr
 
 ## Inbox and event visibility
 
-An MCP connection does not register Google push events. To ingest Gmail, Drive, Calendar, or Chat events, configure the provider-side watch and Google Pub/Sub or an authorized relay separately. The relay must filter events to the connected account and permitted resources before sending them to Staff AI's webhook endpoint. Use the normalized relay protocol in [inbox delivery](inbox-delivery.md), signed with the connection's own relay secret, which the owner reveals or rotates from Manage access:
+Gmail is the exception to what follows: a Gmail connection registers a `users.watch` on sign-in and receives INBOX changes through Cloud Pub/Sub, described in [inbox delivery](inbox-delivery.md#gmail-push) and set up per [deployment](deployment.md#gmail-push). An MCP connection registers no other Google push events. To ingest Drive, Calendar, or Chat events, configure the provider-side watch and Google Pub/Sub or an authorized relay separately. The relay must filter events to the connected account and permitted resources before sending them to Staff AI's webhook endpoint. Use the normalized relay protocol in [inbox delivery](inbox-delivery.md), signed with the connection's own relay secret, which the owner reveals or rotates from Manage access:
 
 ```text
 POST /api/webhooks/inbox/<connectionId>
@@ -72,7 +72,7 @@ x-ahq-timestamp: <unix-seconds>
 x-ahq-signature: HMAC_SHA256(secret, timestamp + "." + rawBody)
 ```
 
-The endpoint accepts normalized items only, at most 100 per request, with an HTTPS source URL when present. It rejects missing or stale signatures. Never forward full message bodies when a title and short preview are sufficient, and never log the raw payload. Event visibility follows the relay's filtering, the Google account's permissions, Workspace admin policy, and the connection's visible user list. The app has no automatic provider subscription registration.
+The endpoint accepts normalized items only, at most 100 per request, with an HTTPS source URL when present. It rejects missing or stale signatures. Never forward full message bodies when a title and short preview are sufficient, and never log the raw payload. Event visibility follows the relay's filtering, the Google account's permissions, Workspace admin policy, and the connection's visible user list. Beyond the Gmail watch, the app has no automatic provider subscription registration.
 
 ## Test plan
 

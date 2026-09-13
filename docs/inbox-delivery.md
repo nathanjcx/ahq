@@ -12,7 +12,7 @@ The endpoint reads the raw request body, verifies the provider signature with th
 
 An unknown provider path segment, or a provider with no configured secret, returns `404`.
 
-The separate signed normalized relay at `/api/webhooks/inbox/<connectionId>` is the integration path for Google Workspace and any other provider relay. It is described under [the normalized relay](#the-normalized-relay) below.
+Gmail arrives through Google's own push, described under [Gmail push](#gmail-push). The separate signed normalized relay at `/api/webhooks/inbox/<connectionId>` is the integration path for any other provider relay. It is described under [the normalized relay](#the-normalized-relay) below.
 
 ## Administrator configuration
 
@@ -62,6 +62,21 @@ Convex deduplicates by `(connectionId, externalId)`, and the external ID is a ha
 
 To test: save the Slack Request URL and confirm URL verification passes with no Slack connection present. Then add a repository, team, and channel to a connection's inbox list and trigger one non-sensitive event for each. Resend the same delivery and confirm one record. Trigger an event on an unfollowed resource and confirm `delivered` is `0`. Never place full provider bodies, webhook secrets, OAuth tokens, or message contents in logs.
 
+## Gmail push
+
+A Google Workspace Gmail connection delivers through Gmail's `users.watch` and Cloud Pub/Sub, with no relay in between. When the connection is made (and once an hour from the worker for any connection without one), the web service asks Gmail to publish the mailbox's INBOX changes to the deployment's topic, and stores the watch's mailbox, history cursor, and expiry on the connection. Gmail keeps a watch for seven days; the worker renews anything inside its last day.
+
+Pub/Sub pushes each change to:
+
+```text
+POST https://your-web-origin.example.com/api/webhooks/gmail
+authorization: Bearer <OIDC token for the subscription's service account>
+```
+
+The route verifies the token against Google's keys (issuer `https://accounts.google.com`, audience the endpoint URL) and requires its `email` claim to equal `GMAIL_PUSH_SERVICE_ACCOUNT`; nothing in the body is trusted before that. The body names only the mailbox. The route then lists Gmail history from the connection's stored cursor, fetches Subject and From for each message added to INBOX (at most 100 per sync), and ingests them through the same path the relay uses, so the connection's routing rule and `(connectionId, externalId)` deduplication apply. The external ID is `gmail:<messageId>`, the preview is the sender line and Gmail's snippet, never the body. A cursor Gmail no longer holds restarts at the mailbox's current history id.
+
+The route answers `200` even when a sync fails, so Pub/Sub does not retry: the next push, or the worker's hourly sync from the cursor, picks the mail up. Deliveries are rate-limited per mailbox. Google Cloud setup (topic, publisher grant, subscription, service account) is in [deployment](deployment.md#gmail-push).
+
 ## The normalized relay
 
 Providers without a native endpoint deliver through `POST /api/webhooks/inbox/<connectionId>`. Each connection carries its own relay secret, generated and sealed when the connection is created. The owner reveals or rotates it from **Manage access** on the connection; rotation returns a new secret and the exact relay URL, and no one but the owner can read it.
@@ -93,6 +108,6 @@ The timestamp must be within five minutes of receipt. The body is JSON with at m
 
 `sourceUrl` must be HTTPS. Items deduplicate on `(connectionId, externalId)`, so a redelivery updates one record. A delivery marks the connection's inbox mode as push and clears its last error. A connection with no relay secret, or one that is not active, is rejected.
 
-The relay is responsible for filtering: it must normalize only events the connection's owner may see, before signing. The application registers no provider subscription, watch, or Pub/Sub topic. To rotate, pause delivery, rotate from Manage access, give the relay the new secret, resume, and send one signed test item. A connection accepts one secret at a time.
+The relay is responsible for filtering: it must normalize only events the connection's owner may see, before signing. Apart from Gmail, the application registers no provider subscription, watch, or Pub/Sub topic. To rotate, pause delivery, rotate from Manage access, give the relay the new secret, resume, and send one signed test item. A connection accepts one secret at a time.
 
 Provider references: [GitHub webhook signatures](https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries), [GitHub webhook events](https://docs.github.com/en/webhooks/webhook-events-and-payloads), [Linear webhooks](https://linear.app/developers/webhooks), and [Slack request verification](https://api.slack.com/authentication/verifying-requests-from-slack).

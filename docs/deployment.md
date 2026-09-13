@@ -80,18 +80,33 @@ This is the complete list the code reads. Everything else that used to live here
 | `VAPID_PUBLIC_KEY`                | web, worker                  | yes for push           | Web Push application key                                   |
 | `VAPID_PRIVATE_KEY`               | web, worker                  | yes for push           | Web Push signing key                                       |
 | `VAPID_SUBJECT`                   | web, worker                  | yes for push           | `mailto:` address or origin the push service contacts      |
+| `GMAIL_PUBSUB_TOPIC`              | web, worker                  | yes for Gmail push     | `projects/<project>/topics/<topic>` Gmail publishes to     |
+| `GMAIL_PUSH_SERVICE_ACCOUNT`      | web                          | yes for Gmail push     | Email of the push subscription's OIDC service account      |
 | `WORKER_CONCURRENCY`              | worker                       | no                     | Job slots, default 4, bounded 1 to 16                      |
 | `WORKER_MONITORS`                 | worker                       | no                     | Monitor slots, default 16, bounded 1 to 64                 |
 | `MAX_TURN_SECONDS`                | worker                       | no                     | Run time limit, default 900, bounded 60 to 3600            |
 
 Without the three `VAPID_*` variables push notifications are off and say so in the log; the other
-channels still deliver. Generate the pair once with `npx web-push generate-vapid-keys`.
+channels still deliver. Generate the pair once with `npx web-push generate-vapid-keys`. Without
+`GMAIL_PUBSUB_TOPIC` no Gmail watch is started and Gmail inbox items do not arrive; see
+[Gmail push](#gmail-push).
 
 `OPENAI_API_KEY` and `MCP_GATEWAY_URL` are read when a task needs them, not at startup: a worker
 without them starts, serves `/health` with them named in `missingConfig`, logs the same line, and
 fails each job it claims with that reason rather than crash-looping out of the deployment.
 
 Keep `WORKOS_API_KEY` and `WORKOS_COOKIE_PASSWORD` off the browser and `OPENAI_API_KEY` on worker only. Nothing WorkOS needs is public: `NEXT_PUBLIC_WORKOS_REDIRECT_URI` is a URL on this application's own origin. `PLATFORM_ADMIN_USER_IDS` must hold the same list in Convex and on the web service, because Convex guards the configuration functions and the web service guards the routes that seal secrets. Leave `PORT` unset. `ALLOW_INSECURE_MCP_FOR_TESTS` exists for the test suite and only has an effect when `NODE_ENV=test`; never set it on a deployed service.
+
+### Gmail push
+
+Gmail inbox items arrive through `users.watch` and Cloud Pub/Sub ([inbox delivery](inbox-delivery.md#gmail-push)). In the Google Cloud project that holds the Workspace OAuth client:
+
+1. Create a Pub/Sub topic, and grant `gmail-api-push@system.gserviceaccount.com` the Pub/Sub Publisher role on it. If the organization enforces Domain Restricted Sharing, that grant is refused until the project overrides the `iam.allowedPolicyMemberDomains` policy (Replace, one Allow-all rule); the override can be reverted once the binding exists.
+2. Create a service account with no roles; the subscription signs its deliveries as this account.
+3. Create a push subscription on the topic to `<APP_URL>/api/webhooks/gmail` with authentication enabled and that service account selected, leave the audience empty, set the acknowledgement deadline to 60 seconds, and set it never to expire.
+4. Set `GMAIL_PUBSUB_TOPIC` on web and worker and `GMAIL_PUSH_SERVICE_ACCOUNT` on web.
+
+The worker starts a watch on every connected Gmail connection within an hour and renews it before Gmail's seven-day expiry; a new connection starts its watch at sign-in.
 
 ## 4. Artifact storage
 
