@@ -12,6 +12,11 @@ import { taskSummary } from './turns/summary';
 const leaseRenewalMs = 20_000;
 const recoveryScanLimit = 200;
 
+/** Which job a log line is about. Ids and kinds only: a payload never reaches the log. */
+export function jobTag(job: Job) {
+  return `job=${job.id} kind=${job.kind} task=${job.taskId} attempt=${job.attempts}`;
+}
+
 /**
  * Session creation has no idempotency key, and the sessions API cannot filter by metadata
  * (`SessionListParams` carries `agent_id` and `order` only). Recovery is therefore a bounded
@@ -91,7 +96,7 @@ async function runTurnJob(runtime: WorkerRuntime, job: Job) {
 export async function runJob(runtime: WorkerRuntime, job: Job) {
   const heartbeat = setInterval(() => {
     void mutate('services/queue:renewLease', { jobId: job.id, leaseToken: job.leaseToken }).catch((error) =>
-      console.error('Lease renewal failed:', safeError(error)),
+      console.error(`Lease renewal failed ${jobTag(job)}:`, safeError(error)),
     );
   }, leaseRenewalMs);
   try {
@@ -110,7 +115,7 @@ export async function runJob(runtime: WorkerRuntime, job: Job) {
       await sendInput(runtime, job);
     } else await runTurnJob(runtime, job);
   } catch (error) {
-    console.error('Job failed:', safeError(error));
+    console.error(`Job failed ${jobTag(job)}:`, safeError(error));
     // A dispatched external write is never retried: its outcome is unknown, not failed.
     await mutate('services/queue:failJob', {
       jobId: job.id,
@@ -118,7 +123,7 @@ export async function runJob(runtime: WorkerRuntime, job: Job) {
       error: safeError(error),
       retryable: job.kind !== 'execute_action',
       outcomeUnknown: job.kind === 'execute_action',
-    }).catch((failure) => console.error('Failed to record job error:', safeError(failure)));
+    }).catch((failure) => console.error(`Failed to record job error ${jobTag(job)}:`, safeError(failure)));
   } finally {
     clearInterval(heartbeat);
   }

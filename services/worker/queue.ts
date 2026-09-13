@@ -1,7 +1,7 @@
 import { mutate } from '../../lib/server/backend';
 import { safeError } from '../../lib/server/secrets';
 import type { Job } from '../types';
-import { runJob } from './jobs';
+import { jobTag, runJob } from './jobs';
 import { startMonitor } from './monitor';
 import type { WorkerRuntime } from './state';
 
@@ -21,7 +21,7 @@ async function claimJobs(runtime: WorkerRuntime) {
   runtime.jobSlots.take(jobs.length);
   for (const job of jobs) {
     void runJob(runtime, job)
-      .catch((error) => console.error('Job ended abnormally:', safeError(error)))
+      .catch((error) => console.error(`Job ended abnormally ${jobTag(job)}:`, safeError(error)))
       .finally(() => {
         runtime.jobSlots.release(1);
         void pull(runtime);

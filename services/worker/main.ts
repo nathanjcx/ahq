@@ -3,10 +3,10 @@ import { ConvexClient } from 'convex/browser';
 import { makeFunctionReference } from 'convex/server';
 import { agentsClient } from '../../lib/server/agents';
 import { credentialKey, requiredEnv, safeError, serviceSecret } from '../../lib/server/secrets';
-import { healthServer } from './health';
+import { healthServer, missingTaskConfig } from './health';
 import { releaseMonitors } from './monitor';
 import { pull, pullIntervalMs } from './queue';
-import { createRuntime } from './state';
+import { createRuntime, type QueueCounts } from './state';
 
 const drainDeadlineMs = 30_000;
 const drainPollMs = 200;
@@ -16,16 +16,17 @@ const secret = serviceSecret();
 credentialKey();
 const database = new ConvexClient(process.env.CONVEX_URL || requiredEnv('NEXT_PUBLIC_CONVEX_URL'));
 const runtime = createRuntime(
-  agentsClient(),
+  agentsClient,
   () => runtime.lastSubscriptionAt > 0 && database.connectionState().isWebSocketConnected,
 );
 
 // The subscription is a wake signal carrying counts only. The worker pulls its own work.
 const unsubscribe = database.onUpdate(
-  makeFunctionReference<'query'>('services/queue:workerState'),
+  makeFunctionReference<'query', { secret: string }, QueueCounts>('services/queue:workerState'),
   { secret },
-  () => {
+  (state) => {
     runtime.lastSubscriptionAt = Date.now();
+    runtime.queue = state;
     void pull(runtime);
   },
   (error) => console.error('Queue subscription failed:', safeError(error)),
@@ -33,6 +34,9 @@ const unsubscribe = database.onUpdate(
 const pullTimer = setInterval(() => void pull(runtime), pullIntervalMs);
 const health = healthServer(runtime, Number(process.env.PORT || 4002));
 console.log(`Worker ${runtime.workerId} started`);
+// Said once at startup and on every /health: the worker runs, and every task it claims will fail
+// until these are set.
+for (const name of missingTaskConfig()) console.error(`${name} missing: tasks will fail until it is set`);
 
 let shuttingDown = false;
 async function shutdown(signal: string) {

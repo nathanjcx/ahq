@@ -420,7 +420,7 @@ beforeAll(async () => {
   await once(gateway, 'listening');
   gatewayUrl = `http://127.0.0.1:${(gateway.address() as AddressInfo).port}`;
   process.env.MCP_GATEWAY_URL = gatewayUrl;
-  runtime = createRuntime({} as OpenAI, () => true);
+  runtime = createRuntime(() => ({}) as OpenAI, () => true);
 });
 
 afterAll(async () => {

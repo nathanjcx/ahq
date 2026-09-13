@@ -58,12 +58,16 @@ async function activeTasks(ctx: QueryCtx | MutationCtx) {
 /**
  * The worker subscription. It carries counts and revisions only: workers pull work with the claim
  * mutations, so a replica never acts on a list it was pushed.
+ *
+ * `failedJobs` and `uncertainTasks` are here for the same reason the backlog is: the worker reports
+ * them on `/health`, which is the one place an operator looks. Every count is capped at one page, so
+ * a busy deployment reads as "at least this many" rather than paging the whole table on every update.
  */
 export const workerState = query({
   args: { secret: v.string() },
   handler: async (ctx, args) => {
     requireService(args.secret);
-    const [queued, leased, tasks, signal] = await Promise.all([
+    const [queued, leased, failed, uncertain, tasks, signal] = await Promise.all([
       ctx.db
         .query('jobs')
         .withIndex('by_state_available', (q) => q.eq('state', 'queued'))
@@ -71,6 +75,14 @@ export const workerState = query({
       ctx.db
         .query('jobs')
         .withIndex('by_state_available', (q) => q.eq('state', 'leased'))
+        .take(100),
+      ctx.db
+        .query('jobs')
+        .withIndex('by_state_available', (q) => q.eq('state', 'failed'))
+        .take(100),
+      ctx.db
+        .query('tasks')
+        .withIndex('by_status', (q) => q.eq('status', 'uncertain'))
         .take(100),
       activeTasks(ctx),
       ctx.db
@@ -81,6 +93,8 @@ export const workerState = query({
     return {
       pendingJobs: queued.length + leased.length,
       activeTasks: tasks.length,
+      failedJobs: failed.length,
+      uncertainTasks: uncertain.length,
       nextAvailableAt: queued.reduce(
         (next: number | undefined, job) =>
           next === undefined ? job.availableAt : Math.min(next, job.availableAt),

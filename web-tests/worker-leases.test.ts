@@ -1,6 +1,8 @@
-import { expect, it } from 'vitest';
+import type { FunctionReturnType } from 'convex/server';
+import { expect, expectTypeOf, it } from 'vitest';
 import { api } from '../convex/_generated/api';
 import type { Id } from '../convex/_generated/dataModel';
+import type { QueueCounts } from '../services/worker/state';
 import { harness, hireOne, identity, publishEmployee, secret, type Harness } from './support';
 
 const subject = 'lease-user';
@@ -82,4 +84,36 @@ it('claims nothing when a worker has no free slots', async () => {
     [],
   );
   expect(await streamOwner(t, taskId)).toBeUndefined();
+});
+
+it('counts the failures the worker reports on its health endpoint', async () => {
+  // What `/health` reads: the subscription is the only thing that tells a worker, and through it an
+  // operator, that work is failing rather than merely absent.
+  expectTypeOf<FunctionReturnType<typeof api.services.queue.workerState>>().toExtend<QueueCounts>();
+  const t = harness();
+  const user = t.withIdentity(identity(subject));
+  await user.mutation(api.workspace.bootstrap, { name: 'Acme' });
+  const { listingId } = await publishEmployee(t);
+  const { employeeId } = await hireOne(user, listingId);
+  await user.mutation(api.tasks.create, { employeeId, title: 'Fail me', prompt: 'Start working.' });
+  expect(await t.query(api.services.queue.workerState, { secret })).toMatchObject({
+    pendingJobs: 1,
+    failedJobs: 0,
+    uncertainTasks: 0,
+  });
+
+  const [job] = await t.mutation(api.services.queue.claimJobs, { secret, workerId: 'worker-a', limit: 1 });
+  await t.mutation(api.services.queue.failJob, {
+    secret,
+    jobId: job.id,
+    leaseToken: job.leaseToken,
+    error: 'OPENAI_API_KEY is not configured',
+    retryable: false,
+    outcomeUnknown: true,
+  });
+  expect(await t.query(api.services.queue.workerState, { secret })).toMatchObject({
+    pendingJobs: 0,
+    failedJobs: 1,
+    uncertainTasks: 1,
+  });
 });

@@ -29,9 +29,27 @@ export function boundedSetting(name: string, fallback: number, min: number, max:
   return Math.max(min, Math.min(max, Math.floor(value)));
 }
 
+/**
+ * The counts `services/queue:workerState` pushes on every subscription update, kept so `/health`
+ * reports the backlog and the failures an operator would otherwise have to go looking for. Each count
+ * is capped by the query's own page size, so a large number reads as "at least this many".
+ */
+export interface QueueCounts {
+  pendingJobs: number;
+  activeTasks: number;
+  failedJobs: number;
+  uncertainTasks: number;
+  nextAvailableAt?: number;
+  wakeRevision: number;
+}
+
 export interface WorkerRuntime {
   workerId: string;
-  api: OpenAI;
+  /**
+   * The Agents client, built on first use. A missing `OPENAI_API_KEY` then fails the job that needed
+   * it, with that reason on the task, rather than taking the process down before it can say so.
+   */
+  readonly api: OpenAI;
   jobSlots: SlotPool;
   monitorSlots: SlotPool;
   monitors: Map<string, AbortController>;
@@ -41,14 +59,18 @@ export interface WorkerRuntime {
   pullAgain: boolean;
   lastClaimAt: number;
   lastSubscriptionAt: number;
+  /** The last counts the subscription pushed, or undefined before the first update. */
+  queue?: QueueCounts;
   /** Whether the Convex subscription is live. Health reports it; nothing else depends on it. */
   connected: () => boolean;
 }
 
-export function createRuntime(api: OpenAI, connected: () => boolean): WorkerRuntime {
+export function createRuntime(api: () => OpenAI, connected: () => boolean): WorkerRuntime {
   return {
     workerId: randomUUID(),
-    api,
+    get api() {
+      return api();
+    },
     jobSlots: slotPool(boundedSetting('WORKER_CONCURRENCY', 4, 1, 16)),
     monitorSlots: slotPool(boundedSetting('WORKER_MONITORS', 16, 1, 64)),
     monitors: new Map(),
