@@ -1,6 +1,6 @@
 # Deployment
 
-Deploying Astra HQ is two jobs. First a platform administrator brings up the four pieces described in [architecture](architecture.md): Convex, web, worker, gateway. Then the same administrator configures every provider inside the running application, on the Operations page. No provider setting is an environment variable.
+Deploying Staff AI is two jobs. First a platform administrator brings up the four pieces described in [architecture](architecture.md): Convex, web, worker, gateway. Then the same administrator configures every provider inside the running application, on the Operations page. No provider setting is an environment variable.
 
 This document does not claim that any account exists, that a provider has been connected, or that a deployment has completed.
 

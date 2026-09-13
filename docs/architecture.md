@@ -1,6 +1,6 @@
 # Architecture
 
-The shape of Astra HQ as the code stands on September 12, 2026, during the platform v4 pass. Where
+The shape of Staff AI as the code stands on September 12, 2026, during the platform v4 pass. Where
 this and the code disagree, fix the code or update this document in the same change. What the
 [plan](platform-v4-plan.md) promises and the code does not yet do is listed under
 [Known gaps](#known-gaps).

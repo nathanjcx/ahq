@@ -6,10 +6,10 @@ import {
   Settings,
   ShieldCheck,
   SlidersHorizontal,
-  Sparkles,
 } from 'lucide-react';
 import { useRef, type TouchEvent } from 'react';
 import { nav, type Page } from './nav';
+import { BrandMark } from '@/components/shared/marks';
 import type { Dashboard } from '@/lib/contracts';
 
 /** How far left a swipe has to travel before it closes the drawer. */
@@ -48,12 +48,12 @@ export function Sidebar({
       onTouchEnd={onTouchEnd}
     >
       <div className="brand-row">
-        <button className="brand" onClick={() => onNavigate('office')} aria-label="Astra HQ home">
+        <button className="brand" onClick={() => onNavigate('office')} aria-label="Staff AI home">
           <span className="brand-glyph" aria-hidden="true">
-            <Sparkles size={18} />
+            <BrandMark size={17} />
           </span>
           <span>
-            Astra <i>HQ</i>
+            Staff <i>AI</i>
           </span>
         </button>
         <button className="icon-button sidebar-close" onClick={onClose} aria-label="Close navigation">

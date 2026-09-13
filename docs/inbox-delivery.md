@@ -1,6 +1,6 @@
 # Native inbox delivery
 
-Astra HQ receives verified native webhook deliveries for GitHub, Linear, and Slack. There is one endpoint per provider, shared by every workspace and connection:
+Staff AI receives verified native webhook deliveries for GitHub, Linear, and Slack. There is one endpoint per provider, shared by every workspace and connection:
 
 ```text
 POST https://your-web-origin.example.com/api/webhooks/native/github
@@ -44,7 +44,7 @@ The endpoint normalizes issue, pull request, and issue comment deliveries into a
 
 Set the webhook URL in the Linear OAuth application's settings and copy its signing secret into the Linear card on Operations. Subscribe to `Issue` and `Comment` only. Linear signs the exact body with `Linear-Signature`, sends `Linear-Delivery`, and includes `webhookTimestamp` in milliseconds. The endpoint requires a timestamp within 60 seconds of now, and rejects a `Linear-Timestamp` header that disagrees with the signed body. The team ID on the payload is the routing key. See the current [webhook documentation](https://linear.app/developers/webhooks).
 
-Other Linear event types are acknowledged and ignored. A deleted or updated provider record is an inbox event; it is never interpreted as an instruction to delete or mutate anything in Astra HQ.
+Other Linear event types are acknowledged and ignored. A deleted or updated provider record is an inbox event; it is never interpreted as an instruction to delete or mutate anything in Staff AI.
 
 ## Slack
 
