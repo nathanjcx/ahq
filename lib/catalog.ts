@@ -258,34 +258,41 @@ export const CATALOG_TOOLS: CatalogTool[] = [
     mode: 'write',
     resourceArgument: 'teamId',
   },
-  // Slack
+  // Slack. Names are the ones the Slack MCP server advertises.
   {
     provider: 'slack',
-    name: 'search_messages',
+    name: 'slack_search_messages',
     description: 'Search messages the user can see.',
     mode: 'read',
   },
   {
     provider: 'slack',
-    name: 'read_channel',
+    name: 'slack_read_channel',
     description: 'Read a channel’s recent messages.',
     mode: 'read',
-    resourceArgument: 'channel',
+    resourceArgument: 'channel_id',
   },
   {
     provider: 'slack',
-    name: 'read_thread',
+    name: 'slack_read_thread',
     description: 'Read a thread.',
     mode: 'read',
-    resourceArgument: 'channel',
+    resourceArgument: 'channel_id',
   },
-  { provider: 'slack', name: 'list_channels', description: 'List channels.', mode: 'read' },
+  { provider: 'slack', name: 'slack_search_channels', description: 'Find channels by name.', mode: 'read' },
   {
     provider: 'slack',
-    name: 'post_message',
+    name: 'slack_list_user_channels',
+    description: 'List the channels the user is in.',
+    mode: 'read',
+  },
+  { provider: 'slack', name: 'slack_fetch_user_info', description: 'Look up a person.', mode: 'read' },
+  {
+    provider: 'slack',
+    name: 'slack_send_message',
     description: 'Post a message to a channel or thread.',
     mode: 'write',
-    resourceArgument: 'channel',
+    resourceArgument: 'channel_id',
   },
   // Google Workspace. Names are the ones the Workspace MCP servers advertise.
   {
@@ -458,8 +465,15 @@ const linear = {
   write: ['create_issue', 'update_issue', 'create_comment'],
 };
 const slack = {
-  read: ['search_messages', 'read_channel', 'read_thread', 'list_channels'],
-  write: ['post_message'],
+  read: [
+    'slack_search_messages',
+    'slack_read_channel',
+    'slack_read_thread',
+    'slack_search_channels',
+    'slack_list_user_channels',
+    'slack_fetch_user_info',
+  ],
+  write: ['slack_send_message'],
 };
 const gmail = ['search_threads', 'get_thread', 'get_message', 'list_labels', 'list_drafts', 'create_draft'];
 const calendar = [
@@ -1117,7 +1131,7 @@ Prioritise everything by expected impact with the reasoning shown. Never report 
     ],
     capabilities: [
       cap('google-workspace', [...docs, ...slides]),
-      cap('slack', [...slack.read, 'post_message'], true),
+      cap('slack', [...slack.read, ...slack.write], true),
       cap('canva', ['search_designs', 'create_design', 'export_design'], true),
       cap('linear', linear.read, true),
     ],

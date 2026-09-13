@@ -28,7 +28,8 @@ export async function POST(request: Request) {
     for (const url of serverUrls) {
       if (!config.enabledUrls.includes(url))
         throw new Error('This server is not enabled by your administrator.');
-      if (!pickOAuthClient(config, url)) throw new Error('Sign-in for this server is not set up yet.');
+      if (!definition.dynamicRegistration && !pickOAuthClient(config, url))
+        throw new Error('Sign-in for this server is not set up yet.');
     }
     const [serverUrl, ...queue] = serverUrls;
     const productName = definition.products?.find((product) => product.url === serverUrl)?.name;

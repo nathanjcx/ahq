@@ -1,4 +1,4 @@
-import { v } from 'convex/values';
+import { ConvexError, v } from 'convex/values';
 import { mutation, query } from '../_generated/server';
 import { assertApprovedServerUrl, grantableTools } from '../registry';
 import { provider } from '../schema';
@@ -40,8 +40,9 @@ export const connectIntegration = mutation({
     const tools = [...new Set(args.tools)];
     // OAuth consent grants account scopes. Tool grants come from the administrator's reviewed registry.
     const allowedTools = await grantableTools(ctx, args.provider, tools);
+    // A ConvexError keeps its message in production, where a plain Error is redacted to "Server Error".
     if (!allowedTools.length)
-      throw new Error('None of the tools on this server are in the reviewed tool registry yet.');
+      throw new ConvexError('None of the tools on this server are in the reviewed tool registry yet.');
     const owned = await ctx.db
       .query('connections')
       .withIndex('by_owner', (q) => q.eq('ownerSubject', args.authSubject))

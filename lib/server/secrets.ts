@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes, timingSafeEqual } from 'node:crypto';
+import { ConvexError } from 'convex/values';
 export function requiredEnv(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is not configured`);
@@ -51,6 +52,7 @@ function thrownMessage(message: string): string {
 }
 
 export function safeError(error: unknown): string {
+  if (error instanceof ConvexError && typeof error.data === 'string') return error.data.slice(0, 500);
   return error instanceof Error
     ? thrownMessage(error.message)
         .replace(/Bearer\s+[^\s]+/gi, 'Bearer [redacted]')
