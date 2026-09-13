@@ -1,10 +1,24 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { shiftsFromCalendar, type DayInput } from './activity';
 import { DAY_MS } from './day-replay';
+import { calendarWall, type CalendarEntry } from './office-layout';
 import { useUiQuery } from '@/components/shared/use-ui-query';
 import { asId, uiApi } from '@/lib/ui-api';
+
+/**
+ * The clock the rooms read. Activities age out on their own, so a room re-reads
+ * the journal on a slow tick rather than waiting for the next subscription.
+ */
+export function useNow(intervalMs: number) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(timer);
+  }, [intervalMs]);
+  return now;
+}
 
 /**
  * One day of the workspace, from the subscriptions the office already has a
@@ -35,4 +49,17 @@ export function useDayQueries(from: number): DayInput {
     }),
     [to, entries, entry, meeting, findings, alerts, notifications],
   );
+}
+
+/** The lobby's wall covers the week ahead, starting with what is left of today. */
+const WEEK_MS = 7 * DAY_MS;
+
+/**
+ * The coming week, as the lobby's calendar wall reads it. `from` is local midnight
+ * today; without one the lobby is not on show and nothing is asked for.
+ */
+export function useWeekCalendar(from?: number): CalendarEntry[] {
+  const range = useMemo(() => (from === undefined ? null : { from, to: from + WEEK_MS }), [from]);
+  const entries = useUiQuery(uiApi.calendarEntries, range ?? 'skip');
+  return useMemo(() => (range && entries ? calendarWall(entries, range.from) : []), [range, entries]);
 }

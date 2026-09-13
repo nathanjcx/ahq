@@ -56,7 +56,16 @@ function Parquet() {
  * The room itself. `desks` is the grid the floor's headcount produced, so the
  * furniture and the people always agree about where a workstation is.
  */
-export function Architecture({ desks, interior }: { desks: Point[]; interior: number }) {
+export function Architecture({
+  desks,
+  interior,
+  lamps,
+}: {
+  desks: Point[];
+  interior: number;
+  /** The desks whose lamps are lit. Every desk when absent. */
+  lamps?: number[];
+}) {
   return (
     <group>
       <Parquet />
@@ -74,7 +83,7 @@ export function Architecture({ desks, interior }: { desks: Point[]; interior: nu
       ).map(([z, width]) => (
         <Box key={z} p={[-9, 1.95, z]} s={[0.17, 1.94, width]} color={C.wall} />
       ))}
-      <ArchitecturalDetails desks={desks} interior={interior} />
+      <ArchitecturalDetails desks={desks} interior={interior} lamps={lamps} />
       <Box p={[0, 0.15, -5.88]} s={[17.9, 0.25, 0.055]} color={C.trim} />
       <Box p={[-8.89, 0.15, 0]} s={[0.055, 0.25, 11.9]} color={C.trim} />
       <Box p={[0, 3.1, -6]} s={[18.2, 0.09, 0.24]} color={C.trim} />

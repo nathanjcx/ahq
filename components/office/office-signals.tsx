@@ -290,6 +290,9 @@ export function TaskCards({
   const relayout = useOverlayRelayout();
   useLayoutEffect(() => {
     label?.anchor.set(...position);
+    // The floor's work outranks the other fixed cards: on a small stage the
+    // whiteboard's note gives way to the board rather than the other way round.
+    label?.rank(1, false);
   }, [label, position]);
   const shown = boardLayout(cards).cards;
   if (!shown.length) return null;
@@ -326,7 +329,7 @@ export function TaskCards({
   );
 }
 
-/** Today's shifts and meetings, on the lobby's calendar wall. */
+/** The week's shifts, meetings and deadlines, on the lobby's calendar wall. */
 export function CalendarCard({
   position,
   entries,
@@ -352,7 +355,7 @@ export function CalendarCard({
           relayout();
         }}
       >
-        <h3>Today</h3>
+        <h3>This week</h3>
         <ol>
           {shown.map((item) => (
             <li key={`${item.at} ${item.label}`}>

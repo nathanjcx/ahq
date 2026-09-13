@@ -396,3 +396,52 @@
     font-size: 12px;
   }
 }
+
+/* === components/office/room-view.tsx: one of the tower's other rooms, over its page === */
+.office-room {
+  flex: none;
+  margin: 18px 0 0;
+  overflow: hidden;
+}
+
+.office-room > header {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 15px 18px;
+}
+
+.office-room > header > div {
+  flex: 0 0 auto;
+}
+
+.office-room h3 {
+  margin: 2px 0 0;
+  font-size: var(--text-md);
+}
+
+.office-room > header > p {
+  flex: 1 1 auto;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.office-room[data-open='true'] > header {
+  border-bottom: 1px solid var(--line);
+}
+
+.office-room-stage {
+  height: 340px;
+  /* A canvas has no content to be sized by, so it never gives up its height. */
+  flex: none;
+}
+
+@media (max-width: 640px) {
+  .office-room > header {
+    flex-wrap: wrap;
+  }
+  .office-room-stage {
+    height: 260px;
+  }
+}

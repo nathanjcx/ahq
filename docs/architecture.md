@@ -375,6 +375,24 @@ and escalations. **Triage** (`components/triage/`) is the alert inbox, the pagin
 reports, and intake setup, with the incident strip above every page. Settings is a panel over any
 page, in five sections. Every per-domain action file under `components/app/actions/` is wired.
 
+**The building** (`components/office/`) is not a page; it is the 3D office the pages mount, and every
+room derives from the data its page already holds. `deriveScene` turns one dashboard, one floor board
+and the day around it into the whole room: activities and floor signals from the pure model in
+`activity.ts`, the wall board from the floor's tasks, the binder and the desk notebooks from the
+memory summaries, the workspace's hours inside the day so a figure can be off shift or writing the
+day's report, and the hour from the viewer's clock so the daylight follows it. The rooms:
+
+| Room       | Where it is mounted                      | What dresses it                                                        |
+| ---------- | ---------------------------------------- | ---------------------------------------------------------------------- |
+| Lobby      | `floors/lobby-view.tsx`                  | `deriveScene` with `room: 'lobby'`; the wall is `calendar:entries` for the coming week, and the lift stands beside it |
+| Floor      | `floors/floor-team.tsx`                  | `deriveScene`: board, binder, notebooks, findings folders, beacon, notice, overnight lamps |
+| Records    | `records/records-basement.tsx`           | `memory:summaries` for workspace, floors and projects, one run of casework each; the janitor while a curation run is open |
+| Boardroom  | `meetings/meeting-view.tsx`              | `meetings:get` and the calendar entry, through the same `deriveActivities` the floor uses |
+| Triage     | `triage/triage-floor.tsx`                | `triage:alerts` and the notification ledger: the alert board, the status lamp, the beacon, the notice |
+
+The three rooms a page mounts over its own content share `office/room-view.tsx`: a fold-away panel
+that starts folded on a phone, where a canvas costs more than it says.
+
 ## One day
 
 1. **09:00.** The tick sees working hours. It creates the reserved staff if they are missing, opens

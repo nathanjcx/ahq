@@ -11,6 +11,7 @@ import { SkeletonList } from '../shared/skeleton';
 import { relativeTime } from '../shared/time';
 import { useUiQuery } from '../shared/use-ui-query';
 import { AlertDetail } from './alert-detail';
+import { TriageFloor } from './triage-floor';
 import { TriageIntake } from './triage-intake';
 import { alertStage, pagingSentence } from './triage-labels';
 import type { Alert } from '@/lib/contracts';
@@ -31,6 +32,8 @@ export function TriagePage({ dashboard, actions, configured, run, go, onSelectTa
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { open, openDetail, closeDetail } = useMasterDetail();
   const hasTriageFloor = dashboard.employees.some((employee) => employee.kind === 'triage');
+  const alerts = useUiQuery(uiApi.alerts, {});
+  const notifications = useUiQuery(uiApi.notifications, {});
 
   const openTask = (taskId: string) => {
     onSelectTask(taskId);
@@ -75,23 +78,32 @@ export function TriagePage({ dashboard, actions, configured, run, go, onSelectTa
           text="Connect your workspace and the Triage floor takes alerts from GitHub, a signed prober, and classified mail."
         />
       ) : tab === 'alerts' ? (
-        <AlertsTab
-          floors={dashboard.floors}
-          selectedId={selectedId}
-          open={open}
-          onSelect={(id) => {
-            setSelectedId(id);
-            openDetail();
-          }}
-          onBack={closeDetail}
-          onAcknowledge={(id) => void run(() => actions.acknowledgeAlert(id), 'Incident acknowledged')}
-          onResolve={(id) => void run(() => actions.closeAlert(id), 'Incident resolved')}
-          onDismiss={(id) => void run(() => actions.dismissAlert(id), 'Alert dismissed')}
-          onAssignFloors={(id, floorIds) =>
-            void run(() => actions.assignAlertFloors(id, floorIds), 'Affected floors updated')
-          }
-          onTask={openTask}
-        />
+        <>
+          <TriageFloor
+            employees={dashboard.employees}
+            tasks={dashboard.tasks}
+            alerts={alerts ?? []}
+            notifications={notifications ?? []}
+          />
+          <AlertsTab
+            alerts={alerts}
+            floors={dashboard.floors}
+            selectedId={selectedId}
+            open={open}
+            onSelect={(id) => {
+              setSelectedId(id);
+              openDetail();
+            }}
+            onBack={closeDetail}
+            onAcknowledge={(id) => void run(() => actions.acknowledgeAlert(id), 'Incident acknowledged')}
+            onResolve={(id) => void run(() => actions.closeAlert(id), 'Incident resolved')}
+            onDismiss={(id) => void run(() => actions.dismissAlert(id), 'Alert dismissed')}
+            onAssignFloors={(id, floorIds) =>
+              void run(() => actions.assignAlertFloors(id, floorIds), 'Affected floors updated')
+            }
+            onTask={openTask}
+          />
+        </>
       ) : tab === 'reports' ? (
         <ReportsTab onTask={openTask} />
       ) : (
@@ -102,6 +114,7 @@ export function TriagePage({ dashboard, actions, configured, run, go, onSelectTa
 }
 
 function AlertsTab({
+  alerts,
   floors,
   selectedId,
   open,
@@ -113,6 +126,8 @@ function AlertsTab({
   onAssignFloors,
   onTask,
 }: {
+  /** The workspace's alerts, read once by the page above so the floor and the list agree. */
+  alerts: Alert[] | undefined;
   floors: PageProps['dashboard']['floors'];
   selectedId: string | null;
   open: boolean;
@@ -124,7 +139,6 @@ function AlertsTab({
   onAssignFloors: (id: string, floorIds: string[]) => void;
   onTask: (taskId: string) => void;
 }) {
-  const alerts = useUiQuery(uiApi.alerts, {});
   if (alerts === undefined) return <SkeletonList kind="entry" rows={5} label="Loading alerts" />;
   if (!alerts.length)
     return (
@@ -170,15 +184,7 @@ function AlertsTab({
   );
 }
 
-function AlertRow({
-  alert,
-  selected,
-  onSelect,
-}: {
-  alert: Alert;
-  selected: boolean;
-  onSelect: () => void;
-}) {
+function AlertRow({ alert, selected, onSelect }: { alert: Alert; selected: boolean; onSelect: () => void }) {
   const stage = alertStage(alert);
   const paging = pagingSentence(alert.paging);
   return (

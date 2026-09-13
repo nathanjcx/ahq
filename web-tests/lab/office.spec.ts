@@ -41,8 +41,10 @@ for (const scene of scenes) {
 
 test('office performance budget', async ({ page }) => {
   test.setTimeout(120_000);
+  // The stage is drawn at the viewport's own size here, so the frame time is a
+  // measurement of a 1440 canvas rather than of the 1280 one the baselines use.
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/office-lab?preset=floor-day&hour=13&seed=1');
+  await page.goto('/office-lab?preset=floor-day&hour=13&seed=1&width=1440&height=860');
   await page.locator('canvas').waitFor();
   await page.waitForTimeout(1000);
 
@@ -74,6 +76,8 @@ test('office performance budget', async ({ page }) => {
         requestAnimationFrame(tick);
       }),
   );
-  // Software rendering has no GPU; LAB_FRAME_BUDGET_MS=16 is the budget on a machine with one.
-  expect(sample.medianMs, 'median frame time').toBeLessThan(Number(process.env.LAB_FRAME_BUDGET_MS ?? 700));
+  // Software rendering has no GPU; LAB_FRAME_BUDGET_MS=16 is the budget on a machine
+  // with one. The fallback is a guard against a collapse under SwiftShader, sized for
+  // the 1440 canvas this draws, not the plan's budget.
+  expect(sample.medianMs, 'median frame time').toBeLessThan(Number(process.env.LAB_FRAME_BUDGET_MS ?? 1_000));
 });

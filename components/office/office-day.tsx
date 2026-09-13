@@ -12,10 +12,12 @@ import {
   type DayRecord,
 } from './day-replay';
 import type { LabelMode } from './office-labels';
+import { boardCards } from './office-layout';
 import type { SelectProp } from './office-props';
 import type { OfficeDressing, OfficeEmployee } from './office-scene';
 import { OfficeStage, type OfficeSceneData } from './office-stage';
 import { useDayQueries } from './use-day';
+import type { ScheduleSummary, Task } from '@/lib/contracts';
 import './office-view.css';
 
 /** The scrubber runs in minutes, which is fine enough to land on any one moment. */
@@ -30,7 +32,7 @@ type ReplayProps = {
   labels?: LabelMode;
   /** Where the scrubber starts, as milliseconds into the day. */
   startAt?: number;
-  /** Props the room carries whatever the day did: the board, the memory, the room itself. */
+  /** Props the room carries whatever the day did: the room itself, and its memory. */
   dressing?: OfficeDressing;
   onSelect?: (id: string) => void;
   onSelectProp?: SelectProp;
@@ -42,11 +44,19 @@ type ReplayProps = {
  * audit, and any incident that came in — all from the same derivation the live
  * office runs on, so a replay cannot show a day the office could not.
  */
-export function OfficeDay(props: ReplayProps) {
+export function OfficeDay({ tasks, schedule, ...props }: ReplayProps & DayQueries) {
   const [from, setFrom] = useState(() => yesterday(Date.now()).from);
-  const record = useDayRecord(props.employees, from);
+  const record = useDayRecord(props.employees, tasks, schedule, from);
   return <DayReplay {...props} record={record} onPickDay={setFrom} />;
 }
+
+/** What the live replay needs beyond the day's own subscriptions. */
+type DayQueries = {
+  /** This floor's work, cut back to the day being replayed. */
+  tasks: Task[];
+  /** The workspace's hours, which is what makes the replayed floor go quiet at night. */
+  schedule?: ScheduleSummary;
+};
 
 /**
  * The replay itself, over a day somebody has already collected. The lab and the
@@ -66,7 +76,12 @@ export function DayReplay({
 }: ReplayProps & { record: DayRecord; onPickDay?: (from: number) => void }) {
   const [offset, setOffset] = useState(startAt ?? DEFAULT_OFFSET);
   const at = record.from + offset;
-  const { activities, signals, day } = useMemo(() => dayAt(record, floorId, at), [record, floorId, at]);
+  const { activities, signals, day, tasks } = useMemo(
+    () => dayAt(record, floorId, at),
+    [record, floorId, at],
+  );
+  // The board is the board of the day being replayed, not of today.
+  const cards = useMemo(() => boardCards(tasks), [tasks]);
   const moments = useMemo(() => dayMoments(record), [record]);
   const when = new Date(at);
   const scene: OfficeSceneData = {
@@ -75,6 +90,7 @@ export function DayReplay({
     providers: [],
     lightBudget: 0,
     hour: when.getHours() + when.getMinutes() / 60,
+    ...(cards.length ? { board: { cards } } : {}),
     ...(signals.incident ? { incident: true, incidentCount: signals.incidentCount } : {}),
     ...(signals.emergency ? { emergency: signals.emergency } : {}),
     ...(signals.meeting ? { meeting: signals.meeting } : {}),
@@ -149,7 +165,12 @@ function clock(at: number): string {
 
 
 /** A recorded day, from the same subscriptions the live office uses. */
-function useDayRecord(employees: OfficeEmployee[], from: number): DayRecord {
+function useDayRecord(
+  employees: OfficeEmployee[],
+  tasks: Task[],
+  schedule: ScheduleSummary | undefined,
+  from: number,
+): DayRecord {
   const day = useDayQueries(from);
   const people = useMemo(
     () => employees.map((employee) => ({ id: employee.id, name: employee.name })),
@@ -160,14 +181,16 @@ function useDayRecord(employees: OfficeEmployee[], from: number): DayRecord {
       from,
       to: from + DAY_MS,
       employees: people,
-      // The replay plays the day's shape; one task's journal is the other replay's job.
-      tasks: [],
+      ...(schedule ? { schedule } : {}),
+      // The work itself, which `dayAt` cuts back to the day. One task's own
+      // journal, turn by turn, is the other replay's job.
+      tasks,
       shifts: day.shifts ?? [],
       meetings: day.meetings ?? [],
       findings: day.findings ?? [],
       alerts: day.alerts ?? [],
       notifications: day.notifications ?? [],
     }),
-    [from, people, day],
+    [from, people, schedule, tasks, day],
   );
 }

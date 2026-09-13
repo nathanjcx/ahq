@@ -107,12 +107,19 @@ export function dayAt(
   record: DayRecord,
   floorId: string | undefined,
   at: number,
-): { activities: Map<string, EmployeeActivity>; signals: FloorSignals; day: DayInput } {
+): {
+  activities: Map<string, EmployeeActivity>;
+  signals: FloorSignals;
+  day: DayInput;
+  /** The day's work as it stood, which is what its board carried. */
+  tasks: Task[];
+} {
   const day = dayInputAt(record, at);
+  const tasks = record.tasks.flatMap((task) => taskAsOf(task, at) ?? []);
   return {
     activities: deriveActivities({
       employees: record.employees,
-      tasks: record.tasks.flatMap((task) => taskAsOf(task, at) ?? []),
+      tasks,
       events: [],
       proposals: [],
       posts: [],
@@ -121,6 +128,7 @@ export function dayAt(
     }),
     signals: deriveFloorSignals(day, floorId, at),
     day,
+    tasks,
   };
 }
 

@@ -8,7 +8,7 @@ import { relativeTime } from '../shared/time';
 import type { FloorSummary } from './floor-stats';
 import { FloorTeam } from './floor-team';
 import { FloorWork } from './floor-work';
-import type { ActionProposal, Employee, Floor, ScheduleSummary, Task } from '@/lib/contracts';
+import type { ActionProposal, Dashboard, Employee, Floor, ScheduleSummary, Task } from '@/lib/contracts';
 import { pluralize } from '@/lib/text';
 
 type Region = 'board' | 'feeds' | 'work' | 'team' | 'binder';
@@ -25,6 +25,7 @@ const BRIEF_CLAMP = 220;
 
 export function FloorView({
   floor,
+  dashboard,
   floorLabel,
   summary,
   staff,
@@ -44,6 +45,8 @@ export function FloorView({
   replay,
 }: {
   floor: Floor;
+  /** The workspace the page is showing, for the office the team rail mounts. */
+  dashboard: Dashboard;
   floorLabel: string;
   summary: FloorSummary;
   staff: Employee[];
@@ -151,6 +154,7 @@ export function FloorView({
           <FloorTeam
             floorName={`${floorLabel} · ${floor.name}`}
             floorId={floor.id}
+            dashboard={dashboard}
             configured={configured}
             archived={archived}
             staff={staff}

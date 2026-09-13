@@ -5,6 +5,7 @@ import { useState } from 'react';
 import type { PageProps } from '../app/page-props';
 import { EmptyPane } from '../shared/empty';
 import { MasterDetail, useMasterDetail } from '../shared/master-detail';
+import { scopeBudget, tokenEstimate } from '../shared/memory';
 import { PageIntro } from '../shared/page-intro';
 import { useUiQuery } from '../shared/use-ui-query';
 import { BudgetsSheet } from './budgets-sheet';
@@ -12,13 +13,9 @@ import { ClaimComposer } from './claim-composer';
 import { ClaimList } from './claim-list';
 import { ContestedPairs, contestedPairs } from './contested-pairs';
 import { JanitorLog } from './janitor-log';
+import { RecordsBasement } from './records-basement';
 import { TaskDossier } from './task-dossier';
-import {
-  defaultWorkspaceSettings,
-  type Memory,
-  type MemoryBudgets,
-  type MemoryScope,
-} from '@/lib/contracts';
+import { defaultWorkspaceSettings, type Memory, type MemoryScope } from '@/lib/contracts';
 import { pluralize } from '@/lib/text';
 import { asId, uiApi } from '@/lib/ui-api';
 import './records.css';
@@ -34,15 +31,6 @@ const tabs: { scope: MemoryScope; label: string }[] = [
 /** The scopes the server can summarise in one query; the rest are counted from their own claims. */
 function isSummaryScope(scope: MemoryScope): scope is 'workspace' | 'project' | 'floor' {
   return scope === 'workspace' || scope === 'project' || scope === 'floor';
-}
-
-/** The one token estimate the product uses, matching the compiler: four characters per token. */
-function tokenEstimate(text: string) {
-  return Math.ceil(text.length / 4);
-}
-
-function scopeBudget(budgets: MemoryBudgets, scope: MemoryScope) {
-  return scope === 'task' ? 0 : budgets[scope];
 }
 
 type Target = { id: string; name: string; note: string };
@@ -87,21 +75,13 @@ function ShelfMeter({ claims, budget }: { claims: Memory[]; budget: number }) {
   );
 }
 
-export function RecordsPage({
-  dashboard,
-  actions,
-  canManageWorkspace,
-  run,
-  onSelectTask,
-  go,
-}: PageProps) {
+export function RecordsPage({ dashboard, actions, canManageWorkspace, run, onSelectTask, go }: PageProps) {
   const [scope, setScope] = useState<MemoryScope>('workspace');
   const [chosen, setChosen] = useState<Partial<Record<MemoryScope, string>>>({});
   const [budgetsOpen, setBudgetsOpen] = useState(false);
   const { open, openDetail, closeDetail } = useMasterDetail();
 
-  const summaries =
-    useUiQuery(uiApi.memorySummaries, isSummaryScope(scope) ? { scope } : 'skip') ?? [];
+  const summaries = useUiQuery(uiApi.memorySummaries, isSummaryScope(scope) ? { scope } : 'skip') ?? [];
   const settings = useUiQuery(uiApi.workspaceSettings, {});
   const budgets = settings?.memoryBudgets ?? defaultWorkspaceSettings.memoryBudgets;
   const janitorEntries = useUiQuery(uiApi.janitorLog, {}) ?? [];
@@ -158,6 +138,8 @@ export function RecordsPage({
           </button>
         }
       />
+
+      <RecordsBasement employees={dashboard.employees} tasks={dashboard.tasks} />
 
       <div className="segmented records-scopes" role="tablist" aria-label="Memory scopes">
         {tabs.map((tab) => (

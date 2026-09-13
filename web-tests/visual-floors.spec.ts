@@ -2,8 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { slug } from '../lib/text';
 
 /**
- * Photographs the floor, its channel, feeds, work, team, and binder, then the Triage floor and the
- * notifications ledger, at both viewports. It checks the two things a screenshot cannot show: that
+ * Photographs the lobby, a floor, its channel, feeds, work, team, and binder, then the Triage floor
+ * and the notifications ledger, at both viewports. It checks the two things a screenshot cannot show: that
  * nothing overflows horizontally, and that no page error was thrown.
  */
 const viewports = [
@@ -65,6 +65,15 @@ for (const viewport of viewports) {
     await shoot(page, viewport.name, 'incident-strip');
 
     await go(page, 'Office', mobile);
+
+    // The lobby, before a floor is chosen: the calendar wall for the week ahead and
+    // the lift behind it, both from the same subscriptions the floors read.
+    await page.locator('canvas').first().waitFor();
+    await page.waitForTimeout(3000);
+    if (!mobile) await expect(page.locator('.office-calendar')).toBeVisible();
+    await expectNoOverflow(page, viewport.width);
+    await shoot(page, viewport.name, 'lobby');
+
     if (mobile) await page.locator('.floor-switcher-trigger').click();
     await page
       .getByRole('button', { name: /Spring launch/ })
@@ -115,7 +124,8 @@ for (const viewport of viewports) {
     await shoot(page, viewport.name, 'triage-alerts');
 
     // The emergency incident: its paging line and the tool call it made without permission.
-    await page.getByRole('button', { name: /Checkout writes are failing/ }).click();
+    // Scoped to the list: the Triage floor above it speaks the same alert's title.
+    await page.locator('.alert-row').filter({ hasText: 'Checkout writes are failing' }).click();
     await expect(page.locator('.alert-paging')).toBeVisible();
     await expect(page.locator('.alert-timeline li[data-authority="emergency"]')).toBeVisible();
     await expectNoOverflow(page, viewport.width);

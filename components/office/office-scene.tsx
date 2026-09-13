@@ -19,7 +19,7 @@ import {
 import { Static } from './office-merge';
 import { OfficeOverlay } from './office-overlay';
 import { useOfficePan } from './office-pan';
-import { EmployeeAvatar, type EmployeeKind } from './office-people';
+import { EmployeeAvatar, isSeated, type EmployeeKind } from './office-people';
 import { C, Halo, SurfaceContext, useSurfaceTextures, type Point } from './office-primitives';
 import {
   AlertBoard,
@@ -31,7 +31,6 @@ import {
   IncidentLamp,
   LiftDoor,
   MemoryBinder,
-  OvernightLamp,
   StatusLamp,
   TaskBoard,
   WaitingString,
@@ -150,6 +149,9 @@ const FILL = 0.85;
 const FILL_COMPACT = 1.18;
 /** A stage narrower than this gets the closer framing and the compact chrome. */
 const COMPACT_WIDTH = 560;
+/** A fixed card is a list to read; on a stage narrower than this it covers the room
+ *  instead, so the phone gets the room and the page around it carries the words. */
+const CARD_STAGE_WIDTH = 420;
 /** Two bubbles only once the stage is genuinely wide. */
 const WIDE_WIDTH = 1200;
 /** One bubble holds the floor this long before the next candidate takes its turn. */
@@ -239,19 +241,22 @@ const EMPTY_DRESSING: OfficeDressing = {};
 /** The floor's props, in the room's coordinates. Desk props are in the desk's own.
  *  The ones a figure walks to live in office-stations, so both agree on where they are. */
 const CALENDAR_WALL: Point = [2.75, 1.72, -0.6];
-/** Beside the door, at eye height, where a notice is read on the way in. */
-const NOTICE: Point = [-8.84, 1.62, -3.2];
+/** On the back wall beside the door, at eye height, where a notice is read on the way in. */
+const NOTICE: Point = [-8.35, 1.62, -5.78];
 /** A waiting figure holds its string at about chest height. */
 const STRING_HEIGHT = 1.18;
-/** The overlay cards hang above the props they belong to. */
-const TASK_CARDS: Point = [-2.3, 3.4, 2.55];
-const CALENDAR_CARD: Point = [2.75, 2.85, -0.6];
+/** The overlay cards hang above the props they belong to. The board's card stands
+ *  beside the board over the open floor between it and the lounge, rather than
+ *  above it over the desks. */
+const TASK_CARDS: Point = [2.2, 1.4, 3.6];
+/** On the wall it reads out, low enough to clear anyone huddled in the middle of
+ *  the room and central enough to stay inside a narrow stage. */
+const CALENDAR_CARD: Point = [2.75, 1, -0.6];
 /** The triage signals stack on the window wall's pier: the board, then the lamp. */
 const ALERT_BOARD: Point = [-8.86, 1.4, -0.8];
 const STATUS_LAMP: Point = [-8.8, 2.66, -0.8];
 const NOTEBOOK: Point = [-1, 0.985, -0.3];
 const FINDINGS: Point = [0.3, 0.985, 0.33];
-const DESK_LAMP: Point = [0.76, 1.328, -0.32];
 
 /** Directional and ambient light follow the viewer's clock, and dim as the cap fills. */
 function Lighting({ light, budget, sky = true }: { light: Daylight; budget: number; sky?: boolean }) {
@@ -337,6 +342,7 @@ export function OfficeScene({
   onSelectProp,
 }: OfficeSceneProps) {
   const { size } = useThree();
+  const cardsFit = size.width >= CARD_STAGE_WIDTH;
   const surfaces = useSurfaceTextures();
   // Sticky desk assignments. A plain stable object rather than a ref: losing it
   // only means the room picks the chairs again, which nobody can tell apart.
@@ -349,7 +355,11 @@ export function OfficeScene({
     return schedule && !schedule.working ? afterHours(clock) : clock;
   }, [hour, room, schedule]);
   const onFloor = room !== 'records' && room !== 'boardroom';
-  const active = useMemo(() => employees.filter(isActiveEmployee), [employees]);
+  // Somebody off shift has gone home, so the floor does not hold a chair for them.
+  const active = useMemo(
+    () => employees.filter((employee) => isActiveEmployee(employee) && employee.state?.activity !== 'off_shift'),
+    [employees],
+  );
   // A boardroom only holds the meeting's attendees, in the order they were invited.
   const present = useMemo(() => {
     if (room !== 'boardroom') return active;
@@ -386,6 +396,19 @@ export function OfficeScene({
       ...(stations[index].accent ? { accent: stations[index].accent } : {}),
     }));
   }, [present, providers, room, onFloor, meeting, seats]);
+  // After hours the floor is dark but for the desks somebody is still sitting and
+  // working at: an auditor walking the floor does not light the desk they left.
+  const lamps = useMemo(() => {
+    if (!schedule || schedule.working) return undefined;
+    return people
+      .filter(
+        (person) =>
+          person.home < desks.length &&
+          isWorking(person.state.activity) &&
+          isSeated(person.state.activity),
+      )
+      .map((person) => person.home);
+  }, [schedule, people, desks.length]);
   const shelves = useMemo(
     () =>
       dressing.records?.shelves ?? (dressing.memory ? defaultShelves(dressing.memory) : ([] as ShelfSpec[])),
@@ -434,8 +457,8 @@ export function OfficeScene({
         )}
         {onFloor && (
           <>
-            <Static revision={desks.length}>
-              <Architecture desks={desks} interior={light.interior} />
+            <Static revision={`${desks.length} ${lamps?.join(' ') ?? 'all'}`}>
+              <Architecture desks={desks} interior={light.interior} lamps={lamps} />
               <FileCabinet />
               <OfficeSpeakers />
             </Static>
@@ -487,11 +510,11 @@ export function OfficeScene({
           </>
         )}
         <OfficeOverlay>
-          {onFloor && <BoardNote position={BOARD_NOTE} note={note} />}
-          {onFloor && dressing.board && (
+          {cardsFit && onFloor && <BoardNote position={BOARD_NOTE} note={note} />}
+          {cardsFit && onFloor && dressing.board && (
             <TaskCards position={TASK_CARDS} cards={dressing.board.cards} onSelectProp={onSelectProp} />
           )}
-          {room === 'lobby' && dressing.calendar && (
+          {cardsFit && room === 'lobby' && dressing.calendar && (
             <CalendarCard position={CALENDAR_CARD} entries={dressing.calendar} onSelectProp={onSelectProp} />
           )}
           {people.map((person) => (
@@ -580,11 +603,9 @@ function FloorDressing({
     findings,
     incident,
     incidentCount = 0,
-    schedule,
     calendar = [],
     emergency,
   } = dressing;
-  const overnight = Boolean(schedule && !schedule.working && schedule.overnightCheap);
   return (
     <group>
       {memory && <MemoryBinder position={BINDER} fill={memory.floorFill} onSelectProp={onSelectProp} />}
@@ -593,8 +614,7 @@ function FloorDressing({
         if (!desk) return null;
         const fill = memory?.agentFills.get(person.employee.id);
         const open = findings?.get(person.employee.id) ?? 0;
-        const working = overnight && isWorking(person.state.activity);
-        if (fill === undefined && open <= 0 && !working) return null;
+        if (fill === undefined && open <= 0) return null;
         return (
           <group key={person.employee.id} position={desk}>
             {fill !== undefined && (
@@ -614,7 +634,6 @@ function FloorDressing({
                 onSelectProp={onSelectProp}
               />
             )}
-            {working && <OvernightLamp position={DESK_LAMP} />}
           </group>
         );
       })}
@@ -643,9 +662,7 @@ function FloorDressing({
           />,
         ];
       })}
-      {emergency && (
-        <EmergencyNotice position={NOTICE} rotation={[0, Math.PI / 2, 0]} onSelectProp={onSelectProp} />
-      )}
+      {emergency && <EmergencyNotice position={NOTICE} onSelectProp={onSelectProp} />}
       {incident && <IncidentLamp position={INCIDENT_LAMP} onSelectProp={onSelectProp} />}
       {room === 'lobby' && (
         <>

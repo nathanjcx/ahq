@@ -97,6 +97,10 @@ function Pendant({
   );
 }
 
+/** A contested claim's binder: a red nothing else on the shelves is near, and it
+ *  stands proud of the row so the colour is not the only thing saying so. */
+const CONTESTED = '#cf2b46';
+
 const SCOPE_COLORS: Record<string, string> = {
   workspace: C.navy,
   floor: C.sage,
@@ -179,11 +183,15 @@ function RecordsShelf({ shelf, onSelectProp }: { shelf: ShelfPlacement; onSelect
                   return (
                     <group key={i}>
                       <Box
-                        p={[-0.72 + i * 0.18, y - 0.05, 0.02]}
-                        s={[0.15, 0.38 + (i % 3) * 0.03, 0.5]}
-                        color={red ? '#b6503c' : i % 4 === 0 ? '#d7cdb2' : color}
+                        p={[-0.72 + i * 0.18, y - 0.05, red ? 0.1 : 0.02]}
+                        s={[0.15, 0.38 + (i % 3) * 0.03, red ? 0.56 : 0.5]}
+                        color={red ? CONTESTED : i % 4 === 0 ? '#d7cdb2' : color}
                       />
-                      <Box p={[-0.72 + i * 0.18, y + 0.06, 0.272]} s={[0.1, 0.075, 0.006]} color="#efe9d8" />
+                      <Box
+                        p={[-0.72 + i * 0.18, y + 0.06, red ? 0.382 : 0.272]}
+                        s={[0.1, 0.075, 0.006]}
+                        color={red ? CONTESTED : '#efe9d8'}
+                      />
                     </group>
                   );
                 })

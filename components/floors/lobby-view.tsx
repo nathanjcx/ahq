@@ -7,11 +7,12 @@ import { statusLabel } from '../shared/format';
 import { Avatar, StatusMark } from '../shared/marks';
 import { relativeTime } from '../shared/time';
 import { FloorScene } from './floor-scene';
-import type { Employee, Task } from '@/lib/contracts';
+import type { Dashboard, Employee, Task } from '@/lib/contracts';
 import { pluralize } from '@/lib/text';
 
 /** The ground floor: the office scene plus whoever and whatever is not on a floor. */
 export function LobbyView({
+  dashboard,
   configured,
   lobbyEmployees,
   officeEmployees,
@@ -22,6 +23,7 @@ export function LobbyView({
   onTask,
   onAllTasks,
 }: {
+  dashboard: Dashboard;
   configured: boolean;
   lobbyEmployees: Employee[];
   officeEmployees: OfficeEmployee[];
@@ -38,7 +40,7 @@ export function LobbyView({
         <div>
           <span className="eyebrow">LOBBY</span>
           <h2>Lobby</h2>
-          <p>Tasks created without a floor stay here.</p>
+          <p>The week is on the wall, the lift is behind it, and work without a floor waits here.</p>
         </div>
         <div className="floor-heading-actions">
           <button
@@ -54,6 +56,8 @@ export function LobbyView({
       <div className="floor-overview">
         <FloorScene
           label="Lobby"
+          room="lobby"
+          dashboard={dashboard}
           live={configured}
           employeeCount={lobbyEmployees.length}
           officeEmployees={officeEmployees}

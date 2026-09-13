@@ -414,6 +414,21 @@ describe('the day around the desk', () => {
     expect(state).toMatchObject({ activity: 'auditing', visitingId: ada.id });
   });
 
+  it('sends an auditor only to a desk in this room, and only for an open finding', () => {
+    const audit = task({ id: 'tsk_a', status: 'running', kind: 'audit', employeeId: bo.id });
+    const away = finding({ id: 'fnd_away', employeeId: 'emp_elsewhere', createdAt: NOW - 1_000 });
+    const closed = finding({ id: 'fnd_closed', status: 'addressed', createdAt: NOW - 2_000 });
+    const state = derive({
+      employees: [bo, ada],
+      tasks: [audit],
+      day: { findings: [away, closed, finding()] },
+    }).get(bo.id);
+    expect(state).toMatchObject({ activity: 'auditing', visitingId: ada.id });
+    expect(
+      derive({ employees: [bo, ada], tasks: [audit], day: { findings: [away, closed] } }).get(bo.id),
+    ).not.toHaveProperty('visitingId');
+  });
+
   it('files the janitor at the binder during a curation run', () => {
     const state = derive({
       tasks: [task({ id: 'tsk_c', status: 'running', kind: 'curation' })],
@@ -451,6 +466,14 @@ describe('the day around the desk', () => {
   it('reads the edges of a shift as arriving and leaving, and the rest of the night as off shift', () => {
     const shifts = [{ employeeId: ada.id, startedAt: NOW - 60_000, endedAt: NOW + 600_000 }];
     expect(derive({ day: { shifts } }).get(ada.id)?.activity).toBe('arriving');
+    // The shift's own task is queued from the moment it opens, so arriving has to
+    // outrank the journal or nobody would ever be seen walking in.
+    expect(
+      derive({
+        tasks: [task({ id: 'tsk_1', status: 'running' })],
+        day: { shifts },
+      }).get(ada.id)?.activity,
+    ).toBe('arriving');
     expect(
       derive({ day: { shifts: [{ employeeId: ada.id, startedAt: NOW - 3_600_000, endedAt: NOW - 60_000 }] } }).get(
         ada.id,

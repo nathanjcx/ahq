@@ -194,6 +194,7 @@ function SelectedFloor({
     <FloorView
       key={floor.id}
       floor={floor}
+      dashboard={dashboard}
       floorLabel={floorLabel}
       summary={summary}
       staff={staff}
@@ -262,6 +263,7 @@ function Lobby({
 
   return (
     <LobbyView
+      dashboard={dashboard}
       configured={configured}
       lobbyEmployees={lobbyEmployees}
       officeEmployees={toOfficeEmployees(lobbyEmployees, activeTasks)}

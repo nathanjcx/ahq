@@ -16,7 +16,6 @@ export const TALK_GAP = 0.8;
 
 /** The lectern work waits on, and the queue in front of it. */
 export const LECTERN: Point = [-0.75, 0, 1.05];
-const LECTERN_SLOTS = 3;
 const LECTERN_STEP = 0.95;
 /** Provider consoles line the window wall; people stand a step into the room from them. */
 export const CONSOLE_X = -8.5;
@@ -33,22 +32,54 @@ export const BINDER: Point = [4.55, 0.99, -3.95];
 /** The way in and out of a room: the lift on the lobby, the door on a floor. */
 export const DOORWAY: Point = [-8.5, 0, -5.88];
 
-/** In front of the task board, facing it. */
-const BOARD_STAND: Station = { at: [TASK_BOARD[0], 0, TASK_BOARD[2] + 1.15], facing: 0 };
-/** At the beacon, when there is no console free to run to. */
-const BEACON_STAND: Station = { at: [INCIDENT_LAMP[0] + 0.9, 0, INCIDENT_LAMP[2] - 0.5], facing: -2.1 };
-/** At the meeting table, filing the floor's binder. */
-const BINDER_STAND: Station = { at: [BINDER[0], 0, BINDER[2] + 1.05], facing: 0 };
-/** Just inside the door, arriving or on the way out. */
-const DOOR_STAND: Station = { at: [DOORWAY[0] + 1.1, 0, DOORWAY[2] + 1.1], facing: 2.36 };
+/**
+ * Room at a prop. The first figure takes the prop itself and the rest queue clear
+ * of it, in the order they are placed, so two people are never on the same spot.
+ * Once a queue is full the next figure stays at their own desk.
+ */
+const QUEUES = {
+  /** In front of the task board, facing it. */
+  board: [
+    { at: [TASK_BOARD[0], 0, TASK_BOARD[2] + 1.15], facing: 0 },
+    { at: [TASK_BOARD[0] + 0.95, 0, TASK_BOARD[2] + 1.15], facing: 0 },
+    { at: [TASK_BOARD[0] + 1.9, 0, TASK_BOARD[2] + 1.15], facing: 0 },
+  ],
+  /** At the meeting table, filing the floor's binder. */
+  binder: [
+    { at: [BINDER[0], 0, BINDER[2] + 1.05], facing: 0 },
+    { at: [BINDER[0] - 1.2, 0, BINDER[2] + 0.65], facing: 0.4 },
+    { at: [BINDER[0] + 1.2, 0, BINDER[2] + 0.65], facing: -0.4 },
+  ],
+  /** Just inside the door, arriving, leaving, or waiting for the lift. */
+  door: [
+    { at: [DOORWAY[0] + 1.1, 0, DOORWAY[2] + 1.1], facing: 2.36 },
+    { at: [DOORWAY[0] + 2.05, 0, DOORWAY[2] + 1.1], facing: 2.36 },
+    { at: [DOORWAY[0] + 3, 0, DOORWAY[2] + 1.1], facing: 2.36 },
+  ],
+  /** At the beacon, when there is no console free to run to. */
+  beacon: [
+    { at: [INCIDENT_LAMP[0] + 0.9, 0, INCIDENT_LAMP[2] - 0.5], facing: -2.1 },
+    { at: [INCIDENT_LAMP[0] - 0.15, 0, INCIDENT_LAMP[2] - 0.85], facing: -1.7 },
+    { at: [INCIDENT_LAMP[0] + 1.8, 0, INCIDENT_LAMP[2] - 1.05], facing: -2.4 },
+  ],
+  /** The queue at the review lectern, each one a step along it. */
+  lectern: [0, 1, 2].map(
+    (slot): Station => ({
+      at: [LECTERN[0] + slot * LECTERN_STEP, 0, LECTERN[2] - LECTERN_STEP],
+      facing: 0,
+    }),
+  ),
+} satisfies Record<string, Station[]>;
+
+type QueueName = keyof typeof QUEUES;
 
 /** Activities that put a figure somewhere specific in the room, whatever their desk is. */
-const AT_A_PROP: Partial<Record<EmployeeActivity['activity'], Station>> = {
-  planning: BOARD_STAND,
-  filing: BINDER_STAND,
-  arriving: DOOR_STAND,
-  leaving: DOOR_STAND,
-  preparing: DOOR_STAND,
+const AT_A_PROP: Partial<Record<EmployeeActivity['activity'], QueueName>> = {
+  planning: 'board',
+  filing: 'binder',
+  arriving: 'door',
+  leaving: 'door',
+  preparing: 'door',
 };
 
 /**
@@ -56,8 +87,8 @@ const AT_A_PROP: Partial<Record<EmployeeActivity['activity'], Station>> = {
  * one pair, standing `TALK_GAP` apart along the spot's axis.
  */
 const HUDDLES: { at: Point; axis: 'x' | 'z' }[] = [
-  { at: [-1, 0, -2.4], axis: 'x' },
-  { at: [-1, 0, -4.3], axis: 'x' },
+  { at: [-0.5, 0, -2.4], axis: 'x' },
+  { at: [-0.5, 0, -4.3], axis: 'x' },
   { at: [6.4, 0, 0.4], axis: 'x' },
 ];
 
@@ -142,6 +173,8 @@ export function layoutStations({
   seats: Map<string, number>;
 }): PlacedStation[] {
   const homes = homeStations(people.length);
+  /** Homes past this index are seats and standing room rather than desks. */
+  const desks = deskGrid(people.length).length;
   const taken = new Set<number>();
   for (const person of people) {
     const home = seats.get(person.id);
@@ -162,7 +195,14 @@ export function layoutStations({
   }
 
   const partners = huddlePairs(people);
-  let lecternQueue = 0;
+  // How many figures each queue has already taken, so the next one stands clear.
+  const queued = new Map<string, number>();
+  const take = (name: string, slots: Station[]): Station | undefined => {
+    const next = queued.get(name) ?? 0;
+    if (next >= slots.length) return undefined;
+    queued.set(name, next + 1);
+    return slots[next];
+  };
   const consoles = new Set<number>();
   const result: PlacedStation[] = [];
   for (const person of people) {
@@ -172,32 +212,30 @@ export function layoutStations({
       result.push({ id: person.id, station: pair, home: own.index });
       continue;
     }
-    if (person.state.activity === 'reviewing' && lecternQueue < LECTERN_SLOTS) {
-      const x = LECTERN[0] + lecternQueue * LECTERN_STEP;
-      lecternQueue += 1;
-      const stand: Point = [x, 0, LECTERN[2] - LECTERN_STEP];
-      result.push({
-        id: person.id,
-        station: { at: stand, facing: facing(stand, [x, 0, LECTERN[2]]) },
-        home: own.index,
-      });
-      continue;
+    if (person.state.activity === 'reviewing') {
+      const stand = take('lectern', QUEUES.lectern);
+      if (stand) {
+        result.push({ id: person.id, station: stand, home: own.index });
+        continue;
+      }
     }
     const prop = AT_A_PROP[person.state.activity];
     if (prop) {
-      result.push({ id: person.id, station: prop, home: own.index });
-      continue;
+      const stand = take(prop, QUEUES[prop]);
+      if (stand) {
+        result.push({ id: person.id, station: stand, home: own.index });
+        continue;
+      }
     }
     // An auditor stands at the desk of whoever they are reading, not at their own.
+    // Two auditors on one desk take one side of it each; somebody working from a
+    // seat rather than a desk has no room beside them, so the auditor stays put.
     if (person.state.activity === 'auditing' && person.state.visitingId) {
-      const desk = home.get(person.state.visitingId);
-      if (desk) {
-        const stand: Point = [desk.station.at[0] + 1.05, 0, desk.station.at[2] + 0.15];
-        result.push({
-          id: person.id,
-          station: { at: stand, facing: facing(stand, desk.station.at) },
-          home: own.index,
-        });
+      const read = home.get(person.state.visitingId);
+      const desk = read && read.index < desks ? read : undefined;
+      const stand = desk ? take(`desk ${person.state.visitingId}`, deskSides(desk.station)) : undefined;
+      if (stand) {
+        result.push({ id: person.id, station: stand, home: own.index });
         continue;
       }
     }
@@ -218,12 +256,23 @@ export function layoutStations({
     }
     // An incident with nowhere to take it still gets somebody at the beacon.
     if (person.state.activity === 'triaging') {
-      result.push({ id: person.id, station: BEACON_STAND, home: own.index });
-      continue;
+      const stand = take('beacon', QUEUES.beacon);
+      if (stand) {
+        result.push({ id: person.id, station: stand, home: own.index });
+        continue;
+      }
     }
     result.push({ id: person.id, station: own.station, home: own.index });
   }
   return result;
+}
+
+/** Standing room beside one desk, facing whoever is sitting at it. */
+function deskSides(desk: Station): Station[] {
+  return [
+    [desk.at[0] + 1.05, desk.at[2] + 0.15],
+    [desk.at[0] + 1.05, desk.at[2] - 0.8],
+  ].map(([x, z]): Station => ({ at: [x, 0, z], facing: facing([x, 0, z], desk.at) }));
 }
 
 /** The console this caller gets: its own provider's if that one is still free, else the next one. */
