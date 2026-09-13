@@ -3,6 +3,7 @@ import { emergencyOpen, livePages, pagingState } from '../../lib/paging';
 import type { Doc, Id } from '../_generated/dataModel';
 import { mutation, query } from '../_generated/server';
 import type { MutationCtx } from '../_generated/server';
+import { routeInboxItem } from '../lib/inbox';
 import { MEMORY_LIMITS, proposeMemory } from '../lib/memory';
 import { channelFor, findChannel, insertPost } from '../lib/posts';
 import { ensureSettings, settingsFor } from '../lib/schedule';
@@ -237,16 +238,25 @@ export const classifyEmailInputs = query({
       .withIndex('by_workspace', (q) => q.eq('workspaceId', args.workspaceId))
       .order('desc')
       .take(200);
-    return rows
-      .filter((row) => row.provider === 'google-workspace' && row.triageCheckedAt === undefined)
-      .slice(0, 20)
-      .map((row) => ({
+    const routed = new Map<Id<'connections'>, boolean>();
+    const items = [];
+    for (const row of rows) {
+      if (row.triageCheckedAt !== undefined) continue;
+      if (!routed.has(row.connectionId))
+        routed.set(row.connectionId, (await ctx.db.get(row.connectionId))?.inboxRoute !== undefined);
+      const isRouted = routed.get(row.connectionId)!;
+      if (row.provider !== 'google-workspace' && !isRouted) continue;
+      items.push({
         itemId: row._id,
         title: row.title,
         preview: row.preview,
         sourceUrl: row.sourceUrl,
         createdAt: row.createdAt,
-      }));
+        routed: isRouted,
+      });
+      if (items.length === 20) break;
+    }
+    return items;
   },
 });
 
@@ -258,12 +268,24 @@ export const recordEmailClassification = mutation({
     severity: v.optional(severityValidator),
     title: v.optional(v.string()),
     detail: v.optional(v.string()),
+    /** For an item on a routed connection: start the employee on it, file it as read, or leave it. */
+    action: v.optional(v.union(v.literal('act'), v.literal('file'), v.literal('ignore'))),
+    brief: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     requireService(args.secret);
     const item = await ctx.db.get(args.itemId);
     if (!item) throw new Error('Inbox item not found');
     await ctx.db.patch(item._id, { triageCheckedAt: Date.now() });
+    // An ignored item stays unread in the inbox: the decision is visible, nothing disappears.
+    if (args.action === 'act')
+      await routeInboxItem(
+        ctx,
+        item,
+        args.brief?.trim() || `Handle this ${item.provider} inbox item within your approved access.`,
+      );
+    else if (args.action === 'file' && item.status === 'unread')
+      await ctx.db.patch(item._id, { status: 'read' });
     if (!args.isAlert) return { alertId: undefined, created: false };
     const workspace = await ctx.db.get(item.workspaceId);
     if (!workspace) throw new Error('Workspace not found');
@@ -595,7 +617,7 @@ export const writeConnections = query({
  * Opens the classifier turn over the workspace's unchecked email. The triage instance's standing
  * session runs it, because a classification is triage work with no incident of its own yet.
  */
-/** Opens the hourly email classifier turn in the triage standing session. Idempotent per hour. */
+/** Opens the email classifier turn in the triage standing session. Idempotent per minute, so a push is answered promptly and a burst is one run. */
 export async function enqueueEmailClassificationFor(ctx: MutationCtx, workspace: Doc<'workspaces'>) {
   const { floor, installation, version } = await ensureTriageStaff(ctx, workspace, 'system');
   const taskId = await openSessionTask(ctx, {
@@ -611,7 +633,7 @@ export async function enqueueEmailClassificationFor(ctx: MutationCtx, workspace:
   const jobId = await insertJob(ctx, {
     workspaceId: workspace._id,
     taskId,
-    uniqueKey: `email_classify:${workspace._id}:${Math.floor(Date.now() / 3_600_000)}`,
+    uniqueKey: `email_classify:${workspace._id}:${Math.floor(Date.now() / 60_000)}`,
     kind: 'email_classify',
     payload: JSON.stringify({ workspaceId: workspace._id, model: version.model }),
   });

@@ -110,7 +110,7 @@ describe('integration grants and inbox routing', () => {
     expect(connection.allowedTools).toEqual(['issue_read', 'comment_issue']);
   });
 
-  it('starts a task for each new item when the connection routes its inbox', async () => {
+  it('routes a new item to the employee only once the classifier says to act on it', async () => {
     const t = harness();
     await githubWorkspace(t);
     const a = t.withIdentity(identity('user-a'));
@@ -138,24 +138,63 @@ describe('integration grants and inbox routing', () => {
       inboxResources: '',
       inboxRoute: { employeeId },
     });
-    await t.mutation(api.services.inbox.ingestInbox, {
+    const items = [
+      { ...item, externalId: 'mail-2', title: 'Second request' },
+      { ...item, externalId: 'mail-3', title: 'Weekly digest' },
+      { ...item, externalId: 'mail-4', title: 'Unsubscribe confirmation' },
+    ];
+    await t.mutation(api.services.inbox.ingestInbox, { secret, connectionId, items });
+    // Delivery starts nothing by itself: the classifier decides, and its run is queued.
+    dashboard = await a.query(api.workspace.dashboard, {});
+    expect(dashboard.tasks).toEqual([]);
+    const workspaceId = (await t.run(async (ctx) => ctx.db.query('workspaces').first()))!._id;
+    const inputs = await t.query(api.services.triage.classifyEmailInputs, { secret, workspaceId });
+    expect(inputs.map((row) => [row.title, row.routed])).toEqual(
+      expect.arrayContaining([
+        ['Second request', true],
+        ['Weekly digest', true],
+      ]),
+    );
+    const idOf = (title: string) => inputs.find((row) => row.title === title)!.itemId;
+    await t.mutation(api.services.triage.recordEmailClassification, {
       secret,
-      connectionId,
-      items: [{ ...item, externalId: 'mail-2', title: 'Second request' }],
+      itemId: idOf('Second request'),
+      isAlert: false,
+      action: 'act',
+      brief: 'Build the Q4 sheet from the attached numbers.',
+    });
+    await t.mutation(api.services.triage.recordEmailClassification, {
+      secret,
+      itemId: idOf('Weekly digest'),
+      isAlert: false,
+      action: 'file',
+    });
+    await t.mutation(api.services.triage.recordEmailClassification, {
+      secret,
+      itemId: idOf('Unsubscribe confirmation'),
+      isAlert: false,
+      action: 'ignore',
     });
     dashboard = await a.query(api.workspace.dashboard, {});
-    const routed = dashboard.inbox.find((entry) => entry.title === 'Second request');
-    expect(routed).toMatchObject({ status: 'assigned' });
+    const byTitle = (title: string) => dashboard.inbox.find((entry) => entry.title === title);
+    expect(byTitle('Second request')).toMatchObject({ status: 'assigned' });
+    expect(byTitle('Weekly digest')).toMatchObject({ status: 'read' });
+    expect(byTitle('Unsubscribe confirmation')).toMatchObject({ status: 'unread' });
     expect(dashboard.tasks).toHaveLength(1);
     expect(dashboard.tasks[0]).toMatchObject({ title: 'Second request', employeeId, createdBy: 'user-a' });
+    expect(dashboard.tasks[0].prompt).toContain('Build the Q4 sheet from the attached numbers.');
     expect(dashboard.tasks[0].prompt).toContain('Numbers attached.');
+    expect(dashboard.tasks[0].prompt).toContain('proposal');
     expect(dashboard.connections[0].inboxRoute).toEqual({ employeeId });
-    // A redelivery of the same item creates nothing more.
-    await t.mutation(api.services.inbox.ingestInbox, {
+    // A second decision on the same item, or a redelivery, creates nothing more.
+    await t.mutation(api.services.triage.recordEmailClassification, {
       secret,
-      connectionId,
-      items: [{ ...item, externalId: 'mail-2', title: 'Second request' }],
+      itemId: idOf('Second request'),
+      isAlert: false,
+      action: 'act',
+      brief: 'Again.',
     });
+    await t.mutation(api.services.inbox.ingestInbox, { secret, connectionId, items: [items[0]] });
     expect((await a.query(api.workspace.dashboard, {})).tasks).toHaveLength(1);
   });
 

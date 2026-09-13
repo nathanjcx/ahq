@@ -2,9 +2,8 @@ import { v } from 'convex/values';
 import type { Doc, Id } from '../_generated/dataModel';
 import { mutation } from '../_generated/server';
 import type { MutationCtx } from '../_generated/server';
-import { assertEmployeeReady, assertTokenCap, assignmentForFloor, startTask } from '../lib/tasks';
 import { provider } from '../schema';
-import { requireService, untrustedBlock } from '../shared';
+import { requireService } from '../shared';
 import { enqueueEmailClassificationFor } from './triage';
 
 const inboxItem = v.object({
@@ -63,58 +62,14 @@ async function insertInboxItems(ctx: MutationCtx, connection: Doc<'connections'>
   return inserted;
 }
 
-/** The task an inbox item becomes, whether a person assigned it or the connection's route did. */
-export function inboxTaskPrompt(item: { provider: string; title: string; preview: string }) {
-  return `Review this ${item.provider} inbox item and handle it within your approved access.\n\n${untrustedBlock(
-    `${item.title}\n${item.preview}`,
-  )}`;
-}
-
 /**
- * A connection with a route starts a task for each new item, in the owner's name and under the
- * owner's reach, the way the owner assigning it by hand would. An employee that is not ready leaves
- * the item unread with the reason, so a delivery never fails because a route is stale.
+ * New mail may report an incident, and a routed connection's mail needs a decision before an
+ * employee spends a session on it. Both are the classifier's, so it runs whenever either applies.
  */
-async function routeInboxItems(ctx: MutationCtx, connection: Doc<'connections'>, itemIds: Id<'inbox'>[]) {
-  const route = connection.inboxRoute;
-  if (!route || !itemIds.length) return;
+async function classifyNewItems(ctx: MutationCtx, connection: Doc<'connections'>) {
+  if (connection.provider !== 'google-workspace' && !connection.inboxRoute) return;
   const workspace = await ctx.db.get(connection.workspaceId);
-  if (!workspace) return;
-  for (const itemId of itemIds) {
-    const item = await ctx.db.get(itemId);
-    if (!item) continue;
-    try {
-      await assertTokenCap(ctx, workspace);
-      const { version } = await assertEmployeeReady(
-        ctx,
-        workspace,
-        connection.ownerSubject,
-        route.employeeId,
-      );
-      const taskId = await startTask(ctx, {
-        workspace,
-        createdBy: connection.ownerSubject,
-        createdByName: connection.ownerName,
-        employeeId: route.employeeId,
-        version,
-        title: item.title,
-        prompt: inboxTaskPrompt(item),
-        floor: route.floorId
-          ? await assignmentForFloor(ctx, workspace._id, route.floorId, route.employeeId)
-          : undefined,
-        messageExternalId: `inbox:${item._id}`,
-        jobPayload: { inboxItemId: item._id },
-      });
-      await ctx.db.patch(item._id, { status: 'assigned', taskId });
-    } catch (error) {
-      await ctx.db.patch(connection._id, {
-        error: `Inbox route: ${error instanceof Error ? error.message : 'could not start the task'}`.slice(
-          0,
-          500,
-        ),
-      });
-    }
-  }
+  if (workspace) await enqueueEmailClassificationFor(ctx, workspace);
 }
 
 export const ingestInbox = mutation({
@@ -130,18 +85,13 @@ export const ingestInbox = mutation({
     const connection = await ctx.db.get(args.connectionId);
     if (!connection || connection.status !== 'connected') throw new Error('Connection is inactive');
     const inserted = await insertInboxItems(ctx, connection, args.items);
-    // New mail may report an incident; the triage classifier decides, once an hour at most.
-    if (inserted.length && connection.provider === 'google-workspace') {
-      const workspace = await ctx.db.get(connection.workspaceId);
-      if (workspace) await enqueueEmailClassificationFor(ctx, workspace);
-    }
+    if (inserted.length) await classifyNewItems(ctx, connection);
     await ctx.db.patch(connection._id, {
       inboxMode: 'push',
       cursor: args.cursor === undefined ? connection.cursor : args.cursor,
       lastCheckedAt: Date.now(),
       error: undefined,
     });
-    await routeInboxItems(ctx, connection, inserted);
     return { inserted: inserted.length };
   },
 });
@@ -161,7 +111,7 @@ export const ingestInboxByResource = mutation({
       if (!connection.inboxResources.some((resource) => args.resourceIds.includes(resource))) continue;
       const inserted = await insertInboxItems(ctx, connection, args.items);
       delivered += inserted.length;
-      await routeInboxItems(ctx, connection, inserted);
+      if (inserted.length) await classifyNewItems(ctx, connection);
       if (connection.inboxMode !== 'push')
         await ctx.db.patch(connection._id, { inboxMode: 'push', lastCheckedAt: Date.now() });
     }

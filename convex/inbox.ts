@@ -1,8 +1,8 @@
 import { v } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation } from './_generated/server';
+import { inboxTaskPrompt } from './lib/inbox';
 import { assertEmployeeReady, assertTokenCap, assignmentForFloor, startTask } from './lib/tasks';
-import { inboxTaskPrompt } from './services/inbox';
 import type { Ctx } from './shared';
 import { canSeeConnection, requireWorkspace } from './shared';
 
