@@ -147,10 +147,13 @@ delivery is matched against each following workspace's `triageRules`, case-insen
 issue or pull-request labels, the title, and the body or comment. A match opens a `high` alert
 fingerprinted `github:<owner/name>#<number>`. Without rules, nothing is an alert.
 
-**Gmail.** Mail arriving through the relay for a `google-workspace` connection enqueues
-`email_classify` at most once an hour. The classifier turn has no tools at all, reads at most twenty
-unchecked items, and answers with one JSON object. Items it is not confident about are left unchecked
-for the next run rather than silently marked.
+**Gmail.** Mail arriving for a `google-workspace` connection, or for any connection that routes its
+inbox to an employee, enqueues `email_classify` at most once a minute. The classifier turn has no
+tools at all, reads at most twenty unchecked items, and answers with one JSON object: whether each is
+an incident, and for a routed item whether the employee should `act` (with a one-line brief that
+becomes the task), `file` it as read, or `ignore` it, which leaves it unread in the inbox so nothing
+disappears. Items it is not confident about are left unchecked for the next run rather than silently
+marked.
 
 ## Notifications
 

@@ -13,7 +13,9 @@ Four floor rules live nowhere else:
 - Archiving a floor stops new assignments and refuses new posts and handoffs
   (`convex/lib/posts.ts`). Existing tasks, history, and running work are preserved, and restoring the
   floor makes it usable again.
-- Only a person accepts or declines a handoff, including one an agent requested. Accepting checks
+- A person accepts or declines a handoff from the board. A floor whose handoff policy is `auto`
+  accepts one the moment an employee requests it, in the name of the person who owns the source task;
+  the default, `ask`, waits for a person. Accepting checks
   that the target is still staffed and ready, then creates a floor task whose prompt is the brief plus
   the source task's final completed assistant message, truncated to 20,000 characters, and links both
   tasks. Deciding an already-decided handoff returns the task it created, if it made one.

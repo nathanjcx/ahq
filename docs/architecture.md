@@ -46,7 +46,11 @@ project and a milestone. `convex/lib/projects.ts` validates a roadmap proposal;
 
 `tasks` carries `kind` (`work`, `meeting`, `audit`, `curation`, `triage`, `standing`; absent means
 `work`), `cadence` (`once` or `daily`), `deadlineAt`, `dependsOn`, `floorId`, `projectId`,
-`milestoneId`, and `sessionKey`. Task status adds `waiting` and `blocked` to the earlier set.
+`milestoneId`, and `sessionKey`. Task status adds `waiting` and `blocked` to the earlier set, and
+`needs_input`: the employee called `ask` on `astra_shift` with the one question it cannot continue
+without, stored on the task as `question`, and the turn ended. The owner's next message clears it and
+resumes the session. A work task that fails gets one fresh session with the failure in its brief
+(`retriedAt`); the second failure stands.
 
 - A task whose dependencies have not all completed is stored `waiting` and given no start job
   (`startTask` in `convex/lib/tasks.ts`).
@@ -73,6 +77,9 @@ it.
 is the structured close of a shift: `done`, `inProgress`, `blockedOn`, `next`, `risks`,
 `deadlineConfidence`, `inferred`. A shift that ends without a filed report gets one inferred from
 the task's final assistant message, marked `inferred` (`closeShift` in `convex/services/schedule.ts`).
+A filed report is acted on: a non-empty `blockedOn` becomes the task's question, so the session ends
+`needs_input` and the owner is paged; `next` on a finished one-off task gives it a shift on a later
+working day that opens with those lines carried over.
 `taskSummaries` is the structured outcome of a finished task, written by `submit_summary` or
 inferred the same way.
 
@@ -107,7 +114,10 @@ arrived. Nothing reads a post's text to classify it.
 `channelReads` holds one `lastReadAt` per channel per person, which is what the unread counts read.
 
 Agents read their floor, project, and workspace channels through `read_board` and write through
-`floor_post` and `floor_handoff`. Only a person accepts a handoff or an addressed note.
+`floor_post` and `floor_handoff`; every shift also opens with the floor's last day of posts in its
+working memory, fenced. A person accepts a handoff from the board, or the floor accepts it itself
+when its `handoffs` policy is `auto`, in the name of whoever owns the source task; both go through
+`acceptHandoff` in `convex/lib/handoffs.ts`. Only a person accepts an addressed note.
 
 ### Calendar and meetings
 
@@ -240,23 +250,23 @@ queue kind from `lib/jobs.ts`.
 re-exports the type and `services/worker/turns/index.ts` maps the kinds the worker dispatches itself.
 The first four predate the schedule and live in `services/worker/jobs.ts`.
 
-| Kind             | Enqueued by                                | What the turn does                                                              |
-| ---------------- | ------------------------------------------ | ------------------------------------------------------------------------------- |
-| `start_task`     | `startTask`                                | First message of a `once` task; not a turn, and never for a daily task          |
-| `send_message`   | `tasks:message`                            | Follow-up message                                                               |
-| `cancel_task`    | `tasks:cancel`                             | Cancellation                                                                    |
-| `execute_action` | Approving a proposal                       | The approved external write                                                     |
-| `start_shift`    | Planner                                    | Opens the shift row, works the day, ends with `submit_report`                   |
-| `review_shift`   | Planner                                    | Reads the dependency's report and artifacts, posts feedback, files no report    |
-| `meeting_prep`   | Planner at the lead                        | One report against the agenda                                                   |
-| `meeting_answer` | `meetings:ask`                             | One answer, short when the question went to everyone                            |
-| `meeting_wrapup` | `meetings:close`                           | Proposes outcomes as JSON a person confirms                                     |
-| `curation_run`   | Planner (janitor)                          | Merge, contest, archive, promote through `astra_janitor`                        |
-| `audit_run`      | Planner (auditor, after hours)             | `read_reports`, `read_journal`, then `submit_findings`                          |
-| `triage_run`     | Planner, one per open alert                | Reproduce, fix, `resolve_alert`, and `file_incident_report` after emergency use |
-| `page_alert`     | Planner, outside attended hours            | Records and delivers one page; no model turn                                    |
-| `email_classify` | `services/inbox:ingestInbox` on Gmail mail | Classifies mail into alerts; no tools at all                                    |
-| `plan_project`   | `projects:create` and `projects:replan`    | Proposes a roadmap; creates nothing                                             |
+| Kind             | Enqueued by                                                                | What the turn does                                                                                      |
+| ---------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `start_task`     | `startTask`                                                                | First message of a `once` task; not a turn, and never for a daily task                                  |
+| `send_message`   | `tasks:message`                                                            | Follow-up message                                                                                       |
+| `cancel_task`    | `tasks:cancel`                                                             | Cancellation                                                                                            |
+| `execute_action` | Approving a proposal                                                       | The approved external write                                                                             |
+| `start_shift`    | Planner                                                                    | Opens the shift row, works the day, ends with `submit_report`                                           |
+| `review_shift`   | Planner                                                                    | Reads the dependency's report and artifacts, posts feedback, files no report                            |
+| `meeting_prep`   | Planner at the lead                                                        | One report against the agenda                                                                           |
+| `meeting_answer` | `meetings:ask`                                                             | One answer, short when the question went to everyone                                                    |
+| `meeting_wrapup` | `meetings:close`                                                           | Proposes outcomes as JSON a person confirms                                                             |
+| `curation_run`   | Planner (janitor)                                                          | Merge, contest, archive, promote through `astra_janitor`                                                |
+| `audit_run`      | Planner (auditor, after hours)                                             | `read_reports`, `read_journal`, then `submit_findings`                                                  |
+| `triage_run`     | Planner, one per open alert                                                | Reproduce, fix, `resolve_alert`, and `file_incident_report` after emergency use                         |
+| `page_alert`     | Planner: an incident outside attended hours, or a task waiting on a person | Records and delivers one page; no model turn                                                            |
+| `email_classify` | `services/inbox:ingestInbox` on Gmail or routed mail                       | Classifies mail into alerts and, for a routed connection, decides act, file, or ignore; no tools at all |
+| `plan_project`   | `projects:create` and `projects:replan`                                    | Proposes a roadmap; creates nothing                                                                     |
 
 Every turn goes through one interface, `TurnRunner` in `services/worker/turns/runner.ts`. The OpenAI
 client is behind it alone, which is what lets the runtime harness drive real gateway tools with a
@@ -273,7 +283,7 @@ be refused for.
 | --------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | `astra_floor`   | `floor_post`, `floor_handoff`                                                                     | worker on a floor, triage                |
 | `astra_memory`  | `remember`, `recall`, `read_memory`, `read_board`                                                 | worker, janitor, triage                  |
-| `astra_shift`   | `submit_report`, `submit_summary`                                                                 | worker                                   |
+| `astra_shift`   | `submit_report`, `submit_summary`, `ask`                                                          | worker                                   |
 | `astra_studio`  | `generate_image`                                                                                  | worker whose version's workshop names it |
 | `astra_audit`   | `read_reports`, `read_journal`, `read_artifact`, `read_memory`, `read_channel`, `submit_findings` | auditor only                             |
 | `astra_janitor` | `merge`, `contest`, `archive`, `promote`, `read_memory`                                           | janitor only                             |
@@ -346,8 +356,12 @@ over inputs the platform hands them.
 
 - `projects:create` and `projects:replan` call `enqueuePlanningFor`, which opens the planner's
   standing session task and enqueues `plan_project`.
-- `services/inbox:ingestInbox` enqueues `email_classify` when a Gmail relay delivery inserts
-  anything, keyed to the hour so it runs at most hourly.
+- `services/inbox:ingestInbox` enqueues `email_classify` when a delivery inserts anything on a Gmail
+  or routed connection, keyed to the minute. Delivery starts no task itself: the classifier's `act`
+  decision does, through `routeInboxItem` in `convex/lib/inbox.ts`, with the one-line brief it wrote.
+- The planner pages a task's owner once it has waited a quarter hour in `needs_input` or
+  `awaiting_approval`, on the incident ledger's own cadence and ceiling; answering, deciding, or
+  cancelling settles the pages.
 - The alert route pages a person on a new `high` or `critical` alert.
 - `services/queue:claimJobs` reopens a `completed` task for the job kinds in `REOPENS_TASK`, because a
   `completed` task is not always finished work: a daily task's session completes at the end of every
@@ -386,8 +400,7 @@ one line and its primary action, never an intro block.
 
 **Work** (`components/work/`) is the default page: every thread in motion beside the open one.
 `buildThreads` in `lib/work.ts` is pure and orders the stream by what it needs from a person (pending
-approvals, a last message that asks a question, pending handoffs from `work.pendingHandoffs`, open
-alerts), then running, waiting or blocked, and done today; hidden session tasks never appear. The
+approvals, a `needs_input` question, pending handoffs from `work.pendingHandoffs`, open alerts), then running, waiting or blocked, and done today; hidden session tasks never appear. The
 open thread is the task detail (conversation, actions, audit); a handoff or an incident opens as its
 own pane with its decision. Team and Files are tables on the shared `.data-table` primitive that open
 a full detail page with a back link.
