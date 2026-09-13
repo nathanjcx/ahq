@@ -25,6 +25,7 @@ import type * as plan from "../plan.js";
 import type * as registry from "../registry.js";
 import type * as calendar from "../calendar.js";
 import type * as schedule from "../schedule.js";
+import type * as seed from "../seed.js";
 import type * as services_actions from "../services/actions.js";
 import type * as services_artifacts from "../services/artifacts.js";
 import type * as services_audit from "../services/audit.js";
@@ -84,6 +85,7 @@ declare const fullApi: ApiFromModules<{
   registry: typeof registry;
   calendar: typeof calendar;
   schedule: typeof schedule;
+  seed: typeof seed;
   "services/actions": typeof services_actions;
   "services/artifacts": typeof services_artifacts;
   "services/audit": typeof services_audit;

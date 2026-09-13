@@ -6,13 +6,13 @@ in [architecture](architecture.md).
 
 ## Service map
 
-| Component            | Role                                                                                        | Check                                          |
-| -------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| Convex               | Every table, the job queue, the journal, the schedule, the crons, subscriptions             | Convex dashboard deployment and function logs  |
+| Component            | Role                                                                                         | Check                                          |
+| -------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Convex               | Every table, the job queue, the journal, the schedule, the crons, subscriptions              | Convex dashboard deployment and function logs  |
 | web                  | WorkOS sessions, the UI, API routes, OAuth callback, webhooks, alert intake, sealing secrets | Railway web deployment and `/health`           |
-| worker               | Queue jobs and turns, Agents sessions, session monitoring, artifact archive                 | Railway worker `/health`                       |
-| gateway              | The only MCP server an agent can reach                                                      | Railway gateway `/health`                      |
-| S3-compatible bucket | Private artifact archive                                                                    | Bucket metrics and an authorized file download |
+| worker               | Queue jobs and turns, Agents sessions, session monitoring, artifact archive                  | Railway worker `/health`                       |
+| gateway              | The only MCP server an agent can reach                                                       | Railway gateway `/health`                      |
+| S3-compatible bucket | Private artifact archive                                                                     | Bucket metrics and an authorized file download |
 
 Sessions run in an OpenAI hosted environment with network access disabled,
 `connection_origin: "service"` MCP transports, and `multi_agent.enabled: false`.
@@ -60,7 +60,7 @@ leave the hours inconsistent, and only a workspace owner or admin may call it.
 | `triageAllowance`                       | 500,000                                                                   | Today's triage tokens; triage stops here and nowhere else   |
 | `memoryBudgets`                         | workspace 2,000, project 3,000, floor 4,000, agent 1,500, summaries 1,500 | Estimated tokens per section                                |
 | `hiringPolicy`                          | `anyone`                                                                  | `anyone`, `admins`, or `approval`                           |
-| `auditPolicy`                           | `soft`                                                                    | `soft` leads the day with findings; `hard` holds other work  |
+| `auditPolicy`                           | `soft`                                                                    | `soft` leads the day with findings; `hard` holds other work |
 | `triageRules`                           | empty                                                                     | GitHub labels or keywords that make a delivery an alert     |
 | `triageAllowList`                       | empty                                                                     | Tools a triage run executes without a proposal              |
 | `emergencyAllowList`                    | empty                                                                     | Tools the emergency rule admits                             |
@@ -389,3 +389,9 @@ functions first, then the three services on the same commit.
   all edited in the Settings panel, which saves through one `schedule:updateSettings` call; memory
   administration is the Records page and the triage rules are the Triage floor's Intake tab. Nothing
   here needs the Convex dashboard any more.
+
+## The core catalog
+
+The marketplace ships with 21 employees defined in `lib/catalog.ts`: nine engineering roles (backend, frontend, full-stack, code review, testing, DevOps, technical writing, debugging, data), a product manager, three sales roles (outbound SDR, account executive, sales operations), three marketing roles (content, SEO and growth, product marketing), two support roles (agent, knowledge base), and three finance roles (financial modelling, FP&A, strategy). Each entry carries its instructions, persona, model, and the provider tools it uses.
+
+`npx convex run --prod seed:catalog` publishes them. It is safe to repeat: registry tools are added only where missing, so an administrator's reviewed tool wins; a draft is matched by name; a new version is published only when the catalog entry changed. The tool names follow the providers' MCP servers; importing discovered tools from a live connection on the Operations page replaces the seeded descriptions with the real ones.
