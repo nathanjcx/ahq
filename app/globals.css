@@ -23,7 +23,7 @@
   --slate-700: #3d5274;
   --slate-800: #27405e;
   /* The brand accent: actions, active navigation, links, unread and today markers. */
-  --accent: #2b6cd4;
+  --accent: #2a68cd;
   --accent-deep: #1d4f9e;
   --accent-soft: #eef4fe;
   /* Status stays semantic, and deliberately outside the blue family, so colour still means state. */
@@ -696,7 +696,7 @@ p {
   gap: 9px;
   padding: 14px 28px calc(14px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
-  background: #f7f6ed;
+  background: #f4f8fd;
 }
 /* === components/shared: forms inside sheets === */
 .form-stack {

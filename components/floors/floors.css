@@ -81,7 +81,7 @@
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  color: #fdfbf2;
+  color: #f9fcff;
   border-radius: 8px;
   background: var(--slate-800);
   box-shadow: 3px 3px 0 #d4dae2;
@@ -664,7 +664,7 @@
 }
 .handoff-badge {
   padding: 2px 7px;
-  color: #fffdf5;
+  color: #fdfeff;
   border-radius: 999px;
   background: var(--accent);
   font-size: var(--text-sm);

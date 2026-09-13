@@ -133,7 +133,7 @@
   background: var(--slate-100);
 }
 .channel-author[data-who='person'] {
-  color: #fffdf5;
+  color: #fdfeff;
   background: var(--slate-600);
 }
 .channel-author[data-who='workspace'] {
@@ -209,7 +209,7 @@
   padding: 12px 13px;
   border: 1px solid #e1d4bc;
   border-radius: 9px;
-  background: #fffcf3;
+  background: #fbfdff;
 }
 .channel-handoff > header {
   display: flex;

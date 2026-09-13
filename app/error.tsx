@@ -7,8 +7,8 @@ export default function ErrorPage({ reset }: { error: Error & { digest?: string 
         display: 'grid',
         placeItems: 'center',
         padding: 24,
-        background: '#f7f5eb',
-        color: '#294235',
+        background: '#f1f5fa',
+        color: '#1c2a3d',
       }}
     >
       <section style={{ maxWidth: 440 }}>

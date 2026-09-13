@@ -127,7 +127,7 @@
 }
 .claim[data-status='proposed'] {
   border-color: #d9cfae;
-  background: #fdfaee;
+  background: #fafcff;
 }
 .claim-head {
   display: flex;

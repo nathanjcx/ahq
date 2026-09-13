@@ -23,7 +23,7 @@
 }
 .severity-pill {
   padding: 2px 8px;
-  color: #fffdf5;
+  color: #fdfeff;
   border-radius: 999px;
   background: var(--green);
   font-size: var(--text-sm);
@@ -247,7 +247,7 @@
   background: #f7efdf;
 }
 .alert-timeline li[data-authority='emergency'] .timeline-mark {
-  color: #fffdf5;
+  color: #fdfeff;
   background: var(--red);
 }
 .timeline-outcome {
@@ -261,7 +261,7 @@
 }
 .emergency-pill {
   padding: 1px 8px;
-  color: #fffdf5;
+  color: #fdfeff;
   border-radius: 999px;
   background: var(--red);
   font-size: var(--text-sm);

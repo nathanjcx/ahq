@@ -149,8 +149,8 @@
   margin-left: auto;
   padding: 0 5px;
   border-radius: 5px;
-  color: #85602e;
-  background: #ecddc2;
+  color: var(--accent-deep);
+  background: var(--accent-soft);
   font-size: var(--text-xs);
   font-weight: 700;
 }
@@ -195,7 +195,7 @@
   justify-content: space-between;
   padding: 0 35px;
   border-bottom: 1px solid rgba(208, 215, 223, 0.86);
-  background: rgba(246, 244, 234, 0.9);
+  background: rgba(241, 245, 250, 0.9);
   backdrop-filter: blur(16px);
 }
 .topbar-title {
@@ -223,7 +223,7 @@
   align-items: center;
   justify-content: center;
   padding: 0 4px;
-  color: #fffdf5;
+  color: #fdfeff;
   border: 2px solid var(--canvas);
   border-radius: 999px;
   background: var(--accent);
@@ -902,7 +902,7 @@
   overflow: hidden;
   border: 1px solid #e1d4bc;
   border-radius: var(--radius-lg);
-  background: #fffcf3;
+  background: #fbfdff;
 }
 .review-card[data-active='true'] {
   border-color: #cbad76;

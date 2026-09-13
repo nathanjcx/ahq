@@ -466,7 +466,7 @@
   overflow: hidden;
   border: 1px solid #e1d4bc;
   border-radius: 9px;
-  background: #fffcf3;
+  background: #fbfdff;
   box-shadow: 0 6px 20px rgba(92, 73, 42, 0.06);
 }
 .proposal-head {
@@ -626,7 +626,7 @@
 }
 .audit-proposal {
   border-color: #e1d4bc;
-  background: #fffcf3;
+  background: #fbfdff;
 }
 .audit-entry-head {
   display: flex;
