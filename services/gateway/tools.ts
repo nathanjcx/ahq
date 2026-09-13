@@ -27,9 +27,11 @@ const writeNotice = ' This tool prepares an action for human approval. It does n
 const approvalInstruction =
   'Wait for the human decision. This response does not mean the external action succeeded. Do not retry the same proposal or start dependent writes.';
 
-function log(request: GatewayRequest, reason: string) {
-  // Reasons and request ids only. Arguments, tokens, and provider content never reach the log.
-  console.error(`gateway tool call refused reason=${reason} request=${request.requestId}`);
+function log(request: GatewayRequest, reason: string, detail?: string) {
+  // Reasons, request ids, and a sanitised message only. Arguments, tokens, and provider content never reach the log.
+  console.error(
+    `gateway tool call refused reason=${reason} request=${request.requestId}${detail ? ` detail=${JSON.stringify(detail)}` : ''}`,
+  );
 }
 
 /** The tools an agent may see: the connection grant, the version capability, and a non-blocked policy. */
@@ -80,7 +82,7 @@ export function providerServer(
         error instanceof GatewayError
           ? error
           : upstreamFailure(error, 'The integration could not list its tools.');
-      log(request, failure.reason);
+      log(request, failure.reason, error instanceof GatewayError ? undefined : safeError(error));
       throw new McpError(failure.code, failure.message, {
         reason: failure.reason,
         requestId: request.requestId,
