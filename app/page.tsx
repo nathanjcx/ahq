@@ -1,5 +1,5 @@
 import { connection } from 'next/server';
-import { AstraHq } from '@/components/app';
+import { StaffAi } from '@/components/app';
 import { ClientProviders, type PublicConfig } from '@/lib/client';
 import { authConfigured } from '@/lib/server/workos';
 
@@ -14,7 +14,7 @@ export default async function Home() {
 
   return (
     <ClientProviders config={config}>
-      <AstraHq configured={configured} />
+      <StaffAi configured={configured} />
     </ClientProviders>
   );
 }

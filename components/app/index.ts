@@ -1,1 +1,1 @@
-export { AstraHq } from './astra-hq';
+export { StaffAi } from './staff-ai';

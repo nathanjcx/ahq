@@ -23,8 +23,8 @@ import { uiApi } from '@/lib/ui-api';
 let placeholder: ConvexReactClient | undefined;
 const noQueries = {};
 
-export function AstraHq({ configured }: { configured: boolean }) {
-  if (configured) return <ConnectedAstraHq />;
+export function StaffAi({ configured }: { configured: boolean }) {
+  if (configured) return <ConnectedStaffAi />;
   placeholder ??= new ConvexReactClient('https://unconfigured.convex.cloud');
   return (
     <ConvexProvider client={placeholder}>
@@ -44,7 +44,7 @@ export function AstraHq({ configured }: { configured: boolean }) {
   );
 }
 
-function ConnectedAstraHq() {
+function ConnectedStaffAi() {
   const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
   const dashboard = useQuery(uiApi.dashboard, isAuthenticated ? {} : 'skip');
   const listings = useQuery(uiApi.listings, isAuthenticated ? {} : 'skip');
@@ -60,7 +60,7 @@ function ConnectedAstraHq() {
   );
   const actions = useWorkspaceActions();
 
-  if (authLoading) return <CenteredLoader label="Opening Astra HQ" />;
+  if (authLoading) return <CenteredLoader label="Opening Staff AI" />;
 
   return (
     <>

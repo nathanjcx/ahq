@@ -329,3 +329,35 @@ describe('service secret', () => {
     }
   });
 });
+
+describe('the canonical origin', () => {
+  it('sends another host name to APP_URL and leaves the health probe alone', async () => {
+    const { canonicalRedirect } = await import('../proxy');
+    const { NextRequest } = await import('next/server');
+    const previous = process.env.APP_URL;
+    process.env.APP_URL = 'https://app.example.com';
+    try {
+      const foreign = canonicalRedirect(
+        new NextRequest('https://web-production.up.railway.app/tasks?open=1', {
+          headers: { host: 'web-production.up.railway.app' },
+        }),
+      );
+      expect(foreign?.status).toBe(308);
+      expect(foreign?.headers.get('location')).toBe('https://app.example.com/tasks?open=1');
+      expect(
+        canonicalRedirect(
+          new NextRequest('https://app.example.com/tasks', { headers: { host: 'app.example.com' } }),
+        ),
+      ).toBeNull();
+      expect(
+        canonicalRedirect(
+          new NextRequest('http://web.railway.internal/health', {
+            headers: { host: 'web.railway.internal' },
+          }),
+        ),
+      ).toBeNull();
+    } finally {
+      process.env.APP_URL = previous;
+    }
+  });
+});

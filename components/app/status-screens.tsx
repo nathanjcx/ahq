@@ -1,6 +1,7 @@
 'use client';
 
-import { ArrowRight, LoaderCircle, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowRight, LoaderCircle, ShieldCheck } from 'lucide-react';
+import { BrandMark } from '../shared/marks';
 import './app.css';
 
 export function SignInScreen() {
@@ -8,9 +9,9 @@ export function SignInScreen() {
     <div className="signin-screen">
       <div className="signin-card card">
         <span className="brand-glyph large">
-          <Sparkles size={25} />
+          <BrandMark size={25} />
         </span>
-        <span className="eyebrow">ASTRA HQ</span>
+        <span className="eyebrow">STAFF AI</span>
         <h1>Come into the office</h1>
         <p>Sign in to see your employees, connected work, and action reviews.</p>
         {/* A plain link: minting the sign-in URL sets a single-use verifier cookie, which only the
@@ -31,7 +32,7 @@ export function CenteredLoader({ label }: { label: string }) {
   return (
     <div className="centered-loader">
       <span className="brand-glyph">
-        <Sparkles size={19} />
+        <BrandMark size={19} />
       </span>
       <LoaderCircle className="spin" size={20} />
       <p>{label}</p>

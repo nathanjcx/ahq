@@ -186,7 +186,7 @@ const safeEvents: NonNullable<CanvasProps['events']> = (store) => {
 };
 
 /**
- * The Astra HQ office as a self-contained client component: the cutaway
+ * The Staff AI office as a self-contained client component: the cutaway
  * architectural room from the desktop app, dressed only by the people it is
  * given. With no employees it stays a furnished, honest empty office.
  */
