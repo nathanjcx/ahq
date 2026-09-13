@@ -17,6 +17,13 @@ export type FixtureQueries = Record<string, unknown>;
 
 export const FixtureQueriesContext = createContext<FixtureQueries | null>(null);
 
+/**
+ * Whether the signed-in person has a workspace yet. Every page-owned query reads one, so before the
+ * workspace exists they hold off instead of throwing "Create a workspace first" at the error boundary.
+ * The shell sets it; outside the shell (tests, the fixture route) a workspace is assumed.
+ */
+export const WorkspaceReadyContext = createContext(true);
+
 type Query = FunctionReference<'query'>;
 
 /**
@@ -28,8 +35,12 @@ export function useUiQuery<Q extends Query>(
   args: FunctionArgs<Q> | 'skip',
 ): FunctionReturnType<Q> | undefined {
   const fixtures = useContext(FixtureQueriesContext);
-  const live = useQuery(reference, ...((fixtures ? ['skip'] : [args]) as OptionalRestArgsOrSkip<Q>));
-  if (!fixtures) return live;
+  const ready = useContext(WorkspaceReadyContext);
+  const live = useQuery(
+    reference,
+    ...((fixtures || !ready ? ['skip'] : [args]) as OptionalRestArgsOrSkip<Q>),
+  );
+  if (!fixtures) return ready ? live : undefined;
   if (args === 'skip') return undefined;
   const answer = fixtures[getFunctionName(reference)];
   return typeof answer === 'function' ? (answer as (args: unknown) => unknown)(args) : answer;
