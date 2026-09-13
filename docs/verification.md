@@ -45,10 +45,11 @@ Pure modules, run by Vitest without a browser or a deployment.
 | `text.test.ts`              | 20    | `lib/text.ts`: shortening, counting, slugs                                               |
 | `paging.test.ts`            | 4     | `lib/paging.ts`: pages counted per batch, in-app rows excluded, the twenty-minute gate   |
 | `projects-timeline.test.ts` | 5     | The roadmap timeline's lanes, flags, and dependency strings                              |
-| `office-activity.test.ts`   | 35    | `deriveActivities`: every rule, its timeout, attention, bubble text, provider matching   |
+| `office-activity.test.ts`   | 36    | `deriveActivities`: every rule, its timeout, attention, bubble text, provider matching   |
 | `office-labels.test.ts`     | 13    | Label priority, the collision pass and its stability, bubble ranking and placement       |
-| `office-stations.test.ts`   | 6     | The desk grid, sticky homes, the minimum gap, the lectern queue, consoles, handoff pairs |
-| `office-rooms.test.ts`      | 18    | Records, boardroom, triage and lobby layout invariants: shelves, seats, props            |
+| `office-stations.test.ts`   | 6     | The desk grid, sticky homes, the minimum gap over every activity, the prop queues        |
+| `office-rooms.test.ts`      | 21    | Records, boardroom, triage and lobby layout invariants: shelves, seats, cards, the wall  |
+| `office-stage.test.ts`      | 5     | `deriveScene`: the board, the room, the hour, and the workspace's hours inside the day   |
 | `office-replay.test.ts`     | 11    | `sceneAt` and `entryAt`: a recorded timeline replayed into the live floor's scene        |
 
 ## Convex tests
@@ -162,12 +163,15 @@ first frames, the label pass, and the lighting blend: `lobby-day`, `floor-day`, 
 `boardroom`, `triage`, and the four the activity model added — `meeting-live` (the boardroom with a
 speaker holding the floor), `audit-night` (the auditor working an empty floor after hours),
 `incident` (triage on an open incident, with the notice the emergency allow-list leaves by the door),
-and `day-replay` (a whole day replayed and stopped at three in the afternoon). Images live in
+and `day-replay` (a whole day replayed and stopped at three in the afternoon, with the day's own
+board on the wall and a string from whoever is waiting to the card they wait on). Images live in
 `web-tests/lab/baselines/`; the tolerance is `maxDiffPixelRatio: 0.01`, one percent, set in
 `playwright.config.ts`.
 
-The same file holds the performance probe: `/office-lab?preset=floor-day` at 1440×900, twenty frames
-sampled through `requestAnimationFrame`, asserting the median frame time. The plan's budget is 16 ms,
+The same file holds the performance probe: `/office-lab?preset=floor-day` at 1440×900 with
+`width=1440&height=860`, which sizes the stage to the viewport, so the frame time is a measurement of
+a 1440 canvas rather than of the 1280 one the baselines fix. Twenty frames are sampled through
+`requestAnimationFrame` and the median asserted. The plan's budget is 16 ms,
 and `LAB_FRAME_BUDGET_MS` sets it; the default is 700 ms, because this machine renders through
 SwiftShader with no GPU. Set the real budget on a machine with one. The probe also asserts the plan's
 draw-call budget: under 400 calls on a floor at 1440, read from `data-office-stats`. Static geometry
@@ -224,9 +228,9 @@ in [deployment](deployment.md) are run with real accounts and the results record
 - **Multiple replicas under load.** The lease invariants are tested in a single process against
   `convex-test`. Two real workers competing, and Convex read limits at depth, have not been measured.
 - **S3 storage, the Docker image, and Railway.** Not exercised in this pass.
-- **The office under live data.** `/qa` points a Convex client at an unreachable deployment, so the
-  dashboard subscription never resolves and the office there is furnished but empty. The pure modules
-  cover the rules behind it; nothing covers the office rendering real journal data in a browser.
+- **The office under live data.** The office takes the dashboard from the page rather than
+  subscribing for it, so `/qa` now photographs every room dressed by the fixture. What is still
+  untested is the same rooms against a Convex subscription: no browser suite has run one.
 - **Every page against live data.** The per-page visual suites walk the roadmap, the calendar week,
   the records room, the audit documents, and the incident timeline, but they walk them against the
   `/qa` fixture. No browser suite has rendered one of those pages from a Convex subscription.
