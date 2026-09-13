@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { api, internal } from '../convex/_generated/api';
 import { CATALOG, CATALOG_TOOLS } from '../lib/catalog';
-import { DELIVERABLES, STUDIO_TOOLS, WORKSHOP_LIBRARIES } from '../lib/contracts/core';
-import { MODEL_IDS } from '../lib/contracts/core';
+import { DELIVERABLES, MODEL_IDS, STUDIO_TOOLS, WORKSHOP_LIBRARIES } from '../lib/contracts/core';
 import { PERSONA_LIMITS, isPersonaTrait } from '../lib/personas';
 import { harness, identity } from './support';
 
