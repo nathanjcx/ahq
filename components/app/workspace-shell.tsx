@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react';
 import type { EditorDraft } from '../admin/draft-issues';
 import { FloorPanel } from '../floors/floor-panel';
+import { WorkspaceReadyContext } from '../shared/use-ui-query';
 import type { Actions } from './actions';
 import { IncidentStrip } from './incident-strip';
-import { WorkspaceReadyContext } from '../shared/use-ui-query';
 import { nav, pageTitle, type Page } from './nav';
 import { NewTaskPanel } from './new-task-panel';
 import { SetupBanner, Toast } from './notices';
