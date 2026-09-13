@@ -17,23 +17,33 @@ const floorPost: InternalTool = {
 const floorHandoff: InternalTool = {
   name: 'floor_handoff',
   description:
-    'Request a handoff to another employee on this floor. A person accepts or declines it; requesting is not accepting.',
+    'Request a handoff to another employee on this floor. A person accepts or declines it unless the floor accepts its own handoffs; requesting is not accepting.',
   properties: {
     toEmployeeId: { type: 'string', description: 'The employee id to hand off to.' },
     brief: { type: 'string', description: 'What the next employee should do.' },
   },
   required: ['toEmployeeId', 'brief'],
   async run(request, _context, args) {
-    await request.backend.mutate('services/channels:requestHandoffFromAgent', {
-      runToken: request.runToken,
-      toEmployeeId: requireString(args, 'toEmployeeId'),
-      brief: requireString(args, 'brief'),
-    });
-    return {
-      requested: true,
-      status: 'pending',
-      instruction: 'A person decides this handoff. Do not claim it was accepted and do not wait for it.',
-    };
+    const result = await request.backend.mutate<{ status: 'pending' | 'accepted'; taskId?: string }>(
+      'services/channels:requestHandoffFromAgent',
+      {
+        runToken: request.runToken,
+        toEmployeeId: requireString(args, 'toEmployeeId'),
+        brief: requireString(args, 'brief'),
+      },
+    );
+    return result.status === 'accepted'
+      ? {
+          requested: true,
+          status: 'accepted',
+          taskId: result.taskId,
+          instruction: 'The floor accepted it; the task is started.',
+        }
+      : {
+          requested: true,
+          status: 'pending',
+          instruction: 'A person decides this handoff. Do not claim it was accepted and do not wait for it.',
+        };
   },
 };
 

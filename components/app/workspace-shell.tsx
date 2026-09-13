@@ -244,14 +244,14 @@ export function WorkspaceShell({
             employees={dashboard.employees}
             configured={configured && Boolean(workspace)}
             onClose={() => setFloorEditor(null)}
-            onSave={async (name, brief, employeeIds) => {
+            onSave={async (name, brief, employeeIds, handoffs) => {
               let createdFloorId: string | undefined;
               const saved = await run(
                 async () => {
                   if (floorEditor === 'new') {
-                    createdFloorId = (await actions.createFloor(name, brief, employeeIds))?.floorId;
+                    createdFloorId = (await actions.createFloor(name, brief, employeeIds, handoffs))?.floorId;
                   } else {
-                    await actions.updateFloor(floorEditor.id, name, brief, employeeIds);
+                    await actions.updateFloor(floorEditor.id, name, brief, employeeIds, handoffs);
                   }
                 },
                 floorEditor === 'new' ? 'Floor created' : 'Floor updated',

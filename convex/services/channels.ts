@@ -2,6 +2,7 @@ import { v } from 'convex/values';
 import type { Doc, Id } from '../_generated/dataModel';
 import { mutation, query } from '../_generated/server';
 import type { MutationCtx } from '../_generated/server';
+import { acceptHandoff } from '../lib/handoffs';
 import {
   channelName,
   findChannel,
@@ -45,7 +46,7 @@ export async function handoffFromRun(
   brief: string,
 ) {
   const { task, floor } = await floorForRun(ctx, runToken);
-  return insertHandoff(ctx, {
+  const { postId } = await insertHandoff(ctx, {
     floor,
     authorEmployeeId: task.employeeId,
     authorName: task.employeeName,
@@ -53,6 +54,15 @@ export async function handoffFromRun(
     brief,
     sourceTaskId: task._id,
   });
+  if (floor.handoffs !== 'auto') return { postId, status: 'pending' as const };
+  // The floor accepts its own handoffs, in the name of the person whose work this is.
+  const [post, workspace] = await Promise.all([ctx.db.get(postId), ctx.db.get(task.workspaceId)]);
+  if (!post?.handoff || !workspace) throw new Error('Handoff not found');
+  const taskId = await acceptHandoff(ctx, workspace, { ...post, handoff: post.handoff }, floor, {
+    subject: task.createdBy,
+    name: task.createdByName,
+  });
+  return { postId, status: 'accepted' as const, taskId };
 }
 
 async function channelRows(ctx: Ctx, task: Doc<'tasks'>, limit: number) {
@@ -119,5 +129,29 @@ export const postReport = mutation({
     const [task, report] = await Promise.all([ctx.db.get(args.taskId), ctx.db.get(args.reportId)]);
     if (!task || !report || report.taskId !== task._id) throw new Error('Report not found');
     return { postIds: await postShiftReport(ctx, task, report) };
+  },
+});
+
+/**
+ * The floor board an employee's shift opens with: what was posted there in the last day, so two
+ * employees on one floor can coordinate within it rather than through tomorrow's compiled memory.
+ */
+export const floorBoard = query({
+  args: { secret: v.string(), taskId: v.id('tasks') },
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const task = await ctx.db.get(args.taskId);
+    if (!task?.floorId) return [];
+    const channel = await findChannel(ctx, task.workspaceId, 'floor', task.floorId);
+    if (!channel) return [];
+    const since = Date.now() - 86_400_000;
+    return (await recentPosts(ctx, channel._id, BOARD_LIMIT))
+      .filter((post) => post.createdAt >= since)
+      .map((post) => ({
+        kind: post.kind,
+        authorName: post.authorName,
+        text: post.text,
+        createdAt: post.createdAt,
+      }));
   },
 });

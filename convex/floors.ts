@@ -2,15 +2,12 @@ import { v } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import type { MutationCtx } from './_generated/server';
-import { channelFor, findChannel, insertHandoff, insertNote, insertPost, recentPosts } from './lib/posts';
-import {
-  assertEmployeeReady,
-  assertTokenCap,
-  finalAssistantMessage,
-  requireFloor,
-  startTask,
-} from './lib/tasks';
-import { canSeeTask, cleanText, requireWorkspace, untrustedBlock } from './shared';
+import { acceptHandoff } from './lib/handoffs';
+import { findChannel, insertHandoff, insertNote, recentPosts } from './lib/posts';
+import { requireFloor } from './lib/tasks';
+import { canSeeTask, cleanText, requireWorkspace } from './shared';
+
+const handoffPolicy = v.union(v.literal('ask'), v.literal('auto'));
 
 function floorFields(name: string, brief: string) {
   return {
@@ -55,7 +52,12 @@ function boardPost(floorId: Id<'floors'>, post: Doc<'posts'> & { kind: BoardKind
 }
 
 export const create = mutation({
-  args: { name: v.string(), brief: v.string(), employeeIds: v.array(v.id('installations')) },
+  args: {
+    name: v.string(),
+    brief: v.string(),
+    employeeIds: v.array(v.id('installations')),
+    handoffs: v.optional(handoffPolicy),
+  },
   returns: v.object({ floorId: v.id('floors') }),
   handler: async (ctx, args) => {
     const { workspace, actor } = await requireWorkspace(ctx);
@@ -67,6 +69,7 @@ export const create = mutation({
       createdBy: actor.subject,
       ...fields,
       employeeIds: args.employeeIds,
+      handoffs: args.handoffs,
       createdAt: now,
       updatedAt: now,
     });
@@ -80,6 +83,7 @@ export const update = mutation({
     name: v.string(),
     brief: v.string(),
     employeeIds: v.array(v.id('installations')),
+    handoffs: v.optional(handoffPolicy),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -87,7 +91,12 @@ export const update = mutation({
     const floor = await requireFloor(ctx, workspace._id, args.floorId);
     const fields = floorFields(args.name, args.brief);
     await validateEmployees(ctx, workspace._id, args.employeeIds);
-    await ctx.db.patch(floor._id, { ...fields, employeeIds: args.employeeIds, updatedAt: Date.now() });
+    await ctx.db.patch(floor._id, {
+      ...fields,
+      employeeIds: args.employeeIds,
+      handoffs: args.handoffs,
+      updatedAt: Date.now(),
+    });
     return null;
   },
 });
@@ -183,45 +192,7 @@ export const decideHandoff = mutation({
       });
       return {};
     }
-    if (!floor.employeeIds.includes(post.handoff.toEmployeeId))
-      throw new Error('Employee is not assigned to this floor');
-    await assertTokenCap(ctx, workspace);
-    const { version } = await assertEmployeeReady(ctx, workspace, actor.subject, post.handoff.toEmployeeId);
-    // A handoff a person wrote is an instruction. One an agent requested through the floor tools has
-    // no author subject, and it is the previous employee's words, so it is delimited as material.
-    let prompt = post.authorSubject ? post.handoff.brief : untrustedBlock(post.handoff.brief);
-    // The carried context is another employee's output. It travels only to someone who could already
-    // read the source task, and it is delimited so this employee treats it as material, not orders.
-    const source = post.taskId ? await ctx.db.get(post.taskId) : null;
-    if (source && canSeeTask(source, actor.subject)) {
-      const closing = await finalAssistantMessage(ctx, source._id);
-      if (closing)
-        prompt = `${prompt}\n\nContext carried from ${source.title}:\n${untrustedBlock(
-          closing.slice(0, 20_000),
-        )}`;
-    }
-    const taskId = await startTask(ctx, {
-      workspace,
-      createdBy: actor.subject,
-      createdByName: actor.name,
-      employeeId: post.handoff.toEmployeeId,
-      version,
-      title: post.handoff.brief.slice(0, 200),
-      prompt,
-      floor: { floorId: floor._id, floorContext: { name: floor.name, brief: floor.brief } },
-      sourceTaskId: post.taskId,
-    });
-    await ctx.db.patch(post._id, {
-      handoff: { ...post.handoff, status: 'accepted', decidedBy: actor.subject, decidedAt: now, taskId },
-    });
-    await insertPost(ctx, {
-      channel: await channelFor(ctx, workspace._id, 'floor', floor._id),
-      kind: 'system',
-      authorEmployeeId: post.handoff.toEmployeeId,
-      authorName: version.name,
-      text: 'Accepted handoff → task created',
-      taskId,
-    });
+    const taskId = await acceptHandoff(ctx, workspace, { ...post, handoff: post.handoff }, floor, actor);
     return { taskId };
   },
 });

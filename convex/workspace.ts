@@ -262,6 +262,7 @@ export const dashboard = query({
         name: floor.name,
         brief: floor.brief,
         employeeIds: floor.employeeIds,
+        handoffs: floor.handoffs ?? 'ask',
         archivedAt: floor.archivedAt,
         createdAt: floor.createdAt,
         updatedAt: floor.updatedAt,

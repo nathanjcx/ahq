@@ -5,6 +5,7 @@ import type { DraftInput } from '../../admin/draft-input';
 import type {
   ConnectionVisibility,
   CorrectionDescriptor,
+  Floor,
   ModelId,
   ProviderId,
   TaskVisibility,
@@ -41,8 +42,15 @@ export type CoreActions = {
     name: string,
     brief: string,
     employeeIds: string[],
+    handoffs: Floor['handoffs'],
   ) => Promise<{ floorId: string } | undefined>;
-  updateFloor: (floorId: string, name: string, brief: string, employeeIds: string[]) => Promise<unknown>;
+  updateFloor: (
+    floorId: string,
+    name: string,
+    brief: string,
+    employeeIds: string[],
+    handoffs: Floor['handoffs'],
+  ) => Promise<unknown>;
   setFloorArchived: (floorId: string, archived: boolean) => Promise<unknown>;
   sendMessage: (taskId: string, text: string) => Promise<unknown>;
   cancelTask: (taskId: string) => Promise<unknown>;
@@ -194,13 +202,14 @@ export function useCoreActions(): CoreActions {
         title,
         floorId: floorId ? asId<'floors'>(floorId) : undefined,
       }),
-    createFloor: (name, brief, employeeIds) =>
-      createFloor({ name, brief, employeeIds: employeeIds.map((id) => asId<'installations'>(id)) }),
-    updateFloor: (floorId, name, brief, employeeIds) =>
+    createFloor: (name, brief, employeeIds, handoffs) =>
+      createFloor({ name, brief, handoffs, employeeIds: employeeIds.map((id) => asId<'installations'>(id)) }),
+    updateFloor: (floorId, name, brief, employeeIds, handoffs) =>
       updateFloor({
         floorId: asId(floorId),
         name,
         brief,
+        handoffs,
         employeeIds: employeeIds.map((id) => asId<'installations'>(id)),
       }),
     setFloorArchived: (floorId, archived) => setFloorArchived({ floorId: asId(floorId), archived }),

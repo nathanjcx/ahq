@@ -18,12 +18,13 @@ export function FloorPanel({
   employees: Employee[];
   configured: boolean;
   onClose: () => void;
-  onSave: (name: string, brief: string, employeeIds: string[]) => Promise<void>;
+  onSave: (name: string, brief: string, employeeIds: string[], handoffs: Floor['handoffs']) => Promise<void>;
   onArchive: (floor: Floor, archived: boolean) => Promise<void>;
 }) {
   const [name, setName] = useState(floor?.name ?? '');
   const [brief, setBrief] = useState(floor?.brief ?? '');
   const [employeeIds, setEmployeeIds] = useState<string[]>(floor?.employeeIds ?? []);
+  const [handoffs, setHandoffs] = useState<Floor['handoffs']>(floor?.handoffs ?? 'ask');
   const [busy, setBusy] = useState(false);
   const archived = Boolean(floor?.archivedAt);
 
@@ -31,7 +32,7 @@ export function FloorPanel({
     event.preventDefault();
     if (!name.trim() || !brief.trim() || busy) return;
     setBusy(true);
-    await onSave(name.trim(), brief.trim(), employeeIds);
+    await onSave(name.trim(), brief.trim(), employeeIds, handoffs);
     setBusy(false);
   }
 
@@ -74,6 +75,16 @@ export function FloorPanel({
             required
           />
           <small>Shared with your workspace. New tasks receive a copy of this brief.</small>
+        </label>
+        <label>
+          Handoffs between employees
+          <select value={handoffs} onChange={(event) => setHandoffs(event.target.value as Floor['handoffs'])}>
+            <option value="ask">A person accepts each one</option>
+            <option value="auto">The floor accepts them at once</option>
+          </select>
+          <small>
+            An accepted handoff starts a task for the next employee, in the name of whoever owns the work.
+          </small>
         </label>
         <fieldset className="staffing-picker">
           <legend>Staff this floor</legend>

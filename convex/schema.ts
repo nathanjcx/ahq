@@ -323,6 +323,8 @@ export default defineSchema({
     employeeIds: v.array(v.id('installations')),
     /** Reserved floors the workspace makes itself. Only Triage is one: the lobby is a room, not a team. */
     reserved: v.optional(v.literal('triage')),
+    /** Who accepts a handoff an employee requests: a person (the default), or the floor itself. */
+    handoffs: v.optional(v.union(v.literal('ask'), v.literal('auto'))),
     archivedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -434,6 +436,8 @@ export default defineSchema({
     updatedAt: v.number(),
     sessionId: v.optional(v.string()),
     error: v.optional(v.string()),
+    /** When the platform gave a failed task its one fresh session; a second failure stands. */
+    retriedAt: v.optional(v.number()),
     /** The one question the employee stopped on; cleared by the person's next message. */
     question: v.optional(v.object({ text: v.string(), askedAt: v.number() })),
     runToken: v.string(),

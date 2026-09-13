@@ -214,6 +214,8 @@ export interface Floor {
   name: string;
   brief: string;
   employeeIds: string[];
+  /** Who accepts a handoff an employee requests on this floor. */
+  handoffs: 'ask' | 'auto';
   archivedAt?: number;
   createdAt: number;
   updatedAt: number;

@@ -249,3 +249,46 @@ describe('workspace floors', () => {
     });
   });
 });
+
+describe('a floor that accepts its own handoffs', () => {
+  it('starts the next task the moment an employee requests one', async () => {
+    const t = harness();
+    await linearWorkspace(t);
+    const { listingId } = await publishEmployee(t);
+    const { listingId: writerListing } = await publishEmployee(t, { name: 'Writer' });
+    const owner = t.withIdentity(orgIdentity('owner', 'acme'));
+    await owner.mutation(api.workspace.bootstrap, { name: 'Acme' });
+    const { employeeId } = await hireOne(owner, listingId);
+    const { employeeId: writerId } = await hireOne(owner, writerListing);
+    const { floorId } = await owner.mutation(api.floors.create, {
+      name: 'Launch',
+      brief: 'Prepare the launch.',
+      employeeIds: [employeeId, writerId],
+      handoffs: 'auto',
+    });
+    const { taskId } = await owner.mutation(api.tasks.create, {
+      floorId,
+      employeeId,
+      title: 'Draft the notes',
+      prompt: 'Draft the release notes.',
+    });
+    const runToken = await t.run(async (ctx) => (await ctx.db.get(taskId))?.runToken ?? '');
+    const handoff = await t.mutation(api.services.floors.requestHandoff, {
+      secret,
+      runToken,
+      toEmployeeId: writerId,
+      brief: 'Polish the notes.',
+    });
+    expect(handoff.status).toBe('accepted');
+    const started = await t.run(async (ctx) => (handoff.taskId ? ctx.db.get(handoff.taskId) : null));
+    expect(started).toMatchObject({
+      employeeId: writerId,
+      floorId,
+      createdBy: 'owner',
+      sourceTaskId: taskId,
+    });
+    expect(started?.prompt).toContain('--- Untrusted context');
+    const board = await owner.query(api.floors.board, { floorId });
+    expect(board.find((post) => post.kind === 'handoff')?.handoff?.status).toBe('accepted');
+  });
+});

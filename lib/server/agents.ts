@@ -290,12 +290,29 @@ export interface TurnMemoryOptions {
  * block is built, so the agent budget evicts on what actually reached a model rather than on what
  * was merely available.
  */
+interface BoardRow {
+  kind: string;
+  authorName: string;
+  text: string;
+  createdAt: number;
+}
+
+/** The floor's last day of posts, fenced: every line is another employee's or a person's words. */
+function boardLines(board: BoardRow[]) {
+  return {
+    heading: 'Floor board (last day)',
+    lines: board.length
+      ? [untrustedBlock(board.map((post) => `${post.authorName} (${post.kind}): ${post.text}`).join('\n'))]
+      : [],
+  };
+}
+
 export async function workingMemory(taskId: string, options: TurnMemoryOptions = {}): Promise<WorkingMemory> {
   const inputs = await query<WorkingMemoryInputs & { workspaceId: string; employeeId: string }>(
     'services/memory:compileInputs',
     { taskId },
   );
-  const [pacing, meetings, project] = await Promise.all([
+  const [pacing, meetings, project, board] = await Promise.all([
     query<PacingRow>('services/schedule:pacing', { taskId }),
     query<MeetingRow[]>('services/calendar:upcoming', {
       workspaceId: inputs.workspaceId,
@@ -303,10 +320,11 @@ export async function workingMemory(taskId: string, options: TurnMemoryOptions =
       limit: 1,
     }),
     query<ProjectContextRow>('services/projects:projectContext', { taskId }),
+    query<BoardRow[]>('services/channels:floorBoard', { taskId }),
   ]);
   const compiled = compileWorkingMemory(inputs, {
     title: options.title,
-    sections: [scheduleLines(pacing, meetings, project), ...(options.sections ?? [])],
+    sections: [scheduleLines(pacing, meetings, project), boardLines(board), ...(options.sections ?? [])],
   });
   if (compiled.usedIds.length) await mutate('services/memory:touch', { ids: compiled.usedIds });
   return compiled;
