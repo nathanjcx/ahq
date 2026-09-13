@@ -1,10 +1,4 @@
-/* Instances grouped by version and floor, and the instance detail beside them. */
-/* The pair is a MasterDetail, which owns `display`; a phone drops to one pane on its own. */
-.employee-layout {
-  grid-template-columns: minmax(0, 1fr) 380px;
-  gap: 18px;
-  align-items: start;
-}
+/* Employees as a table, hire requests above it, and the instance detail as its own page. */
 .hire-requests {
   margin-bottom: 22px;
 }
@@ -38,97 +32,10 @@
   font-size: var(--text-xs);
   font-weight: 650;
 }
-.instance-groups {
-  display: grid;
-  gap: 22px;
-}
-.retired-toggle {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--muted);
-  font-size: var(--text-xs);
-}
-.instance-group > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--line);
-}
-.instance-group h2 {
-  font-size: var(--text-xl);
-}
-.instance-group > header p {
-  margin-top: 2px;
-  color: var(--muted);
-  font-size: var(--text-xs);
-}
-.floor-group {
-  margin-top: 14px;
-}
-.floor-group h3 {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 8px;
-  font-size: var(--text-sm);
-}
-.floor-group h3 > span {
-  color: var(--muted);
-  font-size: var(--text-2xs);
-  font-weight: 500;
-}
-.employee-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 12px;
-}
-.instance-group > .employee-grid {
-  margin-top: 14px;
-}
-.employee-card {
-  position: relative;
-  display: grid;
-  grid-template-columns: 50px minmax(0, 1fr);
-  gap: 6px 14px;
-  align-items: center;
-  padding: 17px;
-  text-align: left;
-}
-.employee-card:hover,
-.employee-card[data-active='true'] {
-  border-color: var(--accent);
-}
-.employee-card[data-active='true'] {
-  box-shadow:
-    inset 3px 0 #667588,
-    var(--shadow-sm);
-}
-.employee-card h3 {
-  font-size: var(--text-lg);
-}
-.employee-card p {
-  margin-top: 3px;
-  color: var(--muted);
-  font-size: var(--text-xs);
-}
-.employee-card .model-pill {
-  grid-column: 2;
-  width: fit-content;
-}
-.employee-card .card-meta {
-  grid-column: 2;
-  color: var(--muted);
-  font-size: var(--text-2xs);
-}
-.employee-card .card-meta[data-blocked='true'] {
-  color: #85622f;
-}
 .employee-profile {
   display: flex;
   flex-direction: column;
+  max-width: 920px;
   padding: 0;
 }
 .profile-top {
@@ -366,17 +273,8 @@
   margin-top: 14px;
 }
 @media (max-width: 1120px) {
-  .employee-layout {
-    grid-template-columns: 1fr;
-  }
 }
 @media (max-width: 640px) {
-  .employee-layout {
-    gap: 0;
-  }
-  .employee-grid {
-    grid-template-columns: 1fr;
-  }
   .instance-group > header {
     flex-direction: column;
     align-items: flex-start;

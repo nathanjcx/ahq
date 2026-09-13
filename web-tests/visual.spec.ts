@@ -191,13 +191,13 @@ test('a phone opens a detail and comes back to the list', async ({ page }) => {
   await page.locator('.md-back').click();
   await expect(layout).toHaveAttribute('data-detail', 'closed');
 
-  await go(page, 'Employees', true);
-  await page.locator('.employee-card').first().click();
-  await expect(layout).toHaveAttribute('data-detail', 'open');
+  await go(page, 'Team', true);
+  await page.locator('.data-table .row-link').first().click();
+  await expect(page.locator('.detail-page')).toBeVisible();
   await expectNoOverflow(page, 390);
   await shoot(page, 'mobile', 'employees-detail');
-  await page.locator('.md-back').click();
-  await expect(layout).toHaveAttribute('data-detail', 'closed');
+  await page.locator('.detail-back').click();
+  await expect(page.locator('.data-table')).toBeVisible();
   expect(errors).toEqual([]);
 });
 

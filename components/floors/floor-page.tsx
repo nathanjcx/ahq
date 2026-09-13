@@ -101,6 +101,7 @@ export function FloorPage({
             onNewTask={onNewTask}
             onEditFloor={onEditFloor}
             onRecords={() => onPage('records')}
+            onCalendar={() => onPage('calendar')}
           />
         ) : (
           <Lobby
@@ -150,6 +151,7 @@ function SelectedFloor({
   onNewTask,
   onEditFloor,
   onRecords,
+  onCalendar,
 }: {
   entry: FloorEntry;
   floorLabel: string;
@@ -163,6 +165,7 @@ function SelectedFloor({
   onEditFloor: (floor: Floor) => void;
   /** The Records room, where the binder's provenance and supersession chains live. */
   onRecords: () => void;
+  onCalendar: () => void;
 }) {
   const { floor, summary } = entry;
   const staff = floor.employeeIds
@@ -173,6 +176,7 @@ function SelectedFloor({
   return (
     <FloorView
       key={floor.id}
+      onCalendar={onCalendar}
       floor={floor}
       dashboard={dashboard}
       floorLabel={floorLabel}

@@ -1039,3 +1039,126 @@ p {
 .legal-footer {
   margin-top: 40px;
 }
+
+/* === components/shared: the data table and the click-through detail page === */
+.data-table-wrap {
+  overflow: auto;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.data-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 38px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+.data-table th.num,
+.data-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.data-table td {
+  height: 52px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--slate-100);
+  vertical-align: middle;
+}
+.data-table tr.row-link {
+  cursor: pointer;
+}
+.data-table tr.row-link:hover td {
+  background: var(--slate-50);
+}
+.data-table td.dim {
+  color: var(--muted);
+}
+.data-table td.chev {
+  width: 32px;
+  color: #94a3b8;
+  text-align: right;
+}
+.data-table .who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.data-table .who > span:last-child {
+  min-width: 0;
+}
+.data-table .who b {
+  display: block;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.data-table .who small {
+  display: block;
+  margin-top: 1px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.data-table .employee-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 0;
+  box-shadow: none;
+}
+.table-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.table-foot label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* A record opened from a table: a back link in place of the toolbar, then the record. */
+.detail-page {
+  display: grid;
+  gap: 14px;
+}
+.detail-back {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-md);
+  font-weight: 500;
+}
+.detail-back:hover {
+  color: var(--ink);
+}
+.file-ext {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--slate-100);
+  color: var(--muted);
+  font: 10px var(--mono);
+  text-transform: uppercase;
+}

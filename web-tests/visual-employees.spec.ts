@@ -42,9 +42,7 @@ async function shoot(page: Page, viewport: string, name: string) {
 
 /** A listing's card, found by the name it shows: a phone leaves the cover image out. */
 function listingCard(page: Page, name: string) {
-  return page
-    .locator('.listing-card')
-    .filter({ has: page.getByRole('heading', { name, exact: true }) });
+  return page.locator('.listing-card').filter({ has: page.getByRole('heading', { name, exact: true }) });
 }
 
 async function go(page: Page, label: string, mobile: boolean) {
@@ -77,7 +75,7 @@ for (const viewport of viewports) {
     await open(page);
 
     // Instances grouped by version and floor, with the reserved staff in their own group.
-    await go(page, 'Employees', mobile);
+    await go(page, 'Team', mobile);
     await expect(page.getByRole('heading', { name: 'Hire requests' })).toBeVisible();
     await shoot(page, viewport.name, 'employees');
 
@@ -95,10 +93,7 @@ for (const viewport of viewports) {
     if (mobile) await page.locator('.md-back').click();
 
     // The hire sheet: a count, the names it would give, and what it adds to capacity and spend.
-    await page
-      .getByRole('button', { name: 'Hire more' })
-      .first()
-      .click();
+    await page.getByRole('button', { name: 'Hire more' }).first().click();
     await expect(page.getByRole('dialog', { name: /^Hire 1 instance of / })).toBeVisible();
     await shoot(page, viewport.name, 'hire-sheet');
     await page.getByRole('button', { name: 'One more' }).click();
@@ -112,13 +107,17 @@ for (const viewport of viewports) {
     await shoot(page, viewport.name, 'marketplace');
     await page.getByRole('button', { name: 'Installed', exact: true }).click();
     await shoot(page, viewport.name, 'marketplace-installed');
-    await listingCard(page, 'Bruno').getByRole('button', { name: /View details/ }).click();
+    await listingCard(page, 'Bruno')
+      .getByRole('button', { name: /View details/ })
+      .click();
     await expect(page.getByRole('dialog', { name: 'Bruno' })).toBeVisible();
     await shoot(page, viewport.name, 'marketplace-detail');
     await page.keyboard.press('Escape');
 
     await page.getByRole('button', { name: 'All', exact: true }).click();
-    await listingCard(page, 'Ada').getByRole('button', { name: /View details/ }).click();
+    await listingCard(page, 'Ada')
+      .getByRole('button', { name: /View details/ })
+      .click();
     await expect(page.getByRole('dialog', { name: 'Ada' })).toBeVisible();
     // Evidence, versions, and the upgrade prompt sit below the gallery inside the sheet's own scroll.
     await page.locator('.sheet-body').evaluate((body) => body.scrollTo(0, body.scrollHeight));
@@ -149,15 +148,13 @@ test('a phone opens an instance and comes back to the list', async ({ page }) =>
   const errors = watchErrors(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await open(page);
-  const layout = page.locator('.master-detail');
 
-  await go(page, 'Employees', true);
-  await expect(layout).toHaveAttribute('data-detail', 'closed');
+  await go(page, 'Team', true);
   await shoot(page, 'mobile', 'employees-list');
-  await page.locator('.employee-card').first().click();
-  await expect(layout).toHaveAttribute('data-detail', 'open');
+  await page.locator('.data-table .row-link').first().click();
+  await expect(page.locator('.detail-page')).toBeVisible();
   await shoot(page, 'mobile', 'employees-detail');
-  await page.goBack();
-  await expect(layout).toHaveAttribute('data-detail', 'closed');
+  await page.locator('.detail-back').click();
+  await expect(page.locator('.data-table')).toBeVisible();
   expect(errors).toEqual([]);
 });

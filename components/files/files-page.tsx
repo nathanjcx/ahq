@@ -1,6 +1,6 @@
 'use client';
 
-import { Archive, ArrowRight, FileText } from 'lucide-react';
+import { Archive, Download } from 'lucide-react';
 import { EmptySection } from '../shared/empty';
 import { fileSize } from '../shared/format';
 import { PageIntro } from '../shared/page-intro';
@@ -16,22 +16,43 @@ export function FilesPage({ artifacts, onTasks }: { artifacts: Artifact[]; onTas
         description="Artifacts created by your employees, with their task and source history attached."
       />
       {artifacts.length ? (
-        <div className="file-grid">
-          {artifacts.map((artifact) => (
-            <a className="file-card card" key={artifact.id} href={`/api/files/${artifact.id}`}>
-              <span className="file-icon">
-                <FileText size={22} />
-              </span>
-              <div>
-                <h3>{artifact.name}</h3>
-                <p>
-                  {fileSize(artifact.size)} · {artifact.mediaType}
-                </p>
-                <time>{relativeTime(artifact.createdAt)}</time>
-              </div>
-              <ArrowRight size={16} />
-            </a>
-          ))}
+        <div className="card data-table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Type</th>
+                <th className="num">Size</th>
+                <th>When</th>
+                <th aria-hidden="true" />
+              </tr>
+            </thead>
+            <tbody>
+              {artifacts.map((artifact) => {
+                const ext = artifact.name.split('.').pop()?.toUpperCase() ?? '';
+                return (
+                  <tr key={artifact.id}>
+                    <td>
+                      <span className="who">
+                        <span className="file-ext">{ext.slice(0, 5) || 'FILE'}</span>
+                        <span>
+                          <b>{artifact.name}</b>
+                        </span>
+                      </span>
+                    </td>
+                    <td className="dim">{artifact.mediaType}</td>
+                    <td className="num dim">{fileSize(artifact.size)}</td>
+                    <td className="dim">{relativeTime(artifact.createdAt)}</td>
+                    <td className="chev">
+                      <a className="text-button" href={`/api/files/${artifact.id}`}>
+                        <Download size={14} /> Download
+                      </a>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       ) : (
         <EmptySection

@@ -41,6 +41,7 @@ export function FloorView({
   onTask,
   onNewTask,
   onEditFloor,
+  onCalendar,
   onArchive,
   replay,
 }: {
@@ -65,6 +66,7 @@ export function FloorView({
   onTask: (id: string) => void;
   onNewTask: (employeeId?: string) => void;
   onEditFloor: () => void;
+  onCalendar: () => void;
   onArchive: (archived: boolean) => void;
   /** An optional control for this floor's scene, shown beside Edit and Archive. */
   replay?: ReactNode;
@@ -165,6 +167,7 @@ export function FloorView({
             onEmployee={onEmployee}
             onNewTask={onNewTask}
             onEditFloor={onEditFloor}
+            onCalendar={onCalendar}
           />
         </section>
         <section className="floor-region region-binder" aria-label="Floor memory binder">

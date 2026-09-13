@@ -10,6 +10,7 @@ import { EmptyMini } from '../shared/empty';
 import { Avatar } from '../shared/marks';
 import { FloorReplay } from './floor-replay';
 import { FloorScene } from './floor-scene';
+import { WeekList } from './week-list';
 import type { Dashboard, Employee, ScheduleSummary, Task } from '@/lib/contracts';
 import { pluralize } from '@/lib/text';
 
@@ -49,6 +50,7 @@ export function FloorTeam({
   onEmployee,
   onNewTask,
   onEditFloor,
+  onCalendar,
 }: {
   floorName: string;
   /** This floor, so the office can read its board and replay its finished tasks. */
@@ -67,6 +69,7 @@ export function FloorTeam({
   onEmployee: (id: string) => void;
   onNewTask: (employeeId: string) => void;
   onEditFloor: () => void;
+  onCalendar: () => void;
 }) {
   const [replay, setReplay] = useState<OfficeSceneData | undefined>(undefined);
   const [dayOpen, setDayOpen] = useState(false);
@@ -179,6 +182,7 @@ export function FloorTeam({
             text="Edit this floor to add one or more employees."
           />
         )}
+        <WeekList live={configured} onCalendar={onCalendar} />
         <button className="floor-team-edit" onClick={onEditFloor}>
           <Pencil size={14} /> {archived ? 'Manage floor' : 'Edit staffing'}
         </button>
