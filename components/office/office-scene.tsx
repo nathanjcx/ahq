@@ -19,7 +19,7 @@ import {
 import { Static } from './office-merge';
 import { OfficeOverlay } from './office-overlay';
 import { useOfficePan } from './office-pan';
-import { EmployeeAvatar, type EmployeeKind } from './office-people';
+import { EmployeeAvatar, isSeated, type EmployeeKind } from './office-people';
 import { C, Halo, SurfaceContext, useSurfaceTextures, type Point } from './office-primitives';
 import {
   AlertBoard,
@@ -242,9 +242,12 @@ const CALENDAR_WALL: Point = [2.75, 1.72, -0.6];
 const NOTICE: Point = [-8.35, 1.62, -5.78];
 /** A waiting figure holds its string at about chest height. */
 const STRING_HEIGHT = 1.18;
-/** The overlay cards hang above the props they belong to, clear of any figure. */
-const TASK_CARDS: Point = [-0.9, 1.6, 6];
-const CALENDAR_CARD: Point = [2.75, 2.85, -0.6];
+/** The overlay cards hang above the props they belong to. The board's card hangs
+ *  off the near edge of the floor, beside the board: the one part of the frame no
+ *  desk, seat or standing station can put a figure in. */
+const TASK_CARDS: Point = [-1.2, 1, 7.9];
+/** Beside the wall it reads out, clear of anyone huddled in the middle of the room. */
+const CALENDAR_CARD: Point = [4.9, 2.2, -0.6];
 /** The triage signals stack on the window wall's pier: the board, then the lamp. */
 const ALERT_BOARD: Point = [-8.86, 1.4, -0.8];
 const STATUS_LAMP: Point = [-8.8, 2.66, -0.8];
@@ -388,11 +391,17 @@ export function OfficeScene({
       ...(stations[index].accent ? { accent: stations[index].accent } : {}),
     }));
   }, [present, providers, room, onFloor, meeting, seats]);
-  // After hours the floor is dark but for the desks somebody is still working at.
+  // After hours the floor is dark but for the desks somebody is still sitting and
+  // working at: an auditor walking the floor does not light the desk they left.
   const lamps = useMemo(() => {
     if (!schedule || schedule.working) return undefined;
     return people
-      .filter((person) => person.home < desks.length && isWorking(person.state.activity))
+      .filter(
+        (person) =>
+          person.home < desks.length &&
+          isWorking(person.state.activity) &&
+          isSeated(person.state.activity),
+      )
       .map((person) => person.home);
   }, [schedule, people, desks.length]);
   const shelves = useMemo(

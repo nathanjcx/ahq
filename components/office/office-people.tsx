@@ -501,6 +501,11 @@ function Figure({
   );
 }
 
+/** Whether this activity is done sitting down, which is to say at the person's own desk. */
+export function isSeated(activity: Activity): boolean {
+  return SEATED.includes(activity);
+}
+
 const scratch = new THREE.Vector3();
 const heading = new THREE.Vector3();
 
