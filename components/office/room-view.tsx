@@ -16,7 +16,6 @@ import './office.css';
  * since a canvas is the most expensive thing a small screen can carry.
  */
 export function RoomView({
-  eyebrow,
   title,
   note,
   employees,
@@ -24,7 +23,6 @@ export function RoomView({
   onSelect,
   onSelectProp,
 }: {
-  eyebrow: string;
   title: string;
   /** One line saying what the room is showing, for anyone who folds it away. */
   note: string;
@@ -41,16 +39,10 @@ export function RoomView({
     <section className="office-room card" data-open={open}>
       <header>
         <div>
-          <span className="eyebrow">{eyebrow}</span>
           <h3>{title}</h3>
         </div>
         <p>{note}</p>
-        <button
-          type="button"
-          className="text-button"
-          aria-expanded={open}
-          onClick={() => setChosen(!open)}
-        >
+        <button type="button" className="text-button" aria-expanded={open} onClick={() => setChosen(!open)}>
           {open ? 'Hide the room' : 'Show the room'}
           <ChevronDown size={14} />
         </button>

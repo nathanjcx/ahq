@@ -79,7 +79,6 @@ export function TriageFloor({
   const open = scene.incidentCount ?? 0;
   return (
     <RoomView
-      eyebrow="TRIAGE"
       title="Triage floor"
       note={
         open

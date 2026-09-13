@@ -101,7 +101,6 @@ export function AuditPage({
   return (
     <div>
       <PageIntro
-        eyebrow="AUDITORS"
         title="Audit"
         description="What the auditors found overnight, one document per instance per night, with evidence."
       />

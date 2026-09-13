@@ -1,11 +1,9 @@
 'use client';
 
-import { Plus } from 'lucide-react';
 import type { Actions } from '../app/actions';
 import type { Page } from '../app/nav';
 import { FloorFeeds } from '../channels/floor-feeds';
 import type { OfficeEmployee } from '../office/office-view';
-import { PageIntro } from '../shared/page-intro';
 import { FloorBinder } from './floor-binder';
 import { FloorChannel } from './floor-channel';
 import { FloorDirectory } from './floor-directory';
@@ -79,20 +77,6 @@ export function FloorPage({
 
   return (
     <div className="office-page">
-      <PageIntro
-        eyebrow="FLOORS"
-        title={dashboard.workspace ? 'Office' : 'Set up your workspace'}
-        description={
-          dashboard.workspace
-            ? 'Floors, who is staffed on them, and work that has no floor yet.'
-            : 'Create a workspace, hire an employee, and give them a task.'
-        }
-        action={
-          <button className="primary-button" disabled={!workspaceReady} onClick={onNewFloor}>
-            <Plus size={17} /> New floor
-          </button>
-        }
-      />
       <div className="building-layout">
         <FloorDirectory
           workspaceName={dashboard.workspace?.name}
@@ -127,6 +111,7 @@ export function FloorPage({
             onTask={onTask}
             onNewTask={onNewTask}
             onAllTasks={() => onPage('tasks')}
+            onCalendar={() => onPage('calendar')}
           />
         )}
       </div>
@@ -239,6 +224,7 @@ function Lobby({
   onTask,
   onNewTask,
   onAllTasks,
+  onCalendar,
 }: {
   dashboard: Dashboard;
   configured: boolean;
@@ -247,6 +233,7 @@ function Lobby({
   onTask: (id: string) => void;
   onNewTask: (floorId: string | null) => void;
   onAllTasks: () => void;
+  onCalendar: () => void;
 }) {
   const lobbyTasks = dashboard.tasks.filter((task) => !task.floorId);
   const activeTasks = lobbyTasks.filter((task) => ACTIVE_TASK_STATUSES.includes(task.status));
@@ -268,6 +255,7 @@ function Lobby({
       onEmployee={onEmployee}
       onTask={onTask}
       onAllTasks={onAllTasks}
+      onCalendar={onCalendar}
     />
   );
 }

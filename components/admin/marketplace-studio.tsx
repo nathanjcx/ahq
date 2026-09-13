@@ -35,7 +35,6 @@ export function MarketplaceStudioPage({
   return (
     <div>
       <PageIntro
-        eyebrow="PLATFORM ADMIN"
         title="Marketplace studio"
         description="Write employee definitions and publish versions to the marketplace."
         action={

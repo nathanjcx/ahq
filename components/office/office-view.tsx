@@ -33,8 +33,6 @@ export type OfficeViewProps = {
   archived?: boolean;
   /** Connected providers, one console each. Figures walk to them while calling a tool. */
   providers?: OfficeProvider[];
-  /** The latest board note, shown on the whiteboard. */
-  note?: string;
   /** Fraction of the workspace token cap used, 0 to 1. Above zero the room dims. */
   lightBudget?: number;
   /** Local hour, 0 to 24, for day and night. Defaults to the viewer's clock. */
@@ -200,7 +198,6 @@ export default function OfficeView({
   notice,
   archived,
   providers,
-  note,
   lightBudget,
   hour,
   labels = 'names',
@@ -397,7 +394,6 @@ export default function OfficeView({
               resetKey={resetKey}
               eventSource={eventSource}
               providers={providers}
-              note={note}
               lightBudget={lightBudget}
               hour={hour}
               dressing={dressing}

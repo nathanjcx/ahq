@@ -215,10 +215,10 @@ p {
 /* === components/shared/page-intro.tsx and the card surface === */
 .page-intro {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  gap: 30px;
-  margin-bottom: 29px;
+  gap: 24px;
+  margin-bottom: 18px;
 }
 .page-intro > div {
   max-width: 680px;
@@ -233,14 +233,14 @@ p {
 }
 .page-intro h1 {
   color: #293340;
-  font-size: clamp(27px, 2.5vw, 37px);
-  line-height: 1.06;
-  letter-spacing: -1.35px;
+  font-size: 22px;
+  line-height: 1.15;
+  letter-spacing: -0.5px;
 }
 .page-intro p {
-  max-width: 600px;
-  margin-top: 9px;
-  color: #757b82;
+  max-width: 640px;
+  margin-top: 4px;
+  color: #6b7480;
   font-size: var(--text-md);
 }
 .card {
@@ -803,7 +803,7 @@ p {
     gap: 14px;
   }
   .page-intro h1 {
-    font-size: 28px;
+    font-size: 20px;
   }
 }
 /* === components/shared/master-detail.tsx === */

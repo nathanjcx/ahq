@@ -12,7 +12,6 @@ export function FilesPage({ artifacts, onTasks }: { artifacts: Artifact[]; onTas
   return (
     <div>
       <PageIntro
-        eyebrow="OUTPUTS"
         title="Files"
         description="Artifacts created by your employees, with their task and source history attached."
       />

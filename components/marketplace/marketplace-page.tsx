@@ -64,7 +64,6 @@ export function MarketplacePage({ listings, ...props }: Props) {
   return (
     <div>
       <PageIntro
-        eyebrow="EMPLOYEE MARKETPLACE"
         title="Marketplace"
         description="Published employees. Each version lists its tools, what it produces, and its limits."
         action={
@@ -204,7 +203,6 @@ export function MarketplacePage({ listings, ...props }: Props) {
               <i />
             </span>
           </div>
-          <span className="eyebrow">CURATED BY YOUR PLATFORM TEAM</span>
           <h2>
             {filtered
               ? 'No employees match these filters'

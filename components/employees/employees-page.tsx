@@ -136,7 +136,6 @@ export function EmployeesPage({ listings, ...props }: Props) {
   return (
     <div>
       <PageIntro
-        eyebrow="YOUR TEAM"
         title="Employees"
         description="Each instance runs one published version, on one floor, one shift at a time."
         action={

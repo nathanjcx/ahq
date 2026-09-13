@@ -270,7 +270,6 @@ function Stage({
       archived={archived}
       labels={labels}
       providers={scene.providers}
-      note={scene.note}
       lightBudget={scene.lightBudget}
       hour={scene.hour}
       dressing={scene}

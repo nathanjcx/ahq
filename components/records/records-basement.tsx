@@ -68,7 +68,6 @@ export function RecordsBasement({ employees, tasks }: { employees: Employee[]; t
   const contested = shelves.reduce((total, shelf) => total + shelf.contested, 0);
   return (
     <RoomView
-      eyebrow="THE BASEMENT"
       title="Records room"
       note={
         `${pluralize(shelves.length, 'run')} of casework` +

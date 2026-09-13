@@ -219,14 +219,14 @@
   overflow: hidden;
 }
 .floor-heading {
-  min-height: 104px;
+  min-height: 62px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 20px 22px;
+  padding: 12px 20px;
   border-bottom: 1px solid var(--line);
-  background: linear-gradient(105deg, #f8fbff 55%, #e9eef3);
+  background: #f8fbff;
 }
 .floor-heading > div:first-child {
   min-width: 0;
@@ -234,21 +234,21 @@
 .floor-heading h2 {
   overflow: hidden;
   color: #293340;
-  font-size: 24px;
-  line-height: 1.1;
-  letter-spacing: -0.7px;
+  font-size: 18px;
+  line-height: 1.15;
+  letter-spacing: -0.4px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .floor-heading p {
   max-width: 680px;
-  margin-top: 7px;
+  margin-top: 2px;
   overflow: hidden;
-  color: #787e85;
+  color: #6b7480;
   font-size: var(--text-md);
-  line-height: 1.55;
+  line-height: 1.45;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
 .floor-heading-actions {
@@ -265,7 +265,7 @@
   border-right: 1px solid var(--line);
 }
 .floor-stage {
-  height: 390px;
+  height: clamp(420px, calc(100vh - 380px), 620px);
   min-height: 340px;
   animation: floor-fade 0.2s ease-out;
 }
@@ -296,9 +296,51 @@
   font-weight: 750;
 }
 .floor-team-list {
-  max-height: 308px;
-  margin-top: 12px;
+  max-height: 268px;
+  margin-top: 8px;
   overflow-y: auto;
+}
+/* === components/floors/week-list.tsx === */
+.week-list {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.week-list ol {
+  display: grid;
+  gap: 0;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.week-list li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #e4e7eb;
+  font-size: var(--text-base);
+  white-space: nowrap;
+}
+.week-list li span:first-child {
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.week-list li span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.week-list .week-more {
+  border-bottom: 0;
+}
+.week-empty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: var(--text-base);
 }
 .floor-team-list > button {
   width: 100%;
@@ -916,7 +958,6 @@
   color: #8c4a3c;
   font-size: var(--text-base);
 }
-
 
 /* Team rail */
 .region-team .floor-canvas {

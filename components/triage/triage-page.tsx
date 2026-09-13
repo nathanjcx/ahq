@@ -43,7 +43,6 @@ export function TriagePage({ dashboard, actions, configured, run, go, onSelectTa
   return (
     <div className="triage-page">
       <PageIntro
-        eyebrow="TRIAGE FLOOR"
         title="Triage"
         description="Open incidents. Triage reproduces, fixes under the allow-list, and posts the post-mortem."
         action={

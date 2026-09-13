@@ -11,7 +11,6 @@ export function ActivityPage({ events }: { events: ActivityEvent[] }) {
   return (
     <div>
       <PageIntro
-        eyebrow="HISTORY"
         title="Activity"
         description="Work, reviews, and actions across the workspace."
       />

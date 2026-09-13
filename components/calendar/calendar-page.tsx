@@ -132,7 +132,6 @@ export function CalendarPage({
   return (
     <div>
       <PageIntro
-        eyebrow="SCHEDULE"
         title="Calendar"
         description="Shifts, deadlines, audits, and meetings, one row per instance."
         action={

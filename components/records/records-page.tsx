@@ -123,7 +123,6 @@ export function RecordsPage({ dashboard, actions, canManageWorkspace, run, onSel
   return (
     <div>
       <PageIntro
-        eyebrow="MEMORY"
         title="Records"
         description="Every claim the workspace works from: who filed it, what it replaced, and what is in dispute."
         action={

@@ -52,7 +52,6 @@ export function OperationsPage({
   return (
     <div>
       <PageIntro
-        eyebrow="PLATFORM ADMIN"
         title="Operations"
         description="Provider configuration and the tool registry. Every service reads this, so a change here takes effect on the next agent call and the next sign-in."
       />

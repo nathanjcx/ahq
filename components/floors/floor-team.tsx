@@ -26,7 +26,8 @@ function shiftFor(employee: Employee, tasks: Task[], schedule?: ScheduleSummary)
   const review = mine.find((task) => task.status === 'awaiting_approval');
   if (review) return { label: 'Waiting on you', tone: 'review', detail: review.title };
   const held = mine.find((task) => task.status === 'waiting' || task.status === 'blocked');
-  if (held) return { label: held.status === 'waiting' ? 'Waiting' : 'Blocked', tone: 'held', detail: held.title };
+  if (held)
+    return { label: held.status === 'waiting' ? 'Waiting' : 'Blocked', tone: 'held', detail: held.title };
   const queued = mine.filter((task) => task.status === 'queued');
   if (queued.length) return { label: 'Queued', tone: 'working', detail: pluralize(queued.length, 'task') };
   if (employee.status !== 'ready') return { label: employee.status, tone: 'held' };
@@ -129,10 +130,7 @@ export function FloorTeam({
       />
       <div className="floor-team">
         <div className="section-title">
-          <div>
-            <span className="eyebrow">STAFFING</span>
-            <h3>Floor team</h3>
-          </div>
+          <h3>Floor team</h3>
           <span className="staff-count">{staff.length}</span>
         </div>
         {staff.length ? (

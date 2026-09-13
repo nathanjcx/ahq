@@ -109,7 +109,6 @@ export function ProjectsPage({
   return (
     <div>
       <PageIntro
-        eyebrow="ROADMAPS"
         title="Projects"
         description="Roadmaps that span floors, with milestones and who is on them."
         action={newProject}

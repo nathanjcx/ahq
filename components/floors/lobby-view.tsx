@@ -7,6 +7,7 @@ import { statusLabel } from '../shared/format';
 import { Avatar, StatusMark } from '../shared/marks';
 import { relativeTime } from '../shared/time';
 import { FloorScene } from './floor-scene';
+import { WeekList } from './week-list';
 import type { Dashboard, Employee, Task } from '@/lib/contracts';
 import { pluralize } from '@/lib/text';
 
@@ -22,6 +23,7 @@ export function LobbyView({
   onEmployee,
   onTask,
   onAllTasks,
+  onCalendar,
 }: {
   dashboard: Dashboard;
   configured: boolean;
@@ -33,12 +35,12 @@ export function LobbyView({
   onEmployee: (id: string) => void;
   onTask: (id: string) => void;
   onAllTasks: () => void;
+  onCalendar: () => void;
 }) {
   return (
     <section className="floor-workspace card" aria-live="polite">
       <header className="floor-heading">
         <div>
-          <span className="eyebrow">LOBBY</span>
           <h2>Lobby</h2>
           <p>Employees not yet on a floor, and tasks without one.</p>
         </div>
@@ -73,10 +75,7 @@ export function LobbyView({
 
         <aside className="floor-team">
           <div className="section-title">
-            <div>
-              <span className="eyebrow">STAFFING</span>
-              <h3>Unassigned team</h3>
-            </div>
+            <h3>Unassigned team</h3>
             <span className="staff-count">{lobbyEmployees.length}</span>
           </div>
           {lobbyEmployees.length ? (
@@ -101,15 +100,15 @@ export function LobbyView({
               text="Employees without an active floor appear here."
             />
           )}
+          <WeekList live={configured} onCalendar={onCalendar} />
         </aside>
       </div>
 
       <div className="floor-queue">
         <div className="section-title">
-          <div>
-            <span className="eyebrow">UNASSIGNED WORK</span>
-            <h3>{activeTasks.length ? pluralize(activeTasks.length, 'active task') : 'No active tasks'}</h3>
-          </div>
+          <h3>
+            {activeTasks.length ? pluralize(activeTasks.length, 'unassigned task') : 'No unassigned tasks'}
+          </h3>
           <button className="text-button" onClick={onAllTasks}>
             All tasks <ArrowRight size={14} />
           </button>

@@ -26,7 +26,6 @@ import {
   CalendarWall,
   ContestedFolder,
   DeskNotebook,
-  EmergencyNotice,
   FindingsFolder,
   IncidentLamp,
   LiftDoor,
@@ -38,15 +37,7 @@ import {
 } from './office-props';
 import { Architecture } from './office-room';
 import { Boardroom, RecordsRoom } from './office-rooms';
-import {
-  BoardNote,
-  CalendarCard,
-  MeetingMurmur,
-  ProviderConsole,
-  ReviewLectern,
-  StatusDevice,
-  TaskCards,
-} from './office-signals';
+import { MeetingMurmur, ProviderConsole, ReviewLectern, StatusDevice } from './office-signals';
 import {
   BINDER,
   CONSOLE_X,
@@ -129,8 +120,6 @@ export type OfficeSceneProps = {
   title?: string;
   /** Connected providers on this floor, one console each. */
   providers?: OfficeProvider[];
-  /** The latest board note, already short. Shown on the whiteboard. */
-  note?: string;
   /** Fraction of the workspace token cap used, 0 to 1. 0 means no cap, so no dimming. */
   lightBudget?: number;
   /** Local hour, 0 to 24. Defaults to the viewer's clock. */
@@ -144,7 +133,6 @@ export type OfficeSceneProps = {
 const ACTIVE_STATUSES = new Set(['working', 'review', 'ready']);
 const IDLE: EmployeeActivity = { activity: 'idle', since: 0 };
 const STATUS_DEVICE: Point = [-7.9, 1.55, -5.84];
-const BOARD_NOTE: Point = [4.5, 2.16, -5.7];
 /** The floor plate and the people on it. Taller props are allowed to crop. */
 const ROOM = { x: 9.3, y: 1.9, z: 6.3 };
 /** How much of the tighter axis the room fills, on a wide stage and on a phone. */
@@ -154,7 +142,6 @@ const FILL_COMPACT = 1.18;
 const COMPACT_WIDTH = 560;
 /** A fixed card is a list to read; on a stage narrower than this it covers the room
  *  instead, so the phone gets the room and the page around it carries the words. */
-const CARD_STAGE_WIDTH = 420;
 /** Two bubbles only once the stage is genuinely wide. */
 const WIDE_WIDTH = 1200;
 /** One bubble holds the floor this long before the next candidate takes its turn. */
@@ -244,17 +231,8 @@ const EMPTY_DRESSING: OfficeDressing = {};
 /** The floor's props, in the room's coordinates. Desk props are in the desk's own.
  *  The ones a figure walks to live in office-stations, so both agree on where they are. */
 const CALENDAR_WALL: Point = [2.75, 1.72, -0.6];
-/** On the back wall beside the door, at eye height, where a notice is read on the way in. */
-const NOTICE: Point = [-8.35, 1.62, -5.78];
 /** A waiting figure holds its string at about chest height. */
 const STRING_HEIGHT = 1.18;
-/** The overlay cards hang above the props they belong to. The board's card stands
- *  beside the board over the open floor between it and the lounge, rather than
- *  above it over the desks. */
-const TASK_CARDS: Point = [2.2, 1.4, 3.6];
-/** On the wall it reads out, low enough to clear anyone huddled in the middle of
- *  the room and central enough to stay inside a narrow stage. */
-const CALENDAR_CARD: Point = [2.75, 1, -0.6];
 /** The triage signals stack on the window wall's pier: the board, then the lamp. */
 const ALERT_BOARD: Point = [-8.86, 1.4, -0.8];
 const STATUS_LAMP: Point = [-8.8, 2.66, -0.8];
@@ -339,14 +317,12 @@ export function OfficeScene({
   labels,
   title,
   providers = [],
-  note,
   lightBudget = 0,
   hour,
   dressing = EMPTY_DRESSING,
   onSelectProp,
 }: OfficeSceneProps) {
   const { size } = useThree();
-  const cardsFit = size.width >= CARD_STAGE_WIDTH;
   const surfaces = useSurfaceTextures();
   // Sticky desk assignments. A plain stable object rather than a ref: losing it
   // only means the room picks the chairs again, which nobody can tell apart.
@@ -513,13 +489,6 @@ export function OfficeScene({
           </>
         )}
         <OfficeOverlay>
-          {cardsFit && onFloor && <BoardNote position={BOARD_NOTE} note={note} />}
-          {cardsFit && onFloor && dressing.board && (
-            <TaskCards position={TASK_CARDS} cards={dressing.board.cards} onSelectProp={onSelectProp} />
-          )}
-          {cardsFit && room === 'lobby' && dressing.calendar && (
-            <CalendarCard position={CALENDAR_CARD} entries={dressing.calendar} onSelectProp={onSelectProp} />
-          )}
           {people.map((person) => (
             <EmployeeAvatar
               key={person.employee.id}
@@ -600,7 +569,7 @@ function FloorDressing({
   people: Placed[];
   onSelectProp?: SelectProp;
 }) {
-  const { memory, board, findings, incident, incidentCount = 0, calendar = [], emergency } = dressing;
+  const { memory, board, findings, incident, incidentCount = 0, calendar = [] } = dressing;
   return (
     <group>
       {memory && <MemoryBinder position={BINDER} fill={memory.floorFill} onSelectProp={onSelectProp} />}
@@ -657,7 +626,6 @@ function FloorDressing({
           />,
         ];
       })}
-      {emergency && <EmergencyNotice position={NOTICE} onSelectProp={onSelectProp} />}
       {incident && <IncidentLamp position={INCIDENT_LAMP} onSelectProp={onSelectProp} />}
       {room === 'lobby' && (
         <>

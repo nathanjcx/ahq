@@ -46,7 +46,6 @@ export function InboxPage({
   return (
     <div>
       <PageIntro
-        eyebrow="CONNECTED WORK"
         title="Inbox"
         description="Items delivered by your integrations, to review or assign."
       />

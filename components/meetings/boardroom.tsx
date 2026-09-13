@@ -73,7 +73,6 @@ export function Boardroom({
   const live = scene.meeting?.live;
   return (
     <RoomView
-      eyebrow="TOP FLOOR"
       title="Boardroom"
       note={
         live

@@ -59,7 +59,6 @@ export function TasksPage({
   return (
     <div>
       <PageIntro
-        eyebrow="ASSIGNMENTS"
         title="Tasks"
         description="Every task, its conversation, and the external changes waiting for review."
         action={

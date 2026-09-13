@@ -49,7 +49,6 @@ export function IntegrationsPage({
   return (
     <div>
       <PageIntro
-        eyebrow="CONNECTIONS"
         title="Integrations"
         description="Sign in once per service. Employees use only reviewed tools, and every external change waits for approval."
       />
