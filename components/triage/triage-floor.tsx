@@ -79,12 +79,12 @@ export function TriageFloor({
   const open = scene.incidentCount ?? 0;
   return (
     <RoomView
-      eyebrow="THE TRIAGE FLOOR"
+      eyebrow="TRIAGE"
       title="Triage floor"
       note={
         open
           ? `The board is lit: ${pluralize(open, 'open incident')}.`
-          : 'Nothing on the board. The engineers are on call.'
+          : 'No open alerts.'
       }
       employees={people}
       scene={scene}

@@ -381,6 +381,7 @@ export default function OfficeView({
               onSelect={select}
               selectedId={selectedId}
               labels={labels}
+              title={label}
               motion={motion}
               zoom={zoom}
               angle={angle}

@@ -26,7 +26,7 @@ export function FloorDirectory({
   onNewFloor: () => void;
 }) {
   return (
-    <aside className="floor-directory" aria-label="Building directory">
+    <aside className="floor-directory" aria-label="Floors">
       <FloorSwitcher
         activeFloors={activeFloors}
         archivedFloors={archivedFloors}
@@ -44,7 +44,7 @@ export function FloorDirectory({
             <Building2 size={19} />
           </span>
           <div>
-            <span className="eyebrow">BUILDING DIRECTORY</span>
+            <span className="eyebrow">FLOORS</span>
             <h2>{workspaceName || 'Staff AI'}</h2>
           </div>
         </div>
@@ -89,7 +89,7 @@ export function FloorDirectory({
         </div>
         {!activeFloors.length && (
           <div className="directory-empty">
-            <p>Create a floor for each floor, then staff it with the employees it needs.</p>
+            <p>Create a floor for each team, then staff it.</p>
             <button className="text-button" onClick={onNewFloor} disabled={!canCreate}>
               Add first floor
             </button>

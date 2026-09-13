@@ -147,7 +147,7 @@ export function ClaimList({
     return (
       <EmptyMini
         icon={<Archive size={18} />}
-        title="Nothing on the shelf yet"
+        title="No claims yet"
         text="Claims filed against this scope appear here as employees work and the janitor curates."
       />
     );

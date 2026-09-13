@@ -48,7 +48,7 @@ export function JanitorLog({ entries }: { entries: JanitorLogEntry[] }) {
       ) : (
         <EmptyMini
           icon={<Brush size={18} />}
-          title="The janitor has not been down here yet"
+          title="No curation runs yet"
           text="Curation runs after hours, and again whenever twenty claims are waiting."
         />
       )}

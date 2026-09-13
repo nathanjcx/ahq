@@ -138,7 +138,7 @@ export function EmployeesPage({ listings, ...props }: Props) {
       <PageIntro
         eyebrow="YOUR TEAM"
         title="Employees"
-        description="Every instance is pinned to a reviewed version, stands on one floor, and runs one shift at a time."
+        description="Each instance runs one published version, on one floor, one shift at a time."
         action={
           <button className="primary-button" onClick={() => go('marketplace')}>
             <UserPlus size={17} />

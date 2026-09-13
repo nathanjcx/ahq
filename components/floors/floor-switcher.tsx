@@ -39,14 +39,14 @@ export function FloorSwitcher({
           <Building2 size={17} />
         </span>
         <span>
-          <small>{selected ? `FLOOR ${Number(selected.number)}` : 'GROUND FLOOR'}</small>
+          <small>{selected ? `FLOOR ${Number(selected.number)}` : 'LOBBY'}</small>
           <strong>{selected ? selected.floor.name : 'Lobby'}</strong>
         </span>
         <ChevronDown size={16} />
       </button>
       {open && (
         <Sheet
-          title="Building directory"
+          title="Floors"
           subtitle="Every floor, and the lobby for work with no floor of its own."
           onClose={() => setOpen(false)}
           footer={

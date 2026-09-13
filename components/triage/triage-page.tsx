@@ -45,7 +45,7 @@ export function TriagePage({ dashboard, actions, configured, run, go, onSelectTa
       <PageIntro
         eyebrow="TRIAGE FLOOR"
         title="Triage"
-        description="Incidents preempt working hours here: reproduce, fix under the allow-list, post the post-mortem, close."
+        description="Open incidents. Triage reproduces, fixes under the allow-list, and posts the post-mortem."
         action={
           !hasTriageFloor && configured ? (
             <button

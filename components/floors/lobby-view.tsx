@@ -40,7 +40,7 @@ export function LobbyView({
         <div>
           <span className="eyebrow">LOBBY</span>
           <h2>Lobby</h2>
-          <p>The week is on the wall, the lift is behind it, and work without a floor waits here.</p>
+          <p>Employees not yet on a floor, and tasks without one.</p>
         </div>
         <div className="floor-heading-actions">
           <button
@@ -97,7 +97,7 @@ export function LobbyView({
           ) : (
             <EmptyMini
               icon={<Users size={19} />}
-              title="No one waiting in the lobby"
+              title="Everyone is on a floor"
               text="Employees without an active floor appear here."
             />
           )}
@@ -108,7 +108,7 @@ export function LobbyView({
         <div className="section-title">
           <div>
             <span className="eyebrow">UNASSIGNED WORK</span>
-            <h3>{activeTasks.length ? pluralize(activeTasks.length, 'active task') : 'Nothing in motion'}</h3>
+            <h3>{activeTasks.length ? pluralize(activeTasks.length, 'active task') : 'No active tasks'}</h3>
           </div>
           <button className="text-button" onClick={onAllTasks}>
             All tasks <ArrowRight size={14} />
@@ -136,7 +136,7 @@ export function LobbyView({
             <Clock3 size={18} />
             <p>
               {configured
-                ? 'Your unassigned tasks and older work will collect here.'
+                ? 'Tasks without a floor will be listed here.'
                 : 'Connect the backend to see live work.'}
             </p>
           </div>

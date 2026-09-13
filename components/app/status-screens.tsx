@@ -12,7 +12,7 @@ export function SignInScreen() {
           <BrandMark size={25} />
         </span>
         <span className="eyebrow">STAFF AI</span>
-        <h1>Come into the office</h1>
+        <h1>Sign in</h1>
         <p>Sign in to see your employees, connected work, and action reviews.</p>
         {/* A plain link: minting the sign-in URL sets a single-use verifier cookie, which only the
             server can do, so no script is involved in starting the flow. */}

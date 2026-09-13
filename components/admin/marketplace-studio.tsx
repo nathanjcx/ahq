@@ -37,7 +37,7 @@ export function MarketplaceStudioPage({
       <PageIntro
         eyebrow="PLATFORM ADMIN"
         title="Marketplace studio"
-        description="Author private employee definitions and publish immutable versions for customer workspaces."
+        description="Write employee definitions and publish versions to the marketplace."
         action={
           <button className="primary-button" onClick={() => setEditing('new')}>
             <Plus size={16} />

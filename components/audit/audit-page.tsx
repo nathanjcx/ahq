@@ -103,7 +103,7 @@ export function AuditPage({
       <PageIntro
         eyebrow="AUDITORS"
         title="Audit"
-        description="What the auditors found after hours, one document per instance per night, with the evidence they are prepared to defend."
+        description="What the auditors found overnight, one document per instance per night, with evidence."
       />
 
       {escalated.length > 0 && (

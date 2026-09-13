@@ -354,8 +354,8 @@
 
 .office-calendar li {
   display: grid;
-  grid-template-columns: 38px 1fr;
-  gap: 7px;
+  grid-template-columns: max-content 1fr;
+  gap: 8px;
   white-space: nowrap;
 }
 

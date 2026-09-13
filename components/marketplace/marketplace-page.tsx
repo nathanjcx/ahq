@@ -65,8 +65,8 @@ export function MarketplacePage({ listings, ...props }: Props) {
     <div>
       <PageIntro
         eyebrow="EMPLOYEE MARKETPLACE"
-        title="Meet your next hire"
-        description="Published employees with versioned skills, clear limits, and no marketplace fee."
+        title="Marketplace"
+        description="Published employees. Each version lists its tools, what it produces, and its limits."
         action={
           dashboard.isPlatformAdmin ? (
             <button className="secondary-button" onClick={() => go('admin')}>

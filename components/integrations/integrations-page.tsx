@@ -51,7 +51,7 @@ export function IntegrationsPage({
       <PageIntro
         eyebrow="CONNECTIONS"
         title="Integrations"
-        description="Sign in once per service. Employees only use the tools an administrator reviewed, and every external change waits for your approval."
+        description="Sign in once per service. Employees use only reviewed tools, and every external change waits for approval."
       />
       <div className="integration-grid">
         {providers.map((provider) => (

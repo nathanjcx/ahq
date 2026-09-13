@@ -13,7 +13,7 @@ export function ActivityPage({ events }: { events: ActivityEvent[] }) {
       <PageIntro
         eyebrow="HISTORY"
         title="Activity"
-        description="A read-only account of work, reviews, and actions across your workspace."
+        description="Work, reviews, and actions across the workspace."
       />
       <div className="activity-card card">
         <div className="activity-notice">

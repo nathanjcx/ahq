@@ -111,7 +111,7 @@ export function ProjectsPage({
       <PageIntro
         eyebrow="ROADMAPS"
         title="Projects"
-        description="Work that spans floors: a roadmap, its milestones, and the people doing them."
+        description="Roadmaps that span floors, with milestones and who is on them."
         action={newProject}
       />
       {projects && !projects.length ? (

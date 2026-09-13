@@ -6,7 +6,6 @@ import type { Page } from '../app/nav';
 import { FloorFeeds } from '../channels/floor-feeds';
 import type { OfficeEmployee } from '../office/office-view';
 import { PageIntro } from '../shared/page-intro';
-import { timeGreeting } from '../shared/time';
 import { FloorBinder } from './floor-binder';
 import { FloorChannel } from './floor-channel';
 import { FloorDirectory } from './floor-directory';
@@ -81,16 +80,12 @@ export function FloorPage({
   return (
     <div className="office-page">
       <PageIntro
-        eyebrow="PROJECT FLOORS"
-        title={
-          dashboard.workspace
-            ? `Good ${timeGreeting()}, ${dashboard.workspace.name}`
-            : 'Your team starts here'
-        }
+        eyebrow="FLOORS"
+        title={dashboard.workspace ? 'Office' : 'Set up your workspace'}
         description={
           dashboard.workspace
-            ? 'Move between floors, see who is staffed, and keep unassigned work in the lobby.'
-            : 'Connect your workspace, hire your first employee, and give them a clear assignment.'
+            ? 'Floors, who is staffed on them, and work that has no floor yet.'
+            : 'Create a workspace, hire an employee, and give them a task.'
         }
         action={
           <button className="primary-button" disabled={!workspaceReady} onClick={onNewFloor}>

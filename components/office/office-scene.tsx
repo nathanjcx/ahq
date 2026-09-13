@@ -125,6 +125,8 @@ export type OfficeSceneProps = {
   eventSource: HTMLDivElement;
   /** What the legend's Labels control is set to. */
   labels: LabelMode;
+  /** The room's name, shown on its wall display. */
+  title?: string;
   /** Connected providers on this floor, one console each. */
   providers?: OfficeProvider[];
   /** The latest board note, already short. Shown on the whiteboard. */
@@ -146,7 +148,7 @@ const BOARD_NOTE: Point = [4.5, 2.16, -5.7];
 /** The floor plate and the people on it. Taller props are allowed to crop. */
 const ROOM = { x: 9.3, y: 1.9, z: 6.3 };
 /** How much of the tighter axis the room fills, on a wide stage and on a phone. */
-const FILL = 0.85;
+const FILL = 0.98;
 const FILL_COMPACT = 1.18;
 /** A stage narrower than this gets the closer framing and the compact chrome. */
 const COMPACT_WIDTH = 560;
@@ -315,9 +317,9 @@ function Lighting({ light, budget, sky = true }: { light: Daylight; budget: numb
           </mesh>
           <Halo
             p={[-11.5, light.skyHeight, 4.2]}
-            size={[4.6, 4.6]}
+            size={[2.2, 2.2]}
             color={light.disc}
-            opacity={light.interior * 0.55}
+            opacity={light.interior * 0.28}
           />
         </>
       )}
@@ -335,6 +337,7 @@ export function OfficeScene({
   resetKey,
   eventSource,
   labels,
+  title,
   providers = [],
   note,
   lightBudget = 0,
@@ -358,7 +361,8 @@ export function OfficeScene({
   const onFloor = room !== 'records' && room !== 'boardroom';
   // Somebody off shift has gone home, so the floor does not hold a chair for them.
   const active = useMemo(
-    () => employees.filter((employee) => isActiveEmployee(employee) && employee.state?.activity !== 'off_shift'),
+    () =>
+      employees.filter((employee) => isActiveEmployee(employee) && employee.state?.activity !== 'off_shift'),
     [employees],
   );
   // A boardroom only holds the meeting's attendees, in the order they were invited.
@@ -404,9 +408,7 @@ export function OfficeScene({
     return people
       .filter(
         (person) =>
-          person.home < desks.length &&
-          isWorking(person.state.activity) &&
-          isSeated(person.state.activity),
+          person.home < desks.length && isWorking(person.state.activity) && isSeated(person.state.activity),
       )
       .map((person) => person.home);
   }, [schedule, people, desks.length]);
@@ -458,8 +460,8 @@ export function OfficeScene({
         )}
         {onFloor && (
           <>
-            <Static revision={`${desks.length} ${lamps?.join(' ') ?? 'all'}`}>
-              <Architecture desks={desks} interior={light.interior} lamps={lamps} />
+            <Static revision={`${title ?? ''} ${desks.length} ${lamps?.join(' ') ?? 'all'}`}>
+              <Architecture desks={desks} interior={light.interior} lamps={lamps} title={title} />
               <FileCabinet />
               <OfficeSpeakers />
             </Static>
@@ -598,15 +600,7 @@ function FloorDressing({
   people: Placed[];
   onSelectProp?: SelectProp;
 }) {
-  const {
-    memory,
-    board,
-    findings,
-    incident,
-    incidentCount = 0,
-    calendar = [],
-    emergency,
-  } = dressing;
+  const { memory, board, findings, incident, incidentCount = 0, calendar = [], emergency } = dressing;
   return (
     <group>
       {memory && <MemoryBinder position={BINDER} fill={memory.floorFill} onSelectProp={onSelectProp} />}

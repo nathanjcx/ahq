@@ -61,7 +61,7 @@ export function TasksPage({
       <PageIntro
         eyebrow="ASSIGNMENTS"
         title="Tasks"
-        description="Follow work as it happens. Review external changes before they run."
+        description="Every task, its conversation, and the external changes waiting for review."
         action={
           <button className="primary-button" onClick={onNew} disabled={!configured}>
             <Plus size={17} />

@@ -200,7 +200,7 @@ function NotificationPanel({
           {notifications === undefined ? (
             <p className="bell-empty">Loading…</p>
           ) : notifications.length === 0 ? (
-            <p className="bell-empty">Nothing has needed you yet.</p>
+            <p className="bell-empty">No notifications.</p>
           ) : (
             notifications.map((row) => (
               <article key={row.id} className="bell-item" data-unread={!row.acknowledgedAt}>

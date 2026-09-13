@@ -38,7 +38,7 @@ export function FilesPage({ artifacts, onTasks }: { artifacts: Artifact[]; onTas
         <EmptySection
           icon={<Archive size={29} />}
           title="No files yet"
-          text="Reports, documents, and other employee outputs will collect here with a clear audit trail."
+          text="Files your employees produce are listed here with the task that made them."
           action={
             <button className="secondary-button" onClick={onTasks}>
               View tasks

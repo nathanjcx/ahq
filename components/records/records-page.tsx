@@ -125,7 +125,7 @@ export function RecordsPage({ dashboard, actions, canManageWorkspace, run, onSel
       <PageIntro
         eyebrow="MEMORY"
         title="Records"
-        description="The basement: every claim the workspace works from, who filed it, what it replaced, and what is still in dispute."
+        description="Every claim the workspace works from: who filed it, what it replaced, and what is in dispute."
         action={
           <button
             className="secondary-button"

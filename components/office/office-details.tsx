@@ -170,10 +170,11 @@ export function ArchitecturalDetails({
 }
 
 /**
- * The wall display carries the room's identity only. No pipeline counts or
- * progress metrics: an office with no activity has no numbers to show.
+ * The wall display carries the room's identity only: the product and the room's
+ * name. No slogans and no metrics, because an office with no activity has no
+ * numbers to show.
  */
-export function OperationsDisplay() {
+export function OperationsDisplay({ title = 'Office' }: { title?: string }) {
   const texture = useMemo(() => {
     const canvas = document.createElement('canvas');
     canvas.width = 1024;
@@ -183,42 +184,21 @@ export function OperationsDisplay() {
     ctx.fillRect(0, 0, 1024, 576);
     ctx.fillStyle = C.shell;
     ctx.font = '600 28px Arial';
-    ctx.fillText('A S T R A  H Q', 54, 63);
+    ctx.fillText('S T A F F  A I', 54, 63);
     ctx.fillStyle = C.screenLive;
     ctx.beginPath();
     ctx.arc(932, 53, 8, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = C.paper;
-    ctx.font = '500 62px Arial';
-    ctx.fillText('A little space for big things.', 52, 164);
-    ctx.fillStyle = C.inkSoft;
-    ctx.font = '27px Arial';
-    ctx.fillText('THE TEAM OFFICE', 55, 214);
-    const labels = ['RESEARCH', 'CREATE', 'REVIEW', 'SHIP'];
-    labels.forEach((label, i) => {
-      const x = 58 + i * 244;
-      ctx.fillStyle = i === 2 ? C.amber : C.screenFrame;
-      ctx.fillRect(x, 279, 204, 143);
-      ctx.fillStyle = i === 2 ? C.screen : C.paperShade;
-      ctx.font = '600 21px Arial';
-      ctx.fillText(label, x + 17, 313);
-      ctx.font = '500 49px Arial';
-      ctx.fillText('—', x + 17, 377);
-      if (i < 3) {
-        ctx.fillStyle = C.shellDeep;
-        ctx.fillRect(x + 214, 346, 20, 2);
-      }
-    });
-    ctx.fillStyle = C.inkSoft;
-    ctx.font = '23px Arial';
-    ctx.fillText('One team. A hundred possibilities.', 55, 506);
+    ctx.font = '500 72px Arial';
+    ctx.fillText(title.slice(0, 28), 52, 300);
     ctx.fillStyle = C.shellDeep;
-    ctx.fillRect(54, 457, 916, 1);
+    ctx.fillRect(54, 340, 916, 1);
     const map = new THREE.CanvasTexture(canvas);
     map.colorSpace = THREE.SRGBColorSpace;
     map.anisotropy = 4;
     return map;
-  }, []);
+  }, [title]);
   useEffect(() => () => texture.dispose(), [texture]);
   return (
     <group position={[-5.68, 2.05, -5.79]}>

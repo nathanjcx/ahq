@@ -48,7 +48,7 @@ export function InboxPage({
       <PageIntro
         eyebrow="CONNECTED WORK"
         title="Inbox"
-        description="New work from your approved integrations, ready to review or assign."
+        description="Items delivered by your integrations, to review or assign."
       />
       <MasterDetail
         className="split-card card"

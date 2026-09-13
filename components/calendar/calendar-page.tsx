@@ -134,7 +134,7 @@ export function CalendarPage({
       <PageIntro
         eyebrow="SCHEDULE"
         title="Calendar"
-        description="Shifts, deadlines, audits, and meetings, one row per instance, on the workspace's clock."
+        description="Shifts, deadlines, audits, and meetings, one row per instance."
         action={
           <button className="primary-button" disabled={!configured} onClick={() => setSheet({})}>
             <Plus size={17} />

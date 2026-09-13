@@ -60,11 +60,14 @@ export function Architecture({
   desks,
   interior,
   lamps,
+  title,
 }: {
   desks: Point[];
   interior: number;
   /** The desks whose lamps are lit. Every desk when absent. */
   lamps?: number[];
+  /** The room's name, shown on the wall display. */
+  title?: string;
 }) {
   return (
     <group>
@@ -119,7 +122,7 @@ export function Architecture({
           />
         </group>
       ))}
-      <OperationsDisplay />
+      <OperationsDisplay title={title} />
       <Bookshelf p={[-1.7, 0, -5.47]} />
       <Whiteboard />
       {/* Meeting room perimeter: thin charcoal mullions and genuinely clear glass. */}
@@ -179,7 +182,13 @@ export function Architecture({
         <Round p={[0, 0.38, 0]} s={[3.45, 0.55, 1.02]} color={C.sofaDeep} radius={0.13} />
         <Round p={[0, 0.91, 0.4]} s={[3.5, 0.82, 0.25]} color={C.sofa} radius={0.1} />
         {[-1, 0, 1].map((i) => (
-          <Round key={i} p={[i * 1.03, 0.69, -0.07]} s={[0.99, 0.22, 0.79]} color={C.seatSoft} radius={0.08} />
+          <Round
+            key={i}
+            p={[i * 1.03, 0.69, -0.07]}
+            s={[0.99, 0.22, 0.79]}
+            color={C.seatSoft}
+            radius={0.08}
+          />
         ))}
         {[-1, 1].map((side) => (
           <group key={side}>
