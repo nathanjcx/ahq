@@ -16,6 +16,7 @@ import { useFloorMemory } from './use-memory';
 import { useUiQuery } from '@/components/shared/use-ui-query';
 import type { Dashboard, FloorPost } from '@/lib/contracts';
 import { providers as providerCatalog } from '@/lib/providers';
+import { nextWorkingStart } from '@/lib/time';
 import { asId, uiApi } from '@/lib/ui-api';
 
 const OfficeView = dynamic(() => import('./office-view'), { ssr: false });
@@ -207,7 +208,35 @@ function LiveStage({
     [dashboard, posts, employees, floorId, now, day, room, memory, calendar],
   );
   useActivityCues(scene.activities);
-  return <Stage {...props} scene={scene} />;
+  const notice = useMemo(
+    () => offShiftNotice(employees, scene, now, dashboard),
+    [employees, scene, now, dashboard],
+  );
+  return <Stage {...props} scene={scene} notice={notice} />;
+}
+
+/** When everyone in the room has gone home, say so and when they are back, in the workspace's zone. */
+function offShiftNotice(
+  employees: OfficeEmployee[],
+  scene: OfficeSceneData,
+  now: number,
+  dashboard: Dashboard,
+): string | undefined {
+  if (!employees.length || !dashboard.schedule) return undefined;
+  const everyoneOff = employees.every(
+    (employee) => scene.activities.get(employee.id)?.activity === 'off_shift',
+  );
+  if (!everyoneOff) return undefined;
+  const back = nextWorkingStart(now, dashboard.schedule);
+  if (!back) return 'Everyone is off shift.';
+  const when = new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: dashboard.schedule.timezone,
+  }).format(back);
+  return `Everyone is off shift. Back ${when}.`;
 }
 
 function Stage({
@@ -216,11 +245,12 @@ function Stage({
   archived,
   label,
   emptyMessage,
+  notice,
   labels,
   onSelect,
   onSelectProp,
   onRenderStats,
-}: Omit<OfficeStageProps, 'live' | 'floorId'> & { scene: OfficeSceneData }) {
+}: Omit<OfficeStageProps, 'live' | 'floorId'> & { scene: OfficeSceneData; notice?: string }) {
   const dressed = useMemo(
     () =>
       employees.map((employee) => {
@@ -236,6 +266,7 @@ function Stage({
       onSelect={onSelect}
       label={label}
       emptyMessage={emptyMessage}
+      notice={notice}
       archived={archived}
       labels={labels}
       providers={scene.providers}

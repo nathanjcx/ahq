@@ -27,6 +27,8 @@ export type OfficeViewProps = {
   label?: string;
   /** Contextual guidance shown when this floor has no employees. */
   emptyMessage?: string;
+  /** A line about the whole room, such as everyone being off shift, shown in the empty room's place. */
+  notice?: string;
   /** An archived floor renders desaturated and dark, and animates nothing. */
   archived?: boolean;
   /** Connected providers, one console each. Figures walk to them while calling a tool. */
@@ -195,6 +197,7 @@ export default function OfficeView({
   onSelect,
   label,
   emptyMessage,
+  notice,
   archived,
   providers,
   note,
@@ -255,10 +258,16 @@ export default function OfficeView({
       tabIndex={0}
     >
       {label && <p className="office-view-floor">{label}</p>}
-      {employees.length === 0 && (
+      {employees.length === 0 ? (
         <p className="office-view-note" role="status">
           {emptyMessage || 'Your office is ready. Add your first employee to get started.'}
         </p>
+      ) : (
+        notice && (
+          <p className="office-view-note" role="status">
+            {notice}
+          </p>
+        )
       )}
       <div className="office-view-controls" role="group" aria-label="Office view controls">
         <button
