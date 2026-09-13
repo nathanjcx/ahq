@@ -287,30 +287,51 @@ export const CATALOG_TOOLS: CatalogTool[] = [
     mode: 'write',
     resourceArgument: 'channel',
   },
-  // Google Workspace
-  { provider: 'google-workspace', name: 'search_messages', description: 'Search Gmail.', mode: 'read' },
+  // Google Workspace. Names are the ones the Workspace MCP servers advertise.
+  {
+    provider: 'google-workspace',
+    name: 'search_threads',
+    description: 'Search Gmail threads.',
+    mode: 'read',
+  },
+  { provider: 'google-workspace', name: 'get_thread', description: 'Read an email thread.', mode: 'read' },
   { provider: 'google-workspace', name: 'get_message', description: 'Read an email.', mode: 'read' },
+  { provider: 'google-workspace', name: 'list_labels', description: 'List Gmail labels.', mode: 'read' },
+  { provider: 'google-workspace', name: 'list_drafts', description: 'List email drafts.', mode: 'read' },
   {
     provider: 'google-workspace',
     name: 'create_draft',
     description: 'Prepare an email draft for a person to send.',
     mode: 'write',
   },
-  { provider: 'google-workspace', name: 'list_events', description: 'List calendar events.', mode: 'read' },
+  { provider: 'google-workspace', name: 'search_files', description: 'Search Drive.', mode: 'read' },
   {
     provider: 'google-workspace',
-    name: 'create_event',
-    description: 'Create a calendar event.',
-    mode: 'write',
+    name: 'list_recent_files',
+    description: 'List recent Drive files.',
+    mode: 'read',
   },
-  { provider: 'google-workspace', name: 'get_document', description: 'Read a Google Doc.', mode: 'read' },
   {
     provider: 'google-workspace',
-    name: 'create_document',
-    description: 'Create a Google Doc.',
+    name: 'get_file_metadata',
+    description: 'Read a Drive file’s metadata.',
+    mode: 'read',
+  },
+  {
+    provider: 'google-workspace',
+    name: 'read_file_content',
+    description: 'Read a Drive file.',
+    mode: 'read',
+  },
+  {
+    provider: 'google-workspace',
+    name: 'create_file',
+    description: 'Create a Drive file: a Doc, a Sheet, a deck, or an upload.',
     mode: 'write',
   },
-  { provider: 'google-workspace', name: 'update_document', description: 'Edit a Google Doc.', mode: 'write' },
+  { provider: 'google-workspace', name: 'copy_file', description: 'Copy a Drive file.', mode: 'write' },
+  { provider: 'google-workspace', name: 'read_doc', description: 'Read a Google Doc.', mode: 'read' },
+  { provider: 'google-workspace', name: 'update_doc', description: 'Edit a Google Doc.', mode: 'write' },
   {
     provider: 'google-workspace',
     name: 'get_spreadsheet',
@@ -320,21 +341,60 @@ export const CATALOG_TOOLS: CatalogTool[] = [
   { provider: 'google-workspace', name: 'get_values', description: 'Read a range of cells.', mode: 'read' },
   {
     provider: 'google-workspace',
-    name: 'create_spreadsheet',
-    description: 'Create a spreadsheet.',
-    mode: 'write',
-  },
-  {
-    provider: 'google-workspace',
     name: 'update_values',
     description: 'Write a range of cells.',
     mode: 'write',
   },
-  { provider: 'google-workspace', name: 'search_files', description: 'Search Drive.', mode: 'read' },
   {
     provider: 'google-workspace',
-    name: 'create_presentation',
-    description: 'Create a Slides deck.',
+    name: 'update_formulas',
+    description: 'Write formulas into a range.',
+    mode: 'write',
+  },
+  {
+    provider: 'google-workspace',
+    name: 'update_spreadsheet',
+    description: 'Change a spreadsheet’s sheets, formats, or charts.',
+    mode: 'write',
+  },
+  {
+    provider: 'google-workspace',
+    name: 'insert_dimension',
+    description: 'Insert rows or columns.',
+    mode: 'write',
+  },
+  {
+    provider: 'google-workspace',
+    name: 'read_presentation',
+    description: 'Read a Slides deck.',
+    mode: 'read',
+  },
+  {
+    provider: 'google-workspace',
+    name: 'update_presentation',
+    description: 'Edit a Slides deck.',
+    mode: 'write',
+  },
+  { provider: 'google-workspace', name: 'list_calendars', description: 'List calendars.', mode: 'read' },
+  { provider: 'google-workspace', name: 'list_events', description: 'List calendar events.', mode: 'read' },
+  { provider: 'google-workspace', name: 'get_event', description: 'Read a calendar event.', mode: 'read' },
+  {
+    provider: 'google-workspace',
+    name: 'search_events',
+    description: 'Search calendar events.',
+    mode: 'read',
+  },
+  { provider: 'google-workspace', name: 'suggest_time', description: 'Suggest meeting times.', mode: 'read' },
+  {
+    provider: 'google-workspace',
+    name: 'create_event',
+    description: 'Create a calendar event.',
+    mode: 'write',
+  },
+  {
+    provider: 'google-workspace',
+    name: 'update_event',
+    description: 'Change a calendar event.',
     mode: 'write',
   },
   // Canva
@@ -401,11 +461,35 @@ const slack = {
   read: ['search_messages', 'read_channel', 'read_thread', 'list_channels'],
   write: ['post_message'],
 };
-const gmail = ['search_messages', 'get_message', 'create_draft'];
-const calendar = ['list_events', 'create_event'];
-const docs = ['get_document', 'create_document', 'update_document', 'search_files'];
-const sheets = ['get_spreadsheet', 'get_values', 'create_spreadsheet', 'update_values', 'search_files'];
-const slides = ['create_presentation'];
+const gmail = ['search_threads', 'get_thread', 'get_message', 'list_labels', 'list_drafts', 'create_draft'];
+const calendar = [
+  'list_calendars',
+  'list_events',
+  'get_event',
+  'search_events',
+  'suggest_time',
+  'create_event',
+  'update_event',
+];
+const drive = [
+  'search_files',
+  'list_recent_files',
+  'get_file_metadata',
+  'read_file_content',
+  'create_file',
+  'copy_file',
+];
+const docs = [...drive, 'read_doc', 'update_doc'];
+const sheets = [
+  ...drive,
+  'get_spreadsheet',
+  'get_values',
+  'update_values',
+  'update_formulas',
+  'update_spreadsheet',
+  'insert_dimension',
+];
+const slides = [...drive, 'read_presentation', 'update_presentation'];
 
 const cap = (provider: ProviderId, tools: string[], optional = false): CatalogCapability => ({
   provider,

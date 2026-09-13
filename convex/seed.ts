@@ -29,17 +29,30 @@ function profile(entry: CatalogEmployee) {
 
 /**
  * Publishes the core catalog. Safe to run on every deploy: registry tools are added only where
- * missing (an administrator's review wins), a draft is matched by name, and a new version is
- * published only when the catalog entry differs from the version the listing currently offers.
+ * missing (an administrator's review wins) and a tool the catalog itself published and has since
+ * dropped is removed, a draft is matched by name, and a new version is published only when the
+ * catalog entry differs from the version the listing currently offers.
  *
  *   npx convex run --prod seed:catalog
  */
 export const catalog = internalMutation({
   args: {},
-  returns: v.object({ tools: v.number(), published: v.array(v.string()), unchanged: v.array(v.string()) }),
+  returns: v.object({
+    tools: v.number(),
+    removedTools: v.number(),
+    published: v.array(v.string()),
+    unchanged: v.array(v.string()),
+  }),
   handler: async (ctx) => {
     const now = Date.now();
     let tools = 0;
+    let removedTools = 0;
+    const catalogued = new Set(CATALOG_TOOLS.map((tool) => `${tool.provider}.${tool.name}`));
+    for (const row of await ctx.db.query('registryTools').collect()) {
+      if (row.updatedBy !== CATALOG_PUBLISHER || catalogued.has(`${row.provider}.${row.name}`)) continue;
+      await ctx.db.delete(row._id);
+      removedTools += 1;
+    }
     for (const tool of CATALOG_TOOLS) {
       const existing = await ctx.db
         .query('registryTools')
@@ -104,7 +117,7 @@ export const catalog = internalMutation({
         });
       published.push(entry.name);
     }
-    return { tools, published, unchanged };
+    return { tools, removedTools, published, unchanged };
   },
 });
 
