@@ -44,9 +44,9 @@ describe('the work stream', () => {
         task({ id: 't1' }),
         task({
           id: 't2',
-          status: 'completed',
+          status: 'needs_input',
           updatedAt: now - 10_000,
-          lastMessage: { text: 'Which price goes on it?', createdAt: now, phase: 'final_answer' },
+          question: { text: 'Which price goes on it?', askedAt: now },
         }),
         task({ id: 't3', status: 'queued' }),
         task({ id: 't4', status: 'waiting' }),

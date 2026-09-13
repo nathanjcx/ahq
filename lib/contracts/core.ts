@@ -9,6 +9,7 @@ export type TaskStatus =
   | 'queued'
   | 'running'
   | 'awaiting_approval'
+  | 'needs_input'
   | 'completed'
   | 'failed'
   | 'cancelled'
@@ -265,6 +266,8 @@ export interface Task {
   usage?: TokenUsage;
   /** Latest assistant output for tasks that are still active, so the office can show what is happening. */
   lastMessage?: { text: string; createdAt: number; phase?: string };
+  /** The question the employee stopped on, while the task is `needs_input`. */
+  question?: { text: string; askedAt: number };
 }
 export interface ActivityEvent {
   id: string;

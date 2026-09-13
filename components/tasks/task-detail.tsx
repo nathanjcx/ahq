@@ -83,7 +83,7 @@ export function TaskDetail({
               Hand off…
             </button>
           )}
-          {['queued', 'running', 'awaiting_approval'].includes(task.status) && (
+          {['queued', 'running', 'awaiting_approval', 'needs_input'].includes(task.status) && (
             <button className="icon-button" onClick={() => onCancel(task.id)} aria-label="Cancel task">
               <Square size={14} />
             </button>
@@ -95,9 +95,7 @@ export function TaskDetail({
           {notice}
         </p>
       )}
-      {usage && (
-        <p className="task-usage">{usageLine(usage)}</p>
-      )}
+      {usage && <p className="task-usage">{usageLine(usage)}</p>}
       <div className="task-tabs" role="tablist" aria-label="Task detail">
         {TABS.map((entry) => (
           <button

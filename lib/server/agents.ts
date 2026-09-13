@@ -6,6 +6,7 @@ import type { TaskContext } from '../../services/types';
 import type { EmployeeKind, ModelId, TaskKind } from '../contracts';
 import {
   FLOOR_RULES,
+  ASK_RULES,
   MEMORY_RULES,
   PACING_RULES,
   TRIAGE_RULES,
@@ -50,7 +51,7 @@ const SERVER_LABELS: Record<InternalServer, string> = {
 const SERVER_TOOLS: Record<InternalServer, string[]> = {
   floor: ['floor_post', 'floor_handoff'],
   memory: ['remember', 'recall', 'read_memory', 'read_board'],
-  shift: ['submit_report', 'submit_summary'],
+  shift: ['submit_report', 'submit_summary', 'ask'],
   studio: ['generate_image'],
   audit: ['read_reports', 'read_journal', 'read_artifact', 'read_memory', 'read_channel', 'submit_findings'],
   triage: ['report_reproduction', 'resolve_alert', 'file_incident_report'],
@@ -163,6 +164,7 @@ export function sessionConfiguration(
   const roleRules = [
     PACING_RULES,
     ...(internal.includes('memory') ? [MEMORY_RULES] : []),
+    ...(internal.includes('shift') ? [ASK_RULES] : []),
     ...(internal.includes('floor') ? [FLOOR_RULES] : []),
     ...deliverableRules(workshop),
     ...(internal.includes('triage') ? [TRIAGE_RULES] : []),

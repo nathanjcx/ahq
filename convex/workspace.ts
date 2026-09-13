@@ -20,7 +20,7 @@ import {
 } from './shared';
 
 /** Statuses the workspace is still waiting on; only these carry a live message into the office. */
-const ACTIVE_TASK_STATUSES = ['queued', 'running', 'awaiting_approval'];
+const ACTIVE_TASK_STATUSES = ['queued', 'running', 'awaiting_approval', 'needs_input'];
 const LAST_MESSAGE_CHARS = 500;
 
 /**
@@ -294,6 +294,7 @@ export const dashboard = query({
           error: task.error,
           model: task.model,
           usage: task.usage,
+          question: task.question,
           lastMessage: ACTIVE_TASK_STATUSES.includes(task.status)
             ? await latestAssistantMessage(ctx, task._id)
             : undefined,

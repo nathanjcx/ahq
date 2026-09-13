@@ -64,4 +64,20 @@ const submitSummary: InternalTool = {
   },
 };
 
-export const shiftTools = [submitReport, submitSummary];
+/** The one question a person has to answer before the work can go on. Ends the turn. */
+const ask: InternalTool = {
+  name: 'ask',
+  description:
+    'Stop and ask the person one question you cannot continue without. The task waits on their answer, which arrives as your next message. End your turn after calling this.',
+  properties: { question: { type: 'string', description: 'The question, with the choice it decides.' } },
+  required: ['question'],
+  async run(request, _context, args) {
+    await request.backend.mutate('services/sessions:askQuestion', {
+      runToken: request.runToken,
+      text: requireString(args, 'question'),
+    });
+    return { asked: true, next: 'End your turn. The answer arrives as a message.' };
+  },
+};
+
+export const shiftTools = [submitReport, submitSummary, ask];

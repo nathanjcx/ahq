@@ -144,7 +144,7 @@ export const SPEAKING_MS = 45_000;
 /** Three unacknowledged attempts is what lets triage act on its own. */
 export const EMERGENCY_ATTEMPTS = 3;
 
-const ACTIVE_STATUSES: Task['status'][] = ['queued', 'running', 'awaiting_approval'];
+const ACTIVE_STATUSES: Task['status'][] = ['queued', 'running', 'awaiting_approval', 'needs_input'];
 const PROVIDER_IDS: ProviderId[] = ['linear', 'slack', 'github', 'google-workspace', 'canva'];
 const OPEN_ALERTS: Alert['status'][] = ['open', 'triaging'];
 /** The memory tools, and which of the two memory activities each one reads as. */
@@ -377,8 +377,7 @@ function auditActivity({ employee, own, day, employeeIds }: Context): EmployeeAc
   // A closed one has been dealt with, and a desk on another floor is not here.
   const finding = newest(
     (day.findings ?? []).filter(
-      (item) =>
-        item.status === 'open' && item.employeeId !== employee.id && employeeIds.has(item.employeeId),
+      (item) => item.status === 'open' && item.employeeId !== employee.id && employeeIds.has(item.employeeId),
     ),
     (item) => item.createdAt,
   );
@@ -418,7 +417,11 @@ function arrivingActivity({ employee, day, now }: Context): EmployeeActivity | u
 function sessionActivity(context: Context): EmployeeActivity | undefined {
   const { own, active, taskEvents, latestEvent, now } = context;
   const requiresAction = latestEvent?.type === 'agent.session.requires_action';
-  if (active?.status === 'awaiting_approval' || (active && requiresAction))
+  if (
+    active?.status === 'awaiting_approval' ||
+    active?.status === 'needs_input' ||
+    (active && requiresAction)
+  )
     return { activity: 'reviewing', since: active.updatedAt, taskId: active.id };
 
   const settled = newest(
@@ -434,8 +437,7 @@ function sessionActivity(context: Context): EmployeeActivity | undefined {
     return { activity: 'celebrating', since: settled.updatedAt, taskId: settled.id };
 
   if (!active) return undefined;
-  if (active.kind === 'standing')
-    return { activity: 'planning', since: active.updatedAt, taskId: active.id };
+  if (active.kind === 'standing') return { activity: 'planning', since: active.updatedAt, taskId: active.id };
 
   const message = active.lastMessage;
   if (message && now - message.createdAt < WRITING_MS)
@@ -514,7 +516,9 @@ function uneasyActivity({ employee, day }: Context): EmployeeActivity | undefine
 function shiftActivity({ employee, day, now }: Context): EmployeeActivity | undefined {
   const mine = (day.shifts ?? []).filter((shift) => shift.employeeId === employee.id);
   const ended = newest(
-    mine.filter((shift) => shift.endedAt !== undefined && now >= shift.endedAt && now - shift.endedAt < LEAVING_MS),
+    mine.filter(
+      (shift) => shift.endedAt !== undefined && now >= shift.endedAt && now - shift.endedAt < LEAVING_MS,
+    ),
     (shift) => shift.endedAt ?? 0,
   );
   if (ended?.endedAt)
@@ -561,7 +565,11 @@ function bubbleFor(
 }
 
 function attentionFor(own: Task[], proposals: ActionProposal[], now: number): Attention | undefined {
-  const stuck = own.some((task) => task.status === 'awaiting_approval' && now - task.updatedAt > STUCK_MS);
+  const stuck = own.some(
+    (task) =>
+      (task.status === 'awaiting_approval' || task.status === 'needs_input') &&
+      now - task.updatedAt > STUCK_MS,
+  );
   if (stuck) return 'stuck';
   const ownIds = new Set(own.map((task) => task.id));
   const approval = proposals.some(

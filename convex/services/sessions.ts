@@ -8,7 +8,7 @@ import { systemPost } from '../lib/posts';
 import { finalAssistantMessage, releaseDependents } from '../lib/tasks';
 import { taskStatus, tokenUsage } from '../schema';
 import { requireService, usagePeriod } from '../shared';
-import { activeTaskContext, isTerminal, privateConnection, taskInputState } from './context';
+import { activeTaskContext, isTerminal, privateConnection, taskForRunToken, taskInputState } from './context';
 
 export const taskContext = query({
   args: { secret: v.string(), taskId: v.id('tasks') },
@@ -63,6 +63,7 @@ function publicTask(task: Doc<'tasks'>) {
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
     usage: task.usage,
+    question: task.question,
   };
 }
 
@@ -331,6 +332,7 @@ export const recordEvents = mutation({
           nextStatus = 'awaiting_approval';
         else if ([...queuedJobs, ...leasedJobs].some((job) => job.kind === 'send_message'))
           nextStatus = task.status === 'queued' ? 'queued' : 'running';
+        else if (task.question) nextStatus = 'needs_input';
       }
       patch.status = nextStatus;
     }
@@ -361,5 +363,22 @@ export const recordEvents = mutation({
     // the tasks waiting on it or blocks them with the reason. Nothing else here reads the graph.
     if (finishedWork) await releaseDependents(ctx, task, status);
     return { inserted, lastSequence: sequence, status };
+  },
+});
+
+/**
+ * The employee stopped on a question only a person can answer. The turn that asked it ends as
+ * `needs_input`, and the person's next message on the task clears it and resumes the session.
+ */
+export const askQuestion = mutation({
+  args: { secret: v.string(), runToken: v.string(), text: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    requireService(args.secret);
+    const task = await taskForRunToken(ctx, args.runToken);
+    const text = args.text.trim().slice(0, 2_000);
+    if (!text) throw new Error('A question needs text');
+    await ctx.db.patch(task._id, { question: { text, askedAt: Date.now() }, updatedAt: Date.now() });
+    return null;
   },
 });

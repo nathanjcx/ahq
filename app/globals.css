@@ -381,7 +381,8 @@ p {
   color: #66835f;
   background: #e5eee1;
 }
-.status-mark.status-awaiting_approval {
+.status-mark.status-awaiting_approval,
+.status-mark.status-needs_input {
   color: #a7742f;
   background: #f5ebd6;
 }

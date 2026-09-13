@@ -420,7 +420,10 @@ beforeAll(async () => {
   await once(gateway, 'listening');
   gatewayUrl = `http://127.0.0.1:${(gateway.address() as AddressInfo).port}`;
   process.env.MCP_GATEWAY_URL = gatewayUrl;
-  runtime = createRuntime(() => ({}) as OpenAI, () => true);
+  runtime = createRuntime(
+    () => ({}) as OpenAI,
+    () => true,
+  );
 });
 
 afterAll(async () => {
@@ -1005,9 +1008,7 @@ it('files the missing report itself and escalates when an emergency run writes n
   });
   await runQueue(['triage_run']);
 
-  const placeholder = (
-    await t.withIdentity(identity(subject)).query(api.triage.incidentReports, {})
-  ).find(
+  const placeholder = (await t.withIdentity(identity(subject)).query(api.triage.incidentReports, {})).find(
     (report) => report.alertId === alert.alertId,
   );
   expect(placeholder).toMatchObject({ emergency: true, missing: true });
@@ -1102,8 +1103,40 @@ it('shifts a daily task again on a later day, though its session finished the la
     .map((shift) => shift.date);
   expect(worked).toEqual(['2026-09-16', '2026-09-17', '2026-09-18']);
   // No closing summary either: a daily task is closed on purpose, not at the end of every shift.
-  expect(
-    (await rows<{ taskId: string }>('taskSummaries')).some((row) => row.taskId === dailyTaskId),
-  ).toBe(false);
+  expect((await rows<{ taskId: string }>('taskSummaries')).some((row) => row.taskId === dailyTaskId)).toBe(
+    false,
+  );
   scripts.delete('start_shift');
+});
+
+it('stops a task on a question until the person answers it', async () => {
+  const user = t.withIdentity(identity(subject));
+  const { taskId } = await user.mutation(api.tasks.create, {
+    employeeId,
+    floorId,
+    title: 'Price the launch offer',
+    prompt: 'Draft the launch offer.',
+  });
+  const task = await t.run(async (ctx) => ctx.db.get(taskId));
+  if (!task) throw new Error('Expected the task');
+  const client = await mcpClient('shift', task.runToken);
+  try {
+    await client.callTool({ name: 'ask', arguments: { question: 'Which price goes on it?' } });
+  } finally {
+    await client.close();
+  }
+  // The worker delivered the first message before the turn; the session then goes idle after the
+  // ask and the monitor reports the turn complete.
+  await t.run(async (ctx) => {
+    for await (const job of ctx.db.query('jobs').withIndex('by_task_state', (q) => q.eq('taskId', taskId)))
+      await ctx.db.patch(job._id, { state: 'completed' });
+  });
+  await completeSession(String(taskId));
+  const asked = await t.run(async (ctx) => ctx.db.get(taskId));
+  expect(asked).toMatchObject({ status: 'needs_input', question: { text: 'Which price goes on it?' } });
+
+  await user.mutation(api.tasks.send, { taskId, text: 'Forty-nine dollars.' });
+  const answered = await t.run(async (ctx) => ctx.db.get(taskId));
+  expect(answered?.status).toBe('queued');
+  expect(answered?.question).toBeUndefined();
 });

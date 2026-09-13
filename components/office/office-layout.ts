@@ -32,6 +32,7 @@ const CARD_STATUS: Partial<Record<TaskStatus, BoardStatus>> = {
   queued: 'active',
   running: 'active',
   awaiting_approval: 'active',
+  needs_input: 'active',
   waiting: 'waiting',
   blocked: 'blocked',
   completed: 'done',

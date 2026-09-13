@@ -43,12 +43,6 @@ export const GROUP_LABELS: Record<ThreadGroup, string> = {
   done: 'Done today',
 };
 
-/** An employee's last line that ends in a question is a question for the person, whatever the status. */
-function asksAQuestion(task: Task) {
-  const text = task.lastMessage?.text.trim() ?? '';
-  return text.endsWith('?') && (task.lastMessage?.phase === 'final_answer' || task.status === 'completed');
-}
-
 function taskThread(task: Task, pending: ActionProposal[], dayStart: number): Thread | null {
   const preview = task.lastMessage?.text ?? task.prompt;
   const base = {
@@ -71,7 +65,14 @@ function taskThread(task: Task, pending: ActionProposal[], dayStart: number): Th
     };
   if (task.status === 'awaiting_approval')
     return { ...base, group: 'needs', tone: 'need', label: 'Approval' };
-  if (asksAQuestion(task)) return { ...base, group: 'needs', tone: 'need', label: 'Question for you' };
+  if (task.status === 'needs_input')
+    return {
+      ...base,
+      group: 'needs',
+      tone: 'need',
+      label: 'Question for you',
+      preview: task.question?.text ?? preview,
+    };
   if (task.status === 'queued' || task.status === 'running')
     return {
       ...base,

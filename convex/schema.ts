@@ -18,6 +18,7 @@ export const taskStatus = v.union(
   v.literal('queued'),
   v.literal('running'),
   v.literal('awaiting_approval'),
+  v.literal('needs_input'),
   v.literal('completed'),
   v.literal('failed'),
   v.literal('cancelled'),
@@ -433,6 +434,8 @@ export default defineSchema({
     updatedAt: v.number(),
     sessionId: v.optional(v.string()),
     error: v.optional(v.string()),
+    /** The one question the employee stopped on; cleared by the person's next message. */
+    question: v.optional(v.object({ text: v.string(), askedAt: v.number() })),
     runToken: v.string(),
     streamOwner: v.optional(v.string()),
     streamLeaseExpiresAt: v.optional(v.number()),

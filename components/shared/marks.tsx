@@ -11,6 +11,7 @@ import {
   MoreHorizontal,
   ShieldCheck,
   X,
+  MessageCircleQuestion,
 } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { providerShort } from './format';
@@ -52,6 +53,8 @@ export function StatusMark({ status }: { status: Task['status'] }) {
         <Check size={12} />
       ) : status === 'awaiting_approval' ? (
         <ShieldCheck size={12} />
+      ) : status === 'needs_input' ? (
+        <MessageCircleQuestion size={12} />
       ) : status === 'failed' || status === 'cancelled' ? (
         <X size={12} />
       ) : status === 'uncertain' ? (

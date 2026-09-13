@@ -212,7 +212,14 @@ export const list = query({
 });
 
 /** Statuses a task still occupies its instance with; an instance in one of them cannot be retired. */
-const ACTIVE_TASK_STATUSES: TaskStatus[] = ['queued', 'running', 'awaiting_approval', 'waiting', 'blocked'];
+const ACTIVE_TASK_STATUSES: TaskStatus[] = [
+  'queued',
+  'running',
+  'awaiting_approval',
+  'needs_input',
+  'waiting',
+  'blocked',
+];
 
 async function hirableListing(ctx: Ctx, listingId: Id<'listings'>) {
   const listing = await ctx.db.get(listingId);

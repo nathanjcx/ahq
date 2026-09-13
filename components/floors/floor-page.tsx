@@ -24,7 +24,7 @@ function toOfficeEmployees(employees: Employee[], activeTasks: Task[]): OfficeEm
         name: employee.name,
         role: employee.role,
         color: employee.color,
-        status: work.some((task) => task.status === 'awaiting_approval')
+        status: work.some((task) => task.status === 'awaiting_approval' || task.status === 'needs_input')
           ? 'review'
           : work.some((task) => task.status === 'running')
             ? 'working'

@@ -24,7 +24,7 @@ function shiftFor(employee: Employee, tasks: Task[], schedule?: ScheduleSummary)
   const mine = tasks.filter((task) => task.employeeId === employee.id);
   const running = mine.find((task) => task.status === 'running');
   if (running) return { label: 'On shift', tone: 'working', detail: running.title };
-  const review = mine.find((task) => task.status === 'awaiting_approval');
+  const review = mine.find((task) => task.status === 'awaiting_approval' || task.status === 'needs_input');
   if (review) return { label: 'Waiting on you', tone: 'review', detail: review.title };
   const held = mine.find((task) => task.status === 'waiting' || task.status === 'blocked');
   if (held)

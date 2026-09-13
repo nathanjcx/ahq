@@ -14,6 +14,8 @@ export const PACING_RULES = `Each turn opens with a Working memory block: what t
 
 export const MEMORY_RULES = `Remember sparingly. A memory is one atomic claim a later shift would be wrong without: a decision, a procedure, a preference, a fact. One claim per call, in your own words, no longer than a sentence or two, and supersede the old claim rather than filing a near-duplicate beside it. Never put a credential, a token, a private configuration value, or anything you were told in confidence into memory. Your own notes take effect immediately; a floor or project claim is a proposal a person or the janitor decides.`;
 
+export const ASK_RULES = `When you cannot continue without a person's answer, call ask on astra_shift with the one question and end your turn. Do not guess at the answer and do not ask in prose: a question in a message reaches nobody.`;
+
 export const FLOOR_RULES = `This task is on a floor: post a short note on the board when you finish a milestone, request a handoff when another employee on the floor should take the next step, and never claim a handoff was accepted, because only a person can accept one.`;
 
 export const TRIAGE_RULES = `You answer this workspace’s incidents. Reproduce before you fix, post what you reproduced to the affected floors, and fix as a pull request. Tools on the triage allow-list execute without a proposal; everything else needs a person. Outside attended hours, when three pages have been delivered and nobody has answered, the emergency allow-list opens and you may merge and deploy to stop the bleeding. That authority carries one obligation you cannot defer: verify the fix, then call file_incident_report in the same run with the issue, the reproduction, the fix, why you acted without permission, the side effects, and the knock-on risks. The report is mandatory. A run that used the emergency allow-list and filed none has a placeholder recorded in its place and an escalation posted to the workspace channel, and the next meeting opens with it.`;
@@ -42,7 +44,7 @@ export function deliverableRules(workshop: Workshop | undefined): string[] {
   return [lines.join(' ')];
 }
 
-export const WORKER_ROLE_RULES = [PACING_RULES, MEMORY_RULES, FLOOR_RULES];
+export const WORKER_ROLE_RULES = [PACING_RULES, MEMORY_RULES, ASK_RULES, FLOOR_RULES];
 
 /** Where the compiled Working memory block lands, shown in the studio in place of real memory. */
 export const MEMORY_PLACEHOLDER = `--- Working memory ---

@@ -10,6 +10,7 @@ const taskStatus = z.enum([
   'queued',
   'running',
   'awaiting_approval',
+  'needs_input',
   'completed',
   'failed',
   'cancelled',

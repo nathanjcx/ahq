@@ -50,6 +50,17 @@ export function TaskConversation({
         ) : (
           messages.map((message) => <MessageBubble key={message.id} message={message} />)
         )}
+        {task.status === 'needs_input' && task.question && (
+          <MessageBubble
+            message={{
+              id: 'question',
+              taskId: task.id,
+              role: 'assistant',
+              text: task.question.text,
+              createdAt: task.question.askedAt,
+            }}
+          />
+        )}
         {task.status === 'running' && (
           <div className="working-line">
             <span>

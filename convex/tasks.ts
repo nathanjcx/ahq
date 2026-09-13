@@ -194,7 +194,7 @@ export const send = mutation({
       kind: 'send_message',
       payload: JSON.stringify({ messageId, text }),
     });
-    await ctx.db.patch(task._id, { status: 'queued', updatedAt: now, error: undefined });
+    await ctx.db.patch(task._id, { status: 'queued', updatedAt: now, error: undefined, question: undefined });
     return null;
   },
 });

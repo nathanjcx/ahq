@@ -14,7 +14,15 @@ export interface StatusNode extends DependencyNode {
 }
 
 /** Statuses that mean the work has begun, so the milestone holding it is under way. */
-const STARTED = ['running', 'awaiting_approval', 'completed', 'failed', 'uncertain', 'blocked'];
+const STARTED = [
+  'running',
+  'awaiting_approval',
+  'needs_input',
+  'completed',
+  'failed',
+  'uncertain',
+  'blocked',
+];
 /** Statuses that mean nothing more will happen to the task. */
 const FINISHED = ['completed', 'cancelled'];
 
