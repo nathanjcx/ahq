@@ -63,7 +63,7 @@ This is the complete list the code reads. Everything else that used to live here
 | `WORKOS_API_KEY`                  | web, Convex                  | yes                    | WorkOS server API                                      |
 | `WORKOS_AUTH_DOMAIN`              | Convex                       | with a custom domain   | The environment's custom auth domain, the token issuer |
 | `WORKOS_COOKIE_PASSWORD`          | web                          | yes                    | Seals the session cookie, 32+ characters               |
-| `APP_URL`                         | web                          | yes                    | Origin checks, OAuth callback, relay URL               |
+| `APP_URL`                         | web, gateway, worker         | yes                    | Origin checks, OAuth callback and token refresh, relay URL |
 | `AHQ_SERVICE_SECRET`              | web, worker, gateway, Convex | yes                    | Authenticates service functions                        |
 | `CREDENTIAL_ENCRYPTION_KEY`       | web, worker, gateway         | yes for integrations   | Seals and unseals every stored secret                  |
 | `OPENAI_API_KEY`                  | worker                       | yes for tasks          | Agents API                                             |
@@ -198,7 +198,7 @@ What exists, created from this machine's CLI logins (Railway and Cloudflare as `
 | Custom domain     | `app.trystaff.ai` on `web`: CNAME `app` → `vr13r0en.up.railway.app`, TXT `_railway-verify.app` → the token `railway domain status` prints |
 | Cloudflare        | account `efcd9eb4fb3e9ac231414a8867b3babe`; no zone and R2 not enabled yet                                                                |
 
-Variables already set: Convex production has `AHQ_SERVICE_SECRET`, `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `PLATFORM_ADMIN_USER_IDS`; every Railway service has `NEXT_PUBLIC_CONVEX_URL`, `AHQ_SERVICE_SECRET`, `CREDENTIAL_ENCRYPTION_KEY`; `web` has `APP_URL=https://app.trystaff.ai`, the four WorkOS variables, `PLATFORM_ADMIN_USER_IDS`, and the `S3_*` set; `worker` has `OPENAI_API_KEY`, `MCP_GATEWAY_URL`, `WORKER_CONCURRENCY`, and the `S3_*` set. The generated secrets live only in `~/.config/trystaff/deploy.env` on the machine that ran the setup, and in the services.
+Variables already set: Convex production has `AHQ_SERVICE_SECRET`, `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `PLATFORM_ADMIN_USER_IDS`; every Railway service has `NEXT_PUBLIC_CONVEX_URL`, `AHQ_SERVICE_SECRET`, `CREDENTIAL_ENCRYPTION_KEY`; every Railway service has `APP_URL=https://app.trystaff.ai` (the gateway and worker need it to use a stored OAuth grant); `web` has the four WorkOS variables, `PLATFORM_ADMIN_USER_IDS`, and the `S3_*` set; `worker` has `OPENAI_API_KEY`, `MCP_GATEWAY_URL`, `WORKER_CONCURRENCY`, and the `S3_*` set. The generated secrets live only in `~/.config/trystaff/deploy.env` on the machine that ran the setup, and in the services.
 
 WorkOS (production environment): the organization `trystaff` (`org_01M2CEJA0S187MRZAW96NEA45A`) exists with `spencer@trystaff.ai` as `admin` (`user_01M2CEJ9SQAYKZGWT8CFFYTCY8`, the platform administrator), the redirect URI is `https://app.trystaff.ai/callback`. Cloudflare R2 bucket `staff-ai-artifacts` is wired and write-tested. Requests on the Railway-generated host redirect to `app.trystaff.ai`.
 
