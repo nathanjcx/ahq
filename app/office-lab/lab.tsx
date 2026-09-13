@@ -10,6 +10,7 @@ import type { EmployeeKind } from '@/components/office/office-people';
 import type { OfficeDressing, OfficeEmployee, OfficeProvider } from '@/components/office/office-scene';
 import { OfficeStage, type OfficeSceneData } from '@/components/office/office-stage';
 import type { RenderStats } from '@/components/office/office-view';
+import type { Task } from '@/lib/contracts';
 
 /**
  * Presets are the scenes the baselines photograph. Each is fully determined by its name, the hour,
@@ -51,8 +52,9 @@ const CALENDAR = [
   { at: '11:00', label: 'September release review' },
   { at: '13:00', label: 'Cyrus · warehouse shift' },
   { at: '15:30', label: 'Pricing deadline' },
-  { at: '17:00', label: 'Audit pass · Floor 1' },
   { at: '21:00', label: 'Janitor · memory curation' },
+  { at: 'Thu 09:00', label: 'Ada · release shift' },
+  { at: 'Thu 14:00', label: 'Pricing refresh kick-off' },
 ];
 
 type Preset = {
@@ -266,28 +268,32 @@ const hours = (value: number) => REPLAY_DAY + value * 3_600_000;
 
 function replayRecord(employees: OfficeEmployee[]): DayRecord {
   const [ada, bruno, cyrus, emi] = employees.map((employee) => employee.id);
-  const session = (
-    id: string,
-    employeeId: string,
-    employeeName: string,
-    kind: 'triage' | 'audit',
-    from: number,
-    to: number,
-  ) => ({
-    id,
+  const task = (entry: {
+    id: string;
+    employeeId: string;
+    employeeName: string;
+    title: string;
+    status: Task['status'];
+    from: number;
+    to: number;
+    kind?: Task['kind'];
+    dependsOn?: string[];
+  }): Task => ({
+    id: entry.id,
     floorId: 'flr_1',
-    employeeId,
-    employeeName,
-    kind,
+    employeeId: entry.employeeId,
+    employeeName: entry.employeeName,
+    ...(entry.kind ? { kind: entry.kind } : {}),
+    ...(entry.dependsOn ? { dependsOn: entry.dependsOn } : {}),
     createdBy: 'system',
     createdByName: 'Astra HQ',
     isOwner: true,
     visibility: 'workspace' as const,
-    title: kind === 'triage' ? 'Checkout incident' : 'Nightly audit',
+    title: entry.title,
     prompt: '',
-    status: 'completed' as const,
-    createdAt: from,
-    updatedAt: to,
+    status: entry.status,
+    createdAt: entry.from,
+    updatedAt: entry.to,
     model: 'gpt-5.6-terra' as const,
   });
   return {
@@ -306,7 +312,58 @@ function replayRecord(employees: OfficeEmployee[]): DayRecord {
       attended: true,
       usageToday: { input: 0, output: 0, cached: 0, cap: 0 },
     },
-    tasks: [session('tsk_triage', emi, 'Emi', 'triage', hours(14.4), hours(16))],
+    // The day's work, with one dependency on a task nobody in the room owns, so
+    // the string from whoever is waiting ends on the board rather than at a desk.
+    tasks: [
+      task({
+        id: 'tsk_triage',
+        employeeId: emi,
+        employeeName: 'Emi',
+        kind: 'triage',
+        title: 'Checkout incident',
+        status: 'completed',
+        from: hours(14.4),
+        to: hours(16),
+      }),
+      task({
+        id: 'tsk_changelog',
+        employeeId: ada,
+        employeeName: 'Ada',
+        title: 'Approve the changelog',
+        status: 'completed',
+        from: hours(9.2),
+        to: hours(11),
+      }),
+      task({
+        id: 'tsk_note',
+        employeeId: bruno,
+        employeeName: 'Bruno',
+        title: 'Write the release note',
+        status: 'completed',
+        from: hours(9.4),
+        to: hours(17.2),
+        dependsOn: ['tsk_changelog'],
+      }),
+      task({
+        id: 'tsk_pricing',
+        employeeId: 'lab-pricing',
+        employeeName: 'Gil',
+        title: 'Update the pricing page',
+        status: 'running',
+        from: hours(10),
+        to: hours(17.9),
+      }),
+      task({
+        id: 'tsk_brief',
+        employeeId: cyrus,
+        employeeName: 'Cyrus',
+        title: 'Brief the support team',
+        status: 'waiting',
+        from: hours(12),
+        to: hours(12.5),
+        dependsOn: ['tsk_pricing'],
+      }),
+    ],
     shifts: [
       { employeeId: ada, startedAt: hours(9), endedAt: hours(17.5) },
       { employeeId: bruno, startedAt: hours(9.1), endedAt: hours(17.8) },
@@ -407,6 +464,8 @@ export function OfficeLab({
   labels,
   seed,
   at,
+  width,
+  height,
 }: {
   preset: string;
   hour: number;
@@ -414,6 +473,9 @@ export function OfficeLab({
   seed: number;
   /** Hour of the recorded day the replay's scrubber stands on. */
   at: number;
+  /** The size of the photographed stage. The baselines are all 1280 by 720. */
+  width: number;
+  height: number;
 }) {
   const { employees, scene, label } = useMemo(() => buildScene(preset, hour, seed), [preset, hour, seed]);
   const [stats, setStats] = useState<RenderStats | null>(null);
@@ -427,7 +489,7 @@ export function OfficeLab({
   const [picked, setPicked] = useState('');
   return (
     <>
-      <main className="office-lab" data-preset={preset} style={{ width: 1280, height: 720, margin: 0 }}>
+      <main className="office-lab" data-preset={preset} style={{ width, height, margin: 0 }}>
         {preset === 'day-replay' ? (
           <DayReplay
             employees={employees}
@@ -435,7 +497,6 @@ export function OfficeLab({
             labels={labels as LabelMode}
             record={record}
             startAt={at * 3_600_000}
-            dressing={{ board: { cards: CARDS } }}
             onSelect={(id) => setPicked(`employee ${id}`)}
             onSelectProp={(kind, id) => setPicked(id ? `${kind} ${id}` : kind)}
           />

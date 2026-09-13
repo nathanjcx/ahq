@@ -7,6 +7,7 @@ import {
   MAX_SHELVES,
   boardCards,
   boardLayout,
+  calendarWall,
   boardroomSeats,
   defaultShelves,
   recordsStations,
@@ -16,7 +17,7 @@ import {
 } from '@/components/office/office-layout';
 import { sheetCount } from '@/components/office/office-props';
 import { shelfBinders } from '@/components/office/office-rooms';
-import type { Task, TaskStatus } from '@/lib/contracts';
+import type { CalendarEntry as Booking, Task, TaskStatus } from '@/lib/contracts';
 
 const card = (id: string, dependsOn: string[] = []): BoardCard => ({
   id,
@@ -84,6 +85,55 @@ describe('boardCards', () => {
   it('leaves work the floor is no longer carrying off the board', () => {
     const cards = boardCards([task('tsk_a', 'failed'), task('tsk_b', 'cancelled'), task('tsk_c', 'completed')]);
     expect(cards.map((entry) => [entry.id, entry.status])).toEqual([['tsk_c', 'done']]);
+  });
+
+  it('keeps the hidden runs off the wall: an audit is not the floor’s work', () => {
+    const cards = boardCards([
+      { ...task('tsk_audit', 'running'), kind: 'audit' },
+      { ...task('tsk_curate', 'running'), kind: 'curation' },
+      { ...task('tsk_triage', 'running'), kind: 'triage' },
+      { ...task('tsk_plan', 'running'), kind: 'standing' },
+      { ...task('tsk_work', 'running'), kind: 'work' },
+    ]);
+    expect(cards.map((entry) => entry.id)).toEqual(['tsk_plan', 'tsk_work']);
+  });
+});
+
+describe('calendarWall', () => {
+  const today = Date.UTC(2026, 8, 9, 8, 0);
+  const midnight = new Date(today).setHours(0, 0, 0, 0);
+  const hours = (value: number) => midnight + value * 3_600_000;
+  const booking = (entry: Partial<Booking> & Pick<Booking, 'id' | 'kind' | 'startsAt'>): Booking => ({
+    title: 'Release shift',
+    endsAt: entry.startsAt + 3_600_000,
+    attendees: [{ kind: 'employee', id: 'emp_ada', name: 'Ada' }],
+    agenda: [],
+    status: 'scheduled',
+    ...entry,
+  });
+
+  it('names a shift by whose it is, in the order the week happens', () => {
+    const wall = calendarWall(
+      [
+        booking({ id: 'c2', kind: 'meeting', title: 'Release review', startsAt: hours(11) }),
+        booking({ id: 'c1', kind: 'shift', startsAt: hours(9) }),
+      ],
+      today,
+    );
+    expect(wall.map((row) => row.label)).toEqual(['Ada · Release shift', 'Release review']);
+    expect(wall[0].at).toMatch(/09/);
+  });
+
+  it('carries the weekday once the wall runs past today, and drops what was cancelled', () => {
+    const wall = calendarWall(
+      [
+        booking({ id: 'c1', kind: 'shift', startsAt: hours(30) }),
+        booking({ id: 'c2', kind: 'deadline', title: 'Pricing', startsAt: hours(10), status: 'cancelled' }),
+      ],
+      today,
+    );
+    expect(wall).toHaveLength(1);
+    expect(wall[0].at).toMatch(/^\w+ /);
   });
 });
 

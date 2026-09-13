@@ -326,7 +326,7 @@ export function TaskCards({
   );
 }
 
-/** Today's shifts and meetings, on the lobby's calendar wall. */
+/** The week's shifts, meetings and deadlines, on the lobby's calendar wall. */
 export function CalendarCard({
   position,
   entries,
@@ -352,7 +352,7 @@ export function CalendarCard({
           relayout();
         }}
       >
-        <h3>Today</h3>
+        <h3>This week</h3>
         <ol>
           {shown.map((item) => (
             <li key={`${item.at} ${item.label}`}>
