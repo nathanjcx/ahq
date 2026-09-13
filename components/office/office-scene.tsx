@@ -149,7 +149,8 @@ const FILL = 0.85;
 const FILL_COMPACT = 1.18;
 /** A stage narrower than this gets the closer framing and the compact chrome. */
 const COMPACT_WIDTH = 560;
-/** A fixed card is a list to read; narrower than this and it covers the room instead. */
+/** A fixed card is a list to read; on a stage narrower than this it covers the room
+ *  instead, so the phone gets the room and the page around it carries the words. */
 const CARD_STAGE_WIDTH = 420;
 /** Two bubbles only once the stage is genuinely wide. */
 const WIDE_WIDTH = 1200;
@@ -341,9 +342,7 @@ export function OfficeScene({
   onSelectProp,
 }: OfficeSceneProps) {
   const { size } = useThree();
-  // A fixed card is a list to read, and a phone-sized stage has no room for one:
-  // it gets the room itself, and the page around it carries the words.
-  const cards = size.width >= CARD_STAGE_WIDTH;
+  const cardsFit = size.width >= CARD_STAGE_WIDTH;
   const surfaces = useSurfaceTextures();
   // Sticky desk assignments. A plain stable object rather than a ref: losing it
   // only means the room picks the chairs again, which nobody can tell apart.
@@ -511,11 +510,11 @@ export function OfficeScene({
           </>
         )}
         <OfficeOverlay>
-          {cards && onFloor && <BoardNote position={BOARD_NOTE} note={note} />}
-          {cards && onFloor && dressing.board && (
+          {cardsFit && onFloor && <BoardNote position={BOARD_NOTE} note={note} />}
+          {cardsFit && onFloor && dressing.board && (
             <TaskCards position={TASK_CARDS} cards={dressing.board.cards} onSelectProp={onSelectProp} />
           )}
-          {cards && room === 'lobby' && dressing.calendar && (
+          {cardsFit && room === 'lobby' && dressing.calendar && (
             <CalendarCard position={CALENDAR_CARD} entries={dressing.calendar} onSelectProp={onSelectProp} />
           )}
           {people.map((person) => (

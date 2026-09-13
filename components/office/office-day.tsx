@@ -28,11 +28,11 @@ const DEFAULT_OFFSET = 10 * 3_600_000;
 type ReplayProps = {
   employees: OfficeEmployee[];
   floorId?: string;
-  /** Props the room carries whatever the day did: the room itself, its memory. */
   label?: string;
   labels?: LabelMode;
   /** Where the scrubber starts, as milliseconds into the day. */
   startAt?: number;
+  /** Props the room carries whatever the day did: the room itself, and its memory. */
   dressing?: OfficeDressing;
   onSelect?: (id: string) => void;
   onSelectProp?: SelectProp;

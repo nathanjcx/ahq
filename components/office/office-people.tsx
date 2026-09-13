@@ -343,9 +343,10 @@ function Figure({
   // Reduced motion still changes pose, it just never tweens between them. This is
   // also the pose a figure holds until its first frame.
   const still = useMemo(() => poseFor(activity, 0, 0, traits), [activity, traits]);
+  // Reduced motion snaps: turning it on drops whatever pose the loop left behind.
   useLayoutEffect(() => {
     applyPose(joints.current, still);
-  }, [still]);
+  }, [still, motion]);
   const clock = useRef(index * 7.3 + 7);
   const posed = useRef(-1);
   /** The scene clock this activity began on, so its age costs no call to the wall clock. */

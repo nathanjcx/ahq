@@ -100,7 +100,7 @@ export function ArchitecturalDetails({
               />
             </mesh>
             {lit && (
-              <group>
+              <>
                 <GlowBar p={[-0.16, 0.343, 0]} s={[0.15, 0.012, 0.1]} color="#ffe2a2" />
                 <Halo p={[-0.16, 0.3, 0]} size={[1.5, 1.5]} opacity={interior * 0.5} />
                 <pointLight
@@ -110,7 +110,7 @@ export function ArchitecturalDetails({
                   distance={2.6}
                   decay={2}
                 />
-              </group>
+              </>
             )}
           </group>
         );

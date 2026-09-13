@@ -90,7 +90,7 @@ export function deriveScene({
   employees,
   floorId,
   now,
-  day: rest = NO_DAY,
+  day: around = NO_DAY,
   room,
   memory,
   calendar,
@@ -119,7 +119,7 @@ export function deriveScene({
   // The workspace's hours belong to the day: they are what makes somebody off
   // shift, and what turns the end of a shift into writing the day's report.
   const day: DayInput = {
-    ...rest,
+    ...around,
     ...(dashboard.schedule ? { schedule: dashboard.schedule } : {}),
   };
   const signals = deriveFloorSignals(day, floorId, now);
@@ -165,13 +165,15 @@ export function deriveScene({
 }
 
 /**
- * The office, dressed by the journal. With a Convex client it subscribes for the
- * dashboard and the floor board itself, so the pages above it keep their own shape.
+ * The office, dressed by the workspace the page is showing. A scene given to it —
+ * a replay, or the lab — dresses itself and is shown as it stands; without a
+ * workspace to read, the room is furnished and still.
  */
 export function OfficeStage({ live, scene, room, dashboard, ...props }: OfficeStageProps) {
-  const dressed = scene ?? (live && dashboard ? undefined : emptyScene);
-  if (dressed) return <Stage {...props} scene={room ? { ...dressed, room } : dressed} />;
-  return <LiveStage {...props} room={room} dashboard={dashboard!} />;
+  const still = useMemo(() => (room ? { ...emptyScene, room } : emptyScene), [room]);
+  if (scene) return <Stage {...props} scene={scene} />;
+  if (!live || !dashboard) return <Stage {...props} scene={still} />;
+  return <LiveStage {...props} room={room} dashboard={dashboard} />;
 }
 
 function LiveStage({

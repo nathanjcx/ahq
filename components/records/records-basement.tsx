@@ -45,9 +45,8 @@ export function RecordsBasement({ employees, tasks }: { employees: Employee[]; t
     [janitors],
   );
   const now = useNow(60_000);
-  const scene: OfficeSceneData | undefined = useMemo(() => {
-    if (!shelves?.length) return undefined;
-    return {
+  const scene: OfficeSceneData = useMemo(
+    () => ({
       activities: deriveActivities({
         employees: janitors,
         tasks: curating,
@@ -59,10 +58,12 @@ export function RecordsBasement({ employees, tasks }: { employees: Employee[]; t
       providers: [],
       lightBudget: 0,
       room: 'records',
-      records: { shelves },
-    };
-  }, [shelves, janitors, curating, now]);
-  if (!scene || !shelves) return null;
+      records: { shelves: shelves ?? [] },
+    }),
+    [shelves, janitors, curating, now],
+  );
+  // Until the summaries answer there is nothing to stand casework for.
+  if (!shelves?.length) return null;
 
   const contested = shelves.reduce((total, shelf) => total + shelf.contested, 0);
   return (
