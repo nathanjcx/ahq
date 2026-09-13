@@ -796,7 +796,6 @@ p {
     flex-direction: column;
     gap: 14px;
   }
-
 }
 /* === components/shared/master-detail.tsx === */
 .master-detail {
@@ -929,6 +928,26 @@ p {
   }
   .tool-checklist label {
     min-height: var(--tap);
+  }
+  /* A table keeps its key column and one status column; the rest waits on the detail page. The key
+     column takes what is left and truncates, so a long brief never widens the page. */
+  .data-table .hide-sm {
+    display: none;
+  }
+  .data-table th:first-child,
+  .data-table td:first-child {
+    width: 100%;
+    max-width: 0;
+  }
+  .data-table td:not(:first-child) {
+    white-space: nowrap;
+  }
+  .data-table th,
+  .data-table td {
+    padding: 0 12px;
+  }
+  .data-table td.chev {
+    padding-left: 0;
   }
   /* Master and detail: the list is the page, the detail replaces it. */
   .master-detail {

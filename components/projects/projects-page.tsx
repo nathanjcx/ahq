@@ -200,10 +200,10 @@ export function ProjectsPage({
               <thead>
                 <tr>
                   <th>Project</th>
-                  <th>Floors</th>
-                  <th>Milestones</th>
-                  <th className="num">Open tasks</th>
-                  <th>Deadline</th>
+                  <th className="hide-sm">Floors</th>
+                  <th className="hide-sm">Milestones</th>
+                  <th className="num hide-sm">Open tasks</th>
+                  <th className="hide-sm">Deadline</th>
                   <th>Status</th>
                   <th aria-hidden="true" />
                 </tr>
@@ -236,13 +236,15 @@ export function ProjectsPage({
                           </span>
                         </span>
                       </td>
-                      <td className={names.length ? undefined : 'dim'}>{names.join(', ') || 'No floors'}</td>
-                      <td className="dim">
+                      <td className={names.length ? 'hide-sm' : 'dim hide-sm'}>
+                        {names.join(', ') || 'No floors'}
+                      </td>
+                      <td className="dim hide-sm">
                         {done}/{entry.milestones.length}
                         {entry.behindMilestones ? ` · ${entry.behindMilestones} behind` : ''}
                       </td>
-                      <td className="num dim">{entry.openTasks}</td>
-                      <td className="dim">{deadline ? shortDate(deadline) : '—'}</td>
+                      <td className="num dim hide-sm">{entry.openTasks}</td>
+                      <td className="dim hide-sm">{deadline ? shortDate(deadline) : '—'}</td>
                       <td>
                         <ProjectStatusPill status={entry.status} />
                       </td>

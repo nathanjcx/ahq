@@ -157,8 +157,7 @@
   z-index: 20;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 14px;
   padding: 0 20px;
   border-bottom: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.92);
@@ -177,6 +176,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
 }
 /* Segmented control: a destination's sections, beside its title. */
 .segmented {
@@ -969,8 +969,40 @@
   }
 }
 @media (max-width: 640px) {
-  .topbar-title > span {
+  /* The title and actions on one row, the destination's sections on a full-width row under them. */
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 6px 12px;
+    row-gap: 6px;
+  }
+  .topbar-title {
+    flex: 1;
+  }
+  .topbar-tabs {
+    order: 3;
+    flex: 1 0 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .topbar-tabs::-webkit-scrollbar {
     display: none;
+  }
+  .topbar-tabs button {
+    flex: 1 0 auto;
+    min-height: 34px;
+  }
+  /* The incident reads in full on one row; its buttons take the next. */
+  .incident-strip {
+    flex-wrap: wrap;
+    padding: 10px 12px;
+  }
+  .incident-strip p {
+    flex: 1 1 calc(100% - 28px);
+    white-space: normal;
+  }
+  .incident-strip button {
+    flex: 1 1 0;
   }
   .topbar .primary-button.compact {
     font-size: 0;
@@ -1105,7 +1137,14 @@
   font: 11px var(--font);
 }
 @media (max-width: 640px) {
-  .topbar-search span {
+  .topbar-search {
+    width: var(--tap);
+    height: var(--tap);
+    justify-content: center;
+    padding: 0;
+  }
+  .topbar-search span,
+  .topbar-search kbd {
     display: none;
   }
 }

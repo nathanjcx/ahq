@@ -138,10 +138,10 @@ export function EmployeesPage({ listings: _listings, ...props }: Props) {
             <thead>
               <tr>
                 <th>Employee</th>
-                <th>Floor</th>
+                <th className="hide-sm">Floor</th>
                 <th>Now</th>
-                <th>Model</th>
-                <th className="num">Today</th>
+                <th className="hide-sm">Model</th>
+                <th className="num hide-sm">Today</th>
                 <th aria-hidden="true" />
               </tr>
             </thead>
@@ -174,7 +174,9 @@ export function EmployeesPage({ listings: _listings, ...props }: Props) {
                         </span>
                       </span>
                     </td>
-                    <td className={employee.floorId ? undefined : 'dim'}>{floorName(employee.floorId)}</td>
+                    <td className={employee.floorId ? 'hide-sm' : 'dim hide-sm'}>
+                      {floorName(employee.floorId)}
+                    </td>
                     <td>
                       <span
                         className="work-status"
@@ -184,8 +186,8 @@ export function EmployeesPage({ listings: _listings, ...props }: Props) {
                         {blocked ?? shiftLabel(status)}
                       </span>
                     </td>
-                    <td className="dim">{modelName(employee.model)}</td>
-                    <td className="num dim">
+                    <td className="dim hide-sm">{modelName(employee.model)}</td>
+                    <td className="num dim hide-sm">
                       {status?.tokensToday ? `${status.tokensToday.toLocaleString()} tokens` : '—'}
                     </td>
                     <td className="chev">

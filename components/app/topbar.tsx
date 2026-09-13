@@ -58,16 +58,16 @@ export function Topbar({
           <Menu size={20} />
         </button>
         <span>{title}</span>
-        {tabs.length > 0 && (
-          <div className="segmented" role="tablist" aria-label={`${title} sections`}>
-            {tabs.map((item) => (
-              <button key={item.id} role="tab" aria-selected={tab === item.id} onClick={() => onTab(item.id)}>
-                {item.label}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
+      {tabs.length > 0 && (
+        <div className="segmented topbar-tabs" role="tablist" aria-label={`${title} sections`}>
+          {tabs.map((item) => (
+            <button key={item.id} role="tab" aria-selected={tab === item.id} onClick={() => onTab(item.id)}>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="topbar-actions">
         {configured && (
           <button className="topbar-search" onClick={onSearch} aria-label="Search">

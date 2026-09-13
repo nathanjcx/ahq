@@ -72,8 +72,8 @@ export function MarketplaceStudioPage({
               <thead>
                 <tr>
                   <th>Draft</th>
-                  <th>Model</th>
-                  <th>Updated</th>
+                  <th className="hide-sm">Model</th>
+                  <th className="hide-sm">Updated</th>
                   <th>Ready</th>
                   <th aria-hidden="true" />
                 </tr>
@@ -94,8 +94,8 @@ export function MarketplaceStudioPage({
                           </span>
                         </span>
                       </td>
-                      <td className="dim">{modelName(draft.model)}</td>
-                      <td className="dim">{relativeTime(draft.updatedAt)}</td>
+                      <td className="dim hide-sm">{modelName(draft.model)}</td>
+                      <td className="dim hide-sm">{relativeTime(draft.updatedAt)}</td>
                       <td>
                         <span
                           className="work-status"
@@ -144,8 +144,8 @@ export function MarketplaceStudioPage({
               <thead>
                 <tr>
                   <th>Employee</th>
-                  <th>Model</th>
-                  <th className="num">Hires</th>
+                  <th className="hide-sm">Model</th>
+                  <th className="num hide-sm">Hires</th>
                   <th>Published</th>
                   <th aria-hidden="true" />
                 </tr>
@@ -166,8 +166,8 @@ export function MarketplaceStudioPage({
                         </span>
                       </span>
                     </td>
-                    <td className="dim">{modelName(listing.model)}</td>
-                    <td className="num dim">{listing.hires}</td>
+                    <td className="dim hide-sm">{modelName(listing.model)}</td>
+                    <td className="num dim hide-sm">{listing.hires}</td>
                     <td className="dim">{relativeTime(listing.publishedAt)}</td>
                     <td className="chev table-actions">
                       <button

@@ -188,8 +188,8 @@ export function AuditPage({ dashboard, actions, canManageWorkspace, run, onSelec
               <thead>
                 <tr>
                   <th>Night</th>
-                  <th className="num">Instances</th>
-                  <th className="num">Findings</th>
+                  <th className="num hide-sm">Instances</th>
+                  <th className="num hide-sm">Findings</th>
                   <th className="num">Outstanding</th>
                   <th aria-hidden="true" />
                 </tr>
@@ -215,8 +215,8 @@ export function AuditPage({ dashboard, actions, canManageWorkspace, run, onSelec
                       <td>
                         <b>{nightLabel(night)}</b>
                       </td>
-                      <td className="num dim">{instances}</td>
-                      <td className="num dim">{nightly.length}</td>
+                      <td className="num dim hide-sm">{instances}</td>
+                      <td className="num dim hide-sm">{nightly.length}</td>
                       <td className="num">
                         {outstanding ? (
                           <span className="work-status" data-tone="need">

@@ -280,3 +280,15 @@
     align-items: flex-start;
   }
 }
+@media (max-width: 640px) {
+  /* A hire request reads in full, with its decision under it. */
+  .request-list .card {
+    flex-wrap: wrap;
+  }
+  .request-list .card > div {
+    flex: 1 1 100%;
+  }
+  .request-list .card > button {
+    flex: 1 1 0;
+  }
+}

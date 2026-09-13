@@ -21,8 +21,8 @@ export function FilesPage({ artifacts, onTasks }: { artifacts: Artifact[]; onTas
             <thead>
               <tr>
                 <th>File</th>
-                <th>Type</th>
-                <th className="num">Size</th>
+                <th className="hide-sm">Type</th>
+                <th className="num hide-sm">Size</th>
                 <th>When</th>
                 <th aria-hidden="true" />
               </tr>
@@ -40,8 +40,8 @@ export function FilesPage({ artifacts, onTasks }: { artifacts: Artifact[]; onTas
                         </span>
                       </span>
                     </td>
-                    <td className="dim">{artifact.mediaType}</td>
-                    <td className="num dim">{fileSize(artifact.size)}</td>
+                    <td className="dim hide-sm">{artifact.mediaType}</td>
+                    <td className="num dim hide-sm">{fileSize(artifact.size)}</td>
                     <td className="dim">{relativeTime(artifact.createdAt)}</td>
                     <td className="chev">
                       <a className="text-button" href={`/api/files/${artifact.id}`}>
