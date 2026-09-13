@@ -156,6 +156,12 @@ function providerFor(
       await onTokens?.(state);
     },
     redirectToAuthorization: (url) => {
+      // Google issues a refresh token only when asked for offline access with a fresh consent; a
+      // connection without one would stop working when the first access token expires.
+      if (state.provider === 'google-workspace') {
+        url.searchParams.set('access_type', 'offline');
+        url.searchParams.set('prompt', 'consent');
+      }
       authorizationUrl = url.href;
     },
     saveCodeVerifier: (verifier) => {
