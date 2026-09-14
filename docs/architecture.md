@@ -408,6 +408,19 @@ the employee (the question it stopped on, or the actions it is holding for) abov
 message renders the material it carried as a quoted attachment rather than as the fence itself. Team and Files are tables on the shared `.data-table` primitive that open
 a full detail page with a back link.
 
+**Motion and light.** Every animation moves only `opacity` or `transform` and every one is a cut
+under `prefers-reduced-motion`. Page changes and the phone's list-to-detail swap run through
+`lib/view-transition.ts`, a document view transition where the browser has one; the sidebar and
+topbar carry their own transition names so they hold still. A Work row pulses once when the
+subscription moves it (`useChanged`), a running thread previews the newest journal line, a sent
+message shows at once until the subscription carries it back, and the answer block and the
+"needs you" mark breathe once when they appear. The shell sets `--night` from the office's own
+`daylight` curve every minute; the body and topbar tint from it over two seconds, so the chrome is
+the same building as the room. The sidebar's porthole (`components/app/porthole.tsx`) is the floor
+last looked at, drawn only on a wide screen, off the Office page, while on screen in a visible tab;
+its canvas is `paused` otherwise. Blur is used on the topbar, the office's floating chrome, and
+sheets, and is dropped for a solid tint on a phone.
+
 **Office** (`components/floors/`) has two sections. **3D** (`office-3d.tsx`) is the room as the whole
 page: the shell drops its padding and page scroll (`data-bleed`), the scene fills the viewport, and
 everything else floats inside it: the floor picker top left, the legend and scene controls top right,

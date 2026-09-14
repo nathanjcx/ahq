@@ -4,6 +4,7 @@ import { PanelLeftClose, Settings } from 'lucide-react';
 import { useRef, type TouchEvent } from 'react';
 import { AccountMenu, WorkspaceSwitcher } from './account';
 import { destinations, type Page } from './nav';
+import { Porthole } from './porthole';
 import type { Dashboard } from '@/lib/contracts';
 
 /** How far left a swipe has to travel before it closes the drawer. */
@@ -17,10 +18,13 @@ export function Sidebar({
   onClose,
   onNavigate,
   onSettings,
+  floorId,
 }: {
   dashboard: Dashboard;
   configured: boolean;
   page: Page;
+  /** The floor the porthole shows: the one last looked at, or the lobby. */
+  floorId: string | null;
   open: boolean;
   onClose: () => void;
   onNavigate: (page: Page) => void;
@@ -95,6 +99,9 @@ export function Sidebar({
             <ShieldIcon />
             <span>Platform admin</span>
           </button>
+        )}
+        {configured && page !== 'office' && (
+          <Porthole dashboard={dashboard} floorId={floorId} onOpen={() => onNavigate('office')} />
         )}
         {configured && (
           <div className="sidebar-account">

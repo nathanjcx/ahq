@@ -58,6 +58,8 @@ export type OfficeStageProps = {
   /** What the legend's Labels control is set to. */
   labels?: LabelMode;
   onSelect?: (id: string) => void;
+  /** Draw nothing while off screen or in a hidden tab. */
+  paused?: boolean;
   /** Called when a prop is clicked: the binder, a notebook, a card, a shelf, a lamp. */
   onSelectProp?: SelectProp;
   /** Reports what the renderer did on the last frame. Only the lab asks. */
@@ -250,6 +252,7 @@ function Stage({
   onSelect,
   onSelectProp,
   onRenderStats,
+  paused,
 }: Omit<OfficeStageProps, 'live' | 'floorId'> & { scene: OfficeSceneData; notice?: string }) {
   const dressed = useMemo(
     () =>
@@ -275,6 +278,7 @@ function Stage({
       dressing={scene}
       onSelectProp={onSelectProp}
       onRenderStats={onRenderStats}
+      paused={paused}
     />
   );
 }

@@ -15,11 +15,14 @@ import { asId, uiApi } from '@/lib/ui-api';
  */
 export function TaskConversation({
   task,
+  activity,
   pendingActions,
   onSend,
   onReviewActions,
 }: {
   task: Task;
+  /** The newest journal line: what the employee is doing right now. */
+  activity?: string;
   /** Proposals waiting for a decision, which the footer points at. */
   pendingActions: number;
   onSend: (taskId: string, text: string) => void;
@@ -27,9 +30,21 @@ export function TaskConversation({
 }) {
   const messages = useQuery(uiApi.messages, { taskId: asId<'tasks'>(task.id) });
   const [text, setText] = useState('');
+  // What was just sent shows at once; the subscription's copy replaces it when it lands.
+  const [pending, setPending] = useState<{ text: string; createdAt: number }[]>([]);
+  const [sent, setSent] = useState(false);
   const log = useRef<HTMLDivElement>(null);
   const asking = task.status === 'needs_input' && task.question;
-  const count = messages?.length ?? 0;
+  // A pending line is shown until the subscription carries the same words back.
+  const unsettled = pending.filter(
+    (row) => !messages?.some((message) => message.role === 'user' && message.text === row.text),
+  );
+  const count = (messages?.length ?? 0) + unsettled.length;
+  useEffect(() => {
+    if (!sent) return;
+    const timer = setTimeout(() => setSent(false), 450);
+    return () => clearTimeout(timer);
+  }, [sent]);
 
   // The log opens at its newest line and keeps following it while the employee works.
   useEffect(() => {
@@ -37,13 +52,6 @@ export function TaskConversation({
     if (element) element.scrollTop = element.scrollHeight;
   }, [count, task.status, task.id]);
 
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    const value = text.trim();
-    if (!value) return;
-    onSend(task.id, value);
-    setText('');
-  }
   return (
     <>
       <div ref={log} className="message-stream" role="log" aria-label="Conversation" tabIndex={0}>
@@ -72,6 +80,18 @@ export function TaskConversation({
             <MessageBubble key={message.id} message={message} who={task.employeeName} />
           ))
         )}
+        {unsettled.map((row) => (
+          <MessageBubble
+            key={`pending:${row.createdAt}`}
+            message={{
+              id: `pending:${row.createdAt}`,
+              taskId: task.id,
+              role: 'user',
+              text: row.text,
+              createdAt: row.createdAt,
+            }}
+          />
+        ))}
         {task.status === 'running' && (
           <div className="working-line" role="status">
             <span aria-hidden="true">
@@ -79,7 +99,8 @@ export function TaskConversation({
               <i />
               <i />
             </span>
-            {task.employeeName} is working
+            <em>{task.employeeName} is working</em>
+            {activity && <small>{activity}</small>}
           </div>
         )}
       </div>
@@ -111,7 +132,18 @@ export function TaskConversation({
             </button>
           </section>
         )}
-        <form className="composer" onSubmit={submit}>
+        <form
+          className="composer"
+          onSubmit={(event: FormEvent) => {
+            event.preventDefault();
+            const value = text.trim();
+            if (!value) return;
+            onSend(task.id, value);
+            setPending([...unsettled, { text: value, createdAt: Date.now() }]);
+            setSent(true);
+            setText('');
+          }}
+        >
           <textarea
             aria-label={asking ? `Answer ${task.employeeName}` : `Message ${task.employeeName}`}
             placeholder={asking ? `Answer ${task.employeeName}…` : `Message ${task.employeeName}…`}
@@ -129,6 +161,7 @@ export function TaskConversation({
             <span>Enter to send · Shift + Enter for a new line</span>
             <button
               className="send-button"
+              data-sent={sent || undefined}
               disabled={!text.trim()}
               aria-label={asking ? 'Send answer' : 'Send message'}
             >

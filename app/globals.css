@@ -85,7 +85,9 @@ html {
 body {
   margin: 0;
   color: var(--ink);
-  background: var(--canvas);
+  /* The building's light: `--night` is 0 at midday and 1 in the small hours, set by the shell. */
+  background: color-mix(in srgb, var(--canvas), #e6ebf3 calc(var(--night, 0) * 100%));
+  transition: background-color 2s linear;
   font: 13px/1.5 var(--font);
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
@@ -242,6 +244,8 @@ p {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--paper);
+  /* A hairline of light along the top edge: the surface reads as glass, at no cost. */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 .office-stage {
   background: #dde2e7;
@@ -845,7 +849,8 @@ p {
 .skeleton-bar {
   background: linear-gradient(90deg, #e2e7ec 25%, #eef2f6 45%, #e2e7ec 65%);
   background-size: 280% 100%;
-  animation: skeleton-sheen 1.4s ease-in-out infinite;
+  /* Twice, then still: a slow query never strobes. */
+  animation: skeleton-sheen 1.4s ease-in-out 2;
 }
 .skeleton-mark {
   width: 30px;
@@ -1019,7 +1024,42 @@ p {
     flex: 1;
   }
 }
+/* Page changes cross-fade on the compositor; the chrome holds still through them. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 160ms;
+  animation-timing-function: ease-out;
+}
+.sidebar {
+  view-transition-name: sidebar;
+}
+.topbar {
+  view-transition-name: topbar;
+}
+/* A thing that appears because it needs the person breathes once, then holds still. */
+@keyframes breathe {
+  from {
+    transform: scale(0.985);
+    opacity: 0.6;
+  }
+}
+@media (max-width: 640px) {
+  /* Blur costs fill rate a phone does not have; the same surfaces go solid. */
+  .topbar,
+  .office-3d-cluster,
+  .office-3d-rail,
+  .office-3d .floor-switcher-trigger,
+  .office-3d-state {
+    backdrop-filter: none;
+    background: var(--paper);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
   *,
   *::before,
   *::after {

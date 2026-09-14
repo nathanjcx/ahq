@@ -45,6 +45,8 @@ export type OfficeViewProps = {
   onSelectProp?: SelectProp;
   /** Reports what the renderer did on the last frame. The lab shows it; nothing else asks. */
   onRenderStats?: (stats: RenderStats) => void;
+  /** Draw nothing: the view is off screen or its tab is hidden. */
+  paused?: boolean;
 };
 
 /**
@@ -204,6 +206,7 @@ export default function OfficeView({
   dressing,
   onSelectProp,
   onRenderStats,
+  paused = false,
 }: OfficeViewProps) {
   const [eventSource, setEventSource] = useState<HTMLDivElement | null>(null);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
@@ -369,7 +372,7 @@ export default function OfficeView({
             shadows={{ type: THREE.PCFShadowMap }}
             camera={{ position: [28, 27, 28], zoom: 25, near: 0.1, far: 150 }}
             dpr={[1, 1.75]}
-            frameloop={motion ? 'always' : 'demand'}
+            frameloop={paused ? 'never' : motion ? 'always' : 'demand'}
             fallback={fallback}
             gl={{
               antialias: true,

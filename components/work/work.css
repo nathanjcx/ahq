@@ -319,3 +319,19 @@
     display: none;
   }
 }
+
+/* A row the subscription just moved pulses once. Opacity and transform only. */
+@keyframes thread-pulse {
+  0% {
+    background: var(--accent-soft);
+  }
+  100% {
+    background: transparent;
+  }
+}
+.work-row[data-changed] {
+  animation: thread-pulse 700ms ease-out;
+}
+.work-status[data-tone='need'] {
+  animation: breathe 240ms ease-out;
+}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { EditorDraft } from '../admin/draft-issues';
 import { FloorPanel } from '../floors/floor-panel';
+import { daylight } from '../office/daylight';
 import { WorkspaceReadyContext } from '../shared/use-ui-query';
 import type { Actions } from './actions';
 import { CommandPalette } from './command-palette';
@@ -23,6 +24,7 @@ import type {
   ProviderReadiness,
   RegistryTool,
 } from '@/lib/contracts';
+import { withViewTransition } from '@/lib/view-transition';
 import './app.css';
 
 export function WorkspaceShell({
@@ -46,6 +48,17 @@ export function WorkspaceShell({
 }) {
   const [route, setRoute] = useState<Route>({ page: 'work', tab: 'threads' });
   const { page, tab } = route;
+  // The building's light reaches the chrome: one variable, 0 at midday and 1 in the small hours.
+  useEffect(() => {
+    const apply = () =>
+      document.documentElement.style.setProperty(
+        '--night',
+        daylight(new Date().getHours()).interior.toFixed(2),
+      );
+    apply();
+    const timer = setInterval(apply, 60_000);
+    return () => clearInterval(timer);
+  }, []);
   // Pages that are the whole viewport: the 3D office, and the thread stream beside its open thread.
   const bleed = (page === 'office' && tab !== '2d') || (page === 'work' && tab === 'threads');
   useEffect(() => {
@@ -93,9 +106,11 @@ export function WorkspaceShell({
   function go(next: Destination, nextTab?: string) {
     const resolved = resolveRoute(nextTab ? `${next}/${nextTab}` : next);
     if (!resolved) return;
-    setRoute(resolved);
+    withViewTransition(() => {
+      setRoute(resolved);
+      setSidebarOpen(false);
+    });
     window.location.hash = routeHash(resolved);
-    setSidebarOpen(false);
   }
 
   function openNewTask(floorId: string | null = null, employeeId: string | null = null) {
@@ -141,6 +156,7 @@ export function WorkspaceShell({
           onClose={() => setSidebarOpen(false)}
           onNavigate={go}
           onSettings={() => setSettingsOpen(true)}
+          floorId={selectedFloorId}
         />
 
         {sidebarOpen && (

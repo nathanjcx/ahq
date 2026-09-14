@@ -23,6 +23,7 @@ export function TaskDetail({
   task,
   floorName,
   proposals,
+  activity,
   floorEmployees = [],
   onSend,
   onCancel,
@@ -34,6 +35,8 @@ export function TaskDetail({
   task: Task;
   floorName: string;
   proposals: ActionProposal[];
+  /** The newest journal line, shown under the working line while the employee works. */
+  activity?: string;
   /** Employees staffed on this task's floor. Empty for lobby tasks. */
   floorEmployees?: Employee[];
   onSend: (taskId: string, text: string) => void;
@@ -125,6 +128,7 @@ export function TaskDetail({
         {tab === 'conversation' ? (
           <TaskConversation
             task={task}
+            activity={activity}
             pendingActions={pending}
             onSend={onSend}
             onReviewActions={() => setTab('actions')}

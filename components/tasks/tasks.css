@@ -194,6 +194,7 @@
   margin: 12px 20px 16px;
 }
 .thread-ask {
+  animation: breathe 240ms ease-out;
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -284,10 +285,31 @@
 .working-line {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 9px;
   margin-left: 40px;
   color: #798088;
   font-size: var(--text-xs);
+}
+/* The line itself shimmers while the employee works; the journal's newest line sits beside it. */
+.working-line em {
+  font-style: normal;
+  background: linear-gradient(90deg, #798088 0%, #b9c0c8 50%, #798088 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer-text 1.8s linear infinite;
+}
+.working-line small {
+  flex: 1 1 100%;
+  color: var(--muted);
+  font-size: var(--text-2xs);
+}
+@keyframes shimmer-text {
+  to {
+    background-position: -200% 0;
+  }
 }
 .working-line > span {
   display: flex;
@@ -878,4 +900,31 @@
   .task-notice {
     margin: 12px 18px 0;
   }
+}
+
+/* The send button fills as the message goes. */
+.send-button {
+  position: relative;
+  overflow: hidden;
+}
+.send-button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: rgba(255, 255, 255, 0.35);
+}
+.send-button[data-sent]::after {
+  animation: send-sweep 400ms ease-out;
+}
+@keyframes send-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+/* The audit reads as an instrument: its times and ids in the monospace face. */
+.audit-tab time,
+.audit-kind {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
 }

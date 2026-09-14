@@ -3,6 +3,7 @@
 import { ChevronLeft } from 'lucide-react';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useIsNarrow } from './use-media';
+import { withViewTransition } from '@/lib/view-transition';
 
 /**
  * Tracks whether the detail pane is the thing on screen. Desktop shows both panes at once, so it
@@ -17,7 +18,7 @@ export function useMasterDetail() {
   useEffect(() => {
     if (!open) return;
     window.history.pushState({ ahqDetail: true }, '');
-    const onPopState = () => setOpen(false);
+    const onPopState = () => withViewTransition(() => setOpen(false));
     window.addEventListener('popstate', onPopState);
     return () => {
       window.removeEventListener('popstate', onPopState);
@@ -28,10 +29,14 @@ export function useMasterDetail() {
 
   const close = useCallback(() => {
     if (window.history.state?.ahqDetail) window.history.back();
-    else setOpen(false);
+    else withViewTransition(() => setOpen(false));
   }, []);
 
-  return { open, openDetail: useCallback(() => setOpen(true), []), closeDetail: close };
+  return {
+    open,
+    openDetail: useCallback(() => withViewTransition(() => setOpen(true)), []),
+    closeDetail: close,
+  };
 }
 
 /**

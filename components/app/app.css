@@ -160,8 +160,9 @@
   gap: 14px;
   padding: 0 20px;
   border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.92);
+  background: color-mix(in srgb, rgba(255, 255, 255, 0.92), #e6ebf3 calc(var(--night, 0) * 60%));
   backdrop-filter: blur(12px);
+  transition: background-color 2s linear;
 }
 .topbar-title {
   display: flex;
@@ -1162,6 +1163,65 @@
   }
   .topbar-search span,
   .topbar-search kbd {
+    display: none;
+  }
+}
+
+/* === components/app/porthole.tsx: the building at the foot of the sidebar === */
+.porthole {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 132px;
+  margin: 8px 0 4px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--canvas-deep);
+}
+/* The room's HTML overlays (labels, bubbles, cards) belong to the full view, not the porthole. */
+.porthole .office-view > div > :not(:has(> canvas)),
+.porthole .office-view-controls,
+.porthole .office-view-floor,
+.porthole .office-view-note {
+  display: none;
+}
+.porthole-open {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+.porthole-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 10px;
+}
+.porthole .office-view {
+  min-height: 0;
+  pointer-events: none;
+}
+.porthole-label {
+  position: absolute;
+  left: 8px;
+  bottom: 7px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+@media (max-width: 1100px) {
+  .porthole {
     display: none;
   }
 }

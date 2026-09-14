@@ -3,7 +3,6 @@
 import type { Actions } from '../app/actions';
 import type { Destination } from '../app/nav';
 import { FloorFeeds } from '../channels/floor-feeds';
-import type { OfficeEmployee } from '../office/office-view';
 import { FloorBinder } from './floor-binder';
 import { FloorChannel } from './floor-channel';
 import { ACTIVE_TASK_STATUSES, summarizeFloor, type FloorEntry } from './floor-stats';
@@ -11,31 +10,12 @@ import { FloorTeamList } from './floor-team';
 import { FloorWork } from './floor-work';
 import { Office2D } from './office-2d';
 import { Office3D, type PanelTab } from './office-3d';
+import { toOfficeEmployees } from './office-employees';
 import { WeekList } from './week-list';
 import type { Dashboard, Employee, Floor, Task } from '@/lib/contracts';
 import './floors.css';
 
 export type OfficeMode = '3d' | '2d';
-
-/** Maps a floor's employees to the 3D office, using their live work for presence. */
-function toOfficeEmployees(employees: Employee[], activeTasks: Task[]): OfficeEmployee[] {
-  return employees
-    .filter((employee) => employee.status === 'ready')
-    .map((employee) => {
-      const work = activeTasks.filter((task) => task.employeeId === employee.id);
-      return {
-        id: employee.id,
-        name: employee.name,
-        role: employee.role,
-        color: employee.color,
-        status: work.some((task) => task.status === 'awaiting_approval' || task.status === 'needs_input')
-          ? 'review'
-          : work.some((task) => task.status === 'running')
-            ? 'working'
-            : 'ready',
-      };
-    });
-}
 
 /**
  * The Office destination: the building, one level at a time. The 3D view is the room itself with

@@ -8,6 +8,7 @@ import { EmptyPane } from '../shared/empty';
 import { Avatar } from '../shared/marks';
 import { MasterDetail, useMasterDetail } from '../shared/master-detail';
 import { relativeTime } from '../shared/time';
+import { useChanged } from '../shared/use-changed';
 import { useUiQuery } from '../shared/use-ui-query';
 import { TaskDetail } from '../tasks/task-detail';
 import { taskFloorName } from '../tasks/tasks-page';
@@ -37,9 +38,10 @@ export function WorkPage(props: Props) {
         proposals: dashboard.proposals,
         handoffs: handoffs ?? [],
         alerts: alerts ?? [],
+        events: dashboard.events,
         now,
       }),
-    [dashboard.tasks, dashboard.proposals, handoffs, alerts, now],
+    [dashboard.tasks, dashboard.proposals, dashboard.events, handoffs, alerts, now],
   );
   const [picked, setPicked] = useState<string | null>(null);
   const needsCount = threads.filter((thread) => thread.group === 'needs').length;
@@ -171,8 +173,10 @@ function ThreadRow({
   active: boolean;
   onOpen: () => void;
 }) {
+  // The row pulses once when the subscription moves it: a new line, a new state, a new need.
+  const changed = useChanged(`${thread.label}\n${thread.preview}\n${thread.at}`);
   return (
-    <button className="work-row" data-active={active} onClick={onOpen}>
+    <button className="work-row" data-active={active} data-changed={changed || undefined} onClick={onOpen}>
       {employee ? (
         <Avatar employee={employee} />
       ) : (
@@ -211,9 +215,11 @@ function ThreadPane({
     if (!task) return null;
     const floor = dashboard.floors.find((item) => item.id === task.floorId);
     const floorEmployees = dashboard.employees.filter((employee) => floor?.employeeIds.includes(employee.id));
+    const activity = dashboard.events.filter((event) => event.taskId === task.id).at(-1);
     return (
       <TaskDetail
         task={task}
+        activity={activity?.text}
         floorName={taskFloorName(task, dashboard.floors)}
         proposals={dashboard.proposals.filter((proposal) => proposal.taskId === task.id)}
         floorEmployees={floorEmployees}

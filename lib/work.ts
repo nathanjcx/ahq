@@ -1,4 +1,4 @@
-import type { ActionProposal, Alert, Task } from './contracts';
+import type { ActionProposal, ActivityEvent, Alert, Task } from './contracts';
 
 /** A pending handoff, as the Work page lists it. Served by `work.pendingHandoffs`. */
 export interface PendingHandoff {
@@ -43,8 +43,17 @@ export const GROUP_LABELS: Record<ThreadGroup, string> = {
   done: 'Done today',
 };
 
-function taskThread(task: Task, pending: ActionProposal[], dayStart: number): Thread | null {
-  const preview = task.lastMessage?.text ?? task.prompt;
+function taskThread(
+  task: Task,
+  pending: ActionProposal[],
+  dayStart: number,
+  activity?: ActivityEvent,
+): Thread | null {
+  // While the employee works, the newest journal line says what it is doing right now.
+  const preview =
+    task.status === 'running' && activity && activity.createdAt >= (task.lastMessage?.createdAt ?? 0)
+      ? activity.text
+      : (task.lastMessage?.text ?? task.prompt);
   const base = {
     id: `task:${task.id}`,
     kind: 'task' as const,
@@ -100,9 +109,15 @@ export function buildThreads(input: {
   proposals: ActionProposal[];
   handoffs: PendingHandoff[];
   alerts: Alert[];
+  /** The journal, newest last, for what a running thread is doing. */
+  events?: ActivityEvent[];
   now: number;
 }): Thread[] {
   const dayStart = new Date(input.now).setHours(0, 0, 0, 0);
+  const latestEvent = new Map<string, ActivityEvent>();
+  for (const event of input.events ?? [])
+    if (event.taskId && (latestEvent.get(event.taskId)?.sequence ?? -1) < event.sequence)
+      latestEvent.set(event.taskId, event);
   const pendingByTask = new Map<string, ActionProposal[]>();
   for (const proposal of input.proposals) {
     if (proposal.status !== 'pending') continue;
@@ -111,7 +126,7 @@ export function buildThreads(input: {
   const threads: Thread[] = [];
   for (const task of input.tasks) {
     if (task.kind && task.kind !== 'work') continue;
-    const thread = taskThread(task, pendingByTask.get(task.id) ?? [], dayStart);
+    const thread = taskThread(task, pendingByTask.get(task.id) ?? [], dayStart, latestEvent.get(task.id));
     if (thread) threads.push(thread);
   }
   for (const handoff of input.handoffs)

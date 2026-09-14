@@ -120,3 +120,37 @@ describe('the work stream', () => {
     expect(threads.every((thread) => thread.group === 'needs')).toBe(true);
   });
 });
+
+describe('a running thread', () => {
+  it('previews the newest journal line rather than the last message', () => {
+    const threads = buildThreads({
+      tasks: [
+        task({ id: 't1', status: 'running', lastMessage: { text: 'Starting.', createdAt: now - 5000 } }),
+      ],
+      proposals: [],
+      handoffs: [],
+      alerts: [],
+      events: [
+        {
+          id: 'e1',
+          sequence: 1,
+          taskId: 't1',
+          type: 'tool.call',
+          text: 'Searching Drive',
+          createdAt: now - 4000,
+        },
+        {
+          id: 'e2',
+          sequence: 2,
+          taskId: 't1',
+          type: 'tool.call',
+          text: 'Reading the roster',
+          createdAt: now - 1000,
+        },
+        { id: 'e3', sequence: 3, taskId: 'other', type: 'tool.call', text: 'Elsewhere', createdAt: now },
+      ],
+      now,
+    });
+    expect(threads[0].preview).toBe('Reading the roster');
+  });
+});
