@@ -5,10 +5,16 @@
  */
 /* === components/app: frame === */
 .app-frame {
+  --sidebar-w: 224px;
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  transition: grid-template-columns 160ms ease-out;
 }
+.app-frame[data-sidebar='rail'] {
+  --sidebar-w: 56px;
+}
+/* The sidebar is a rail or its full width; opened over the page from the rail, the frame does not move. */
 .sidebar {
   position: fixed;
   inset: 0 auto 0 0;
@@ -17,9 +23,86 @@
   display: flex;
   flex-direction: column;
   padding: 0 10px 12px;
+  overflow-x: hidden;
   overflow-y: auto;
   background: #fafbfc;
   border-right: 1px solid var(--line);
+  transition:
+    width 160ms ease-out,
+    box-shadow 160ms ease-out;
+}
+.sidebar[data-mode='rail'] {
+  width: 56px;
+  padding: 0 8px 12px;
+}
+.sidebar[data-overlay] {
+  box-shadow: 16px 0 40px rgba(15, 23, 42, 0.12);
+}
+/* Labels fade after the width has settled, so they never wrap mid-transition. */
+.sidebar .brand-word,
+.sidebar .nav-item > span,
+.sidebar .nav-count,
+.sidebar .sidebar-account-name,
+.sidebar .sidebar-workspace .workspace-button span {
+  transition: opacity 120ms ease-out 80ms;
+}
+.sidebar[data-mode='rail'] .brand-word,
+.sidebar[data-mode='rail'] .nav-item > span,
+.sidebar[data-mode='rail'] .sidebar-account-name,
+.sidebar[data-mode='rail'] .sidebar-workspace .workspace-button span,
+.sidebar[data-mode='rail'] .sidebar-workspace .workspace-button svg:last-child,
+.sidebar[data-mode='rail'] .porthole {
+  display: none;
+}
+.sidebar[data-mode='rail'] .brand-row {
+  justify-content: center;
+  padding: 0;
+}
+.sidebar[data-mode='rail'] .nav-item {
+  width: 40px;
+  justify-content: center;
+  padding: 0;
+  margin: 0 auto;
+}
+.sidebar[data-mode='rail'] .nav-count {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: 9px;
+  line-height: 15px;
+  text-align: center;
+}
+.sidebar[data-mode='rail'] .sidebar-workspace .workspace-button {
+  justify-content: center;
+  padding: 0;
+}
+.sidebar[data-mode='rail'] .sidebar-account {
+  justify-content: center;
+}
+.sidebar-workspace {
+  margin: 2px 0 8px;
+}
+.sidebar-workspace .workspace-button {
+  width: 100%;
+  max-width: none;
+  height: 36px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  box-shadow: none;
+}
+.sidebar-workspace .workspace-button span {
+  flex: 1;
+  max-width: none;
+  text-align: left;
+}
+.sidebar-workspace .workspace-panel {
+  top: calc(100% + 6px);
+  right: auto;
+  left: 0;
 }
 /* === components/app/sidebar.tsx === */
 .brand-row {
@@ -59,8 +142,9 @@
 }
 .nav-item {
   appearance: none;
+  position: relative;
   width: 100%;
-  height: 32px;
+  height: 34px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -92,14 +176,23 @@
   white-space: nowrap;
 }
 .nav-count {
+  padding: 1px 6px;
+  border-radius: 999px;
   color: var(--muted);
-  font-size: var(--text-xs);
+  background: var(--slate-100);
+  font-size: var(--text-2xs);
   font-style: normal;
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
-.nav-count[data-hot='true'] {
-  color: var(--accent-deep);
-  font-weight: 600;
+/* The same tones the stream uses: amber for what needs a person, green for what is moving. */
+.nav-count[data-tone='need'] {
+  color: #92400e;
+  background: #fdf1dc;
+}
+.nav-count[data-tone='run'] {
+  color: #166534;
+  background: #e4f5ea;
 }
 .sidebar-bottom {
   margin-top: auto;
@@ -113,30 +206,22 @@
   align-items: center;
   gap: 8px;
   margin-top: 6px;
-  padding: 2px;
+  padding: 2px 4px;
 }
-.sidebar-account .workspace-switcher {
+.sidebar-account-name {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.sidebar-account .workspace-button {
-  width: 100%;
-  max-width: none;
-  height: 40px;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+.sidebar-pin {
+  color: var(--muted);
 }
-.sidebar-account .workspace-button:hover {
-  background: var(--slate-100);
-}
-.sidebar-account .workspace-button span {
-  flex: 1;
-  max-width: none;
-  text-align: left;
-}
-.sidebar .account-panel,
-.sidebar .workspace-panel {
+.sidebar .account-panel {
   top: auto;
   right: auto;
   bottom: calc(100% + 6px);
@@ -895,7 +980,6 @@
   border: 0;
   background: transparent;
 }
-.signin-screen,
 .centered-loader {
   min-height: 100vh;
   display: grid;
@@ -903,33 +987,104 @@
   padding: 30px;
   background: radial-gradient(circle at 50% 0, #e5ebf2 0, transparent 45%), var(--canvas);
 }
-.signin-card {
-  width: min(390px, 100%);
+/* === components/app/status-screens.tsx: the door === */
+.door {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.1fr);
+  background: var(--canvas);
+}
+.door-copy {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 38px;
-  text-align: center;
+  justify-content: center;
+  gap: 18px;
+  padding: clamp(32px, 7vw, 96px);
 }
-.signin-card .eyebrow {
-  margin: 19px 0 7px;
+.door-copy .brand {
+  font-size: 17px;
 }
-.signin-card h1 {
-  font-size: 28px;
-  letter-spacing: -1px;
+.door-copy h1 {
+  max-width: 14ch;
+  font-size: clamp(30px, 3.6vw, 44px);
+  font-weight: 650;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
 }
-.signin-card p {
-  margin: 9px 0 23px;
-  color: var(--muted);
+.door-copy > p {
+  max-width: 46ch;
+  color: var(--ink-soft);
+  font-size: var(--text-lg);
+  line-height: 1.55;
+}
+.door-enter {
+  align-self: flex-start;
+  height: 42px;
+  padding: 0 18px;
+  font-size: var(--text-md);
+}
+.door-points {
+  display: grid;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.door-points li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--ink-soft);
   font-size: var(--text-base);
+  line-height: 1.5;
 }
-.signin-card small {
+.door-points svg {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  color: var(--accent);
+}
+.door-points strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.door-copy small {
   display: flex;
   align-items: center;
   gap: 5px;
-  margin-top: 17px;
   color: #838990;
   font-size: var(--text-2xs);
+}
+.door-scene {
+  position: relative;
+  min-height: 420px;
+  overflow: hidden;
+  border-left: 1px solid var(--line);
+  background: var(--canvas-deep);
+}
+.door-scene > * {
+  height: 100%;
+}
+.door-scene .office-view {
+  min-height: 0;
+  border-radius: 0;
+}
+.door-scene .office-view-controls,
+.door-scene .office-view-note {
+  display: none;
+}
+@media (max-width: 900px) {
+  .door {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(320px, 42dvh);
+  }
+  .door-scene {
+    order: -1;
+    border-left: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .door-copy {
+    padding: 28px 22px 40px;
+  }
 }
 .centered-loader {
   align-content: center;
@@ -952,10 +1107,30 @@
   .main {
     display: block;
   }
-  .sidebar {
+  .sidebar,
+  .sidebar[data-mode='rail'] {
+    width: 224px;
+    padding: 0 10px 12px;
     transform: translateX(-101%);
     transition: transform 0.2s ease;
     box-shadow: 20px 0 55px rgba(33, 40, 48, 0.15);
+  }
+  .sidebar[data-mode='rail'] .brand-word,
+  .sidebar[data-mode='rail'] .nav-item > span,
+  .sidebar[data-mode='rail'] .sidebar-account-name,
+  .sidebar[data-mode='rail'] .sidebar-workspace .workspace-button span {
+    display: inline;
+  }
+  .sidebar[data-mode='rail'] .nav-item {
+    width: 100%;
+    justify-content: flex-start;
+    padding: 0 10px;
+  }
+  .sidebar[data-mode='rail'] .nav-count {
+    position: static;
+  }
+  .sidebar-pin {
+    display: none;
   }
   .sidebar.sidebar-open {
     transform: translateX(0);

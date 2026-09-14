@@ -15,6 +15,7 @@ import { PageContent } from './page-content';
 import { SettingsPanel } from './settings-panel';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
+import { useSidebarMode } from './use-sidebar';
 import type {
   ActionProposal,
   Dashboard,
@@ -61,6 +62,7 @@ export function WorkspaceShell({
   }, []);
   // Pages that are the whole viewport: the 3D office, and the thread stream beside its open thread.
   const bleed = (page === 'office' && tab !== '2d') || (page === 'work' && tab === 'threads');
+  const sidebar = useSidebarMode(route);
   useEffect(() => {
     const sync = () => {
       const next = resolveRoute(window.location.hash.slice(1));
@@ -147,11 +149,14 @@ export function WorkspaceShell({
 
   return (
     <WorkspaceReadyContext value={Boolean(workspace)}>
-      <div className="app-frame">
+      <div className="app-frame" data-sidebar={sidebar.mode}>
         <Sidebar
           dashboard={dashboard}
           configured={configured}
           page={page}
+          mode={sidebar.mode}
+          pinned={sidebar.pinned}
+          onTogglePin={sidebar.toggle}
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
           onNavigate={go}
