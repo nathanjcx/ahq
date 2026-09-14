@@ -402,7 +402,10 @@ one line and its primary action, never an intro block.
 `buildThreads` in `lib/work.ts` is pure and orders the stream by what it needs from a person (pending
 approvals, a `needs_input` question, pending handoffs from `work.pendingHandoffs`, open alerts), then running, waiting or blocked, and done today; hidden session tasks never appear. The
 open thread is the task detail (conversation, actions, audit); a handoff or an incident opens as its
-own pane with its decision. Team and Files are tables on the shared `.data-table` primitive that open
+own pane with its decision. The Threads section is the whole viewport: the stream and the open thread
+scroll on their own, the thread's header and tabs stay put, and its footer pins what the person owes
+the employee (the question it stopped on, or the actions it is holding for) above the composer. A
+message renders the material it carried as a quoted attachment rather than as the fence itself. Team and Files are tables on the shared `.data-table` primitive that open
 a full detail page with a back link.
 
 **Office** (`components/floors/`) has two sections. **3D** (`office-3d.tsx`) is the room as the whole

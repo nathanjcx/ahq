@@ -123,11 +123,16 @@ export function TaskDetail({
       </div>
       <div id="task-tab-panel" role="tabpanel" aria-labelledby={`task-tab-${tab}`} className="task-tab-panel">
         {tab === 'conversation' ? (
-          <TaskConversation task={task} onSend={onSend} />
+          <TaskConversation
+            task={task}
+            pendingActions={pending}
+            onSend={onSend}
+            onReviewActions={() => setTab('actions')}
+          />
         ) : tab === 'audit' ? (
           <AuditTab taskId={task.id} />
         ) : (
-          <div className="message-stream">
+          <div className="message-stream" role="region" aria-label="Actions" tabIndex={0}>
             {proposals.length ? (
               proposals.map((proposal) => (
                 <ProposalCard

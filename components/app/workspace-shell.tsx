@@ -46,6 +46,8 @@ export function WorkspaceShell({
 }) {
   const [route, setRoute] = useState<Route>({ page: 'work', tab: 'threads' });
   const { page, tab } = route;
+  // Pages that are the whole viewport: the 3D office, and the thread stream beside its open thread.
+  const bleed = (page === 'office' && tab !== '2d') || (page === 'work' && tab === 'threads');
   useEffect(() => {
     const sync = () => {
       const next = resolveRoute(window.location.hash.slice(1));
@@ -149,7 +151,7 @@ export function WorkspaceShell({
           />
         )}
 
-        <main className="main" data-bleed={page === 'office' && tab !== '2d' ? 'true' : undefined}>
+        <main className="main" data-bleed={bleed ? 'true' : undefined}>
           <Topbar
             title={pageTitle(page)}
             tabs={pageTabs(page)}
@@ -172,7 +174,7 @@ export function WorkspaceShell({
           <IncidentStrip dashboard={dashboard} actions={actions} run={run} go={go} />
 
           {!configured && <SetupBanner onSetup={() => setSettingsOpen(true)} />}
-          <div className="page-wrap" data-bleed={page === 'office' && tab !== '2d' ? 'true' : undefined}>
+          <div className="page-wrap" data-bleed={bleed ? 'true' : undefined}>
             <PageContent
               page={page}
               tab={tab}
