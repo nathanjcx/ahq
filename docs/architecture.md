@@ -408,6 +408,15 @@ the employee (the question it stopped on, or the actions it is holding for) abov
 message renders the material it carried as a quoted attachment rather than as the fence itself. Team and Files are tables on the shared `.data-table` primitive that open
 a full detail page with a back link.
 
+**The sidebar** (`components/app/sidebar.tsx`) rests as a 56px rail on the Office and Threads pages
+and open elsewhere (`useSidebarMode` in `use-sidebar.ts`); a pin, or `[`, fixes either width in this
+browser through `localStorage`. From the rail, resting the pointer for 150ms or moving focus inside
+opens it over the page (`useHoverIntent`); the frame does not move. The workspace switcher sits at
+the top, the account at the bottom, and the Work badge carries the stream's tones. The porthole
+mounts only while the sidebar rests open. On a phone it is the drawer. **The door**
+(`status-screens.tsx`) is what a signed-out visitor sees: the reason to sign in beside a furnished
+floor, `OfficeStage` with `live={false}`, lit by the visitor's clock.
+
 **Motion and light.** Every animation moves only `opacity` or `transform` and every one is a cut
 under `prefers-reduced-motion`. Page changes and the phone's list-to-detail swap run through
 `lib/view-transition.ts`, a document view transition where the browser has one; the sidebar and
