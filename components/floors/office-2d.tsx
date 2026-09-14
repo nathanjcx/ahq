@@ -86,7 +86,7 @@ export function Office2D({
           onArchive={onArchive}
           onNewTask={() => onNewTask()}
         />
-        <div className="office-2d-grid">
+        <div className="office-2d-grid" data-cols={board ? 3 : 2}>
           <section className="office-2d-cell" aria-label={floor ? 'Floor team' : 'Unassigned team'}>
             <div className="section-title">
               <h3>{floor ? 'Team' : 'Unassigned team'}</h3>

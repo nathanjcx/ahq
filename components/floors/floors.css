@@ -1336,8 +1336,9 @@
 .office-2d-grid:last-child {
   border-bottom: 0;
 }
-.office-2d-lower {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+.office-2d-lower,
+.office-2d-grid[data-cols='2'] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
 }
 .office-2d-cell {
   display: flex;
@@ -1361,6 +1362,12 @@
 .office-2d-cell .team-open,
 .office-3d-rail-body .team-open {
   min-width: 0;
+  grid-template-columns: 36px minmax(110px, 1fr) minmax(0, auto);
+}
+.office-2d-cell .shift-pill,
+.office-3d-rail-body .shift-pill {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .office-2d-board .channel-feed {
   min-height: 420px;
