@@ -1069,6 +1069,7 @@
   border-radius: 0;
 }
 .door-scene .office-view-controls,
+.door-scene .office-view-floor,
 .door-scene .office-view-note {
   display: none;
 }
@@ -1079,6 +1080,8 @@
   }
   .door-scene {
     order: -1;
+    height: 42dvh;
+    min-height: 0;
     border-left: 0;
     border-bottom: 1px solid var(--line);
   }
