@@ -405,6 +405,15 @@ open thread is the task detail (conversation, actions, audit); a handoff or an i
 own pane with its decision. Team and Files are tables on the shared `.data-table` primitive that open
 a full detail page with a back link.
 
+**Office** (`components/floors/`) has two sections. **3D** (`office-3d.tsx`) is the room as the whole
+page: the shell drops its padding and page scroll (`data-bleed`), the scene fills the viewport, and
+everything else floats inside it: the floor picker top left, the legend and scene controls top right,
+replay bottom left, the camera bottom right, and the level's panels (Team, Work, Board, Feeds,
+Binder, Week) in a rail over the right edge that scrolls within itself. **2D** (`office-2d.tsx`) is
+the same level as a board: the building directory beside a floor laid out whole, team and the week,
+the work grouped by project, and the channel side by side, with the feeds and the binder underneath.
+`floor-page.tsx` picks the level's people and work once and hands both views the same data.
+
 **The building** (`components/office/`) is not a page; it is the 3D office the pages mount, and every
 room derives from the data its page already holds. `deriveScene` turns one dashboard, one floor board
 and the day around it into the whole room: activities and floor signals from the pure model in
@@ -414,8 +423,8 @@ day's report, and the hour from the viewer's clock so the daylight follows it. T
 
 | Room      | Where it is mounted            | What dresses it                                                                                                           |
 | --------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| Lobby     | `floors/lobby-view.tsx`        | `deriveScene` with `room: 'lobby'`; the wall is `calendar:entries` for the coming week, and the lift stands beside it     |
-| Floor     | `floors/floor-team.tsx`        | `deriveScene`: board, binder, notebooks, findings folders, beacon, notice, overnight lamps                                |
+| Lobby     | `floors/office-3d.tsx`         | `deriveScene` with `room: 'lobby'`; the wall is `calendar:entries` for the coming week, and the lift stands beside it     |
+| Floor     | `floors/office-3d.tsx`         | `deriveScene`: board, binder, notebooks, findings folders, beacon, notice, overnight lamps                                |
 | Records   | `records/records-basement.tsx` | `memory:summaries` for workspace, floors and projects, one run of casework each; the janitor while a curation run is open |
 | Boardroom | `meetings/meeting-view.tsx`    | `meetings:get` and the calendar entry, through the same `deriveActivities` the floor uses                                 |
 | Triage    | `triage/triage-floor.tsx`      | `triage:alerts` and the notification ledger: the alert board, the status lamp, the beacon, the notice                     |

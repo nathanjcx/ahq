@@ -6,12 +6,16 @@ import { FloorFeeds } from '../channels/floor-feeds';
 import type { OfficeEmployee } from '../office/office-view';
 import { FloorBinder } from './floor-binder';
 import { FloorChannel } from './floor-channel';
-import { FloorDirectory } from './floor-directory';
 import { ACTIVE_TASK_STATUSES, summarizeFloor, type FloorEntry } from './floor-stats';
-import { FloorView } from './floor-view';
-import { LobbyView } from './lobby-view';
+import { FloorTeamList } from './floor-team';
+import { FloorWork } from './floor-work';
+import { Office2D } from './office-2d';
+import { Office3D, type PanelTab } from './office-3d';
+import { WeekList } from './week-list';
 import type { Dashboard, Employee, Floor, Task } from '@/lib/contracts';
 import './floors.css';
+
+export type OfficeMode = '3d' | '2d';
 
 /** Maps a floor's employees to the 3D office, using their live work for presence. */
 function toOfficeEmployees(employees: Employee[], activeTasks: Task[]): OfficeEmployee[] {
@@ -33,7 +37,12 @@ function toOfficeEmployees(employees: Employee[], activeTasks: Task[]): OfficeEm
     });
 }
 
+/**
+ * The Office destination: the building, one level at a time. The 3D view is the room itself with
+ * every control inside the viewport; the 2D view is the same level laid out as a board.
+ */
 export function FloorPage({
+  mode,
   dashboard,
   configured,
   actions,
@@ -47,6 +56,7 @@ export function FloorPage({
   onEditFloor,
   onNewTask,
 }: {
+  mode: OfficeMode;
   dashboard: Dashboard;
   configured: boolean;
   actions: Actions;
@@ -60,206 +70,146 @@ export function FloorPage({
   onEditFloor: (floor: Floor) => void;
   onNewTask: (floorId: string | null, employeeId?: string | null) => void;
 }) {
-  const entries: FloorEntry[] = [...dashboard.floors]
+  const all: FloorEntry[] = [...dashboard.floors]
     .sort((a, b) => a.createdAt - b.createdAt)
     .map((floor, index) => ({
       floor,
       number: String(index + 1).padStart(2, '0'),
       summary: summarizeFloor(floor, dashboard.tasks),
     }));
-  const activeFloors = entries
-    .filter((entry) => !entry.floor.archivedAt)
-    .sort((a, b) => b.summary.lastActivity - a.summary.lastActivity);
-  const archivedFloors = entries.filter((entry) => entry.floor.archivedAt);
-  const selected = entries.find((entry) => entry.floor.id === selectedFloorId) ?? null;
-
+  const entries = {
+    active: all
+      .filter((entry) => !entry.floor.archivedAt)
+      .sort((a, b) => b.summary.lastActivity - a.summary.lastActivity),
+    archived: all.filter((entry) => entry.floor.archivedAt),
+  };
+  const selected = all.find((entry) => entry.floor.id === selectedFloorId) ?? null;
+  const floor = selected?.floor ?? null;
   const workspaceReady = configured && Boolean(dashboard.workspace);
+  const canAct = workspaceReady && !floor?.archivedAt;
 
-  return (
-    <div className="office-page">
-      <div className="building-layout">
-        <FloorDirectory
-          workspaceName={dashboard.workspace?.name}
-          activeFloors={activeFloors}
-          archivedFloors={archivedFloors}
-          selectedFloorId={selected?.floor.id ?? null}
-          unassignedTaskCount={dashboard.tasks.filter((task) => !task.floorId).length}
-          canCreate={workspaceReady}
-          onSelectFloor={onSelectFloor}
-          onNewFloor={onNewFloor}
-        />
-        {selected ? (
-          <SelectedFloor
-            entry={selected}
-            floorLabel={`Floor ${Number(selected.number)}`}
-            dashboard={dashboard}
-            configured={configured}
-            actions={actions}
-            run={run}
-            onEmployee={onEmployee}
-            onTask={onTask}
-            onNewTask={onNewTask}
-            onEditFloor={onEditFloor}
-            onRecords={() => onPage('records')}
-            onCalendar={() => onPage('calendar')}
-          />
-        ) : (
-          <Lobby
-            dashboard={dashboard}
-            configured={configured}
-            activeFloors={activeFloors}
-            onEmployee={onEmployee}
-            onTask={onTask}
-            onNewTask={onNewTask}
-            onAllTasks={() => onPage('tasks')}
-            onCalendar={() => onPage('calendar')}
-          />
-        )}
-      </div>
-      <div className="office-summary" aria-label="Workspace summary">
-        <button onClick={() => onPage('inbox')}>
-          <span>Inbox</span>
-          <strong>{dashboard.inbox.filter((item) => item.status === 'unread').length}</strong>
-          <small>unread items</small>
-        </button>
-        <button onClick={() => onPage('tasks')}>
-          <span>Reviews</span>
-          <strong>{dashboard.proposals.filter((proposal) => proposal.status === 'pending').length}</strong>
-          <small>need you</small>
-        </button>
-        <button onClick={() => onPage('activity')}>
-          <span>Your active work</span>
-          <strong>
-            {dashboard.tasks.filter((task) => ['queued', 'running'].includes(task.status)).length}
-          </strong>
-          <small>across all floors</small>
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function SelectedFloor({
-  entry,
-  floorLabel,
-  dashboard,
-  configured,
-  actions,
-  run,
-  onEmployee,
-  onTask,
-  onNewTask,
-  onEditFloor,
-  onRecords,
-  onCalendar,
-}: {
-  entry: FloorEntry;
-  floorLabel: string;
-  dashboard: Dashboard;
-  configured: boolean;
-  actions: Actions;
-  run: (work: () => Promise<unknown>, success: string) => Promise<boolean>;
-  onEmployee: (id: string) => void;
-  onTask: (id: string) => void;
-  onNewTask: (floorId: string | null, employeeId?: string | null) => void;
-  onEditFloor: (floor: Floor) => void;
-  /** The Records room, where the binder's provenance and supersession chains live. */
-  onRecords: () => void;
-  onCalendar: () => void;
-}) {
-  const { floor, summary } = entry;
-  const staff = floor.employeeIds
-    .map((id) => dashboard.employees.find((employee) => employee.id === id))
-    .filter((employee): employee is Employee => Boolean(employee));
-  const tasks = dashboard.tasks.filter((task) => task.floorId === floor.id);
+  // The level's people and work: a floor's staff and tasks, or whoever and whatever has no floor.
+  const tasks = dashboard.tasks.filter((task) => (floor ? task.floorId === floor.id : !task.floorId));
   const activeTasks = tasks.filter((task) => ACTIVE_TASK_STATUSES.includes(task.status));
-  return (
-    <FloorView
-      key={floor.id}
-      onCalendar={onCalendar}
-      floor={floor}
-      dashboard={dashboard}
-      floorLabel={floorLabel}
-      summary={summary}
+  const staff = floor
+    ? floor.employeeIds
+        .map((id) => dashboard.employees.find((employee) => employee.id === id))
+        .filter((employee): employee is Employee => Boolean(employee))
+    : (() => {
+        const staffedElsewhere = new Set(entries.active.flatMap((entry) => entry.floor.employeeIds));
+        const busyHere = new Set(activeTasks.map((task) => task.employeeId));
+        return dashboard.employees.filter(
+          (employee) => !staffedElsewhere.has(employee.id) || busyHere.has(employee.id),
+        );
+      })();
+  const unassignedTaskCount = dashboard.tasks.filter((task) => !task.floorId).length;
+
+  const board = floor && (
+    <FloorChannel
+      floorId={floor.id}
       staff={staff}
-      officeEmployees={toOfficeEmployees(staff, activeTasks)}
-      tasks={tasks}
-      proposals={dashboard.proposals}
-      schedule={dashboard.schedule}
-      board={
-        <FloorChannel
-          floorId={floor.id}
-          staff={staff}
-          canPost={configured && !floor.archivedAt}
-          actions={actions}
-          run={run}
-          onTask={onTask}
-        />
-      }
-      feeds={<FloorFeeds staff={staff} onTask={onTask} />}
-      binder={
-        <FloorBinder
-          floorId={floor.id}
-          canApprove={configured && !floor.archivedAt}
-          onApprove={(id) => void run(() => actions.approveMemory(id), 'Claim approved')}
-          onRecords={onRecords}
-        />
-      }
-      configured={configured}
-      onEmployee={onEmployee}
+      canPost={canAct}
+      actions={actions}
+      run={run}
       onTask={onTask}
-      onNewTask={(employeeId) => onNewTask(floor.id, employeeId ?? null)}
-      onEditFloor={() => onEditFloor(floor)}
-      onArchive={(archived) =>
-        void run(
-          () => actions.setFloorArchived(floor.id, archived),
-          archived ? 'Floor archived' : 'Floor restored',
-        )
-      }
     />
   );
-}
-
-function Lobby({
-  dashboard,
-  configured,
-  activeFloors,
-  onEmployee,
-  onTask,
-  onNewTask,
-  onAllTasks,
-  onCalendar,
-}: {
-  dashboard: Dashboard;
-  configured: boolean;
-  activeFloors: FloorEntry[];
-  onEmployee: (id: string) => void;
-  onTask: (id: string) => void;
-  onNewTask: (floorId: string | null) => void;
-  onAllTasks: () => void;
-  onCalendar: () => void;
-}) {
-  const lobbyTasks = dashboard.tasks.filter((task) => !task.floorId);
-  const activeTasks = lobbyTasks.filter((task) => ACTIVE_TASK_STATUSES.includes(task.status));
-  const staffedElsewhere = new Set(activeFloors.flatMap((entry) => entry.floor.employeeIds));
-  const busyInLobby = new Set(activeTasks.map((task) => task.employeeId));
-  const lobbyEmployees = dashboard.employees.filter(
-    (employee) => !staffedElsewhere.has(employee.id) || busyInLobby.has(employee.id),
+  const feeds = floor && <FloorFeeds staff={staff} onTask={onTask} />;
+  const binder = floor && (
+    <FloorBinder
+      floorId={floor.id}
+      canApprove={canAct}
+      onApprove={(id) => void run(() => actions.approveMemory(id), 'Claim approved')}
+      onRecords={() => onPage('records')}
+    />
   );
+  const shared = {
+    entries,
+    selected,
+    dashboard,
+    configured: workspaceReady,
+    staff,
+    tasks,
+    unassignedTaskCount,
+    onSelectFloor,
+    onNewFloor,
+    onEditFloor: () => floor && onEditFloor(floor),
+    onArchive: (archived: boolean) =>
+      floor &&
+      void run(
+        () => actions.setFloorArchived(floor.id, archived),
+        archived ? 'Floor archived' : 'Floor restored',
+      ),
+    onEmployee,
+  };
+
+  if (mode === '2d')
+    return (
+      <Office2D
+        {...shared}
+        proposals={dashboard.proposals}
+        board={board || undefined}
+        feeds={feeds || undefined}
+        binder={binder || undefined}
+        onNewTask={(employeeId) => onNewTask(floor?.id ?? null, employeeId ?? null)}
+        onTask={onTask}
+        onCalendar={() => onPage('calendar')}
+        onAllTasks={() => onPage('tasks')}
+      />
+    );
+
+  const panels: PanelTab[] = [
+    {
+      id: 'team',
+      label: 'Team',
+      content: (
+        <FloorTeamList
+          staff={staff}
+          tasks={tasks}
+          schedule={dashboard.schedule}
+          canAssign={canAct}
+          emptyTitle={floor ? 'No one staffed yet' : 'Everyone is on a floor'}
+          emptyText={
+            floor ? 'Edit this floor to add one or more employees.' : 'Employees without a floor appear here.'
+          }
+          onEmployee={onEmployee}
+          onNewTask={(employeeId) => onNewTask(floor?.id ?? null, employeeId)}
+        />
+      ),
+    },
+    {
+      id: 'work',
+      label: 'Work',
+      content: (
+        <FloorWork
+          tasks={tasks}
+          proposals={dashboard.proposals}
+          canAssign={canAct && staff.length > 0}
+          onTask={onTask}
+          onNewTask={() => onNewTask(floor?.id ?? null)}
+        />
+      ),
+    },
+    ...(floor
+      ? [
+          { id: 'board', label: 'Board', content: board },
+          { id: 'feeds', label: 'Feeds', content: feeds },
+          { id: 'binder', label: 'Binder', content: binder },
+        ]
+      : []),
+    {
+      id: 'week',
+      label: 'Week',
+      content: <WeekList live={workspaceReady} onCalendar={() => onPage('calendar')} />,
+    },
+  ];
 
   return (
-    <LobbyView
-      dashboard={dashboard}
-      configured={configured}
-      lobbyEmployees={lobbyEmployees}
-      officeEmployees={toOfficeEmployees(lobbyEmployees, activeTasks)}
-      activeTasks={activeTasks}
-      hasEmployees={dashboard.employees.length > 0}
-      onNewTask={() => onNewTask(null)}
-      onEmployee={onEmployee}
-      onTask={onTask}
-      onAllTasks={onAllTasks}
-      onCalendar={onCalendar}
+    <Office3D
+      {...shared}
+      officeEmployees={toOfficeEmployees(staff, activeTasks)}
+      panels={panels}
+      onNewTask={() => onNewTask(floor?.id ?? null)}
     />
   );
 }

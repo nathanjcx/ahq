@@ -67,15 +67,15 @@ export function FloorWork({
         </button>
       </div>
       {ordered.length === 0 ? (
-        <p className="work-empty">Nothing is assigned to this floor yet.</p>
+        <p className="floor-work-empty">Nothing is assigned to this floor yet.</p>
       ) : (
-        <div className="work-groups">
+        <div className="floor-work-groups">
           {ordered.map(([key, group]) => (
-            <section key={key} className="work-group">
+            <section key={key} className="floor-work-group">
               <h4>
                 {group.title} <span>{group.tasks.length}</span>
               </h4>
-              <div className="work-list">
+              <div className="floor-work-list">
                 {[...group.tasks].sort(byDeadline).map((task) => {
                   const pending = pendingByTask.get(task.id) ?? 0;
                   const held = HELD[task.status];

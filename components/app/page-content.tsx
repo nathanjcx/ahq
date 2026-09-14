@@ -39,6 +39,7 @@ export function PageContent(props: PageContentProps) {
   if (is('office'))
     return (
       <FloorPage
+        mode={tab === '2d' ? '2d' : '3d'}
         dashboard={dashboard}
         configured={props.configured}
         actions={actions}

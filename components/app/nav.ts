@@ -25,7 +25,15 @@ export const destinations: Array<{ id: Page; label: string; icon: LucideIcon; ta
       { id: 'incidents', label: 'Incidents' },
     ],
   },
-  { id: 'office', label: 'Office', icon: Building2, tabs: [] },
+  {
+    id: 'office',
+    label: 'Office',
+    icon: Building2,
+    tabs: [
+      { id: '3d', label: '3D' },
+      { id: '2d', label: '2D' },
+    ],
+  },
   {
     id: 'team',
     label: 'Team',

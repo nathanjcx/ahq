@@ -149,7 +149,7 @@ export function WorkspaceShell({
           />
         )}
 
-        <main className="main">
+        <main className="main" data-bleed={page === 'office' && tab !== '2d' ? 'true' : undefined}>
           <Topbar
             title={pageTitle(page)}
             tabs={pageTabs(page)}
@@ -172,7 +172,7 @@ export function WorkspaceShell({
           <IncidentStrip dashboard={dashboard} actions={actions} run={run} go={go} />
 
           {!configured && <SetupBanner onSetup={() => setSettingsOpen(true)} />}
-          <div className="page-wrap">
+          <div className="page-wrap" data-bleed={page === 'office' && tab !== '2d' ? 'true' : undefined}>
             <PageContent
               page={page}
               tab={tab}

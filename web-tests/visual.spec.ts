@@ -134,22 +134,27 @@ for (const viewport of viewports) {
     await shoot(page, viewport.name, 'new-task');
     await page.keyboard.press('Escape');
 
-    // The floor's Work and Team regions. A phone reaches the floors through the switcher sheet.
+    // The 3D office: the room fills the page and the floor's panels float inside it. A phone reaches
+    // the floors through the switcher sheet; so does the desktop, from the chip over the room.
     await go(page, 'Office', mobile);
-    if (mobile) await page.locator('.floor-switcher-trigger').click();
+    await page.locator('.floor-switcher-trigger').first().click();
     await page
       .getByRole('button', { name: /Spring launch/ })
       .first()
       .click();
-    // Narrow viewports show one floor region at a time behind a switch; wide ones show them together.
-    const regionSwitch = page.locator('.floor-region-switch');
-    for (const region of ['Work', 'Team']) {
-      if (await regionSwitch.isVisible())
-        await regionSwitch.getByRole('button', { name: region, exact: true }).click();
-      await expect(page.locator(`.region-${region.toLowerCase()}`)).toBeVisible();
+    await page.locator('canvas').first().waitFor();
+    const rail = page.locator('.office-3d-rail');
+    if (!(await rail.isVisible())) await page.getByRole('button', { name: 'Show the panel' }).click();
+    for (const panel of ['Work', 'Team']) {
+      await rail.getByRole('tab', { name: panel, exact: true }).click();
       await expectNoOverflow(page, viewport.width);
-      await shoot(page, viewport.name, `floor-${slug(region)}`);
+      await shoot(page, viewport.name, `office-3d-${slug(panel)}`);
     }
+    // The 2D board lays the same floor out whole.
+    await page.locator('.topbar').getByRole('tab', { name: '2D', exact: true }).click();
+    await expect(page.locator('.office-2d-floor')).toBeVisible();
+    await expectNoOverflow(page, viewport.width);
+    await shoot(page, viewport.name, 'office-2d');
 
     if (mobile) {
       await page.getByRole('button', { name: 'Open navigation' }).click();
@@ -213,18 +218,19 @@ test('a phone reviews pending actions and switches floors without leaving the vi
   await shoot(page, 'mobile', 'review-sheet');
   await page.keyboard.press('Escape');
 
-  // Floors: the directory rail becomes a switcher, and the board is the default region.
+  // Floors: the switcher chip opens the directory over the room; the panel is a drawer.
   await go(page, 'Office', true);
   await page.locator('.floor-switcher-trigger').click();
-  await expect(page.getByRole('dialog', { name: 'Building directory' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Floors' })).toBeVisible();
   await expectNoOverflow(page, 390);
   await shoot(page, 'mobile', 'floor-switcher');
   await page
     .getByRole('button', { name: /Spring launch/ })
     .first()
     .click();
-  await expect(page.locator('.region-board')).toBeVisible();
+  await page.getByRole('button', { name: 'Show the panel' }).click();
+  await expect(page.locator('.office-3d-rail')).toBeVisible();
   await expectNoOverflow(page, 390);
-  await shoot(page, 'mobile', 'floor-board');
+  await shoot(page, 'mobile', 'floor-panel');
   expect(errors).toEqual([]);
 });

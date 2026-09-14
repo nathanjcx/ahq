@@ -6,17 +6,22 @@ import { useEffect, useState } from 'react';
 const NARROW = '(max-width: 640px)';
 
 /**
- * Whether the viewport is phone-sized. Server rendering and the first paint answer false, so use
- * this only where the two layouts need different markup; prefer a media query when CSS can do it.
+ * Whether a media query matches. Server rendering and the first paint answer false, so use this only
+ * where two layouts need different markup; prefer a media query when CSS can do it.
  */
-export function useIsNarrow() {
-  const [narrow, setNarrow] = useState(false);
+export function useMedia(query: string) {
+  const [matches, setMatches] = useState(false);
   useEffect(() => {
-    const media = window.matchMedia(NARROW);
-    const sync = () => setNarrow(media.matches);
+    const media = window.matchMedia(query);
+    const sync = () => setMatches(media.matches);
     sync();
     media.addEventListener('change', sync);
     return () => media.removeEventListener('change', sync);
-  }, []);
-  return narrow;
+  }, [query]);
+  return matches;
+}
+
+/** Whether the viewport is phone-sized. */
+export function useIsNarrow() {
+  return useMedia(NARROW);
 }

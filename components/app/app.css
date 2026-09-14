@@ -551,6 +551,23 @@
   margin: 0 auto;
   padding: 20px 24px 48px;
 }
+/* A page that is the whole viewport, such as the 3D office: no padding, no page scroll. */
+.main[data-bleed] {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+.page-wrap[data-bleed] {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+  padding: 0;
+}
+.page-wrap[data-bleed] > * {
+  height: 100%;
+}
 .task-safety {
   display: flex;
   align-items: flex-start;

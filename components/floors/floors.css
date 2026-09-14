@@ -1,47 +1,3 @@
-/* === components/floors/floor-scene.tsx: the chrome around the 3D view === */
-.office-canvas {
-  min-width: 0;
-  overflow: hidden;
-}
-.office-toolbar {
-  height: 45px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 17px;
-  color: #878d95;
-  border-bottom: 1px solid var(--line);
-  font-size: var(--text-xs);
-  font-weight: 700;
-  letter-spacing: 0.65px;
-}
-.office-toolbar > span {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.live-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #667c97;
-  box-shadow: 0 0 0 3px #e0e6ee;
-}
-.office-legend {
-  min-height: 41px;
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 0 16px;
-  color: #808790;
-  border-top: 1px solid var(--line);
-  font-size: var(--text-xs);
-}
-.office-legend span {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
 /* === components/floors: directory, floor workspace, queue === */
 .building-layout {
   display: grid;
@@ -256,24 +212,6 @@
   gap: 8px;
   flex: 0 0 auto;
 }
-.floor-overview {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 265px;
-  border-bottom: 1px solid var(--line);
-}
-.floor-canvas {
-  border-right: 1px solid var(--line);
-}
-.floor-stage {
-  height: clamp(420px, calc(100vh - 380px), 620px);
-  min-height: 340px;
-  animation: floor-fade 0.2s ease-out;
-}
-@keyframes floor-fade {
-  from {
-    opacity: 0.72;
-  }
-}
 .floor-team {
   min-width: 0;
   padding: 18px 16px 16px;
@@ -473,33 +411,6 @@
   background: #f9fcff;
   font-size: var(--text-base);
 }
-.office-summary {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 9px;
-  margin-top: 12px;
-}
-.office-summary button {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 2px 10px;
-  padding: 11px 13px;
-  text-align: left;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(248, 251, 255, 0.72);
-}
-.office-summary span,
-.office-summary small {
-  color: var(--muted);
-  font-size: var(--text-base);
-}
-.office-summary strong {
-  grid-row: 1 / 3;
-  grid-column: 2;
-  align-self: center;
-  font-size: 18px;
-}
 /* === components/floors/floor-panel.tsx === */
 .staffing-picker {
   min-width: 0;
@@ -636,31 +547,14 @@
   .floor-heading-actions button {
     flex: 1;
   }
-  .floor-overview {
-    display: block;
-  }
-  .floor-canvas {
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-  .floor-stage {
-    height: 320px;
-    min-height: 300px;
-  }
   .floor-task-list,
   .staffing-picker > div:not(.staffing-picker-empty) {
     grid-template-columns: 1fr;
   }
-  .office-summary {
-    grid-template-columns: 1fr;
-  }
 }
 @media (max-width: 640px) {
-  .floor-region-switch button {
-    min-height: 38px;
-  }
   .directory-list > button,
-  .work-list > button,
+  .floor-work-list > button,
   .floor-task-list > button,
   .floor-team-list > button,
   .floor-team-list .team-open,
@@ -725,41 +619,6 @@
 }
 
 /* Regions: one section of the floor at a time, chosen by the switch above them. */
-.floor-region-switch {
-  display: flex;
-  margin: 12px 16px 0;
-}
-.floor-region-switch button {
-  flex: 1;
-  padding: 8px;
-  font-size: var(--text-sm);
-}
-.floor-regions {
-  display: grid;
-  height: 620px;
-}
-.floor-region {
-  display: none;
-  min-width: 0;
-}
-.floor-regions[data-region='board'] .region-board,
-.floor-regions[data-region='feeds'] .region-feeds,
-.floor-regions[data-region='team'] .region-team,
-.floor-regions[data-region='binder'] .region-binder,
-.floor-regions[data-region='work'] .region-work {
-  display: flex;
-  min-height: 0;
-  flex-direction: column;
-}
-.region-team {
-  background: #f8fbff;
-}
-.region-work,
-.region-binder {
-  padding: 17px 21px 20px;
-  overflow-y: auto;
-  background: #f4f7fb;
-}
 .floor-channel-bar {
   display: flex;
   justify-content: flex-end;
@@ -959,39 +818,6 @@
   font-size: var(--text-base);
 }
 
-/* Team rail */
-.region-team .floor-canvas {
-  border-right: 0;
-  border-bottom: 1px solid var(--line);
-}
-.floor-canvas-compact .floor-stage {
-  /* The office view has its own 280px minimum; match it so its empty-office note stays visible. */
-  height: 280px;
-  min-height: 280px;
-}
-/* A replayed day puts its date, scrubber, and caption under the room, so the block needs the
-   height the room had plus the height they take. */
-.floor-canvas-compact .floor-stage-day {
-  height: 390px;
-  min-height: 390px;
-}
-.floor-canvas-compact .office-legend {
-  /* The compact chrome keeps only the sound toggle; the legend belongs to the lobby. */
-  min-height: 33px;
-  justify-content: flex-end;
-}
-.floor-canvas-compact .office-legend > span {
-  display: none;
-}
-.region-team .floor-team {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-.region-team .floor-team-list {
-  max-height: none;
-}
 .team-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 34px;
@@ -1014,12 +840,12 @@
 }
 
 /* Work */
-.work-groups {
+.floor-work-groups {
   display: grid;
   gap: 18px;
   margin-top: 13px;
 }
-.work-group h4 {
+.floor-work-group h4 {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -1030,7 +856,7 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.work-group h4 span {
+.floor-work-group h4 span {
   min-width: 19px;
   padding: 1px 5px;
   color: #5e6874;
@@ -1039,11 +865,11 @@
   text-align: center;
   letter-spacing: 0;
 }
-.work-list {
+.floor-work-list {
   display: grid;
   gap: 6px;
 }
-.work-list > button {
+.floor-work-list > button {
   min-width: 0;
   display: grid;
   grid-template-columns: 25px minmax(0, 1fr) repeat(3, auto) 13px;
@@ -1055,28 +881,28 @@
   border-radius: 7px;
   background: #f9fcff;
 }
-.work-list > button:hover {
+.floor-work-list > button:hover {
   border-color: #b6bfcb;
 }
-.work-list strong,
-.work-list small {
+.floor-work-list strong,
+.floor-work-list small {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.work-list strong {
+.floor-work-list strong {
   font-size: var(--text-md);
 }
-.work-list small {
+.floor-work-list small {
   margin-top: 2px;
   color: var(--muted);
   font-size: var(--text-base);
 }
-.work-list > button > svg {
+.floor-work-list > button > svg {
   color: #9da3aa;
 }
-.work-empty {
+.floor-work-empty {
   padding: 11px 12px;
   color: #8b9096;
   border: 1px dashed #d2d7dd;
@@ -1111,57 +937,12 @@
 }
 
 @media (max-width: 640px) {
-  /* A phone gives the channel and the feeds the whole screen; the composer stays in reach. */
-  .floor-regions {
-    height: calc(100dvh - 190px);
-  }
   .handoff-form select,
   .handoff-form textarea {
     font-size: 16px;
   }
 }
 
-/* Replay docks under the canvas, so nothing covers the room it is replaying. */
-.floor-canvas {
-  position: relative;
-}
-.office-dock {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-top: 1px solid var(--line);
-  background: #f6f9fc;
-}
-.floor-replay-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: var(--text-xs);
-  font-weight: 700;
-  letter-spacing: 0.55px;
-  cursor: pointer;
-}
-.floor-replay-toggle:hover:not(:disabled) {
-  border-color: #a8b6c8;
-  color: #505e70;
-}
-.floor-replay-toggle[aria-pressed='true'] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent-deep);
-}
-.floor-replay-toggle:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
 .floor-replay {
   flex: 1 1 260px;
   display: grid;
@@ -1305,36 +1086,334 @@
   }
 }
 
-@media (max-width: 620px) {
-  /* A phone gets the whole width and a 4:3 stage, so the room has room. The
-     view is pinned to that box, since a percentage height cannot resolve
-     against an aspect ratio. */
-  .floor-canvas .floor-stage {
-    position: relative;
-    height: auto;
-    min-height: 0;
-    aspect-ratio: 4 / 3;
+/* === components/floors/office-3d.tsx: the room is the page === */
+.office-3d {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--canvas);
+}
+.office-3d-stage {
+  position: absolute;
+  inset: 0;
+}
+.office-3d-stage > * {
+  height: 100%;
+}
+/* The scene's own floor sign and empty note give way to the page's chrome. */
+.office-3d .office-view-floor {
+  display: none;
+}
+.office-3d .office-view-note {
+  bottom: 62px;
+}
+.office-3d .office-view {
+  min-height: 0;
+  border-radius: 0;
+}
+.office-3d-corner {
+  position: absolute;
+  z-index: 42;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.office-3d-topleft {
+  top: 12px;
+  left: 14px;
+  z-index: 44;
+  flex-direction: column;
+}
+.office-3d-topright {
+  top: 12px;
+  right: 14px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.office-3d-bottomleft {
+  bottom: 14px;
+  left: 14px;
+}
+.office-3d .floor-switcher {
+  display: block;
+}
+.office-3d .floor-switcher-trigger {
+  width: auto;
+  min-width: 220px;
+  padding: 6px 10px 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  backdrop-filter: blur(6px);
+  box-shadow: var(--shadow-sm);
+}
+.office-3d-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: 4px;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--paper) 90%, transparent);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #667c97;
+  box-shadow: 0 0 0 3px #e0e6ee;
+}
+.office-3d-cluster {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 34px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  backdrop-filter: blur(6px);
+  box-shadow: var(--shadow-sm);
+}
+.office-3d-cluster > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+.office-3d-cluster > button:hover:not(:disabled) {
+  background: var(--slate-100);
+  color: var(--ink);
+}
+.office-3d-cluster > button[aria-pressed='true'] {
+  background: var(--accent-soft, #e8efff);
+  color: var(--accent-deep);
+}
+.office-3d-cluster > button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.office-3d-legend {
+  gap: 12px;
+  padding: 0 11px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.office-3d-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+/* The floor's panels, floating over the right edge and scrolling within themselves. */
+.office-3d-rail {
+  position: absolute;
+  top: 58px;
+  right: 14px;
+  bottom: 14px;
+  z-index: 43;
+  display: flex;
+  flex-direction: column;
+  width: min(380px, calc(100% - 28px));
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--paper) 96%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-md, 0 8px 30px rgba(15, 23, 42, 0.12));
+  overflow: hidden;
+}
+.office-3d-rail-tabs {
+  flex: 0 0 auto;
+  margin: 8px 8px 0;
+}
+.office-3d-rail-tabs button {
+  flex: 1;
+  padding: 6px 4px;
+  font-size: var(--text-sm);
+}
+.office-3d-rail-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 12px 14px;
+  overflow-y: auto;
+}
+.office-3d-rail-body > .section-title {
+  margin-top: 0;
+}
+.office-3d-rail-body .floor-team-list {
+  max-height: none;
+}
+.office-3d-rail-body .channel-feed {
+  min-height: 320px;
+}
+.office-3d .floor-replay {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  backdrop-filter: blur(6px);
+  box-shadow: var(--shadow-sm);
+}
+@media (max-width: 640px) {
+  .office-3d-topright {
+    top: auto;
+    right: 10px;
+    bottom: 58px;
+    left: 10px;
+    justify-content: flex-start;
   }
-  .floor-canvas .floor-stage > .office-view {
-    position: absolute;
-    inset: 0;
-    min-height: 0;
+  .office-3d-legend {
+    display: none;
   }
-  /* The day replay is a room plus its scrubber, so it takes a fixed block rather than a 4:3 one. */
-  .floor-canvas .floor-stage-day {
+  .office-3d-topleft {
+    left: 10px;
+  }
+  .office-3d .floor-switcher-trigger {
+    min-width: 0;
+  }
+  .office-3d-state {
+    display: none;
+  }
+  .office-3d-bottomleft {
+    display: none;
+  }
+  /* The panel is a drawer over the lower half; the room stays visible above it. */
+  .office-3d-rail {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    height: 56%;
+    border-radius: 12px 12px 0 0;
+  }
+  .office-3d .office-view-controls {
+    bottom: auto;
+    top: 58px;
+  }
+  .office-3d .office-view-note {
+    bottom: 100px;
+  }
+}
+
+/* === components/floors/office-2d.tsx: the board === */
+.office-2d {
+  display: grid;
+  grid-template-columns: 218px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.office-2d .floor-directory {
+  position: sticky;
+  top: 88px;
+}
+.office-2d-floor {
+  min-width: 0;
+  overflow: hidden;
+}
+.office-2d-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(300px, 1.3fr) minmax(300px, 1.2fr);
+  border-bottom: 1px solid var(--line);
+}
+.office-2d-grid:last-child {
+  border-bottom: 0;
+}
+.office-2d-lower {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.office-2d-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 320px;
+  padding: 16px 18px 18px;
+  border-right: 1px solid var(--line);
+}
+.office-2d-cell:last-child {
+  border-right: 0;
+}
+.office-2d-cell > .section-title {
+  margin-top: 0;
+}
+.office-2d-cell .floor-team-list,
+.office-3d-rail-body .floor-team-list {
+  max-height: none;
+  overflow-x: hidden;
+}
+.office-2d-cell .team-open,
+.office-3d-rail-body .team-open {
+  min-width: 0;
+}
+.office-2d-board .channel-feed {
+  min-height: 420px;
+}
+.office-2d-all {
+  align-self: flex-start;
+  margin-top: 10px;
+}
+@media (max-width: 1120px) {
+  .office-2d {
+    grid-template-columns: 1fr;
+  }
+  .office-2d .floor-directory {
     position: static;
-    height: 380px;
-    aspect-ratio: auto;
   }
-  .office-toolbar {
-    height: auto;
-    flex-wrap: wrap;
-    gap: 4px;
-    padding: 8px 12px;
+  .office-2d-grid {
+    grid-template-columns: 1fr 1fr;
   }
-  .office-legend {
-    flex-wrap: wrap;
-    gap: 8px 14px;
-    padding: 8px 12px;
+  .office-2d-board {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--line);
   }
+}
+@media (max-width: 640px) {
+  .office-2d-grid,
+  .office-2d-lower {
+    grid-template-columns: 1fr;
+  }
+  .office-2d-cell {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .office-2d-cell:last-child {
+    border-bottom: 0;
+  }
+}
+
+/* A narrow column of work: the row's held, deadline, and review marks drop under the title. */
+.office-2d-cell .floor-work-list > button,
+.office-3d-rail-body .floor-work-list > button {
+  grid-template-columns: 25px minmax(0, 1fr) 13px;
+}
+.office-2d-cell .floor-work-list > button > .work-held,
+.office-2d-cell .floor-work-list > button > .work-deadline,
+.office-2d-cell .floor-work-list > button > .tab-badge,
+.office-3d-rail-body .floor-work-list > button > .work-held,
+.office-3d-rail-body .floor-work-list > button > .work-deadline,
+.office-3d-rail-body .floor-work-list > button > .tab-badge {
+  grid-column: 2;
+  justify-self: start;
+}
+.office-2d-cell .floor-work-list > button > svg:last-child,
+.office-3d-rail-body .floor-work-list > button > svg:last-child {
+  grid-column: 3;
+  grid-row: 1;
 }
